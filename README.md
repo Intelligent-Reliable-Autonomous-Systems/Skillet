@@ -11,3 +11,7 @@ Primary Developers: Jeff Jewett (jewettje@oregonstate.edu) and Will Solow (solow
 3. Install requirements via pip: `pip install numpy torch`
 
 ## Use
+
+## Current considerations
+1. Should we assume that we are operating on GPU or CPU (torch or NumPy)?
+2. Should we assume that operations are batched? 
