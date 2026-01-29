@@ -10,3 +10,11 @@ repos:
     rev: v1.8.0
     hooks:
       - id: mypy
+
+  - repo: local
+    hooks:
+      - id: pre-push-checks
+        name: pre-push checks
+        entry: bash -c "ruff check . && mypy . && pytest"
+        language: system
+        stages: [push]
