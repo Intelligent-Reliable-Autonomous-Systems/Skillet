@@ -92,15 +92,15 @@ def configclass(cls: Any, **kwargs: dict[str, Any]) -> Any:  # noqa: ANN401
     # copy mutable members
     # note: we check if user defined __post_init__ function exists and augment it with our own
     if hasattr(cls, "__post_init__"):
-        setattr(cls, "__post_init__", _combined_function(cls.__post_init__, _custom_post_init))
+        cls.__post_init__ = _combined_function(cls.__post_init__, _custom_post_init)
     else:
-        setattr(cls, "__post_init__", _custom_post_init)
+        cls.__post_init__ = _custom_post_init
     # add helper functions for dictionary conversion
-    setattr(cls, "to_dict", _class_to_dict)
-    setattr(cls, "from_dict", _update_class_from_dict)
-    setattr(cls, "replace", _replace_class_with_kwargs)
-    setattr(cls, "copy", _copy_class)
-    setattr(cls, "validate", _validate)
+    cls.to_dict = _class_to_dict
+    cls.from_dict = _update_class_from_dict
+    cls.replace = _replace_class_with_kwargs
+    cls.copy = _copy_class
+    cls.validate = _validate
     # wrap around dataclass
     cls = dataclass(cls, **kwargs)
     # return wrapped class
@@ -262,6 +262,7 @@ def _validate(obj: object, prefix: str = "") -> list[str]:
 
     Raises:
         TypeError: When the object is not a valid configuration object.
+
     """
     missing_fields = []
 
@@ -271,12 +272,12 @@ def _validate(obj: object, prefix: str = "") -> list[str]:
     if type(obj) is type(MISSING):
         missing_fields.append(prefix)
         return missing_fields
-    elif isinstance(obj, (list, tuple)):
+    if isinstance(obj, (list, tuple)):
         for index, item in enumerate(obj):
             current_path = f"{prefix}[{index}]"
             missing_fields.extend(_validate(item, prefix=current_path))
         return missing_fields
-    elif isinstance(obj, dict):
+    if isinstance(obj, dict):
         # Convert any non-string keys to strings to allow validation of dict with non-string keys
         if any(not isinstance(key, str) for key in obj.keys()):
             obj_dict = {str(key): value for key, value in obj.items()}
@@ -415,6 +416,7 @@ def _combined_function(f1: Callable, f2: Callable) -> Callable:
 
     Returns:
         The combined function.
+
     """
 
     def _combined(*args, **kwargs):
@@ -449,6 +451,7 @@ def _skippable_class_member(key: str, value: Any, hints: dict | None = None) -> 
 
     Returns:
         True if the class member should be skipped, False otherwise.
+
     """
     # skip dunder members
     if key.startswith("__"):
@@ -492,15 +495,14 @@ def _return_f(f: Any) -> Callable[[], Any]:
 
             value = field(default_factory=_return_f(value))
             setattr(cls, key, value)
+
     """
 
     def _wrap():
         if isinstance(f, Field):
             if f.default_factory is MISSING:
                 return deepcopy(f.default)
-            else:
-                return f.default_factory
-        else:
-            return deepcopy(f)
+            return f.default_factory
+        return deepcopy(f)
 
     return _wrap

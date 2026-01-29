@@ -1,7 +1,6 @@
-"""
-main_isaac.py
+"""main_isaac.py.
 
-Testing file for executor integration with IsaacSim and ROS2
+Test file for executor integration with IsaacSim and ROS2
 
 Written by Will Solow and Jeff Jewett, 2026
 
@@ -41,17 +40,16 @@ simulation_app = app_launcher.app
 """Rest everything follows."""
 
 import gymnasium as gym
-import torch
-
 import isaaclab_tasks  # noqa: F401
+import torch
 from isaaclab_tasks.utils import parse_env_cfg
 
-from executor.executor_env import SkillExecutor
 from env.isaac_env_wrapper import IsaacEnvWrapper
+from executor.executor_env import SkillExecutor
 
 
 def main() -> None:
-    """Testing of the executor within the IsaacLab/IsaacSim framework."""
+    """Test the executor within the IsaacLab/IsaacSim framework."""
     # create environment configuration
     env_cfg = parse_env_cfg(
         args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs, use_fabric=not args_cli.disable_fabric

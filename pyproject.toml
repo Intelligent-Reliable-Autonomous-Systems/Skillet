@@ -75,6 +75,8 @@ explicit-preview-rules = true
 ignore = [
     "ARG001",  # Allow unused arguments
     "ARG005",  # Allow unused lambda arguments
+    "D203",    # Require blank line before class docstring
+    "D213",    # Summary line on second line of docstring
 ]
 
 # Allow autofix for all enabled rules (when `--fix`) is provided.
@@ -107,8 +109,12 @@ exclude = [
     "dist",
     "node_modules",
     "venv",
+
+    "cfg",
 ]
 
+[tool.ruff.lint.per-file-ignores]
+"main_isaac.py" = ["ALL"]
 [tool.ruff.lint.flake8-quotes]
 inline-quotes = "double"  # Enforce double quotes for strings
 multiline-quotes = "double"  # Enforce double quotes for multiline strings
@@ -118,7 +124,7 @@ docstring-quotes = "double"  # Enforce double quotes for docstrings
 allow-star-arg-any = true
 
 [tool.mypy]
-python_version = ">=3.11"
+python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -130,3 +136,6 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 warn_no_return = true
 warn_unreachable = true
+exclude = [
+    "cfg"
+]

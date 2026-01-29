@@ -88,6 +88,7 @@ def update_class_from_dict(obj, data: dict[str, Any], _ns: str = "") -> None:
         TypeError: When input is not a dictionary.
         ValueError: When dictionary has a value that does not match default config type.
         KeyError: When dictionary has a key that does not exist in the default config type.
+
     """
     for key, value in data.items():
         # key_ns is the full namespace of the key
@@ -181,6 +182,7 @@ def dict_to_md5_hash(data: object) -> str:
 
     Returns:
         A string object of double length containing only hexadecimal digits.
+
     """
     # convert to dictionary
     if isinstance(data, dict):
@@ -226,6 +228,7 @@ def convert_dict_to_backend(
 
     Returns:
         The updated dict with the data converted to the desired backend.
+
     """
     # THINK: Should we also support converting to a specific device, e.g. "cuda:0"?
     # Check the backend is valid.
@@ -280,6 +283,7 @@ def update_dict(orig_dict: dict, new_dict: collections.abc.Mapping) -> dict:
 
     Returns:
         The updated dictionary.
+
     """
     for keyname, value in new_dict.items():
         if isinstance(value, collections.abc.Mapping):
@@ -297,15 +301,15 @@ def replace_slices_with_strings(data: dict) -> dict:
 
     Returns:
         The dictionary with slice objects replaced by their string representations.
+
     """
     if isinstance(data, dict):
         return {k: replace_slices_with_strings(v) for k, v in data.items()}
-    elif isinstance(data, list):
+    if isinstance(data, list):
         return [replace_slices_with_strings(v) for v in data]
-    elif isinstance(data, slice):
+    if isinstance(data, slice):
         return f"slice({data.start},{data.stop},{data.step})"
-    else:
-        return data
+    return data
 
 
 def replace_strings_with_slices(data: dict) -> dict:
@@ -316,15 +320,15 @@ def replace_strings_with_slices(data: dict) -> dict:
 
     Returns:
         The dictionary with string representations of slices replaced by slice objects.
+
     """
     if isinstance(data, dict):
         return {k: replace_strings_with_slices(v) for k, v in data.items()}
-    elif isinstance(data, list):
+    if isinstance(data, list):
         return [replace_strings_with_slices(v) for v in data]
-    elif isinstance(data, str) and data.startswith("slice("):
+    if isinstance(data, str) and data.startswith("slice("):
         return string_to_slice(data)
-    else:
-        return data
+    return data
 
 
 def print_dict(val, nesting: int = -4, start: bool = True):

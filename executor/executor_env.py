@@ -27,6 +27,7 @@ class SkillExecutor:
         """Initialize the environment.
 
         Args:
+            cfg: Config dictionary
             env: A SkillEnvWrapper environment of a wrapped IsaacLab/ROS2 environment
 
         Returns:
