@@ -6,19 +6,16 @@ The high level controller class for skills
 Written by Will Solow & Jeff Jewett, 2026
 """
 
-from abc import abstractmethod
-
 import torch
 
 from ..skill_controller.skill_controller import SkillController
+from .task_policy import TaskPolicy
 
-class TaskPolicy:
+class ReachTaskPolicy(TaskPolicy):
 
-    skill_controller: SkillController
-    avail_skills: dict
 
     def __init__(self, cfg) -> None:
-        self.cfg = cfg
+        super().__init__(cfg)
 
     def reset(self) -> None:
         """
@@ -26,7 +23,6 @@ class TaskPolicy:
         """
         pass
 
-    @abstractmethod
     def get_skills_and_params(self, obs: torch.Tensor) -> tuple[list[str], torch.Tensor]:
         """
         Get the next skill for the robot to execute
@@ -38,7 +34,12 @@ class TaskPolicy:
             skill dictionary: dict of length (num_envs,)
             params: Torch Tensor of shape (num_envs, max_skill_parameter_dimension)
         """
-        pass
+        
+        num_envs = obs.shape[0]
+
+        return ["ReachXYZ"] * num_envs, torch.zeros((num_envs,3),device=obs.device)
+
+
 
 
 

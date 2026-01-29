@@ -4,11 +4,15 @@ skill_controller.py
 The class for controlling low level skills 
 """
 
+from typing import List
+
+import torch
+
 from .skills.base_skill import BaseSkill
 
 class SkillController:
 
-    current_skill: BaseSkill
+    current_skills: List[BaseSkill]
 
     def __init__(self, cfg) -> None:
         """
@@ -16,11 +20,12 @@ class SkillController:
         """
         self.cfg = cfg
 
-    def reset(self) -> None:
+    def reset(self, skills: BaseSkill, params=torch.Tensor) -> None:
         """
         Reset the skill controller
         """ 
-        pass
+        self.current_skills = skills
+        self.params = params
 
     def step(self, obs) -> object:
         """
