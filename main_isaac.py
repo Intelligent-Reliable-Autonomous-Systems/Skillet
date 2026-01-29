@@ -17,11 +17,13 @@ Written by Will Solow and Jeff Jewett, 2026
 """Launch Isaac Sim Simulator first."""
 
 import argparse
+import sys
 
+sys.path.append("/home/will-solow/Projects/IsaacLab/source")
 from isaaclab.app import AppLauncher
 
 # add argparse arguments
-parser = argparse.ArgumentParser(description="Random agent for Isaac Lab environments.")
+parser = argparse.ArgumentParser(description="Main IsaacSim Executor file through IsaacLab.")
 parser.add_argument(
     "--disable_fabric", action="store_true", default=False, help="Disable fabric and use USD I/O operations."
 )
@@ -47,11 +49,9 @@ from isaaclab_tasks.utils import parse_env_cfg
 from executor.executor_env import SkillExecutor
 from env.isaac_env_wrapper import IsaacEnvWrapper
 
-def main():
-    """
-    Testing of the executor within the IsaacLab/IsaacSim framework
-    """
 
+def main() -> None:
+    """Testing of the executor within the IsaacLab/IsaacSim framework."""
     # create environment configuration
     env_cfg = parse_env_cfg(
         args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs, use_fabric=not args_cli.disable_fabric
@@ -59,7 +59,7 @@ def main():
     # create environment
     env = gym.make(args_cli.task, cfg=env_cfg)
 
-    print(f"[INFO]: Testing Executor environment")
+    print("[INFO]: Testing Executor environment")
     print(f"[INFO]: Gym observation space: {env.observation_space}")
     print(f"[INFO]: Gym action space: {env.action_space}")
 
@@ -72,7 +72,7 @@ def main():
         # run everything in inference mode
         with torch.inference_mode():
             skill_executor.execute()
-            print(f"[INFO] finished run of skill executor, resetting")
+            print("[INFO] finished run of skill executor, resetting")
 
     # close the simulator
     env.close()

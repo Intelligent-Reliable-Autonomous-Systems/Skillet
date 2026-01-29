@@ -11,7 +11,9 @@ Primary Developers: Jeff Jewett (jewettje@oregonstate.edu) and Will Solow (solow
 3. Install requirements via pip: `pip install numpy torch gymnasium`
 
 ### IsaacSim/IsaacLab integration
-1. Install IsaacSim `pip install isaacsim`
+See [IsaacLab Installation](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/pip_installation.html) for additional information
+
+1. Install IsaacSim `pip install "isaacsim[all,extscache]==5.1.0" --extra-index-url https://pypi.nvidia.com`
 2. Verify Installation `isaacsim` and accept EULA
 3. Clone IsaacLab repo: Navigate to parent directory `cd ..` and then `git clone https://github.com/isaac-sim/IsaacLab.git`
 4. Install IsaacLab: `cd IsaacLab`, `./isaaclab.sh --install`

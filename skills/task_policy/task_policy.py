@@ -1,7 +1,7 @@
 """
 task_policy.py
 
-The high level controller class for skills 
+The high level controller class for skills
 
 Written by Will Solow & Jeff Jewett, 2026
 """
@@ -11,6 +11,7 @@ from abc import abstractmethod
 import torch
 
 from ..skill_controller.skill_controller import SkillController
+
 
 class TaskPolicy:
 
@@ -31,7 +32,7 @@ class TaskPolicy:
         """
         Get the next skill for the robot to execute
 
-        Input: 
+        Input:
             obs: Torch Tensor of shape (num_envs, observation dimension)
 
         Returns:
@@ -39,6 +40,3 @@ class TaskPolicy:
             params: Torch Tensor of shape (num_envs, max_skill_parameter_dimension)
         """
         pass
-
-
-

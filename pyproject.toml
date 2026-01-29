@@ -1,8 +1,8 @@
 [project]
-name = "robotskills"
+name = "robot_skills"
 version = "0.0.1"
-description = "A continuous extension of Minigrid gridworld environments to Box2D and MuJoCo"
-requires-python = ">= 3.12"
+description = "A Robot Skills framework for manipulation tasks with integration for ROS2 and IsaacLab"
+requires-python = ">= 3.11"
 authors = [
     {name = "Jeff Jewett", email = "jewettje@oregonstate.edu"},
     {name = "Wil Solow", email = "soloww@oregonstate.edu"},
@@ -118,7 +118,7 @@ docstring-quotes = "double"  # Enforce double quotes for docstrings
 allow-star-arg-any = true
 
 [tool.mypy]
-python_version = ">=3.12"
+python_version = ">=3.11"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true

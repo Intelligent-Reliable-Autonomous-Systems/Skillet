@@ -35,6 +35,7 @@ def class_to_dict(obj: object) -> dict[str, Any]:
 
     Returns:
         Converted dictionary mapping.
+
     """
     # check that input data is class instance
     if not hasattr(obj, "__class__"):

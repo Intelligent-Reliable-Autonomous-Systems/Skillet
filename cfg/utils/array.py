@@ -8,13 +8,10 @@
 # needed to import for allowing type-hinting: torch.device | str | None
 from __future__ import annotations
 
-from typing import Union
-
 import numpy as np
 import torch
 import warp as wp
 
-TensorData = Union[np.ndarray, torch.Tensor, wp.array]  # noqa: UP007
 """Type definition for a tensor data.
 
 Union of numpy, torch, and warp arrays.
@@ -44,11 +41,11 @@ inner dictionary are the source backend (``np.ndarray``, ``torch.Tensor``, ``wp.
 
 
 def convert_to_torch(
-    array: TensorData,
+    array: np.ndarray | torch.Tensor | wp.array,
     dtype: torch.dtype = None,
     device: torch.device | str | None = None,
 ) -> torch.Tensor:
-    """Converts a given array into a torch tensor.
+    """Convert a given array into a torch tensor.
 
     The function tries to convert the array to a torch tensor. If the array is a numpy/warp arrays, or python
     list/tuples, it is converted to a torch tensor. If the array is already a torch tensor, it is returned
@@ -68,6 +65,7 @@ def convert_to_torch(
 
     Returns:
         The converted array as torch tensor.
+
     """
     # Convert array to tensor
     # if the datatype is not currently supported by torch we need to improvise

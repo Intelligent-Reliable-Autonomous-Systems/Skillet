@@ -1,7 +1,7 @@
 """
 task_policy.py
 
-The high level controller class for skills 
+The high level controller class for skills
 
 Written by Will Solow & Jeff Jewett, 2026
 """
@@ -11,8 +11,8 @@ import torch
 from ..skill_controller.skill_controller import SkillController
 from .task_policy import TaskPolicy
 
-class ReachTaskPolicy(TaskPolicy):
 
+class ReachTaskPolicy(TaskPolicy):
 
     def __init__(self, cfg) -> None:
         super().__init__(cfg)
@@ -27,19 +27,14 @@ class ReachTaskPolicy(TaskPolicy):
         """
         Get the next skill for the robot to execute
 
-        Input: 
+        Input:
             obs: Torch Tensor of shape (num_envs, observation dimension)
 
         Returns:
             skill dictionary: dict of length (num_envs,)
             params: Torch Tensor of shape (num_envs, max_skill_parameter_dimension)
         """
-        
+
         num_envs = obs.shape[0]
 
-        return ["ReachXYZ"] * num_envs, torch.zeros((num_envs,3),device=obs.device)
-
-
-
-
-
+        return ["ReachXYZ"] * num_envs, torch.zeros((num_envs, 3), device=obs.device)

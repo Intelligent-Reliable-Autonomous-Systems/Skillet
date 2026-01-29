@@ -28,8 +28,8 @@ def __dataclass_transform__():
 
 
 @__dataclass_transform__()
-def configclass(cls, **kwargs):
-    """Wrapper around `dataclass` functionality to add extra checks and utilities.
+def configclass(cls: Any, **kwargs: dict[str, Any]) -> Any:  # noqa: ANN401
+    """Wrap around `dataclass` functionality to add extra checks and utilities.
 
     As of Python 3.7, the standard dataclasses have two main issues which makes them non-generic for
     configuration use-cases. These include:
@@ -83,6 +83,7 @@ def configclass(cls, **kwargs):
         The wrapped class.
 
     .. _dataclass: https://docs.python.org/3/library/dataclasses.html
+
     """
     # add type annotations
     _add_annotation_types(cls)
@@ -121,12 +122,13 @@ def _class_to_dict(obj: object) -> dict[str, Any]:
 
     Returns:
         Converted dictionary mapping.
+
     """
     return class_to_dict(obj)
 
 
 def _update_class_from_dict(obj, data: dict[str, Any]) -> None:
-    """Reads a dictionary and sets object variables recursively.
+    """Read a dictionary and sets object variables recursively.
 
     This function performs in-place update of the class member attributes.
 
@@ -138,6 +140,7 @@ def _update_class_from_dict(obj, data: dict[str, Any]) -> None:
         TypeError: When input is not a dictionary.
         ValueError: When dictionary has a value that does not match default config type.
         KeyError: When dictionary has a key that does not exist in the default config type.
+
     """
     update_class_from_dict(obj, data, _ns="")
 
@@ -165,6 +168,7 @@ def _replace_class_with_kwargs(obj: object, **kwargs) -> object:
 
     Returns:
         The new object.
+
     """
     return replace(obj, **kwargs)
 
@@ -179,7 +183,7 @@ Private helper functions.
 """
 
 
-def _add_annotation_types(cls):
+def _add_annotation_types(cls) -> None:
     """Add annotations to all elements in the dataclass.
 
     By definition in Python, a field is defined as a class variable that has a type annotation.
