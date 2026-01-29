@@ -9,7 +9,7 @@ import torch
 
 from env.skill_env_wrapper import SkillEnvWrapper
 from skills.skill_controller.skill_controller import SkillController
-from skills.task_policy.reach_task_policy import ReachTaskPolicy
+from skills.task_policy.dummy_task_policy import DummyTaskPolicy
 from skills.task_policy.task_policy import TaskPolicy
 
 
@@ -40,7 +40,7 @@ class SkillExecutor:
         self.num_envs = self.env.num_envs
         self.device = self.env.device
         self.skill_controller = SkillController(cfg)
-        self.task_policy = ReachTaskPolicy(cfg)
+        self.task_policy = DummyTaskPolicy(cfg)
 
     def execute(self) -> None:
         """Execute a run of the environment.
@@ -53,22 +53,16 @@ class SkillExecutor:
 
         """
         self.task_policy.reset()
-        _, _ = self.env.reset()
+        obs, _ = self.env.reset()
 
         dones = torch.zeros((self.num_envs,), device=self.device, dtype=torch.bool)
 
         while not dones.all():
-            # skills, params = self.task_policy.get_skills_and_params(obs)
-            # self.skill_controller.reset(skills=skills, params=params)
-            i = 0
-            # while not self.skill_controller.is_done:
-            while True:
-                # action = self.skill_controller.step(obs)
-                action = 2 * torch.rand(self.env.env.action_space.shape, device=self.env.env.unwrapped.device) - 1
-                _, _, term, trunc, _ = self.env.step(action)
-                if i > 10:
-                    break
-                i += 1
+            skills, params = self.task_policy.get_skills_and_params(obs)
+            self.skill_controller.reset(skills=skills, params=params)
+            while not self.skill_controller.is_done:
+                action = self.skill_controller.step(obs)
+                obs, _, term, trunc, _ = self.env.step(action)
             dones = torch.logical_or(term, trunc)
 
         return
