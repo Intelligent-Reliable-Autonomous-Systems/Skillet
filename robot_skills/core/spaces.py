@@ -33,8 +33,7 @@ from typing_extensions import TypedDict
 import gymnasium as gym
 import numpy as np
 
-if TYPE_CHECKING:
-    import torch
+import torch
 # try:
 # except Exception:  # torch not available / typing-only env
 #     class _FakeTorch:
@@ -54,7 +53,7 @@ SpaceItem: TypeAlias = Scalar | ListLike
 """A scalar or list-like value that can be stored in a space."""
 SpaceItemNP: TypeAlias = Scalar | np.ndarray[Scalar]
 """A scalar or numpy array of scalars that can be stored in a space."""
-SpaceItemTorch: TypeAlias = Scalar | torch.Tensor[Scalar]
+SpaceItemTorch: TypeAlias = "Scalar | torch.Tensor[Scalar]"
 """A scalar or PyTorch tensor of scalars that can be stored in a space."""
 SpaceValue: TypeAlias = SpaceItem | Mapping[str, SpaceItem]
 """A scalar or list-like value or dictionary of scalar or list-like values that can be stored in a space."""
@@ -62,11 +61,11 @@ SpaceValueNP: TypeAlias = SpaceItemNP | Mapping[str, SpaceItemNP]
 """A scalar or numpy array of scalars or dictionary of scalar or numpy array of scalars that can be stored in a space."""
 SpaceValueTorch: TypeAlias = SpaceItemTorch | Mapping[str, SpaceItemTorch]
 """A scalar or PyTorch tensor of scalars or dictionary of scalar or PyTorch tensor of scalars that can be stored in a space."""
-BatchedSpaceItem: TypeAlias = ListLike[SpaceItem]
+BatchedSpaceItem: TypeAlias = Sequence[SpaceItem]
 """A batched list-like sequence of scalar or list-like values that can be stored in a space."""
-BatchedSpaceItemNP: TypeAlias = ListLike[SpaceItemNP]
+BatchedSpaceItemNP: TypeAlias = Sequence[SpaceItemNP]
 """A batched list-like sequence of numpy arrays of scalars that can be stored in a space."""
-BatchedSpaceItemTorch: TypeAlias = ListLike[SpaceItemTorch]
+BatchedSpaceItemTorch: TypeAlias = Sequence[SpaceItemTorch]
 """A batched list-like sequence of PyTorch tensors of scalars that can be stored in a space."""
 BatchedSpaceValue: TypeAlias = BatchedSpaceItem | Mapping[str, BatchedSpaceItem]
 """A batched scalar or list-like value or dictionary of batched scalar or list-like values that can be stored in a space."""
@@ -148,6 +147,10 @@ class SpaceSpecification(Generic[TSpace]):
 
         return zeros_for_space(self.space)
 
+    def sample(self) -> TSpace:
+        """Sample a random value from the space."""
+        return self.space.sample()
+
 # =============================================
 # Actions
 # =============================================
@@ -188,8 +191,9 @@ State: TypeAlias = Observation
 """The full state of the environment (full observability)."""
 
 TObs = TypeVar("TObs", bound=Observation)
-ObservationSpec: TypeAlias = SpaceSpecification[TObs]
-"""The specification of an observation space."""
+class ObservationSpec(SpaceSpecification[TObs], Generic[TObs]):
+    """The specification of an observation space."""
+    pass
 
 @overload
 def make_observation_spec(space: gym.spaces.Box, *, name: str = "obs", is_torch: bool = False) -> ObservationSpec[Any]: ...
@@ -230,10 +234,15 @@ SkillParams: TypeAlias = SpaceValue
 BatchedSkillParams: TypeAlias = BatchedSpaceValue
 """A batched scalar or list-like value or dictionary of batched scalar or list-like values that can be stored in a space."""
 
-SkillParamsSpec: TypeAlias = SpaceSpecification[SkillParams]
-"""The specification of a skill parameter space."""
-BatchedSkillParamsSpec: TypeAlias = SpaceSpecification[BatchedSkillParams]
-"""The specification of a batched skill parameter space."""
+TSkillParams = TypeVar("TSkillParams", bound=SkillParams)
+class SkillParamsSpec(SpaceSpecification[TSkillParams], Generic[TSkillParams]):
+    """The specification of a skill parameter space."""
+    pass
+
+TBSkillParams = TypeVar("TBSkillParams", bound=BatchedSkillParams)
+class BatchedSkillParamsSpec(SpaceSpecification[TBSkillParams], Generic[TBSkillParams]):
+    """The specification of a batched skill parameter space."""
+    pass
 
 # Brainstorming parameter examples:
 # Continuous-only: pick(xyz), place(xyzrpy), etc.

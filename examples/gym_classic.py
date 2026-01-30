@@ -10,26 +10,27 @@ from robot_skills.core.spaces import ActionSpec, ObservationSpec, Observation, S
 CartPoleAction = Int[np.ndarray, "2"]
 """A Discrete(2) numpy array."""
 
+CartPoleObservation = Float[np.ndarray, "4"]
+"""A Box(4) numpy array."""
+
 if __name__ == "__main__":
     env = gym.make("CartPole-v1")
-    
     action_spec = ActionSpec[CartPoleAction](
-        obs_type=None,
         space=env.action_space,
         name="cartpole_action",
         is_torch=False,
         is_batched=False,
     )
-    observation_spec = ObservationSpec[Float[np.ndarray, "4"]](
+    observation_spec = ObservationSpec[CartPoleObservation](
         space=env.observation_space,
         name="cartpole_observation",
         is_torch=False,
         is_batched=False,
     )
-    env = BasicEnvironment[Float[np.ndarray, "4"], Int[np.ndarray, "2"]](env)
-    obs = env.reset()
+    env = BasicEnvironment[CartPoleObservation, CartPoleAction](env)
+    obs, _ = env.reset()
     print(obs)
-    action = action_spec.space.sample()
+    action = action_spec.sample()
     obs, reward, term, trunc, info = env.step(action)
     print(obs)
     print(reward)

@@ -52,7 +52,7 @@ class BasicEnvironment(Environment[TEnvObs, TAction], Generic[TEnvObs, TAction])
     def supports_observation_spec(self, obs_spec: ObservationSpec) -> bool:
         return True # TODO: compare obs_spec.space with self.env.observation_space
 
-    def reset(self, *args, **kwargs) -> None:
+    def reset(self, *args, **kwargs) -> tuple[TEnvObs, dict]:
         obs, info = self.env.reset(*args, **kwargs)
         self.last_obs = obs
         return obs, info
@@ -67,7 +67,6 @@ class BasicEnvironment(Environment[TEnvObs, TAction], Generic[TEnvObs, TAction])
     @overload
     def get_observation(self, obs_spec: ObservationSpec[TObs]) -> TObs: ...
     
-    @abc.abstractmethod
     def get_observation(self, obs_spec: ObservationSpec[Any] | None = None) -> Any:
         if self.last_obs is None:
             raise ValueError("No observation has been received yet. Call reset() first.")
