@@ -15,13 +15,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import (
+    TYPE_CHECKING,
     Any,
     ClassVar,
     Generic,
     Mapping,
     NamedTuple,
     Protocol,
+    Sequence,
     Type,
+    TypeAlias,
     TypeVar,
     overload,
 )
@@ -30,19 +33,49 @@ from typing_extensions import TypedDict
 import gymnasium as gym
 import numpy as np
 
-try:
+if TYPE_CHECKING:
     import torch
-except Exception:  # torch not available / typing-only env
-    class _FakeTorch:
-        tensor = Any
-    torch = _FakeTorch()
+# try:
+# except Exception:  # torch not available / typing-only env
+#     class _FakeTorch:
+#         tensor = Any
+#     torch = _FakeTorch()
 
 from jaxtyping import Float, Int, Bool
 
 # =============================================
 # Space specifications
 # =============================================
-TSpace = TypeVar("TSpace")
+Scalar: TypeAlias = int | float | bool
+"""A scalar value."""
+ListLike: TypeAlias = Sequence[Scalar]
+"""A list-like sequence of scalars."""
+SpaceItem: TypeAlias = Scalar | ListLike
+"""A scalar or list-like value that can be stored in a space."""
+SpaceItemNP: TypeAlias = Scalar | np.ndarray[Scalar]
+"""A scalar or numpy array of scalars that can be stored in a space."""
+SpaceItemTorch: TypeAlias = Scalar | torch.Tensor[Scalar]
+"""A scalar or PyTorch tensor of scalars that can be stored in a space."""
+SpaceValue: TypeAlias = SpaceItem | Mapping[str, SpaceItem]
+"""A scalar or list-like value or dictionary of scalar or list-like values that can be stored in a space."""
+SpaceValueNP: TypeAlias = SpaceItemNP | Mapping[str, SpaceItemNP]
+"""A scalar or numpy array of scalars or dictionary of scalar or numpy array of scalars that can be stored in a space."""
+SpaceValueTorch: TypeAlias = SpaceItemTorch | Mapping[str, SpaceItemTorch]
+"""A scalar or PyTorch tensor of scalars or dictionary of scalar or PyTorch tensor of scalars that can be stored in a space."""
+BatchedSpaceItem: TypeAlias = ListLike[SpaceItem]
+"""A batched list-like sequence of scalar or list-like values that can be stored in a space."""
+BatchedSpaceItemNP: TypeAlias = ListLike[SpaceItemNP]
+"""A batched list-like sequence of numpy arrays of scalars that can be stored in a space."""
+BatchedSpaceItemTorch: TypeAlias = ListLike[SpaceItemTorch]
+"""A batched list-like sequence of PyTorch tensors of scalars that can be stored in a space."""
+BatchedSpaceValue: TypeAlias = BatchedSpaceItem | Mapping[str, BatchedSpaceItem]
+"""A batched scalar or list-like value or dictionary of batched scalar or list-like values that can be stored in a space."""
+BatchedSpaceValueNP: TypeAlias = BatchedSpaceItemNP | Mapping[str, BatchedSpaceItemNP]
+"""A batched scalar or numpy array of scalars or dictionary of batched scalar or numpy array of scalars that can be stored in a space."""
+BatchedSpaceValueTorch: TypeAlias = BatchedSpaceItemTorch | Mapping[str, BatchedSpaceItemTorch]
+"""A batched scalar or PyTorch tensor of scalars or dictionary of batched scalar or PyTorch tensor of scalars that can be stored in a space."""
+
+TSpace = TypeVar("TSpace", bound=SpaceValue)
 """The generic type variable for a space type."""
 @dataclass(frozen=True)
 class SpaceSpecification(Generic[TSpace]):
@@ -57,24 +90,105 @@ class SpaceSpecification(Generic[TSpace]):
     """Whether the space is a PyTorch tensor or numpy array."""
     is_batched: bool
     """Whether the space is batched."""
+    n_envs: int | None = None
+    """The number of environments in the batched space. If None, the space is not batched."""
+
+    @overload
+    def index(self, value: TSpace, env_ids: Sequence[bool]) -> TSpace: ...
+    def index(self, value: TSpace, env_ids: Sequence[int]) -> TSpace:
+        """Index the space value for the given environment ids.
+        
+        Args:
+            value: The space value to index.
+            env_ids: The environment ids to index the space value for.
+                If a sequence of booleans, the environment ids are the indices of the True values.
+                If a sequence of integers, select the elements at the given indices.
+        """
+        if isinstance(env_ids, Sequence[bool]):
+            env_ids = np.where(env_ids)[0]
+        if self.is_batched:
+            if isinstance(value, Mapping):
+                return {key: self.index(v, env_ids) for key, v in value.items()}
+            elif isinstance(value, Sequence):
+                return [self.index(v, env_ids) for v in value]
+            else:
+                return value[env_ids]
+        else:
+            return value
+
+    def zeros(self) -> TSpace:
+        """Create a zero-filled tensor or array conforming to the Gym space (including handling Dict spaces)."""
+
+        def zeros_for_space(space: gym.Space[Any]) -> TSpace:
+            if isinstance(space, gym.spaces.Box):
+                if self.is_torch:
+                    return torch.zeros(space.shape, dtype=space.dtype)
+                else:
+                    return np.zeros(space.shape, dtype=space.dtype)
+            elif isinstance(space, gym.spaces.Dict):
+                # Recursively fill dict space
+                return {key: zeros_for_space(subspace) for key, subspace in space.spaces.items()}
+            elif isinstance(space, gym.spaces.Discrete):
+                if self.is_torch:
+                    return torch.zeros((), dtype=torch.long)
+                else:
+                    return np.zeros((), dtype=int)
+            elif isinstance(space, gym.spaces.MultiDiscrete):
+                if self.is_torch:
+                    return torch.zeros(space.nvec.shape, dtype=torch.long)
+                else:
+                    return np.zeros(space.nvec.shape, dtype=int)
+            elif isinstance(space, gym.spaces.MultiBinary):
+                if self.is_torch:
+                    return torch.zeros(space.n, dtype=torch.long)
+                else:
+                    return np.zeros(space.n, dtype=int)
+            else:
+                raise NotImplementedError(f"zeros() not implemented for space type: {type(space)}")
+
+        return zeros_for_space(self.space)
+
+# =============================================
+# Actions
+# =============================================
+Action: TypeAlias = SpaceItem
+"""Represents an action in the environment."""
+BatchedAction: TypeAlias = BatchedSpaceItem
+"""A batched action in the environment."""
+TAction = TypeVar("TAction", bound=Action)
+# ActionSpec: TypeAlias = SpaceSpecification[TAction]
+class ActionSpec(SpaceSpecification[TAction], Generic[TAction]):
+    """The specification of an action space."""
+    pass
+
+def make_action_spec(
+    obs_type: Type[TAction],
+    space: gym.Space[TAction],
+    name: str | None = None,
+    is_torch: bool = False,
+    is_batched: bool = False,
+    n_envs: int | None = None,
+) -> ActionSpec[TAction]:
+    """
+    Takes a Gymnasium space and returns an ActionSpec parameterized by the action type.
+    """
+    if name is None:
+        if space:
+            name = str(space)
+    return ActionSpec[TAction](space=space, name=name, is_torch=is_torch, is_batched=is_batched, n_envs=n_envs)
 
 # =============================================
 # Observations
 # =============================================
-class Observation(Protocol):
-    """Represents an observation from the environment."""
-    ...
-    
-class BatchedObservation(Observation, Protocol):
-    """Represents a batched observation from the environment."""
-    ...
-    
-class State(Observation, Protocol):
-    """Represents the full state of the environment (full observability)."""
-    ...
+Observation: TypeAlias = SpaceValue
+"""A scalar or list-like value or dictionary of scalar or list-like values that can be stored in a space."""
+BatchedObservation: TypeAlias = BatchedSpaceValue
+"""A batched scalar or list-like value or dictionary of batched scalar or list-like values that can be stored in a space."""
+State: TypeAlias = Observation
+"""The full state of the environment (full observability)."""
 
 TObs = TypeVar("TObs", bound=Observation)
-type ObservationSpec[TObs: Observation] = SpaceSpecification[TObs]
+ObservationSpec: TypeAlias = SpaceSpecification[TObs]
 """The specification of an observation space."""
 
 @overload
@@ -111,14 +225,15 @@ def make_observation_spec(space: gym.Space[Any], *, name: str = "obs", is_torch:
 # Skill parameters are the parameters that are used to control the skill.
 # Some skills may involve continuous parameterizations. Some skills may involve discrete parameterizations.
 
-class SkillParams(Protocol):
-    """Represents the parameters of a skill."""
-    ...
+SkillParams: TypeAlias = SpaceValue
+"""A scalar or list-like value or dictionary of scalar or list-like values that can be stored in a space."""
+BatchedSkillParams: TypeAlias = BatchedSpaceValue
+"""A batched scalar or list-like value or dictionary of batched scalar or list-like values that can be stored in a space."""
 
-TParams = TypeVar("TParams", bound=SkillParams)
-"""The generic type variable for the parameters of a skill."""
-SkillParamsSpec = SpaceSpecification[TParams]
-"""The specification of a skill parameters space."""
+SkillParamsSpec: TypeAlias = SpaceSpecification[SkillParams]
+"""The specification of a skill parameter space."""
+BatchedSkillParamsSpec: TypeAlias = SpaceSpecification[BatchedSkillParams]
+"""The specification of a batched skill parameter space."""
 
 # Brainstorming parameter examples:
 # Continuous-only: pick(xyz), place(xyzrpy), etc.
@@ -140,58 +255,62 @@ SkillParamsSpec = SpaceSpecification[TParams]
 # =============================================
 # Common observation space type aliases and definitions
 # =============================================
-type Array1D = Float[np.ndarray, "n"]
+Array1D: TypeAlias = Float[np.ndarray, "n"]
 """Represents a 1D array of floats ndarray[(n,), float]."""
-type BatchedArray1D = Float[np.ndarray, "b n"]
+BatchedArray1D: TypeAlias = Float[np.ndarray, "b n"]
 """Represents a batched 1D array of floats ndarray[(b, n), float]."""
-type ArrayEmpty = Float[np.ndarray, "0"]
+ArrayEmpty: TypeAlias = Float[np.ndarray, "0"]
 """Represents an empty 1D array of floats ndarray[(0,), float]."""
-type BatchedArrayEmpty = Float[np.ndarray, "b 0"]
+BatchedArrayEmpty: TypeAlias = Float[np.ndarray, "b 0"]
 """Represents a batched empty 1D array of floats ndarray[(b, 0), float]."""
-type Array3 = Float[np.ndarray, "3"]
+Array3: TypeAlias = Float[np.ndarray, "3"]
 """Represents a 3D position or orientation in Cartesian space as a 1x3 array."""
-type BatchedArray3 = Float[np.ndarray, "b 3"]
+BatchedArray3: TypeAlias = Float[np.ndarray, "b 3"]
 """Represents a batched 3D position or orientation in Cartesian space as a (b, 3) array."""
-type Array6 = Float[np.ndarray, "6"]
+Array6: TypeAlias = Float[np.ndarray, "6"]
 """Represents a 6D position and orientation in Cartesian space as a 1x6 array."""
-type BatchedArray6 = Float[np.ndarray, "b 6"]
+BatchedArray6: TypeAlias = Float[np.ndarray, "b 6"]
 """Represents a batched 6D position and orientation in Cartesian space as a (b, 6) array."""
-type Array7 = Float[np.ndarray, "7"]
+Array7: TypeAlias = Float[np.ndarray, "7"]
 """Represents a 7D position and orientation in Cartesian space with a weight as a 1x7 array."""
-type BatchedArray7 = Float[np.ndarray, "b 7"]
+BatchedArray7: TypeAlias = Float[np.ndarray, "b 7"]
 """Represents a batched 7D position and orientation in Cartesian space with a weight as a (b, 7) array."""
-type ParamDC = NamedTuple("ParamDC", [("discrete", Int[np.ndarray, "m"]), ("continuous", Float[np.ndarray, "n"])])
+ParamDC: TypeAlias = NamedTuple("ParamDC", [("discrete", Int[np.ndarray, "m"]), ("continuous", Float[np.ndarray, "n"])])
 """Represents a skill parameter set with m discrete parameters and n continuous parameters."""
-type BatchedParamDC = NamedTuple("BatchedParamDC", [("discrete", Int[np.ndarray, "b m"]), ("continuous", Float[np.ndarray, "b n"])])
+BatchedParamDC: TypeAlias = NamedTuple("BatchedParamDC", [("discrete", Int[np.ndarray, "b m"]), ("continuous", Float[np.ndarray, "b n"])])
 """Represents a batched skill parameter set with m discrete parameters and n continuous parameters."""
-type Tensor1D = Float[torch.Tensor, "n"]
+Tensor1D: TypeAlias = Float[torch.Tensor, "n"]
 """Represents a 1D array of floats torch.Tensor[(n,), float]."""
-type BatchedTensor1D = Float[torch.Tensor, "b n"]
+BatchedTensor1D: TypeAlias = Float[torch.Tensor, "b n"]
 """Represents a batched 1D array of floats torch.Tensor[(b, n), float]."""
-type TensorEmpty = Float[torch.Tensor, "0"]
+TensorEmpty: TypeAlias = Float[torch.Tensor, "0"]
 """Represents an empty 1D array of floats torch.Tensor[(0,), float]."""
-type BatchedTensorEmpty = Float[torch.Tensor, "b 0"]
+BatchedTensorEmpty: TypeAlias = Float[torch.Tensor, "b 0"]
 """Represents a batched empty 1D array of floats torch.Tensor[(b, 0), float]."""
-type Tensor3 = Float[torch.Tensor, "3"]
+Tensor3: TypeAlias = Float[torch.Tensor, "3"]
 """Represents a 3D position or orientation in Cartesian space as a 1x3 tensor."""
-type BatchedTensor3 = Float[torch.Tensor, "b 3"]
+BatchedTensor3: TypeAlias = Float[torch.Tensor, "b 3"]
 """Represents a batched 3D position or orientation in Cartesian space as a (b, 3) tensor."""
-type Tensor6 = Float[torch.Tensor, "6"]
+Tensor6: TypeAlias = Float[torch.Tensor, "6"]
 """Represents a 6D position and orientation in Cartesian space as a 1x6 tensor."""
-type BatchedTensor6 = Float[torch.Tensor, "b 6"]
+BatchedTensor6: TypeAlias = Float[torch.Tensor, "b 6"]
 """Represents a batched 6D position and orientation in Cartesian space as a (b, 6) tensor."""
-type Tensor7 = Float[torch.Tensor, "7"]
+Tensor7: TypeAlias = Float[torch.Tensor, "7"]
 """Represents a 7D position and orientation in Cartesian space with a weight as a 1x7 tensor."""
-type BatchedTensor7 = Float[torch.Tensor, "b 7"]
+BatchedTensor7: TypeAlias = Float[torch.Tensor, "b 7"]
 """Represents a batched 7D position and orientation in Cartesian space with a weight as a (b, 7) tensor."""
-type ParamDC_Torch = NamedTuple("ParamDC_Torch", [("discrete", Int[torch.Tensor, "m"]), ("continuous", Float[torch.Tensor, "n"])])
+ParamDC_Torch: TypeAlias = NamedTuple("ParamDC_Torch", [("discrete", Int[torch.Tensor, "m"]), ("continuous", Float[torch.Tensor, "n"])])
 """Represents a skill parameter set with m discrete parameters and n continuous parameters as a PyTorch tensor."""
-type BatchedParamDC_Torch = NamedTuple("BatchedParamDC_Torch", [("discrete", Int[torch.Tensor, "b m"]), ("continuous", Float[torch.Tensor, "b n"])])
+BatchedParamDC_Torch: TypeAlias = NamedTuple("BatchedParamDC_Torch", [("discrete", Int[torch.Tensor, "b m"]), ("continuous", Float[torch.Tensor, "b n"])])
 """Represents a batched skill parameter set with m discrete parameters and n continuous parameters as a PyTorch tensor."""
 
+test: ActionSpec[Float[np.ndarray, "0"]] = ActionSpec[Float[np.ndarray, "0"]](
+    space=gym.spaces.Box(low=0.0, high=1.0, shape=(0,), dtype="float32"),
+    name="ArrayEmpty", is_torch=False, is_batched=False,
+)
 class CommonSpecs:
     # Predefined static types for common observation spaces
-    ArrayEmpty: ClassVar[SpaceSpecification[ArrayEmpty]] = SpaceSpecification[ArrayEmpty](
+    ArrayEmpty: ClassVar[SpaceSpecification[ArrayEmpty]] = ActionSpec[ArrayEmpty](
         space=gym.spaces.Box(low=0.0, high=1.0, shape=(0,), dtype="float32"),
         name="ArrayEmpty", is_torch=False, is_batched=False,
     )

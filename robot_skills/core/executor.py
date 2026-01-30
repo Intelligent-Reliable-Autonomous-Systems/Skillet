@@ -1,5 +1,5 @@
-from skills.core.env import Environment
-from skills.core.skill import Skill, SkillStatus
+from robot_skills.core.env import Environment
+from robot_skills.core.skill import Skill, SkillStatus
 
 
 def tamp_task_executor(agent: TAMPAgent, env: Environment, task: Task) -> None:

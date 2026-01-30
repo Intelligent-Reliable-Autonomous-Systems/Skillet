@@ -1,22 +1,23 @@
 import abc
-from typing import Any, Generic, TypeVar, overload
+from typing import Any, Generic, TypeVar, overload, TypeAlias
 
 import gymnasium as gym
 
-from skills.core.spaces import ObservationSpec, Observation, State
+from robot_skills.core.spaces import Action, ObservationSpec, Observation, SpaceItem, State
 
-type Action = Any
-"""Represents an action in the environment."""
 TObs = TypeVar("TObs", bound=Observation)
 """The type associated with the observation spec"""
 TEnvObs = TypeVar("TEnvObs", bound=Observation)
 """The default observation type returned by the environment."""
+TAction = TypeVar("TAction", bound=Action)
+"""The type associated with the action spec"""
 
-class Environment(gym.Wrapper, abc.ABC, Generic[TEnvObs]):
+class Environment(gym.Wrapper, abc.ABC, Generic[TEnvObs, TAction]):
     """An environment interface for the Robot Skills framework.
     
     Generic type parameters:
         TEnvObs: The type of the environment observation. e.g. np.ndarray[(8,), float]
+        TAction: The type associated with the action spec
     """
 
     def __init__(self, env: gym.Env, *args, **kwargs):
@@ -41,7 +42,7 @@ class Environment(gym.Wrapper, abc.ABC, Generic[TEnvObs]):
         """Get the latest state from the environment."""
         raise NotImplementedError
 
-class BasicEnvironment(Environment[TEnvObs]):
+class BasicEnvironment(Environment[TEnvObs, TAction], Generic[TEnvObs, TAction]):
     """A basic environment that supports raw state observations (full observability)."""
 
     def __init__(self, env: gym.Env, *args, **kwargs):
@@ -56,7 +57,7 @@ class BasicEnvironment(Environment[TEnvObs]):
         self.last_obs = obs
         return obs, info
 
-    def step(self, action: Action) -> tuple[TEnvObs, float, bool, bool, dict]:
+    def step(self, action: TAction) -> tuple[TEnvObs, float, bool, bool, dict]:
         obs, reward, term, trunc, info = self.env.step(action)
         self.last_obs = obs
         return obs, reward, term, trunc, info
