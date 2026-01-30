@@ -18,7 +18,6 @@ Written by Will Solow and Jeff Jewett, 2026
 import argparse
 import sys
 
-sys.path.append("/home/will-solow/Projects/IsaacLab/source")
 from isaaclab.app import AppLauncher
 
 # add argparse arguments
@@ -45,7 +44,8 @@ import torch
 from isaaclab_tasks.utils import parse_env_cfg
 
 from env.isaac_env_wrapper import IsaacEnvWrapper
-from executor.executor_env import SkillExecutor
+from executor import SkillExecutor
+from policy_cfgs import DummyCfg
 
 
 def main() -> None:
@@ -57,20 +57,20 @@ def main() -> None:
     # create environment
     env = gym.make(args_cli.task, cfg=env_cfg)
 
-    print("[INFO]: Testing Executor environment")
-    print(f"[INFO]: Gym observation space: {env.observation_space}")
-    print(f"[INFO]: Gym action space: {env.action_space}")
+    print("[INFO][Main] Testing Executor environment")
+    print(f"[INFO][Main] Gym observation space: {env.observation_space}")
+    print(f"[INFO][Main] Gym action space: {env.action_space}")
 
     # Set up Skill executor and environment in framework
     env = IsaacEnvWrapper(env)
-    skill_executor = SkillExecutor(None, env)
+    skill_executor = SkillExecutor(DummyCfg(), env)
 
     # simulate environment
     while simulation_app.is_running():
         # run everything in inference mode
         with torch.inference_mode():
             skill_executor.execute()
-            print("[INFO] finished run of skill executor, resetting")
+            print("[INFO][Main] finished run of skill executor, resetting")
 
     # close the simulator
     env.close()

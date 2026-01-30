@@ -8,9 +8,9 @@ Written by Will Solow & Jeff Jewett, 2026
 import torch
 
 from env.skill_env_wrapper import SkillEnvWrapper
-from skills.skill_controller.skill_controller import SkillController
-from skills.task_policy.dummy_task_policy import DummyTaskPolicy
-from skills.task_policy.task_policy import TaskPolicy
+from robot_skills import PolicyCfg, get_subclasses
+from robot_skills.task_policy import TaskPolicy
+from robot_skills.high_level_obs import HighLevelObs
 
 
 class SkillExecutor:
@@ -21,9 +21,9 @@ class SkillExecutor:
 
     env: SkillEnvWrapper
     task_policy: TaskPolicy
-    skill_controller: SkillController
+    obs_converter: HighLevelObs
 
-    def __init__(self, cfg: dict, env: SkillEnvWrapper) -> None:
+    def __init__(self, cfg: PolicyCfg, env: SkillEnvWrapper) -> None:
         """Initialize the environment.
 
         Args:
@@ -34,13 +34,16 @@ class SkillExecutor:
             None
 
         """
+        cfg, env = self._fill_cfg_from_env(cfg, env)
         self.cfg = cfg
         self.env = env
 
         self.num_envs = self.env.num_envs
         self.device = self.env.device
-        self.skill_controller = SkillController(cfg)
-        self.task_policy = DummyTaskPolicy(cfg)
+        self.task_policy = get_subclasses("robot_skills.task_policy", "TaskPolicy")[cfg.task_policy.task_policy_name](
+            cfg.task_policy
+        )
+        self.obs_converter = HighLevelObs()
 
     def execute(self) -> None:
         """Execute a run of the environment.
@@ -56,13 +59,30 @@ class SkillExecutor:
         obs, _ = self.env.reset()
 
         dones = torch.zeros((self.num_envs,), device=self.device, dtype=torch.bool)
-
+        self.task_policy.reset()
         while not dones.all():
-            skills, params = self.task_policy.get_skills_and_params(obs)
-            self.skill_controller.reset(skills=skills, params=params)
-            while not self.skill_controller.is_done:
-                action = self.skill_controller.step(obs)
+            high_level_obs = self.obs_converter.get_high_level_obs(obs)
+            self.task_policy.set_skills_and_params(high_level_obs)
+
+            while not self.task_policy.is_skills_done:
+                action = self.task_policy.low_level_step(obs)
                 obs, _, term, trunc, _ = self.env.step(action)
             dones = torch.logical_or(term, trunc)
 
         return
+
+    def _fill_cfg_from_env(self, cfg: PolicyCfg, env: SkillEnvWrapper) -> tuple[PolicyCfg, SkillEnvWrapper]:
+        """Fill the configclass with data from the environment.
+
+        Args:
+            cfg: Config dictionary
+            env: A SkillEnvWrapper environment of a wrapped IsaacLab/ROS2 environment
+
+        Returns:
+            None
+
+        """
+        cfg.task_policy.num_envs = env.num_envs
+        cfg.task_policy.device = env.device
+
+        return cfg, env

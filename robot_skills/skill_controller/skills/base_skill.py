@@ -10,7 +10,7 @@ from abc import abstractmethod
 
 import torch
 
-from skills.low_level_policy.low_level_policy import LowLevelPolicy
+from robot_skills.low_level_policy import LowLevelPolicy, LowLevelPolicyCfg
 
 
 class BaseSkill:
@@ -21,29 +21,33 @@ class BaseSkill:
 
     low_level_policy: LowLevelPolicy
 
-    def __init__(self, cfg: dict) -> None:
+    def __init__(self, cfg: LowLevelPolicyCfg, device: str = "cuda") -> None:
         """Initialize Base skill.
 
         Defines the low level controller
 
         Args:
             cfg: A configuration dictionary
+            device: CUDA device
 
         """
         self.cfg = cfg
+        self.device = device
 
-    @abstractmethod
-    def reset(self) -> None:
-        """Reset the skill.
+    def reset(self, env_ids: torch.Tensor, skill_params: torch.Tensor) -> None:
+        """Reset the skill."""
+        self.env_ids = env_ids
+        self.num_envs = env_ids.shape[0]
+        self.skill_params = skill_params
 
-        Resets the low level skill policy
-        """
-        raise NotImplementedError(f"Please implement the 'reset' method for {self.__class__.__name__}.")
+        self._state = torch.zeros((self.num_envs,), device=self.device)
+        self._curr_calls = 0
+        self._dones = torch.zeros((self.num_envs,), device=self.device, dtype=torch.bool)
 
     def step(self, obs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Step through the skill.
 
-        Step through each of the skills for the skill controller
+        Step through the skill by querying the low level policy
 
         Args:
             obs: Observation tensor of shape (N, obs_dim)
@@ -52,9 +56,23 @@ class BaseSkill:
             A tuple with a tensor of shape (N, num_joints) and a tensor of shape (N,) if the skill is done
 
         """
-        action = self.low_level_policy.get_action(obs)
+        self._curr_calls += 1
+        return self._get_action(obs), self._is_done()
 
-        return action, torch.tensor(0)
+    @abstractmethod
+    def _update_state(self, obs: torch.Tensor) -> torch.Tensor:
+        """Update the state of the skill."""
+        raise NotImplementedError(f"Please implement the '_update_state' method for {self.__class__.__name__}.")
+
+    @abstractmethod
+    def _get_action(self, obs: torch.Tensor) -> torch.Tensor:
+        """Update the pose goal of the skill."""
+        raise NotImplementedError(f"Please implement the '_get_action' method for {self.__class__.__name__}.")
+
+    @abstractmethod
+    def _is_done(self) -> torch.Tensor:
+        """Return a Tensor of the environment IDs that are done."""
+        raise NotImplementedError(f"Please implement the '_is_done' method for {self.__class__.__name__}.")
 
     @abstractmethod
     def is_valid_initial_state(self) -> torch.Tensor:
