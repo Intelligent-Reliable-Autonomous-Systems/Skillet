@@ -1,6 +1,14 @@
 import abc
+from typing import TypeVar
 
-class Policy(abc.ABC):
+from skills.core.spaces import ObservationSpec
+
+TPolicyObs = TypeVar("TPolicyObs")
+"""The type of the observation for the policy."""
+TPolicyParams = TypeVar("TPolicyParams")
+"""The type of the parameters for the policy."""
+
+class Policy(abc.ABC, Generic[TPolicyObs]):
     """A policy that takes an observation and outputs an action."""
 
     @property
@@ -10,7 +18,7 @@ class Policy(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def get_action(self, obs: Observation, params: SkillParams) -> Action:
+    def get_action(self, obs: TPolicyObs, params: TPolicyParams) -> Action:
         """Get the next low-level action for the robot based on the observation and parameters."""
         raise NotImplementedError
 
