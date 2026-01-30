@@ -11,10 +11,10 @@ import torch
 from robot_skills.task_policy import TaskPolicy, TaskPolicyCfg
 
 
-class DummyTaskPolicy(TaskPolicy):
-    """Dummy Task Policy.
+class RandomTaskPolicy(TaskPolicy):
+    """Random Task Policy.
 
-    This task policy repeatedly uses the dummy skill
+    This task policy repeatedly chooses random skills
     """
 
     def __init__(self, cfg: TaskPolicyCfg) -> None:
@@ -44,4 +44,4 @@ class DummyTaskPolicy(TaskPolicy):
 
         self.skill_controller.reset(self.current_skills, self.current_skills_params)
 
-        print(f"[INFO][DummyTaskPolicy] Set current skills: {self.current_skills}")
+        print(f"[INFO][RandomTaskPolicy] Set current skills: {self.current_skills}")

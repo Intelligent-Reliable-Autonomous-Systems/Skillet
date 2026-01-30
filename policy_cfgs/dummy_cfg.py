@@ -18,8 +18,8 @@ class DummyCfg(PolicyCfg):
     """Instantiable dummy policy."""
 
     task_policy = TaskPolicyCfg(
-        task_policy_name="DummyTaskPolicy",
-        skills=["Dummy"],
-        skills_cfgs=[LowLevelPolicyCfg(output_dim=7)],
+        task_policy_name="RandomTaskPolicy",
+        skills=["Random", "Zeroes"],
+        skills_cfgs=[LowLevelPolicyCfg(output_dim=7), LowLevelPolicyCfg(output_dim=7)],
         num_envs=MISSING,
     )

@@ -88,7 +88,7 @@ class SkillController:
             env_ids = self.env_ids_list[np.where(sk == self.current_skills_list)[0]]
             if env_ids.shape[0] == 0:
                 continue
-            self._actions[env_ids], self._dones[env_ids] = self.skills[i].step(obs)
+            self._actions[env_ids], self._dones[env_ids] = self.skills[i].step(obs[env_ids])
 
         return self._actions
 
