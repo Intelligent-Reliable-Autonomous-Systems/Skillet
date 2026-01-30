@@ -15,8 +15,11 @@ import argparse
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Main ROS2 executor file.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default=None, help="Name of the task.")
+parser.add_argument("--task", type=str, default=None, required=True, help="Name of the task.")
 parser.add_argument("--device", type=str, default="cuda", help="Device to use")
+parser.add_argument(
+    "--ros2_ws", type=str, default=None, required=True, help="Absolute path to ROS2 workspace containing bringup files"
+)
 
 # parse the arguments
 args_cli = parser.parse_args()
@@ -30,8 +33,9 @@ import numpy as np
 from roslibpy import Ros
 import ros2  # noqa: F401
 
-from env import ROS2EnvWrapper
-from env.utils import parse_env_cfg
+from env import import_ros2_wrapper
+
+from env.utils import parse_ros2_env_cfg
 from executor import SkillExecutor
 from policy_cfgs import DummyCfg
 
@@ -65,7 +69,9 @@ def main() -> None:
     """Test the executor within the IsaacLab/IsaacSim framework."""
     np.set_printoptions(precision=3)
     # create environment configuration
-    env_cfg = parse_env_cfg(args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs)
+    env_cfg = parse_ros2_env_cfg(
+        args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs, ros2_workspace=args_cli.ros2_ws
+    )
 
     # create environment
     env = gym.make(args_cli.task, cfg=env_cfg, ros=setup_ros())
@@ -75,6 +81,7 @@ def main() -> None:
     print(f"[INFO][Main] Gym action space: {env.action_space}")
 
     # Set up Skill executor and environment in framework
+    ROS2EnvWrapper = import_ros2_wrapper()
     env = ROS2EnvWrapper(env)
     skill_executor = SkillExecutor(DummyCfg(), env)
 

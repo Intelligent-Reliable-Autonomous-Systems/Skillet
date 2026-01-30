@@ -28,3 +28,6 @@ class TaskPolicyCfg:
 
     # Device
     device: str = "cuda"
+
+    # Max action dim
+    action_dim: int = MISSING

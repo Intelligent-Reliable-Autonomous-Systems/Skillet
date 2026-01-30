@@ -57,7 +57,6 @@ class SkillExecutor:
         """
         self.task_policy.reset()
         obs, _ = self.env.reset()
-
         dones = torch.zeros((self.num_envs,), device=self.device, dtype=torch.bool)
         self.task_policy.reset()
         while not dones.all():
@@ -82,7 +81,10 @@ class SkillExecutor:
             None
 
         """
+        print("[INFO][SkillExecutor] Filling cfg from environment (action space)")
         cfg.task_policy.num_envs = env.num_envs
         cfg.task_policy.device = env.device
-
+        for low_level_cfg in cfg.task_policy.skills_cfgs:
+            low_level_cfg.output_dim = env.num_actions
+        cfg.task_policy.action_dim = env.num_actions
         return cfg, env

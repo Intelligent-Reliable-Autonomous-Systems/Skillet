@@ -44,5 +44,4 @@ class IKEEPolicy(LowLevelPolicy):
             A tensor of shape (N, num_joints)
 
         """
-        print(obs)
         return torch.tensor(0)

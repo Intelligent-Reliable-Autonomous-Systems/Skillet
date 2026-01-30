@@ -1,13 +1,25 @@
 """Init file for env."""
 
+from collections.abc import Callable
+
 from .env_cfg import EnvCfg as EnvCfg
 
-# Conditional import
-ISAAC_ENABLED = False
-ROS2_ENABLED = True
 
-if ISAAC_ENABLED:
-    from .isaac_env_wrapper import IsaacEnvWrapper as IsaacEnvWrapper
+def import_isaac_wrapper() -> Callable:
+    """Lazy import of the isaac wrapper"""
+    try:
+        from .isaac_env_wrapper import IsaacEnvWrapper
 
-if ROS2_ENABLED:
-    from .ros2_env_wrapper import ROS2EnvWrapper as ROS2EnvWrapper
+        return IsaacEnvWrapper
+    except ImportError:
+        raise RuntimeError("ISAAC not available")
+
+
+def import_ros2_wrapper() -> Callable:
+    """Lazy import of the ROS2 wrapper"""
+    try:
+        from .ros2_env_wrapper import ROS2EnvWrapper
+
+        return ROS2EnvWrapper
+    except ImportError:
+        raise RuntimeError("ISAAC not available")

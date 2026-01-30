@@ -40,8 +40,11 @@ class IsaacEnvWrapper(SkillEnvWrapper):
 
         """
         obs_dict, info = self.env.reset()
+        obs = obs_dict["policy"]
+        if isinstance(obs, dict):
+            obs = torch.cat(list(obs.values()), dim=1)
 
-        return obs_dict["policy"], info
+        return obs, info
 
     def step(self, action: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, dict]:
         """Step through the environment.
@@ -54,5 +57,8 @@ class IsaacEnvWrapper(SkillEnvWrapper):
 
         """
         obs_dict, reward, term, trunc, info = self.env.step(action)
+        obs = obs_dict["policy"]
+        if isinstance(obs, dict):
+            obs = torch.cat(list(obs.values()), dim=1)
 
-        return obs_dict["policy"], reward, term, trunc, info
+        return obs, reward, term, trunc, info

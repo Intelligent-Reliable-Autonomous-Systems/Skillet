@@ -118,8 +118,8 @@ def load_cfg_from_registry(task_name: str, entry_point_key: str) -> dict | objec
     return cfg
 
 
-def parse_env_cfg(
-    task_name: str, device: str = "cuda:0", num_envs: int | None = None, use_fabric: bool | None = None
+def parse_ros2_env_cfg(
+    task_name: str, device: str = "cuda:0", num_envs: int | None = None, ros2_workspace: str | None = None
 ) -> EnvCfg:
     """Parse configuration for an environment and override based on inputs.
 
@@ -127,9 +127,7 @@ def parse_env_cfg(
         task_name: The name of the environment.
         device: The device to run the simulation on. Defaults to "cuda:0".
         num_envs: Number of environments to create. Defaults to None, in which case it is left unchanged.
-        use_fabric: Whether to enable/disable fabric interface. If false, all read/write operations go through USD.
-            This slows down the simulation but allows seeing the changes in the USD through the USD stage.
-            Defaults to None, in which case it is left unchanged.
+        ros2_workspace: The absolute path to the ros2_workspace
 
     Returns:
         The parsed configuration object.
@@ -149,6 +147,7 @@ def parse_env_cfg(
 
     cfg.device = device
     cfg.num_envs = num_envs
+    cfg.ros2_workspace = ros2_workspace
 
     return cfg
 

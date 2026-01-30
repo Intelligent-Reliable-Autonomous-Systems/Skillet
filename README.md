@@ -19,7 +19,22 @@ See [IsaacLab Installation](https://isaac-sim.github.io/IsaacLab/main/source/set
 4. Install IsaacLab: `cd IsaacLab`, `./isaaclab.sh --install`
 5. Navigate back to Robot-Skills repository `cd ../Robot-Skills`
 
-## Use
+To run experiment with dummy task policy and low level policy: `python3 main_isaac.py --num_envs 4 --task Isaac-Reach-Franka-v0`
+
+## ROS2 Integration
+See [ROS2 Installation](https://docs.ros.org/en/jazzy/Installation.html) to install ROS2. Be sure to install on system python (not venv/conda)
+
+1. Navigate to parent directory and clone `https://github.com/Intelligent-Reliable-Autonomous-Systems/IRAS-Kinova`
+2. Follow installation instructions in `IRAS-Kinova/README.md`
+3. Navigate back to `Robot-Skills`
+
+To run:
+1. Open new terminal. Navigate to IRAS-Kinova. Ensure system python is active (no venv/conda).
+   - Source ROS2 system installation: `source /opt/ros/jazzy/setup.bash`
+   - Source IRAS-Kinova ROS2 overlay: `source install/setup.bash`
+   - Laucn ROSBridge Node: `ros2 launch rosbridge_server rosbridge_websocket_launch.xml`
+2. Navigate back to Robot-Skills in another terminal. Ensure virtual env is active: `conda activate skills`
+3. Run dummy task policy with ROS2/RViz: `python3 main_ros2.py --num_envs 1 --task ROS2-Reach-Kinova-v0 --ros2_ws <absolute-path-to-IRAS/Kinova>`
 
 ## Current considerations
 1. Should we assume that we are operating on GPU or CPU (torch or NumPy)?

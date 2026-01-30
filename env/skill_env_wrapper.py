@@ -31,6 +31,10 @@ class SkillEnvWrapper:
         self.env = env
         self.num_envs = env.unwrapped.num_envs
         self.device = self.env.unwrapped.device
+        if hasattr(self.env.unwrapped, "single_action_space"):
+            self.num_actions = self.env.unwrapped.single_action_space.shape[0]
+        else:
+            self.num_actions = self.env.unwrapped.action_space.shape[0]
 
     @abstractmethod
     def reset(self) -> tuple[torch.Tensor, dict]:

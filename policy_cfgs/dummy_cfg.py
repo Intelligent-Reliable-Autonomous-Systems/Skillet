@@ -20,6 +20,6 @@ class DummyCfg(PolicyCfg):
     task_policy = TaskPolicyCfg(
         task_policy_name="RandomTaskPolicy",
         skills=["Random", "Zeroes"],
-        skills_cfgs=[LowLevelPolicyCfg(output_dim=8), LowLevelPolicyCfg(output_dim=8)],
+        skills_cfgs=[LowLevelPolicyCfg(output_dim=MISSING), LowLevelPolicyCfg(output_dim=MISSING)],
         num_envs=MISSING,
     )

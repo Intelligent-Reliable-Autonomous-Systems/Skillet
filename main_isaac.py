@@ -45,8 +45,7 @@ import gymnasium as gym
 import isaaclab_tasks  # noqa: F401
 import torch
 from isaaclab_tasks.utils import parse_env_cfg
-
-from env import IsaacEnvWrapper
+from env import import_isaac_wrapper
 from executor import SkillExecutor
 from policy_cfgs import DummyCfg
 
@@ -65,6 +64,7 @@ def main() -> None:
     print(f"[INFO][Main] Gym action space: {env.action_space}")
 
     # Set up Skill executor and environment in framework
+    IsaacEnvWrapper = import_isaac_wrapper()
     env = IsaacEnvWrapper(env)
     skill_executor = SkillExecutor(DummyCfg(), env)
 

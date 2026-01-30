@@ -23,8 +23,6 @@ class SkillController:
 
     AVAIL_SKILLS = get_subclasses("robot_skills.skill_controller.skills", "BaseSkill")
 
-    NUM_ROBOT_JOINTS = 8
-
     def __init__(self, cfg: TaskPolicyCfg) -> None:
         """Initialize the skill controller.
 
@@ -36,6 +34,7 @@ class SkillController:
         self.num_envs = cfg.num_envs
         self.device = cfg.device
         self.env_ids_list = torch.arange(self.num_envs, device=self.device)
+        self.action_dim = cfg.action_dim
 
         for skill_name in cfg.skills:
             assert skill_name in self.AVAIL_SKILLS
@@ -61,7 +60,7 @@ class SkillController:
         """
         self.current_skills_list = skills
         self.skills_params = params
-        self._actions = torch.zeros((self.num_envs, self.NUM_ROBOT_JOINTS), device=self.device)
+        self._actions = torch.zeros((self.num_envs, self.action_dim), device=self.device)
         self._dones = torch.zeros((self.num_envs,), device=self.device, dtype=torch.bool)
 
         for i, sk in enumerate(self.skills_names):

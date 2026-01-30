@@ -30,8 +30,6 @@ class KinovaROS2ReachEnvCfg(ROS2RLEnvCfg):
     """The configuration class for Kinova Gen3 Arm."""
 
     """Robot configuration"""
-    # Workspace path for Kinova BringUp
-    ros2_workspace = "/home/will-solow/Projects/IRAS-Kinova/"
 
     # Whether to spin up real robot or not
     use_fake_hardware = True
