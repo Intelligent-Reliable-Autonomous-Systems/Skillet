@@ -28,7 +28,9 @@ classifiers = [
 ]
 dependencies = [
     "torch",
-    "numpy"
+    "numpy",
+    "roslibpy",
+    "gymnasium"
 ]
 
 [project.optional-dependencies]

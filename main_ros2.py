@@ -11,65 +11,78 @@ Written by Will Solow and Jeff Jewett, 2026
 """Launch Isaac Sim Simulator first."""
 
 import argparse
-import sys
-
-from isaaclab.app import AppLauncher
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Main ROS2 executor file.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
-# append AppLauncher cli args
-AppLauncher.add_app_launcher_args(parser)
+parser.add_argument("--device", type=str, default="cuda", help="Device to use")
+
 # parse the arguments
 args_cli = parser.parse_args()
 
-# launch omniverse app
-app_launcher = AppLauncher(args_cli)
-simulation_app = app_launcher.app
 
 """Rest everything follows."""
+import time
 
 import gymnasium as gym
-import isaaclab_tasks  # noqa: F401
-import torch
-from isaaclab_tasks.utils import parse_env_cfg
+import numpy as np
+from roslibpy import Ros
 
-from env.isaac_env_wrapper import IsaacEnvWrapper
+from env import ROS2EnvWrapper
+from env.utils import parse_env_cfg
 from executor import SkillExecutor
 from policy_cfgs import DummyCfg
 
 
+def setup_ros() -> Ros:
+    """Open the ROS2 interface."""
+    print("[INFO][Setup ROS] Waiting to connect to ROSBridge")
+    print(
+        "[INFO][Setup ROS] Ensure that rosbridge node is running: `ros2 launch rosbridge_server rosbridge_websocket_launch.xml`"
+    )
+    # Wait until it starts
+    ros = Ros(host="localhost", port=9090)
+    start = time.time()
+    while True:
+        try:
+            ros.run(timeout=1)
+            if ros.is_connected:
+                print("[INFO][Setup ROS] Connected to rosbridge")
+                break
+        except RuntimeError:
+            if time.time() - start > 30:
+                raise TimeoutError(
+                    "RosBridge failed to start. Is the rosbridge node running? ros2 launch rosbridge_server rosbridge_websocket_launch.xml"
+                )
+            time.sleep(0.2)
+
+    return ros
+
+
 def main() -> None:
     """Test the executor within the IsaacLab/IsaacSim framework."""
+    np.set_printoptions(precision=3)
     # create environment configuration
-    env_cfg = parse_env_cfg(
-        args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs, use_fabric=not args_cli.disable_fabric
-    )
+    env_cfg = parse_env_cfg(args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs)
+
     # create environment
-    env = gym.make(args_cli.task, cfg=env_cfg)
+    env = gym.make(args_cli.task, cfg=env_cfg, ros=setup_ros())
 
     print("[INFO][Main] Testing Executor environment")
     print(f"[INFO][Main] Gym observation space: {env.observation_space}")
     print(f"[INFO][Main] Gym action space: {env.action_space}")
 
     # Set up Skill executor and environment in framework
-    env = IsaacEnvWrapper(env)
+    env = ROS2EnvWrapper(env)
     skill_executor = SkillExecutor(DummyCfg(), env)
 
     # simulate environment
-    while simulation_app.is_running():
-        # run everything in inference mode
-        with torch.inference_mode():
-            skill_executor.execute()
-            print("[INFO][Main] finished run of skill executor, resetting")
+    skill_executor.execute()
 
-    # close the simulator
+    # close the environment. Note that the spun up ROS2 nodes will not close automatically
     env.close()
 
 
 if __name__ == "__main__":
-    # run the main function
     main()
-    # close sim app
-    simulation_app.close()

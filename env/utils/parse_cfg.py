@@ -6,14 +6,15 @@
 """Sub-module with utilities for parsing and loading configurations."""
 
 import collections
-import gymnasium as gym
 import importlib
 import inspect
 import os
 import re
+
+import gymnasium as gym
 import yaml
 
-from isaaclab.envs import DirectRLEnvCfg, ManagerBasedRLEnvCfg
+from env import EnvCfg
 
 
 def load_cfg_from_registry(task_name: str, entry_point_key: str) -> dict | object:
@@ -52,6 +53,7 @@ def load_cfg_from_registry(task_name: str, entry_point_key: str) -> dict | objec
 
     Raises:
         ValueError: If the entry point key is not available in the gym registry for the task.
+
     """
     # obtain the configuration entry point
     cfg_entry_point = gym.spec(task_name.split(":")[-1]).kwargs.get(entry_point_key)
@@ -118,7 +120,7 @@ def load_cfg_from_registry(task_name: str, entry_point_key: str) -> dict | objec
 
 def parse_env_cfg(
     task_name: str, device: str = "cuda:0", num_envs: int | None = None, use_fabric: bool | None = None
-) -> ManagerBasedRLEnvCfg | DirectRLEnvCfg:
+) -> EnvCfg:
     """Parse configuration for an environment and override based on inputs.
 
     Args:
@@ -135,6 +137,7 @@ def parse_env_cfg(
     Raises:
         RuntimeError: If the configuration for the task is not a class. We assume users always use a class for the
             environment configuration.
+
     """
     # load the default configuration
     cfg = load_cfg_from_registry(task_name.split(":")[-1], "env_cfg_entry_point")
@@ -144,14 +147,8 @@ def parse_env_cfg(
     if isinstance(cfg, dict):
         raise RuntimeError(f"Configuration for the task: '{task_name}' is not a class. Please provide a class.")
 
-    # simulation device
-    cfg.sim.device = device
-    # disable fabric to read/write through USD
-    if use_fabric is not None:
-        cfg.sim.use_fabric = use_fabric
-    # number of environments
-    if num_envs is not None:
-        cfg.scene.num_envs = num_envs
+    cfg.device = device
+    cfg.num_envs = num_envs
 
     return cfg
 

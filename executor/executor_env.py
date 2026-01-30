@@ -9,8 +9,8 @@ import torch
 
 from env.skill_env_wrapper import SkillEnvWrapper
 from robot_skills import PolicyCfg, get_subclasses
-from robot_skills.task_policy import TaskPolicy
 from robot_skills.high_level_obs import HighLevelObs
+from robot_skills.task_policy import TaskPolicy
 
 
 class SkillExecutor:

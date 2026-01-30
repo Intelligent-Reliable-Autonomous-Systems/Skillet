@@ -12,12 +12,11 @@ import gymnasium as gym
 ##
 # Joint Position Control
 ##
-
 gym.register(
     id="ROS2-Reach-Kinova-v0",
-    entry_point="ros2_tasks.envs:ROS2RLEnv",
+    entry_point=f"{__name__}.kinova_reach_ros2:KinovaROS2ReachEnv",
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": f"{__name__}.joint_pos_env_cfg:FrankaReachEnvCfg",
+        "env_cfg_entry_point": f"{__name__}.kinova_reach_ros2:KinovaROS2ReachEnvCfg",
     },
 )

@@ -5,8 +5,9 @@ The low level policy controller class configuration for skills
 Written by Will Solow & Jeff Jewett, 2026
 """
 
-from cfg import configclass
 from dataclasses import MISSING
+
+from cfg import configclass
 
 
 @configclass

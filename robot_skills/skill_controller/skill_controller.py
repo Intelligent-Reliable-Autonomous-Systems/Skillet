@@ -8,7 +8,6 @@ Written by Will Solow and Jeff Jewett, 2026
 import numpy as np
 import torch
 
-from robot_skills.skill_controller.skills import BaseSkill
 from robot_skills.task_policy import TaskPolicyCfg
 from robot_skills.utils import get_subclasses
 
@@ -24,7 +23,7 @@ class SkillController:
 
     AVAIL_SKILLS = get_subclasses("robot_skills.skill_controller.skills", "BaseSkill")
 
-    NUM_ROBOT_JOINTS = 7
+    NUM_ROBOT_JOINTS = 8
 
     def __init__(self, cfg: TaskPolicyCfg) -> None:
         """Initialize the skill controller.

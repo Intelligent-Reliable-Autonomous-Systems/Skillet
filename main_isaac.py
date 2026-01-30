@@ -25,12 +25,15 @@ parser = argparse.ArgumentParser(description="Main IsaacSim Executor file throug
 parser.add_argument(
     "--disable_fabric", action="store_true", default=False, help="Disable fabric and use USD I/O operations."
 )
-parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default=None, help="Name of the task.")
+parser.add_argument("--num_envs", type=int, default=None, required=True, help="Number of environments to simulate.")
+parser.add_argument("--task", type=str, default=None, required=True, help="Name of the task.")
+
+
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
 # parse the arguments
 args_cli = parser.parse_args()
+
 
 # launch omniverse app
 app_launcher = AppLauncher(args_cli)
@@ -43,7 +46,7 @@ import isaaclab_tasks  # noqa: F401
 import torch
 from isaaclab_tasks.utils import parse_env_cfg
 
-from env.isaac_env_wrapper import IsaacEnvWrapper
+from env import IsaacEnvWrapper
 from executor import SkillExecutor
 from policy_cfgs import DummyCfg
 

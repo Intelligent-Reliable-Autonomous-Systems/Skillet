@@ -7,8 +7,9 @@ Written by Will Solow & Jeff Jewett, 2026
 
 import torch
 
-from .base_skill import BaseSkill
 from robot_skills.low_level_policy import LowLevelPolicyCfg
+
+from .base_skill import BaseSkill
 
 
 class Random(BaseSkill):

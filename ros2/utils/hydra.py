@@ -7,6 +7,7 @@
 
 import functools
 from collections.abc import Callable
+from typing import Any
 
 try:
     import hydra
@@ -15,16 +16,11 @@ try:
 except ImportError:
     raise ImportError("Hydra is not installed. Please install it by running 'pip install hydra-core'.")
 
-from isaaclab.envs import DirectRLEnvCfg, ManagerBasedRLEnvCfg
-from isaaclab.envs.utils.spaces import replace_env_cfg_spaces_with_strings, replace_strings_with_env_cfg_spaces
-from isaaclab.utils import replace_slices_with_strings, replace_strings_with_slices
-
-from isaaclab_tasks.utils.parse_cfg import load_cfg_from_registry
+from cfg.utils import replace_slices_with_strings, replace_strings_with_slices
+from env.utils import load_cfg_from_registry, replace_env_cfg_spaces_with_strings, replace_strings_with_env_cfg_spaces
 
 
-def register_task_to_hydra(
-    task_name: str, agent_cfg_entry_point: str
-) -> tuple[ManagerBasedRLEnvCfg | DirectRLEnvCfg, dict]:
+def register_task_to_hydra(task_name: str, agent_cfg_entry_point: str) -> tuple[Any, dict]:
     """Register the task configuration to the Hydra configuration store.
 
     This function resolves the configuration file for the environment and agent based on the task's name.
@@ -36,6 +32,7 @@ def register_task_to_hydra(
 
     Returns:
         A tuple containing the parsed environment and agent configuration objects.
+
     """
     # load the configurations
     env_cfg = load_cfg_from_registry(task_name, "env_cfg_entry_point")
@@ -47,10 +44,7 @@ def register_task_to_hydra(
     env_cfg = replace_env_cfg_spaces_with_strings(env_cfg)
     # convert the configs to dictionary
     env_cfg_dict = env_cfg.to_dict()
-    if isinstance(agent_cfg, dict) or agent_cfg is None:
-        agent_cfg_dict = agent_cfg
-    else:
-        agent_cfg_dict = agent_cfg.to_dict()
+    agent_cfg_dict = agent_cfg if isinstance(agent_cfg, dict) or agent_cfg is None else agent_cfg.to_dict()
     cfg_dict = {"env": env_cfg_dict, "agent": agent_cfg_dict}
     # replace slices with strings because OmegaConf does not support slices
     cfg_dict = replace_slices_with_strings(cfg_dict)
@@ -71,6 +65,7 @@ def hydra_task_config(task_name: str, agent_cfg_entry_point: str) -> Callable:
 
     Returns:
         The decorated function with the envrionment's and agent's configurations updated from command line arguments.
+
     """
 
     def decorator(func):

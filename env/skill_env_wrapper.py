@@ -57,3 +57,7 @@ class SkillEnvWrapper:
 
         """
         raise NotImplementedError(f"Please implement the 'step' method for {self.__class__.__name__}.")
+
+    def close(self) -> None:
+        """Cleanup for the environment."""
+        self.env.close()

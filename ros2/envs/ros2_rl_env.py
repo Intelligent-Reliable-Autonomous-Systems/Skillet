@@ -6,14 +6,18 @@ Written by Will Solow, 2026
 
 """
 
-from typing import Any, Sequence, SupportsFloat
+import math
+import time
 from abc import abstractmethod
+from typing import Any
 
 import gymnasium as gym
-import torch
+import numpy as np
+from roslibpy import Ros
+
+from cfg import configure_seed
 
 from .ros2_rl_env_cfg import ROS2RLEnvCfg
-from cfg import configure_seed
 
 
 class ROS2RLEnv(gym.Env):
@@ -25,62 +29,105 @@ class ROS2RLEnv(gym.Env):
 
     """
 
-    def __init__(self, cfg: ROS2RLEnvCfg, render_mode: str | None = None, **kwargs):
+    def __init__(self, cfg: ROS2RLEnvCfg, ros: Ros, render_mode: str | None = None, **kwargs: dict[str, Any]) -> None:
         """Initialize the environment.
 
         Args:
             cfg: The configuration object for the environment
+            ros: roslibpy object
             render_mode: The render mode for the environment. Defaults to None, which
                 is similar to ``"human"``.
-        """
+            kwargs: Additoinal arguments
 
+        """
         self.cfg = cfg
+        self.ros = ros
+        self.num_envs = cfg.num_envs
+        self.device = cfg.device
         self.render_mode = render_mode
 
-    def reset(self, seed: int | None = None, options: dict[str, Any] | None = None) -> tuple[torch.Tensor, dict]:
-        """Resets all the environments and returns observations.
+        self._sim_step_counter = 0
+        # -- counter for curriculum
+        self.common_step_counter = 0
+        # -- init buffers
+        self.episode_length_buf = 0
+        self.reset_terminated = False
+        self.reset_time_outs = False
+        self.reset_buf = False
+        # allocate dictionary to store metrics
+        self.extras: dict[str, Any] = {}
+
+        # setup the action and observation spaces for Gym
+
+        print("[INFO][ROS2RLEnv] Completed Environment Setup")
+
+    def __del__(self) -> None:
+        """Cleanup for the environment."""
+        self.close()
+
+    """
+    Properties.
+    """
+
+    @property
+    def physics_dt(self) -> float:
+        """The physics time-step (in s).
+
+        This is the lowest time-decimation at which ROS2 is publishing.
+        """
+        return self.cfg.dt
+
+    @property
+    def step_dt(self) -> float:
+        """The environment stepping time-step (in s).
+
+        This is the time-step at which the environment steps forward.
+        """
+        return float(self.cfg.dt * self.cfg.decimation)
+
+    @property
+    def max_episode_length_s(self) -> float:
+        """Maximum episode length in seconds."""
+        return self.cfg.episode_length_s
+
+    @property
+    def max_episode_length(self) -> float:
+        """The maximum episode length in steps adjusted from s."""
+        return float(math.ceil(self.max_episode_length_s / (self.cfg.dt * self.cfg.decimation)))
+
+    def reset(
+        self, seed: int | None = None, options: dict[str, Any] | None = None
+    ) -> tuple[dict[str, np.ndarray], dict]:
+        """Reset all the environments and returns observations.
 
         This function calls the :meth:`_reset_idx` function to reset all the environments.
-        However, certain operations, such as procedural terrain generation, that happened during initialization
-        are not repeated.
+        However, certain operations happen during reset() which are not repeated
 
         Args:
             seed: The seed to use for randomization. Defaults to None, in which case the seed is not set.
             options: Additional information to specify how the environment is reset. Defaults to None.
 
-                Note:
-                    This argument is used for compatibility with Gymnasium environment definition.
+        Note:
+            This argument is used for compatibility with Gymnasium environment definition.
 
         Returns:
             A tuple containing the observations and extras.
+
         """
         # set the seed
         if seed is not None:
             self.seed(seed)
 
         # reset state of scene
-        indices = torch.arange(self.num_envs, dtype=torch.int64, device=self.device)
-        self._reset_idx(indices)
+        self._reset_idx()
 
-        # update articulation kinematics
-        self.scene.write_data_to_sim()
-        self.sim.forward()
-
-        # if sensors are added to the scene, make sure we render to reflect changes in reset
-        if self.sim.has_rtx_sensors() and self.cfg.num_rerenders_on_reset > 0:
-            for _ in range(self.cfg.num_rerenders_on_reset):
-                self.sim.render()
-
-        if self.cfg.wait_for_textures and self.sim.has_rtx_sensors():
-            while SimulationManager.assets_loading():
-                self.sim.render()
+        self.episode_length_buf += 1  # step in current episode (per env)
+        self.common_step_counter += 1  # total step (common for all envs)
 
         # return observations
         return self._get_observations(), self.extras
 
-    def step(
-        self, action: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, dict[str, Any]]:  # type: ignore
+    def step(self, action: np.ndarray) -> tuple[dict[str, np.ndarray], np.ndarray, bool, bool, dict[str, Any]]:  # type: ignore
         """Execute one time-step of the ROS2 robot.
 
         The environment steps forward at a fixed time-step, while the physics simulation is decimated at a
@@ -91,7 +138,7 @@ class ROS2RLEnv(gym.Env):
 
         This function performs the following steps:
 
-        1. Convert the action to NumPy
+        1. Pre process the action and store it
         2. Publish the action to the robot
         3. Compute the rewards
         4. Get the observations
@@ -100,31 +147,26 @@ class ROS2RLEnv(gym.Env):
 
         Returns:
             A tuple containing the observations, rewards, resets (terminated and truncated) and extras.
-        """
-        action = action.cpu().numpy()
 
-        self._publish_action_to_robot(action)
+        """
+        # Pre process the robot action
+        joint_pos = self._pre_process_action(action)
+
+        # Send the robot action to hardware
+        self._publish_action_to_robot(joint_pos)
+
+        time.sleep(self.step_dt)
 
         self.episode_length_buf += 1
         self.common_step_counter += 1
 
-        self.reset_terminated[:], self.reset_time_outs[:] = self._get_dones()
+        self.reset_terminated, self.reset_time_outs = self._get_dones()
         self.reset_buf = self.reset_terminated | self.reset_time_outs
         self.reward_buf = self._get_rewards()
 
         # -- reset envs that terminated/timed-out and log the episode information
-        reset_env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
-        if len(reset_env_ids) > 0:
-            self._reset_idx(reset_env_ids)
-            # if sensors are added to the scene, make sure we render to reflect changes in reset
-            if self.sim.has_rtx_sensors() and self.cfg.num_rerenders_on_reset > 0:
-                for _ in range(self.cfg.num_rerenders_on_reset):
-                    self.sim.render()
-
-        # post-step: step interval event
-        if self.cfg.events:
-            if "interval" in self.event_manager.available_modes:
-                self.event_manager.apply(mode="interval", dt=self.step_dt)
+        if self.reset_buf:
+            self._reset_idx()
 
         # update observations
         self.obs_buf = self._get_observations()
@@ -147,6 +189,7 @@ class ROS2RLEnv(gym.Env):
 
         Returns:
             The seed used for random generator.
+
         """
         # set seed for torch and other libraries
         return configure_seed(seed)
@@ -155,7 +198,7 @@ class ROS2RLEnv(gym.Env):
         """Run rendering by visualizing with RViz."""
         pass
 
-    def close(self):
+    def close(self) -> None:
         """Cleanup for the environment."""
         pass
 
@@ -163,64 +206,73 @@ class ROS2RLEnv(gym.Env):
     Helper functions.
     """
 
-    def _reset_idx(self, env_ids: Sequence[int]):
-        """Reset environments based on specified indices.
-
-        Args:
-            env_ids: List of environment ids which must be reset
-        """
+    def _reset_idx(self) -> None:
+        """Reset environments based on specified indices."""
         # reset the episode length buffer
-        self.episode_length_buf[env_ids] = 0
+        self.episode_length_buf = 0
 
     """
     Implementation-specific functions.
     """
 
     @abstractmethod
-    def _pre_physics_step(self, actions: torch.Tensor):
-        """Pre-process actions before stepping through the physics.
+    def _pre_process_action(self, actions: np.ndarray) -> np.ndarray:
+        """Pre process the robot action.
 
-        This function is responsible for pre-processing the actions before stepping through the physics.
-        It is called before the physics stepping (which is decimated).
+        This function is responsible preprocessing the robot action (ie checking joint limits, etc).
 
         Args:
-            actions: The actions to apply on the environment. Shape is (num_envs, action_dim).
+            actions: The actions to apply on the environment. Shape is (num_envs, num_joints).
+
+        Returns:
+            The joint positions to publish to the robot
+
         """
-        raise NotImplementedError(f"Please implement the '_pre_physics_step' method for {self.__class__.__name__}.")
+        raise NotImplementedError(f"Please implement the '_pre_process_action' method for {self.__class__.__name__}.")
 
     @abstractmethod
-    def _apply_action(self):
-        """Apply actions to the simulator.
+    def _publish_action_to_robot(self, actions: np.ndarray, duration: float = 1) -> None:
+        """Publish action to robot controller.
 
-        This function is responsible for applying the actions to the simulator. It is called at each
-        physics time-step.
+        This function is responsible publishing joint positions and velocities to
+        the correct robot target. These positions are set by _pre_process_action()
+
+        Args:
+            actions: joint positions to publish to the robot
+            duration: duration of trajectory
+
         """
-        raise NotImplementedError(f"Please implement the '_apply_action' method for {self.__class__.__name__}.")
+        raise NotImplementedError(
+            f"Please implement the '_publish_action_to_robot' method for {self.__class__.__name__}."
+        )
 
     @abstractmethod
-    def _get_observations(self) -> torch.Tensor:
+    def _get_observations(self) -> dict[str, np.ndarray]:
         """Compute and return the observations for the environment.
 
         Returns:
-            The observations for the environment.
+            The observations for the environment in the form {positions: [], velocities: []}.
+
         """
         raise NotImplementedError(f"Please implement the '_get_observations' method for {self.__class__.__name__}.")
 
     @abstractmethod
-    def _get_rewards(self) -> torch.Tensor:
+    def _get_rewards(self) -> np.ndarray:
         """Compute and return the rewards for the environment.
 
         Returns:
             The rewards for the environment. Shape is (num_envs,).
+
         """
         raise NotImplementedError(f"Please implement the '_get_rewards' method for {self.__class__.__name__}.")
 
     @abstractmethod
-    def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
+    def _get_dones(self) -> tuple[bool, bool]:
         """Compute and return the done flags for the environment.
 
         Returns:
             A tuple containing the done flags for termination and time-out.
-            Shape of individual tensors is (num_envs,).
+            Assumed to not be batched
+
         """
         raise NotImplementedError(f"Please implement the '_get_dones' method for {self.__class__.__name__}.")

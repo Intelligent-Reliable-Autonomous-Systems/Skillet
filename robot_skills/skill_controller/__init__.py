@@ -1,3 +1,3 @@
 """Init file for skill controller."""
 
-from .skill_controller import SkillController
+from .skill_controller import SkillController as SkillController

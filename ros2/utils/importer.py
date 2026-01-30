@@ -10,10 +10,10 @@ from __future__ import annotations
 import importlib
 import pkgutil
 import sys
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Generator, MutableSequence
 
 
 def import_packages(package_name: str, blacklist_pkgs: list[str] | None = None) -> None:
@@ -52,11 +52,11 @@ Internal helpers.
 
 
 def _walk_packages(
-    path: str | None = None,
+    path: MutableSequence | str | None = None,
     prefix: str = "",
     onerror: Callable | None = None,
     blacklist_pkgs: list[str] | None = None,
-) -> None:
+) -> Generator:
     """Yield ModuleInfo for all modules recursively on path, or, if path is None, all accessible modules.
 
     Note:
@@ -71,7 +71,8 @@ def _walk_packages(
     def seen(p: Any, m: dict = {}) -> bool:
         if p in m:
             return True
-        m[p] = True  # noqa: R503
+        m[p] = True
+        return False
 
     for info in pkgutil.iter_modules(path, prefix):
         # check blacklisted

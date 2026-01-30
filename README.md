@@ -8,7 +8,7 @@ Primary Developers: Jeff Jewett (jewettje@oregonstate.edu) and Will Solow (solow
 
 1. Create a conda environment: `conda create -n skills python=3.11`
 2. Activate conda environment: `conda activate skills`
-3. Install requirements via pip: `pip install numpy torch gymnasium`
+3. Install requirements via pip: `pip install numpy torch gymnasium roslibpy`
 
 ### IsaacSim/IsaacLab integration
 See [IsaacLab Installation](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/pip_installation.html) for additional information
