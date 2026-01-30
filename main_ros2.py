@@ -28,6 +28,7 @@ import time
 import gymnasium as gym
 import numpy as np
 from roslibpy import Ros
+import ros2  # noqa: F401
 
 from env import ROS2EnvWrapper
 from env.utils import parse_env_cfg
