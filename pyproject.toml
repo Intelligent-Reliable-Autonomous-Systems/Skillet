@@ -1,11 +1,11 @@
 [project]
 name = "robot_skills"
-version = "0.0.1"
+version = "0.0.2"
 description = "A Robot Skills framework for manipulation tasks with integration for ROS2 and IsaacLab"
 requires-python = ">= 3.11"
 authors = [
     {name = "Jeff Jewett", email = "jewettje@oregonstate.edu"},
-    {name = "Wil Solow", email = "soloww@oregonstate.edu"},
+    {name = "Will Solow", email = "soloww@oregonstate.edu"},
 ]
 license = "MIT"
 license-files = ["LICENSE.txt"]
@@ -19,8 +19,6 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -30,7 +28,9 @@ dependencies = [
     "torch",
     "numpy",
     "roslibpy",
-    "gymnasium"
+    "gymnasium>=1.1",
+    "jaxtyping",
+    "typing-extensions"
 ]
 
 [project.optional-dependencies]

@@ -34,16 +34,9 @@ from typing import (
 from typing_extensions import TypedDict
 
 import gymnasium as gym
-import numpy as np
-
-import torch
-# try:
-# except Exception:  # torch not available / typing-only env
-#     class _FakeTorch:
-#         tensor = Any
-#     torch = _FakeTorch()
-
 from jaxtyping import Float, Int, Bool, Shaped
+import numpy as np
+import torch
 
 # =============================================
 # Space specifications
