@@ -26,28 +26,11 @@ if __name__ == "__main__":
     # env = gym.make_vec("MountainCarContinuous-v0", num_envs=num_envs, render_mode="rgb_array")
     env = gym.make_vec(env_id, num_envs=num_envs, render_mode="rgb_array")
     env = gym.wrappers.vector.HumanRendering(env)
-    # action_spec = ActionSpec[CartPoleAction](
-    #     space=env.action_space,
-    #     name="cartpole_action",
-    #     is_torch=False,
-    #     is_batched=True,
-    # )
-    # observation_spec = ObservationSpec[CartPoleObservation](
-    #     space=env.observation_space,
-    #     name="cartpole_observation",
-    #     is_torch=False,
-    #     is_batched=True,
-    # )
+    
     env = BasicBatchedEnvironment[CartPoleObservation, CartPoleAction](env)
     print(f"Created environment {env_id} (x{num_envs})")
     print(env.obs_spec)
     print(env.action_spec)
-    # obs, _ = env.reset()
-    # print(obs)
-    # action = env.action_spec.sample()
-    # obs, reward, term, trunc, info = env.step(action)
-    # print(obs)
-    # print(reward)
 
     # Low-level policies
     zero_policy = ZeroPolicy[CartPoleObservation, CartPoleAction](env.obs_spec, env.action_spec)
@@ -62,9 +45,8 @@ if __name__ == "__main__":
     options_spec = ActionSpec[B_Int_HighLevel](
         space=gym.spaces.MultiDiscrete([len(skills)] * num_envs),
         name="options",
-        is_torch=True,
+        is_torch=False,
         is_batched=True,
-        # n_envs=args_cli.num_envs,
     )
     policy_over_options = RandomPolicy[CartPoleObservation, B_Int_HighLevel](env.obs_spec, options_spec)
     

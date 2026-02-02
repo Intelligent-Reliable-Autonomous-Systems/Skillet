@@ -12,7 +12,7 @@ import torch
 
 from robot_skills.core.env import BatchedEnvironment
 from robot_skills.core.spaces import ActionSpec
-from robot_skills.env.utils import AsGymVectorEnv
+from robot_skills.envs.utils import AsGymVectorEnv
 if TYPE_CHECKING:
     from isaaclab.envs import DirectRLEnv, ManagerBasedRLEnv
 

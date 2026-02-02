@@ -31,8 +31,8 @@ parser = argparse.ArgumentParser(description="Main IsaacSim Executor file throug
 parser.add_argument(
     "--disable_fabric", action="store_true", default=False, help="Disable fabric and use USD I/O operations."
 )
-parser.add_argument("--num_envs", type=int, default=None, required=True, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default=None, required=True, help="Name of the task.")
+parser.add_argument("--num_envs", type=int, default=4, help="Number of environments to simulate.")
+parser.add_argument("--task", type=str, default="Isaac-Reach-Franka-v0", help="Name of the task.")
 
 
 # append AppLauncher cli args
@@ -49,12 +49,8 @@ simulation_app = app_launcher.app
 
 import gymnasium as gym
 import isaaclab_tasks  # noqa: F401
-dir(isaaclab_tasks)
 import torch
 from isaaclab_tasks.utils import parse_env_cfg
-from env import import_isaac_wrapper
-from executor import SkillExecutor
-from policy_cfgs import DummyCfg
 
 from robot_skills.envs.isaac_env_wrapper import IsaacEnvWrapper
 
