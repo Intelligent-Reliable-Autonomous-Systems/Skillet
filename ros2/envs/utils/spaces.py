@@ -7,9 +7,10 @@ import gymnasium as gym
 import json
 import numpy as np
 import torch
-from typing import Any
+from typing import Any, TypeVar
 
-from ..common import SpaceType
+SpaceType = TypeVar("SpaceType", gym.spaces.Space, int, set, tuple, list, dict)
+"""A sentinel object to indicate a valid space type to specify states, observations and actions."""
 
 
 def spec_to_gym_space(spec: SpaceType) -> gym.spaces.Space:

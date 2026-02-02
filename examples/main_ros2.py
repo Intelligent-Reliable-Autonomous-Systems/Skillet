@@ -27,15 +27,14 @@ args_cli = parser.parse_args()
 
 """Rest everything follows."""
 import time
-import torch
 
 import gymnasium as gym
-import numpy as np
-from ros2.envs.utils import parse_ros2_env_cfg
-from roslibpy import Ros
+import torch
 from jaxtyping import Float, Int
+from roslibpy import Ros
 
 import ros2  # noqa: F401
+from ros2.envs.utils import parse_ros2_env_cfg
 from skillet.agents.policy_over_options import PolicyOverOptionsAgent
 from skillet.core.spaces import ActionSpec, ObservationSpec
 from skillet.envs.ros2_env_wrapper import ROS2EnvWrapper
@@ -114,7 +113,7 @@ def main() -> None:
     zero_policy = ZeroPolicy[BxN_Obs, BxM_Action](observation_spec, action_spec)
     random_policy = RandomPolicy[BxN_Obs, BxM_Action](observation_spec, action_spec)
     # Skills
-    skill_length = 40
+    skill_length = 5
     zero_skill = FixedLengthSkill[BxN_Obs, BxM_Action, None](name="zero_skill", policy=zero_policy, length=skill_length)
     random_skill = FixedLengthSkill[BxN_Obs, BxM_Action, None](
         name="random_skill", policy=random_policy, length=skill_length

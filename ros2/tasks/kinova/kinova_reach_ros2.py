@@ -74,12 +74,15 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
 
         self.default_joint_positions = np.asarray(self.cfg.default_joint_positions)
 
-        self.single_observation_space = gym.spaces.Box(float("-inf"), float("inf"), shape=(16,))
+        self.single_observation_space = gym.spaces.Dict()
+        self.single_observation_space["joints"] = gym.spaces.Box(float("-inf"), float("inf"), shape=(16,))
         self.single_action_space = gym.spaces.Box(float("-inf"), float("inf"), shape=(8,))
 
-        self.observation_space = gym.vector.utils.batch_space(self.single_observation_space["policy"], self.num_envs)
+        self.observation_space = gym.vector.utils.batch_space(self.single_observation_space["joints"], self.num_envs)
         self.action_space = gym.vector.utils.batch_space(self.single_action_space, self.num_envs)
 
+        self.current_joint_positions = np.zeros(shape=len(self.joint_names))
+        self.current_joint_velocities = np.zeros(shape=len(self.joint_names))
 
         # Launch robot hardware in ROS2
         launch_robot_hardware(cfg, cfg.ros2_workspace, "gen3_py", "gen3.launch.py")
@@ -172,7 +175,7 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
 
     def _get_observations(self) -> dict[str, np.ndarray]:
         """Return the observations from the robot."""
-        return {"positions": self.current_joint_positions, "velocities": self.current_joint_velocities}
+        return {"joints": np.concatenate((self.current_joint_positions, self.current_joint_velocities), axis=0)}
 
     def _get_rewards(self) -> np.ndarray:
         """Compute the rewards."""

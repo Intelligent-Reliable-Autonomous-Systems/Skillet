@@ -10,12 +10,12 @@ from typing import Generic, TypeVar
 
 import gymnasium as gym
 import torch
-from jaxtyping import Float, Bool
+from jaxtyping import Bool, Float
 
 from skillet.core import ObservationSpec
 from skillet.core.env import BatchedEnvironment
-from skillet.envs.utils import AsGymVectorEnv
 from skillet.core.spaces import ActionSpec
+from skillet.envs.utils import AsGymVectorEnv
 
 TBatchedObsTorch = TypeVar(
     "TBatchedObsTorch", bound=Float[torch.Tensor, "b ..."] | Mapping[str, Float[torch.Tensor, "b ..."]]
@@ -52,16 +52,16 @@ class ROS2EnvWrapper(
         """
         self._ros_env = env
         self._n_envs = env.unwrapped.num_envs
-        device = env.unwrapped.device
+        self.device = env.unwrapped.device
         vector_env = AsGymVectorEnv(env, num_envs=self._n_envs)
         super().__init__(vector_env)
         self._obs_spec_policy = ObservationSpec[Float[torch.Tensor, "b ..."]](
-            space=vector_env.single_observation_space["policy"],
-            name="policy",
+            space=vector_env.single_observation_space["joints"],
+            name="joints",
             is_torch=True,
             is_batched=True,
             n_envs=-1,
-            device=device,
+            device=self.device,
         )
         self._obs_spec_state = ObservationSpec[Mapping[str, Float[torch.Tensor, "b ..."]]](
             space=vector_env.single_observation_space,
@@ -69,7 +69,7 @@ class ROS2EnvWrapper(
             is_torch=True,
             is_batched=True,
             n_envs=-1,
-            device=device,
+            device=self.device,
         )
         self._action_spec = ActionSpec[TBatchedActionTorch](
             space=vector_env.single_action_space,
@@ -77,7 +77,7 @@ class ROS2EnvWrapper(
             is_torch=True,
             is_batched=True,
             n_envs=-1,
-            device=device,
+            device=self.device,
         )
 
     @property
@@ -107,19 +107,19 @@ class ROS2EnvWrapper(
         """
         obs_dict, info = self.env.reset()
         self.last_obs = obs_dict
-        obs = (
-            torch.cat([torch.as_tensor(obs_dict["positions"]), torch.as_tensor(obs_dict["velocities"])], dim=0)
-            .to(self.device)
-            .unsqueeze(0)
-        )
+
+        obs = obs_dict["joints"]
+        if isinstance(obs, dict):
+            obs = torch.cat(list(obs.values()), dim=1)
+        obs = torch.as_tensor(obs).to(self.device).unsqueeze(0)
 
         return obs, info
 
     def get_observation(self, obs_spec=None):  # noqa: ANN001, ANN201, D102
         if self.last_obs is None:
             raise ValueError("No observation has been received yet. Call reset() first.")
-        if obs_spec is None or obs_spec.name == "policy":
-            return self.last_obs["policy"]
+        if obs_spec is None or obs_spec.name == "joints":
+            return torch.as_tensor(self.last_obs["joints"], device=self.device).unsqueeze(0)
         if obs_spec.name == "state":
             return self.last_obs
         raise ValueError(f"Observation spec {obs_spec} not supported by environment.")
@@ -147,9 +147,13 @@ class ROS2EnvWrapper(
         """
         obs_dict, reward, term, trunc, info = self.env.step(action)
         self.last_obs = obs_dict
-        obs = obs_dict["policy"]
+        obs = obs_dict["joints"]
         if isinstance(obs, dict):
             obs = torch.cat(list(obs.values()), dim=1)
+
+        reward = torch.as_tensor(reward, device=self.device).unsqueeze(0)
+        term = torch.as_tensor([term], device=self.device).unsqueeze(0)
+        trunc = torch.as_tensor([trunc], device=self.device).unsqueeze(0)
 
         return obs, reward, term, trunc, info
 
