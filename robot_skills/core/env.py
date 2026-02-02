@@ -1,12 +1,27 @@
+"""The environment interface that adds explicit obs and action specifications.
+
+'Environment' class wraps a gym.Env and adds explicit obs and action specifications.
+'BatchedEnvironment' class wraps a gym.vector.VectorEnv and adds explicit obs and action specifications.
+'BasicEnvironment' class is a minimal implementation that supports raw state observations (full observability).
+'BasicBatchedEnvironment' class is a minimal batched implementation that supports batched observations and actions.
+"""
+
 import abc
-from typing import Any, Generic, Sequence, TypeVar, overload, TypeAlias
+from typing import Any, Generic, TypeVar, overload
 
 import gymnasium as gym
-from jaxtyping import Bool, Float, Shaped
-import torch
-import numpy as np
+from jaxtyping import Bool, Float
 
-from robot_skills.core.spaces import Action, ActionSpec, ArrayLike, BatchedAction, BatchedObservation, ObservationSpec, Observation, SpaceItem, State
+from robot_skills.core.spaces import (
+    Action,
+    ActionSpec,
+    ArrayLike,
+    BatchedAction,
+    BatchedObservation,
+    Observation,
+    ObservationSpec,
+    State,
+)
 
 TSpecObs = TypeVar("TSpecObs", bound=Observation)
 """A generic type of the requested observation specification"""
@@ -19,9 +34,10 @@ TAction = TypeVar("TAction", bound=Action)
 TBAction = TypeVar("TBAction", bound=BatchedAction)
 """A generic type of the batched action returned by the environment."""
 
+
 class _EnvironmentBase(abc.ABC, Generic[TObs, TAction]):
     """An environment interface for the Robot Skills framework.
-    
+
     Generic type parameters:
         TEnvObs: The type of the environment observation. e.g. np.ndarray[(8,), float]
         TAction: The type associated with the action spec
@@ -32,7 +48,7 @@ class _EnvironmentBase(abc.ABC, Generic[TObs, TAction]):
         """The default observation specification for the environment, for observations returned by step()."""
         raise NotImplementedError
 
-    @property 
+    @property
     def action_spec(self) -> ActionSpec[TAction]:
         """The default action specification for the environment, for actions consumed by step()."""
         raise NotImplementedError
@@ -46,7 +62,7 @@ class _EnvironmentBase(abc.ABC, Generic[TObs, TAction]):
     def get_observation(self) -> TObs: ...
     @overload
     def get_observation(self, obs_spec: ObservationSpec[TSpecObs]) -> TSpecObs: ...
-    
+
     @abc.abstractmethod
     def get_observation(self, obs_spec: ObservationSpec[Any] | None = None) -> Any:
         """Get the latest observation from the environment, optionally querying a specific observation type."""
@@ -56,26 +72,41 @@ class _EnvironmentBase(abc.ABC, Generic[TObs, TAction]):
         """Get the latest state from the environment."""
         raise NotImplementedError
 
+
 class Environment(_EnvironmentBase[TObs, TAction], gym.Wrapper[TObs, TAction, TObs, TAction], Generic[TObs, TAction]):
     """An environment interface for the Robot Skills framework.
-    
+
     Generic type parameters:
-        TEnvObs: The type of the environment observation. e.g. np.ndarray[(8,), float]
+        TObs: The type of the environment observation. e.g. np.ndarray[(8,), float]
         TAction: The type associated with the action spec
     """
-    def __init__(self, env: gym.Env, *args, **kwargs):
-        super().__init__(env, *args, **kwargs)
+
 
 class BatchedEnvironment(_EnvironmentBase[TBObs, TBAction], gym.vector.VectorWrapper, Generic[TBObs, TBAction]):
-    """A batched environment that supports batched observations and actions."""
-    
-    def __init__(self, env: gym.vector.VectorEnv, *args, **kwargs):
-        super().__init__(env, *args, **kwargs)
+    """A batched environment that supports batched observations and actions.
+
+    Generic type parameters:
+        TBObs: The type of the batched environment observation. e.g. torch.Tensor[(b, 8), float]
+        TBAction: The type associated with the batched action spec
+    """
+
 
 class BasicEnvironment(Environment[TObs, TAction], Generic[TObs, TAction]):
     """A basic environment that supports raw state observations (full observability)."""
 
-    def __init__(self, env: gym.Env, is_torch: bool = False, *args, **kwargs):
+    def __init__(self, env: gym.Env, is_torch: bool = False, *args: Any, **kwargs: Any) -> None:
+        """Initialize a basic environment wrapper.
+
+        Args:
+            env: The gym.Env environment to wrap
+            is_torch: Whether the environment uses PyTorch tensors
+            *args: Additional arguments to pass to the gym.Wrapper constructor
+            **kwargs: Additional keyword arguments to pass to the gym.Wrapper constructor
+
+        Returns:
+            None
+
+        """
         super().__init__(env, *args, **kwargs)
         self.last_obs = None
         self._obs_spec = ObservationSpec[TObs](
@@ -92,45 +123,61 @@ class BasicEnvironment(Environment[TObs, TAction], Generic[TObs, TAction]):
         )
 
     @property
-    def obs_spec(self) -> ObservationSpec[TObs]:
+    def obs_spec(self) -> ObservationSpec[TObs]:  # noqa: D102
         return self._obs_spec
 
     @property
-    def action_spec(self) -> ActionSpec[TAction]:
+    def action_spec(self) -> ActionSpec[TAction]:  # noqa: D102
         return self._action_spec
 
-    def supports_observation_spec(self, obs_spec: ObservationSpec) -> bool:
-        return True # TODO: compare obs_spec.space with self.env.observation_space
+    def supports_observation_spec(self, obs_spec: ObservationSpec) -> bool:  # noqa: D102
+        del obs_spec
+        return True  # TODO: compare obs_spec.space with self.env.observation_space
 
-    def reset(self, *args, **kwargs) -> tuple[TObs, dict]:
-        obs, info = self.env.reset(*args, **kwargs)
+    def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None) -> tuple[TObs, dict]:  # noqa: D102
+        obs, info = self.env.reset(seed=seed, options=options)
         self.last_obs = obs
         return obs, info
 
-    def step(self, action: TAction) -> tuple[TObs, float, bool, bool, dict]:
+    def step(self, action: TAction) -> tuple[TObs, float, bool, bool, dict]:  # noqa: D102
         obs, reward, term, trunc, info = self.env.step(action)
         self.last_obs = obs
         return obs, reward, term, trunc, info
-    
+
     @overload
     def get_observation(self) -> TObs: ...
     @overload
     def get_observation(self, obs_spec: ObservationSpec[TSpecObs]) -> TSpecObs: ...
-    
-    def get_observation(self, obs_spec: ObservationSpec[Any] | None = None) -> Any:
+
+    def get_observation(self, obs_spec: ObservationSpec[Any] | None = None) -> Any:  # noqa: D102
         if self.last_obs is None:
             raise ValueError("No observation has been received yet. Call reset() first.")
         if obs_spec is not None and not self.supports_observation_spec(obs_spec):
             raise ValueError(f"Observation spec {obs_spec} not supported by environment.")
         return self.last_obs
 
-    def get_state(self) -> TObs:
+    def get_state(self) -> TObs:  # noqa: D102
         return self.get_observation()
 
+
 class BasicBatchedEnvironment(BatchedEnvironment[TBObs, TBAction], Generic[TBObs, TBAction]):
-    """A batched environment that supports batched observations and actions."""
-    
-    def __init__(self, env: gym.vector.VectorEnv, is_torch: bool = False, *args, **kwargs):
+    """A batched environment that supports batched observations and actions.
+
+    Generic type parameters:
+        TBObs: The type of the batched environment observation. e.g. torch.Tensor[(batch_size, 8), float]
+        TBAction: The type associated with the batched action spec
+    """
+
+    def __init__(self, env: gym.vector.VectorEnv, is_torch: bool = False, *args: Any, **kwargs: Any) -> None:
+        """Initialize a basic batched environment wrapper.
+
+        Args:
+            env: The gym.vector.VectorEnv environment to wrap
+            is_torch: Whether the environment uses PyTorch tensors
+            *args: Additional arguments to pass to the gym.vector.VectorWrapper constructor
+            **kwargs: Additional keyword arguments to pass to the gym.vector.VectorWrapper constructor
+
+        """
         super().__init__(env, *args, **kwargs)
         self.last_obs = None
         self._obs_spec = ObservationSpec[TObs](
@@ -138,49 +185,55 @@ class BasicBatchedEnvironment(BatchedEnvironment[TBObs, TBAction], Generic[TBObs
             name="obs",
             is_torch=is_torch,
             is_batched=True,
-            n_envs=-1, # Variable batch size is more flexible
+            n_envs=-1,  # Variable batch size is more flexible
         )
         self._action_spec = ActionSpec[TAction](
             space=env.single_action_space,
             name="action",
             is_torch=is_torch,
             is_batched=True,
-            n_envs=-1, 
+            n_envs=-1,
         )
 
     @property
-    def obs_spec(self) -> ObservationSpec[TObs]:
+    def obs_spec(self) -> ObservationSpec[TObs]:  # noqa: D102
         return self._obs_spec
 
     @property
-    def action_spec(self) -> ActionSpec[TAction]:
+    def action_spec(self) -> ActionSpec[TAction]:  # noqa: D102
         return self._action_spec
 
-    def supports_observation_spec(self, obs_spec: ObservationSpec) -> bool:
-        return True # TODO: compare obs_spec.space with self.env.observation_space
+    def supports_observation_spec(self, obs_spec: ObservationSpec) -> bool:  # noqa: D102
+        return True  # TODO: compare obs_spec.space with self.env.observation_space
 
-    def reset(self, *args, **kwargs) -> tuple[TBObs, dict]:
-        obs, info = self.env.reset(*args, **kwargs)
+    def reset(  # noqa: D102
+        self,
+        *,
+        seed: int | list[int] | None = None,
+        options: dict[str, Any] | None = None,
+    ) -> tuple[TBObs, dict]:
+        obs, info = self.env.reset(seed=seed, options=options)
         self.last_obs = obs
         return obs, info
 
-    def step(self, action: TBAction) -> tuple[TBObs, Float[ArrayLike, "b"], Bool[ArrayLike, "b"], Bool[ArrayLike, "b"], dict]:
-        obs, reward, term, trunc, info = self.env.step(action)
+    def step(  # noqa: D102
+        self, actions: TBAction
+    ) -> tuple[TBObs, Float[ArrayLike, "b"], Bool[ArrayLike, "b"], Bool[ArrayLike, "b"], dict]:  # noqa: F821
+        obs, reward, term, trunc, info = self.env.step(actions)
         self.last_obs = obs
         return obs, reward, term, trunc, info
-    
+
     @overload
     def get_observation(self) -> TObs: ...
     @overload
     def get_observation(self, obs_spec: ObservationSpec[TSpecObs]) -> TSpecObs: ...
-    
-    def get_observation(self, obs_spec: ObservationSpec[Any] | None = None) -> Any:
+
+    def get_observation(self, obs_spec: ObservationSpec[Any] | None = None) -> Any:  # noqa: D102
         if self.last_obs is None:
             raise ValueError("No observation has been received yet. Call reset() first.")
         if obs_spec is not None and not self.supports_observation_spec(obs_spec):
             raise ValueError(f"Observation spec {obs_spec} not supported by environment.")
         return self.last_obs
 
-    def get_state(self) -> TObs:
+    def get_state(self) -> TObs:  # noqa: D102
         return self.get_observation()
-    

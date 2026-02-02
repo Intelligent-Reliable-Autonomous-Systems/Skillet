@@ -5,20 +5,24 @@ A wrapper around IsaacLab Gym environments
 Written by Will Solow and Jeff Jewett, 2026
 """
 
-from typing import TYPE_CHECKING, Any, Generic, Mapping, TypeVar, overload
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Generic, TypeVar
 
-from jaxtyping import Bool, Float
 import torch
+from jaxtyping import Bool, Float
 
 from robot_skills.core.env import BatchedEnvironment
 from robot_skills.core.spaces import ActionSpec
 from robot_skills.envs.utils import AsGymVectorEnv
+
 if TYPE_CHECKING:
     from isaaclab.envs import DirectRLEnv, ManagerBasedRLEnv
 
-from robot_skills.core import Environment, TObs, TAction, ObservationSpec
+from robot_skills.core import ObservationSpec, TObs
 
-TBatchedObsTorch = TypeVar("TBatchedObsTorch", bound=Float[torch.Tensor, "b ..."] | Mapping[str, Float[torch.Tensor, "b ..."]])
+TBatchedObsTorch = TypeVar(
+    "TBatchedObsTorch", bound=Float[torch.Tensor, "b ..."] | Mapping[str, Float[torch.Tensor, "b ..."]]
+)
 """A generic type of the batched observation tensor returned by the environment.
 
 Can be a batched observation tensor or a dictionary of batched observation tensors.
@@ -30,7 +34,10 @@ TBatchedActionTorch = TypeVar("TBatchedActionTorch", bound=Float[torch.Tensor, "
 torch.Tensor[(b, n), float]
 """
 
-class IsaacEnvWrapper(BatchedEnvironment[TBatchedObsTorch, TBatchedActionTorch], Generic[TBatchedObsTorch, TBatchedActionTorch]):
+
+class IsaacEnvWrapper(
+    BatchedEnvironment[TBatchedObsTorch, TBatchedActionTorch], Generic[TBatchedObsTorch, TBatchedActionTorch]
+):
     """Wrapper for IsaacLab Environments.
 
     This assumes that the environment is either a DirectRLEnv or ManagerBasedRLEnv.
@@ -57,7 +64,7 @@ class IsaacEnvWrapper(BatchedEnvironment[TBatchedObsTorch, TBatchedActionTorch],
             is_torch=True,
             is_batched=True,
             n_envs=-1,
-            device=device
+            device=device,
         )
         self._obs_spec_state = ObservationSpec[Mapping[str, Float[torch.Tensor, "b ..."]]](
             space=vector_env.single_observation_space,
@@ -65,7 +72,7 @@ class IsaacEnvWrapper(BatchedEnvironment[TBatchedObsTorch, TBatchedActionTorch],
             is_torch=True,
             is_batched=True,
             n_envs=-1,
-            device=device
+            device=device,
         )
         self._action_spec = ActionSpec[TBatchedActionTorch](
             space=vector_env.single_action_space,
@@ -73,22 +80,22 @@ class IsaacEnvWrapper(BatchedEnvironment[TBatchedObsTorch, TBatchedActionTorch],
             is_torch=True,
             is_batched=True,
             n_envs=-1,
-            device=device
+            device=device,
         )
 
     @property
-    def obs_spec(self):
+    def obs_spec(self):  # noqa: ANN201, D102
         return self._obs_spec_policy
 
     @property
-    def action_spec(self):
+    def action_spec(self):  # noqa: ANN201, D102
         return self._action_spec
 
     @property
-    def n_envs(self) -> int:
+    def n_envs(self) -> int:  # noqa: D102
         return self._n_envs
 
-    def supports_observation_spec(self, obs_spec: ObservationSpec) -> bool:
+    def supports_observation_spec(self, obs_spec: ObservationSpec) -> bool:  # noqa: D102
         return obs_spec.name in ["policy", "state"]
 
     def reset(self) -> tuple[TBatchedObsTorch, dict]:
@@ -108,21 +115,28 @@ class IsaacEnvWrapper(BatchedEnvironment[TBatchedObsTorch, TBatchedActionTorch],
             obs = torch.cat(list(obs.values()), dim=1)
 
         return obs, info
-    
-    def get_observation(self, obs_spec = None):
+
+    def get_observation(self, obs_spec=None):  # noqa: ANN001, ANN201, D102
         if self.last_obs is None:
             raise ValueError("No observation has been received yet. Call reset() first.")
-        if obs_spec.name == "policy" or obs_spec is None:
+        if obs_spec is None or obs_spec.name == "policy":
             return self.last_obs["policy"]
         if obs_spec.name == "state":
             return self.last_obs
         raise ValueError(f"Observation spec {obs_spec} not supported by environment.")
 
-    def get_state(self) -> TObs:
-        return self.get_observation(self.STATE_OBS_SPEC)
+    def get_state(self) -> TObs:  # noqa: D102
+        return self.get_observation(self._obs_spec_state)
 
-    def step(self, action: TBatchedActionTorch) -> tuple[TBatchedObsTorch, Float[torch.Tensor, "b"], Bool[torch.Tensor, "b"], \
-            Bool[torch.Tensor, "b"], Mapping[str, torch.Tensor]]:
+    def step(
+        self, action: TBatchedActionTorch
+    ) -> tuple[
+        TBatchedObsTorch,
+        Float[torch.Tensor, "b"],  # noqa: F821
+        Bool[torch.Tensor, "b"],  # noqa: F821
+        Bool[torch.Tensor, "b"],  # noqa: F821
+        Mapping[str, torch.Tensor],
+    ]:
         """Step through the environment.
 
         Args:

@@ -18,11 +18,14 @@ Written by Will Solow and Jeff Jewett, 2026
 import argparse
 import sys
 
-from jaxtyping import Float, Int
-
 from isaaclab.app import AppLauncher
+from jaxtyping import Float, Int
+import gymnasium as gym
+import torch
+
 from robot_skills.agents.policy_over_options import PolicyOverOptionsAgent
 from robot_skills.core.spaces import ActionSpec, ObservationSpec
+from robot_skills.envs.isaac_env_wrapper import IsaacEnvWrapper
 from robot_skills.policy.dummy import RandomPolicy, ZeroPolicy
 from robot_skills.skill.fixed_length import FixedLengthSkill
 
@@ -39,20 +42,14 @@ parser.add_argument("--task", type=str, default="Isaac-Reach-Franka-v0", help="N
 AppLauncher.add_app_launcher_args(parser)
 # parse the arguments
 args_cli = parser.parse_args()
-
-
 # launch omniverse app
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
-"""Rest everything follows."""
-
-import gymnasium as gym
+# import isaaclab_tasks after app launcher
 import isaaclab_tasks  # noqa: F401
-import torch
 from isaaclab_tasks.utils import parse_env_cfg
 
-from robot_skills.envs.isaac_env_wrapper import IsaacEnvWrapper
 
 BxN_Obs = Float[torch.Tensor, "b n"]
 """Environment observation: torch.Tensor[(b, n), float]"""
@@ -61,10 +58,11 @@ BxM_Action = Float[torch.Tensor, "b m"]
 B_Int_HighLevel = Int[torch.Tensor, "b"]
 """Selected skills action: torch.Tensor[(b,), int]"""
 
+
 def main() -> None:
     """Test the executor within the IsaacLab/IsaacSim framework."""
     # create environment configuration
-    
+
     # For example, the Reach task with the Franka arm has the config
     # isaaclab_tasks.manager_based.manipulation.reach.config.franka.joint_pos_env_cfg:FrankaReachEnvCfg
     env_cfg = parse_env_cfg(
@@ -103,7 +101,9 @@ def main() -> None:
     # Skills
     skill_length = 40
     zero_skill = FixedLengthSkill[BxN_Obs, BxM_Action, None](name="zero_skill", policy=zero_policy, length=skill_length)
-    random_skill = FixedLengthSkill[BxN_Obs, BxM_Action, None](name="random_skill", policy=random_policy, length=skill_length)
+    random_skill = FixedLengthSkill[BxN_Obs, BxM_Action, None](
+        name="random_skill", policy=random_policy, length=skill_length
+    )
     skills = [zero_skill, random_skill]
 
     # High-level policy
@@ -115,14 +115,12 @@ def main() -> None:
         # n_envs=args_cli.num_envs,
     )
     policy_over_options = RandomPolicy[BxN_Obs, B_Int_HighLevel](observation_spec, options_spec)
-    
+
     policy_over_options_agent = PolicyOverOptionsAgent[BxN_Obs, BxM_Action, B_Int_HighLevel, None](
         skills=[zero_skill, random_skill],
         high_level_policy=policy_over_options,
         params_policy=None,
     )
-
-
 
     # env.step()
     # skill_executor = SkillExecutor(DummyCfg(), env)

@@ -79,9 +79,12 @@ explicit-preview-rules = true
 
 ignore = [
     "ARG001",  # Allow unused arguments
+    "ARG002",  # Allow unused method args
     "ARG005",  # Allow unused lambda arguments
     "D203",    # Require blank line before class docstring
     "D213",    # Summary line on second line of docstring
+    "TRY003",  # Allow long exception messages
+    "F722",    # Allow certain forward references like "b ..." in Shaped[np.ndarray, "b ..."]
 ]
 
 # Allow autofix for all enabled rules (when `--fix`) is provided.
@@ -127,6 +130,11 @@ docstring-quotes = "double"  # Enforce double quotes for docstrings
 
 [tool.ruff.lint.flake8-annotations]
 allow-star-arg-any = true
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
 
 [tool.mypy]
 python_version = "3.11"

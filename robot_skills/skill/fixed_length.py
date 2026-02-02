@@ -1,10 +1,17 @@
-
+"""A skill that executes for a fixed number of steps."""
 
 from typing import Generic
 
 from jaxtyping import Int
+
 from robot_skills.core.policy import BatchedPolicy
-from robot_skills.core.skill import BatchedSkill, Skill, SkillStatus, SkillStatusCodes, TBSkillObs, TBAction, TBSkillParams
+from robot_skills.core.skill import (
+    BatchedSkill,
+    SkillStatusCodes,
+    TBAction,
+    TBSkillObs,
+    TBSkillParams,
+)
 from robot_skills.core.spaces import ArrayLike
 
 
@@ -12,6 +19,14 @@ class FixedLengthSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generi
     """A skill that executes for a fixed number of steps."""
 
     def __init__(self, name: str, policy: BatchedPolicy[TBSkillObs, TBAction, TBSkillParams], length: int) -> None:
+        """Initialize the fixed length skill.
+
+        Args:
+            name: The name of the skill.
+            policy: The policy for the skill.
+            length: The number of steps to execute the skill for.
+
+        """
         self._name = name
         self._policy = policy
         self._length = length
@@ -19,7 +34,7 @@ class FixedLengthSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generi
         self._params = None
 
     @property
-    def name(self) -> str:
+    def name(self) -> str:  # noqa: D102
         return self._name
 
     @property
@@ -28,13 +43,13 @@ class FixedLengthSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generi
         return self._policy
 
     @property
-    def status(self) -> Int[ArrayLike, "b"]:
+    def status(self) -> Int[ArrayLike, "b"]:  # noqa: F821
         """The status of the skills."""
         if self._status is None:
             raise ValueError("The status is not initialized. Must call initiate() before using this property.")
         return self._status
 
-    def initiate(self, obs: TBSkillObs, params: TBSkillParams) -> None:
+    def initiate(self, obs: TBSkillObs, params: TBSkillParams) -> None:  # noqa: D102
         n_envs = self.obs_spec.n_envs_from(obs)
         self._status = self.policy.obs_spec.with_n_envs(n_envs).zeros(shape=(n_envs,), dtype=int)
         self._status[:] = SkillStatusCodes.RUNNING
@@ -42,7 +57,7 @@ class FixedLengthSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generi
         self._params = params
         self._n_steps = 0
 
-    def get_action(self, obs: TBSkillObs) -> TBAction:
+    def get_action(self, obs: TBSkillObs) -> TBAction:  # noqa: D102
         action = self.policy.get_action(obs, self._params)
         self._n_steps += 1
         if self._n_steps >= self._length:

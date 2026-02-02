@@ -1,8 +1,22 @@
+"""Module for defining and working with policy classes."""
+
 import abc
 from dataclasses import replace
 from typing import Any, Generic, TypeVar
 
-from robot_skills.core.spaces import Action, ActionSpec, ArrayEmpty, BatchedAction, BatchedArrayEmpty, BatchedObservation, BatchedSkillParams, CommonSpecs, ObservationSpec, Observation, SkillParamsSpec
+from robot_skills.core.spaces import (
+    Action,
+    ActionSpec,
+    ArrayEmpty,
+    BatchedAction,
+    BatchedArrayEmpty,
+    BatchedObservation,
+    BatchedSkillParams,
+    CommonSpecs,
+    Observation,
+    ObservationSpec,
+    SkillParamsSpec,
+)
 
 ### Policy type aliases
 TPolicyObs = TypeVar("TPolicyObs", bound=Observation)
@@ -23,7 +37,7 @@ TBPolicyParams = TypeVar("TBPolicyParams", bound=BatchedSkillParams)
 
 Sequence[int | float | bool] | Mapping[str, Sequence[int | float | bool]]"""
 TBAction = TypeVar("TBAction", bound=BatchedAction)
-"""The type of the batched action for the policy: 
+"""The type of the batched action for the policy:
 
 Sequence[int | float | bool]"""
 
@@ -31,6 +45,7 @@ Unparameterized = ArrayEmpty
 """The type of the unparameterized parameters for the policy."""
 BUnparameterized = BatchedArrayEmpty
 """The type of the batched unparameterized parameters for the policy."""
+
 
 ### Policy classes
 class Policy(abc.ABC, Generic[TPolicyObs, TAction, TPolicyParams]):
@@ -63,9 +78,16 @@ class Policy(abc.ABC, Generic[TPolicyObs, TAction, TPolicyParams]):
         """Reset the policy. Useful if policy is stateful."""
         pass
 
-class BatchedPolicy(Policy[TBPolicyObs, TBAction, TBPolicyParams], abc.ABC, Generic[TBPolicyObs, TBAction, TBPolicyParams]):
+
+class BatchedPolicy(
+    Policy[TBPolicyObs, TBAction, TBPolicyParams],
+    abc.ABC,
+    Generic[TBPolicyObs, TBAction, TBPolicyParams],
+):
     """A batched policy that takes a batched observation and outputs a batched action."""
+
     pass
+
 
 class UPolicy(Policy[TPolicyObs, TAction, Unparameterized], abc.ABC, Generic[TPolicyObs, TAction]):
     """An unparameterized policy that has an empty parameters space."""
@@ -75,13 +97,18 @@ class UPolicy(Policy[TPolicyObs, TAction, Unparameterized], abc.ABC, Generic[TPo
         """The specification of the parameters space for the policy."""
         return replace(CommonSpecs.ArrayEmpty, is_torch=self.action_spec.is_torch)
 
-    def get_action(self, obs: TPolicyObs, params: Any = None) -> TAction:
+    def get_action(self, obs: TPolicyObs, params: Any = None) -> TAction:  # noqa: ANN401
         """Get the next low-level action for the robot based on the observation. The parameters are ignored."""
         raise NotImplementedError
 
-class BatchedUPolicy(Policy[TBPolicyObs, TBAction, BUnparameterized], abc.ABC, Generic[TBPolicyObs, TBAction]):
+
+class BatchedUPolicy(
+    Policy[TBPolicyObs, TBAction, BUnparameterized],
+    abc.ABC,
+    Generic[TBPolicyObs, TBAction],
+):
     """An unparameterized batched policy that takes a batched observation and outputs a batched action."""
-    
+
     @property
     def params_spec(self) -> SkillParamsSpec[BUnparameterized]:
         """The specification of the parameters space for the policy."""

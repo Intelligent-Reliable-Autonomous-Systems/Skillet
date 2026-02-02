@@ -1,12 +1,22 @@
 import abc
-from dataclasses import replace
-from enum import IntEnum, StrEnum
-from typing import Any, Generic, NamedTuple, Optional, Sequence, TypeAlias, TypeVar, cast
+from enum import IntEnum
+from typing import Generic, Sequence, TypeAlias, TypeVar
 
 from jaxtyping import Bool, Int
 
 from robot_skills.core.policy import BatchedPolicy, Policy
-from robot_skills.core.spaces import Action, ActionSpec, ArrayLike, BatchedAction, BatchedObservation, BatchedSkillParams, CommonSpecs, ObservationSpec, SkillParamsSpec, Observation, SkillParams
+from robot_skills.core.spaces import (
+    Action,
+    ActionSpec,
+    ArrayLike,
+    BatchedAction,
+    BatchedObservation,
+    BatchedSkillParams,
+    Observation,
+    ObservationSpec,
+    SkillParams,
+    SkillParamsSpec,
+)
 
 TSkillObs = TypeVar("TSkillObs", bound=Observation)
 """The type of the observation for the skill.
@@ -47,8 +57,10 @@ SkillStatus: TypeAlias = int
 4: The skill is failed.
 """
 
+
 class SkillStatusCodes(IntEnum):
     """The codes for the status of a skill."""
+
     UNINITIATED = 0
     """The skill is not initiated."""
     RUNNING = 1
@@ -58,13 +70,15 @@ class SkillStatusCodes(IntEnum):
     FAILED = 3
     """The skill is failed."""
 
+
 class Skill(abc.ABC, Generic[TSkillObs, TAction, TSkillParams]):
     """A skill that represents a high-level action in the environment.
-    
+
     Generic type parameters:
         TObs: The type of the observation from the environment.
         TParams: The type of the parameters of the skill.
     """
+
     @property
     def name(self) -> str:
         """The name of the skill."""
@@ -78,7 +92,7 @@ class Skill(abc.ABC, Generic[TSkillObs, TAction, TSkillParams]):
 
     @property
     @abc.abstractmethod
-    def status(self) -> SkillStatus | Int[ArrayLike, "b"]:
+    def status(self) -> SkillStatus | Int[ArrayLike, "b"]:  # noqa: F821
         """The status of the skill."""
         raise NotImplementedError
 
@@ -86,7 +100,7 @@ class Skill(abc.ABC, Generic[TSkillObs, TAction, TSkillParams]):
     def get_action(self, obs: TSkillObs) -> TAction:
         """Get the next action for the skill based on the observation. Return the action if the skill is not terminated, otherwise return the result of the skill."""
         raise NotImplementedError
-        
+
     @property
     def obs_spec(self) -> ObservationSpec[TSkillObs]:
         """The specification of the observation space for the skill."""
@@ -106,32 +120,44 @@ class Skill(abc.ABC, Generic[TSkillObs, TAction, TSkillParams]):
         """Initiate the skill with the given observation."""
         pass
 
-    def can_initiate(self, obs: TSkillObs) -> bool | Bool[ArrayLike, "b"]:
+    def can_initiate(self, obs: TSkillObs) -> bool | Bool[ArrayLike, "b"]:  # noqa: F821
         """Check if the skill can be initiated with the given observation."""
         return self.status != SkillStatusCodes.RUNNING
 
-    def is_terminated(self, obs: TSkillObs) -> bool | Bool[ArrayLike, "b"]:
+    def is_terminated(self, obs: TSkillObs) -> bool | Bool[ArrayLike, "b"]:  # noqa: F821
         """Check if the skill is terminated with the given observation."""
-        return (self.status == SkillStatusCodes.SUCCESS) | (self.status == SkillStatusCodes.FAILED)
+        return (self.status == SkillStatusCodes.SUCCESS) | (
+            self.status == SkillStatusCodes.FAILED
+        )
 
-class SingleSkill(Skill[TSkillObs, TAction, TSkillParams], abc.ABC, Generic[TSkillObs, TAction, TSkillParams]):
+
+class SingleSkill(
+    Skill[TSkillObs, TAction, TSkillParams],
+    abc.ABC,
+    Generic[TSkillObs, TAction, TSkillParams],
+):
     """A single skill that takes a single observation and outputs a single action."""
-    
+
     @property
     @abc.abstractmethod
     def status(self) -> SkillStatus:
         """The status of the skills."""
         raise NotImplementedError
-    
+
     def can_initiate(self, obs: TSkillObs) -> bool:
         return super().can_initiate(obs)
 
     def is_terminated(self, obs: TSkillObs) -> bool:
         return super().is_terminated(obs)
 
-class BatchedSkill(Skill[TBSkillObs, TBAction, TBSkillParams], abc.ABC, Generic[TBSkillObs, TBAction, TBSkillParams]):
+
+class BatchedSkill(
+    Skill[TBSkillObs, TBAction, TBSkillParams],
+    abc.ABC,
+    Generic[TBSkillObs, TBAction, TBSkillParams],
+):
     """A batched skill that takes a batched observation and outputs a batched action."""
-    
+
     @property
     @abc.abstractmethod
     def policy(self) -> BatchedPolicy[TBSkillObs, TBAction, TBSkillParams]:
@@ -140,19 +166,27 @@ class BatchedSkill(Skill[TBSkillObs, TBAction, TBSkillParams], abc.ABC, Generic[
 
     @property
     @abc.abstractmethod
-    def status(self) -> Int[ArrayLike, "b"]:
+    def status(self) -> Int[ArrayLike, "b"]:  # noqa: F821
         """The status of the skills. Must call initiate() before using this property."""
         raise NotImplementedError
-    
-    def can_initiate(self, obs: TBSkillObs) -> Bool[ArrayLike, "b"]:
+
+    def can_initiate(self, obs: TBSkillObs) -> Bool[ArrayLike, "b"]:  # noqa: F821
         return super().can_initiate(obs)
 
-    def is_terminated(self, obs: TBSkillObs) -> Bool[ArrayLike, "b"]:
+    def is_terminated(self, obs: TBSkillObs) -> Bool[ArrayLike, "b"]:  # noqa: F821
         return super().is_terminated(obs)
 
-class CompositeSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], abc.ABC, Generic[TBSkillObs, TBAction, TBSkillParams]):
 
-    def __init__(self, skills: Sequence[BatchedSkill[TBSkillObs, TBAction, TBSkillParams]], env_indices: Int[ArrayLike, "b"] | None = None) -> None:
+class CompositeSkill(
+    BatchedSkill[TBSkillObs, TBAction, TBSkillParams],
+    abc.ABC,
+    Generic[TBSkillObs, TBAction, TBSkillParams],
+):
+    def __init__(
+        self,
+        skills: Sequence[BatchedSkill[TBSkillObs, TBAction, TBSkillParams]],
+        env_indices: Int[ArrayLike, "b"] | None = None,  # noqa: F821
+    ) -> None:
         """Initialize the composite skill."""
         if not hasattr(skills, "__len__") or len(skills) == 0:
             raise ValueError("The skills must be a non-empty sequence.")
@@ -161,18 +195,24 @@ class CompositeSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], abc.ABC,
 
         for skill in skills:
             if skill.obs_spec.n_envs != -1:
-                raise ValueError(f"The observation specification of the skills must support variable batch sizes (n_envs = -1): {skill.obs_spec}")
+                raise ValueError(
+                    f"The observation specification of the skills must support variable batch sizes (n_envs = -1): {skill.obs_spec}"
+                )
             if skill.action_spec.n_envs != -1:
-                raise ValueError(f"The action specification of the skills must support variable batch sizes (n_envs = -1): {skill.action_spec}")
+                raise ValueError(
+                    f"The action specification of the skills must support variable batch sizes (n_envs = -1): {skill.action_spec}"
+                )
             if skill.params_spec.n_envs != -1:
-                raise ValueError(f"The parameters specification of the skills must support variable batch sizes (n_envs = -1): {skill.params_spec}")
+                raise ValueError(
+                    f"The parameters specification of the skills must support variable batch sizes (n_envs = -1): {skill.params_spec}"
+                )
         self.skills = skills
         self.env_indices = env_indices
         # copy and mutate the specifications of the first skill to set n_envs
         # self._params_spec = replace(self.skills[0].params_spec, n_envs=len(env_indices))
         # self._observation_spec = replace(self.skills[0].obs_spec, n_envs=len(env_indices))
         # self._action_spec = replace(self.skills[0].action_spec, n_envs=len(env_indices))
-        self._status: Int[ArrayLike, "b"] | None = None
+        self._status: Int[ArrayLike, "b"] | None = None  # noqa: F821
 
     @property
     def name(self) -> str:
@@ -185,10 +225,12 @@ class CompositeSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], abc.ABC,
         return self.skills[0].policy
 
     @property
-    def status(self) -> Int[ArrayLike, "b"]:
+    def status(self) -> Int[ArrayLike, "b"]:  # noqa: F821
         """The status of the composite skill."""
         if self._status is None:
-            raise ValueError("The status is not initialized. Must call initiate() before using this property.")
+            raise ValueError(
+                "The status is not initialized. Must call initiate() before using this property."
+            )
         for idx, skill in enumerate(self.skills):
             env_ids = self.env_indices == idx
             if not env_ids.any():
@@ -216,20 +258,26 @@ class CompositeSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], abc.ABC,
         """The parameters specification is the same as the batched skill parameters specification, but with a fixed n_envs."""
         return self.skills[0].params_spec
 
-    def can_initiate(self, obs: TBSkillObs) -> Bool[ArrayLike, "b"]:
+    def can_initiate(self, obs: TBSkillObs) -> Bool[ArrayLike, "b"]:  # noqa: F821
         """Check if the composite skill can be initiated with the given observation."""
-        can_initiate = self.action_spec.zeros(shape=(-1,), dtype=bool) # initialize (B,) array
+        can_initiate = self.action_spec.zeros(
+            shape=(-1,), dtype=bool
+        )  # initialize (B,) array
         for idx, skill in enumerate(self.skills):
             env_ids = self.env_indices == idx
             if not env_ids.any():
                 continue
-            can_initiate[env_ids] = skill.can_initiate(self.obs_spec.index(obs, env_ids))
+            can_initiate[env_ids] = skill.can_initiate(
+                self.obs_spec.index(obs, env_ids)
+            )
         return can_initiate
 
-    def is_terminated(self, obs: TBSkillObs) -> Bool[ArrayLike, "b"]:
+    def is_terminated(self, obs: TBSkillObs) -> Bool[ArrayLike, "b"]:  # noqa: F821
         """Check if the composite skill is terminated with the given observation."""
         n_envs = self.obs_spec.n_envs_from(obs)
-        terminated = self.action_spec.zeros(shape=(n_envs,), dtype=bool) # initialize (B,) array
+        terminated = self.action_spec.zeros(
+            shape=(n_envs,), dtype=bool
+        )  # initialize (B,) array
         for idx, skill in enumerate(self.skills):
             env_ids = self.env_indices == idx
             if not env_ids.any():
@@ -239,20 +287,30 @@ class CompositeSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], abc.ABC,
             terminated[env_ids] = term_idx
         return terminated
 
-    def initiate(self, obs: TBSkillObs, params: TBSkillParams, env_ids: Int[ArrayLike, "b"] | None = None) -> None:
+    def initiate(
+        self,
+        obs: TBSkillObs,
+        params: TBSkillParams,
+        env_ids: Int[ArrayLike, "b"] | None = None,  # noqa: F821
+    ) -> None:
         """Initiate the composite skill with the given observation and parameters.
-        
+
         Optionally select the skills for each environment."""
         if env_ids is not None:
             self.env_indices = env_ids
         n_envs = self.obs_spec.n_envs_from(obs)
-        self._status = self.action_spec.with_n_envs(n_envs).zeros(shape=(n_envs,), dtype=int) # initialize (B,) array
+        self._status = self.action_spec.with_n_envs(n_envs).zeros(
+            shape=(n_envs,), dtype=int
+        )  # initialize (B,) array
 
         for idx, skill in enumerate(self.skills):
             env_ids = self.env_indices == idx
             if not env_ids.any():
                 continue
-            skill.initiate(self.obs_spec.index(obs, env_ids), self.params_spec.index(params, env_ids))
+            skill.initiate(
+                self.obs_spec.index(obs, env_ids),
+                self.params_spec.index(params, env_ids),
+            )
 
     def get_action(self, obs: TBSkillObs) -> TBAction:
         """Get the next action for the composite skill based on the observation."""

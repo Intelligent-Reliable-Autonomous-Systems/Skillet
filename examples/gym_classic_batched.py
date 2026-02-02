@@ -2,11 +2,13 @@
 
 import gymnasium as gym
 import numpy as np
-from jaxtyping import Int, Float
+from jaxtyping import Float, Int
 
 from robot_skills.agents.policy_over_options import PolicyOverOptionsAgent
-from robot_skills.core.env import BasicBatchedEnvironment, BasicEnvironment
-from robot_skills.core.spaces import ActionSpec, ObservationSpec, Observation, SpaceItem, SpaceSpecification, State, make_action_spec
+from robot_skills.core.env import BasicBatchedEnvironment
+from robot_skills.core.spaces import (
+    ActionSpec,
+)
 from robot_skills.policy.dummy import RandomPolicy, ZeroPolicy
 from robot_skills.skill.fixed_length import FixedLengthSkill
 
@@ -26,7 +28,7 @@ if __name__ == "__main__":
     # env = gym.make_vec("MountainCarContinuous-v0", num_envs=num_envs, render_mode="rgb_array")
     env = gym.make_vec(env_id, num_envs=num_envs, render_mode="rgb_array")
     env = gym.wrappers.vector.HumanRendering(env)
-    
+
     env = BasicBatchedEnvironment[CartPoleObservation, CartPoleAction](env)
     print(f"Created environment {env_id} (x{num_envs})")
     print(env.obs_spec)
@@ -37,8 +39,12 @@ if __name__ == "__main__":
     random_policy = RandomPolicy[CartPoleObservation, CartPoleAction](env.obs_spec, env.action_spec)
     # Skills
     skill_length = 100
-    zero_skill = FixedLengthSkill[CartPoleObservation, CartPoleAction, None](name="zero_skill", policy=zero_policy, length=skill_length)
-    random_skill = FixedLengthSkill[CartPoleObservation, CartPoleAction, None](name="random_skill", policy=random_policy, length=skill_length)
+    zero_skill = FixedLengthSkill[CartPoleObservation, CartPoleAction, None](
+        name="zero_skill", policy=zero_policy, length=skill_length
+    )
+    random_skill = FixedLengthSkill[CartPoleObservation, CartPoleAction, None](
+        name="random_skill", policy=random_policy, length=skill_length
+    )
     skills = [zero_skill, random_skill]
 
     # High-level policy
@@ -49,7 +55,7 @@ if __name__ == "__main__":
         is_batched=True,
     )
     policy_over_options = RandomPolicy[CartPoleObservation, B_Int_HighLevel](env.obs_spec, options_spec)
-    
+
     policy_over_options_agent = PolicyOverOptionsAgent[CartPoleObservation, CartPoleObservation, CartPoleAction, None](
         skills=[zero_skill, random_skill],
         high_level_policy=policy_over_options,
@@ -62,4 +68,3 @@ if __name__ == "__main__":
         print(f"Episode {episode} finished")
 
     env.close()
-

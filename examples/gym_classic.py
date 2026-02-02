@@ -2,10 +2,13 @@
 
 import gymnasium as gym
 import numpy as np
-from jaxtyping import Int, Float
+from jaxtyping import Float, Int
 
 from robot_skills.core.env import BasicEnvironment
-from robot_skills.core.spaces import ActionSpec, ObservationSpec, Observation, SpaceItem, SpaceSpecification, State, make_action_spec
+from robot_skills.core.spaces import (
+    ActionSpec,
+    ObservationSpec,
+)
 
 CartPoleAction = Int[np.ndarray, "2"]
 """A Discrete(2) numpy array."""
