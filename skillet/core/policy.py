@@ -4,7 +4,7 @@ import abc
 from dataclasses import replace
 from typing import Any, Generic, TypeVar
 
-from robot_skills.core.spaces import (
+from skillet.core.spaces import (
     Action,
     ActionSpec,
     ArrayEmpty,

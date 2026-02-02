@@ -4,8 +4,8 @@ import gymnasium as gym
 import numpy as np
 from jaxtyping import Float, Int
 
-from robot_skills.core.env import BasicEnvironment
-from robot_skills.core.spaces import (
+from skillet.core.env import BasicEnvironment
+from skillet.core.spaces import (
     ActionSpec,
     ObservationSpec,
 )

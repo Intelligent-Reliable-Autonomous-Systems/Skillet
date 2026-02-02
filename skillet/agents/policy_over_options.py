@@ -1,12 +1,19 @@
 """A high level model-free agent that selects options/skills to execute in parallel."""
 
 from typing import Generic, TypeVar
-from jaxtyping import Int
+
 import torch
-from robot_skills.core.policy import BatchedUPolicy, Policy
-from robot_skills.core.skill import CompositeSkill, Skill
-from robot_skills.core.env import BatchedEnvironment
-from robot_skills.core.spaces import ArrayLike, BatchedAction, BatchedArrayEmpty, BatchedObservation, BatchedSkillParams, Observation
+from jaxtyping import Int
+
+from skillet.core.env import BatchedEnvironment
+from skillet.core.policy import BatchedUPolicy
+from skillet.core.skill import CompositeSkill, Skill
+from skillet.core.spaces import (
+    ArrayLike,
+    BatchedAction,
+    BatchedObservation,
+    BatchedSkillParams,
+)
 
 THighLevelObs = TypeVar("THighLevelObs", bound=BatchedObservation)
 """The type of the high level observation, batched."""
@@ -20,9 +27,10 @@ TBAction = TypeVar("TBAction", bound=BatchedAction)
 SelectedSkills = Int[torch.Tensor, "b"]
 """The indices of the selected skills for each environment according to the order of the skills."""
 
+
 class PolicyOverOptionsAgent(Generic[THighLevelObs, TLowLevelObs, TBAction, TSkillParams]):
     """A high level model-free agent that selects options/skills to execute in parallel.
-    
+
     Generic type parameters:
         THighLevelObs: The type of the high level observation, batched.
         TLowLevelObs: The type of the low level observation, batched.
@@ -33,11 +41,15 @@ class PolicyOverOptionsAgent(Generic[THighLevelObs, TLowLevelObs, TBAction, TSki
         skills: The list of skills to execute.
         high_level_policy: The high level policy to select the skills to execute.
         params_policy: The policy to sample the parameters for the skills.
+
     """
 
-    def __init__(self, skills: list[Skill], 
-            high_level_policy: BatchedUPolicy[THighLevelObs, SelectedSkills],
-            params_policy: BatchedUPolicy[THighLevelObs, TSkillParams] | None = None) -> None:
+    def __init__(
+        self,
+        skills: list[Skill],
+        high_level_policy: BatchedUPolicy[THighLevelObs, SelectedSkills],
+        params_policy: BatchedUPolicy[THighLevelObs, TSkillParams] | None = None,
+    ) -> None:
         self.skills = skills
         self.high_level_policy = high_level_policy
         self.params_policy = params_policy
@@ -52,7 +64,7 @@ class PolicyOverOptionsAgent(Generic[THighLevelObs, TLowLevelObs, TBAction, TSki
         n_envs = env.num_envs
         terminated: ArrayLike = env.obs_spec.with_n_envs(n_envs).zeros(shape=(n_envs,), dtype=bool)
         composite_skill = CompositeSkill[TLowLevelObs, TBAction, TSkillParams](self.skills)
-        
+
         while not terminated.all():
             # High level execution
             high_level_obs = self.get_high_level_obs(env)

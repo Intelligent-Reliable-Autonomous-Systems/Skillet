@@ -11,14 +11,14 @@ from typing import TYPE_CHECKING, Generic, TypeVar
 import torch
 from jaxtyping import Bool, Float
 
-from robot_skills.core.env import BatchedEnvironment
-from robot_skills.core.spaces import ActionSpec
-from robot_skills.envs.utils import AsGymVectorEnv
+from skillet.core.env import BatchedEnvironment
+from skillet.core.spaces import ActionSpec
+from skillet.envs.utils import AsGymVectorEnv
 
 if TYPE_CHECKING:
     from isaaclab.envs import DirectRLEnv, ManagerBasedRLEnv
 
-from robot_skills.core import ObservationSpec, TObs
+from skillet.core import ObservationSpec
 
 TBatchedObsTorch = TypeVar(
     "TBatchedObsTorch", bound=Float[torch.Tensor, "b ..."] | Mapping[str, Float[torch.Tensor, "b ..."]]
@@ -125,7 +125,7 @@ class IsaacEnvWrapper(
             return self.last_obs
         raise ValueError(f"Observation spec {obs_spec} not supported by environment.")
 
-    def get_state(self) -> TObs:  # noqa: D102
+    def get_state(self) -> TBatchedObsTorch:  # noqa: D102
         return self.get_observation(self._obs_spec_state)
 
     def step(

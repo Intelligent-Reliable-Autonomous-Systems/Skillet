@@ -23,11 +23,11 @@ from jaxtyping import Float, Int
 import gymnasium as gym
 import torch
 
-from robot_skills.agents.policy_over_options import PolicyOverOptionsAgent
-from robot_skills.core.spaces import ActionSpec, ObservationSpec
-from robot_skills.envs.isaac_env_wrapper import IsaacEnvWrapper
-from robot_skills.policy.dummy import RandomPolicy, ZeroPolicy
-from robot_skills.skill.fixed_length import FixedLengthSkill
+from skillet.agents.policy_over_options import PolicyOverOptionsAgent
+from skillet.core.spaces import ActionSpec, ObservationSpec
+from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
+from skillet.policy.dummy import RandomPolicy, ZeroPolicy
+from skillet.skill.fixed_length import FixedLengthSkill
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Main IsaacSim Executor file through IsaacLab.")

@@ -4,13 +4,13 @@ import gymnasium as gym
 import numpy as np
 from jaxtyping import Float, Int
 
-from robot_skills.agents.policy_over_options import PolicyOverOptionsAgent
-from robot_skills.core.env import BasicBatchedEnvironment
-from robot_skills.core.spaces import (
+from skillet.agents.policy_over_options import PolicyOverOptionsAgent
+from skillet.core.env import BasicBatchedEnvironment
+from skillet.core.spaces import (
     ActionSpec,
 )
-from robot_skills.policy.dummy import RandomPolicy, ZeroPolicy
-from robot_skills.skill.fixed_length import FixedLengthSkill
+from skillet.policy.dummy import RandomPolicy, ZeroPolicy
+from skillet.skill.fixed_length import FixedLengthSkill
 
 CartPoleAction = Int[np.ndarray, "b 2"]
 """A batched Discrete(2) numpy array."""

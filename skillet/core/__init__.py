@@ -8,15 +8,15 @@ It includes:
 - The space specification interface
 """
 
-from robot_skills.core.env import (
+from skillet.core.env import (
     BasicBatchedEnvironment,
     BasicEnvironment,
     BatchedEnvironment,
     Environment,
 )
-from robot_skills.core.policy import BatchedPolicy, BatchedUPolicy, Policy, UPolicy
-from robot_skills.core.skill import BatchedSkill, CompositeSkill, SingleSkill, Skill
-from robot_skills.core.spaces import (
+from skillet.core.policy import BatchedPolicy, BatchedUPolicy, Policy, UPolicy
+from skillet.core.skill import BatchedSkill, CompositeSkill, SingleSkill, Skill
+from skillet.core.spaces import (
     ActionSpec,
     CommonSpecs,
     ObservationSpec,

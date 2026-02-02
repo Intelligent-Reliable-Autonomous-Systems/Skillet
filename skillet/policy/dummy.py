@@ -2,8 +2,8 @@
 
 from typing import Any, Generic
 
-from robot_skills.core.policy import BatchedUPolicy, TBAction, TBPolicyObs
-from robot_skills.core.spaces import ActionSpec, ObservationSpec
+from skillet.core.policy import BatchedUPolicy, TBAction, TBPolicyObs
+from skillet.core.spaces import ActionSpec, ObservationSpec
 
 
 class RandomPolicy(BatchedUPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, TBAction]):

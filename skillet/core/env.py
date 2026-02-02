@@ -12,7 +12,7 @@ from typing import Any, Generic, TypeVar, overload
 import gymnasium as gym
 from jaxtyping import Bool, Float
 
-from robot_skills.core.spaces import (
+from skillet.core.spaces import (
     Action,
     ActionSpec,
     ArrayLike,

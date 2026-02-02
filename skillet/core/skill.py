@@ -1,11 +1,12 @@
 import abc
+from collections.abc import Sequence
 from enum import IntEnum
-from typing import Generic, Sequence, TypeAlias, TypeVar
+from typing import Generic, TypeAlias, TypeVar
 
 from jaxtyping import Bool, Int
 
-from robot_skills.core.policy import BatchedPolicy, Policy
-from robot_skills.core.spaces import (
+from skillet.core.policy import BatchedPolicy, Policy
+from skillet.core.spaces import (
     Action,
     ActionSpec,
     ArrayLike,
@@ -126,9 +127,7 @@ class Skill(abc.ABC, Generic[TSkillObs, TAction, TSkillParams]):
 
     def is_terminated(self, obs: TSkillObs) -> bool | Bool[ArrayLike, "b"]:  # noqa: F821
         """Check if the skill is terminated with the given observation."""
-        return (self.status == SkillStatusCodes.SUCCESS) | (
-            self.status == SkillStatusCodes.FAILED
-        )
+        return (self.status == SkillStatusCodes.SUCCESS) | (self.status == SkillStatusCodes.FAILED)
 
 
 class SingleSkill(
@@ -212,7 +211,7 @@ class CompositeSkill(
         # self._params_spec = replace(self.skills[0].params_spec, n_envs=len(env_indices))
         # self._observation_spec = replace(self.skills[0].obs_spec, n_envs=len(env_indices))
         # self._action_spec = replace(self.skills[0].action_spec, n_envs=len(env_indices))
-        self._status: Int[ArrayLike, "b"] | None = None  # noqa: F821
+        self._status: Int[ArrayLike, b] | None = None  # noqa: F821
 
     @property
     def name(self) -> str:
@@ -228,9 +227,7 @@ class CompositeSkill(
     def status(self) -> Int[ArrayLike, "b"]:  # noqa: F821
         """The status of the composite skill."""
         if self._status is None:
-            raise ValueError(
-                "The status is not initialized. Must call initiate() before using this property."
-            )
+            raise ValueError("The status is not initialized. Must call initiate() before using this property.")
         for idx, skill in enumerate(self.skills):
             env_ids = self.env_indices == idx
             if not env_ids.any():
@@ -260,24 +257,18 @@ class CompositeSkill(
 
     def can_initiate(self, obs: TBSkillObs) -> Bool[ArrayLike, "b"]:  # noqa: F821
         """Check if the composite skill can be initiated with the given observation."""
-        can_initiate = self.action_spec.zeros(
-            shape=(-1,), dtype=bool
-        )  # initialize (B,) array
+        can_initiate = self.action_spec.zeros(shape=(-1,), dtype=bool)  # initialize (B,) array
         for idx, skill in enumerate(self.skills):
             env_ids = self.env_indices == idx
             if not env_ids.any():
                 continue
-            can_initiate[env_ids] = skill.can_initiate(
-                self.obs_spec.index(obs, env_ids)
-            )
+            can_initiate[env_ids] = skill.can_initiate(self.obs_spec.index(obs, env_ids))
         return can_initiate
 
     def is_terminated(self, obs: TBSkillObs) -> Bool[ArrayLike, "b"]:  # noqa: F821
         """Check if the composite skill is terminated with the given observation."""
         n_envs = self.obs_spec.n_envs_from(obs)
-        terminated = self.action_spec.zeros(
-            shape=(n_envs,), dtype=bool
-        )  # initialize (B,) array
+        terminated = self.action_spec.zeros(shape=(n_envs,), dtype=bool)  # initialize (B,) array
         for idx, skill in enumerate(self.skills):
             env_ids = self.env_indices == idx
             if not env_ids.any():
@@ -295,13 +286,12 @@ class CompositeSkill(
     ) -> None:
         """Initiate the composite skill with the given observation and parameters.
 
-        Optionally select the skills for each environment."""
+        Optionally select the skills for each environment.
+        """
         if env_ids is not None:
             self.env_indices = env_ids
         n_envs = self.obs_spec.n_envs_from(obs)
-        self._status = self.action_spec.with_n_envs(n_envs).zeros(
-            shape=(n_envs,), dtype=int
-        )  # initialize (B,) array
+        self._status = self.action_spec.with_n_envs(n_envs).zeros(shape=(n_envs,), dtype=int)  # initialize (B,) array
 
         for idx, skill in enumerate(self.skills):
             env_ids = self.env_indices == idx

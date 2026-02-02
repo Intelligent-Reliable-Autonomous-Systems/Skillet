@@ -4,15 +4,15 @@ from typing import Generic
 
 from jaxtyping import Int
 
-from robot_skills.core.policy import BatchedPolicy
-from robot_skills.core.skill import (
+from skillet.core.policy import BatchedPolicy
+from skillet.core.skill import (
     BatchedSkill,
     SkillStatusCodes,
     TBAction,
     TBSkillObs,
     TBSkillParams,
 )
-from robot_skills.core.spaces import ArrayLike
+from skillet.core.spaces import ArrayLike
 
 
 class FixedLengthSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSkillObs, TBAction, TBSkillParams]):

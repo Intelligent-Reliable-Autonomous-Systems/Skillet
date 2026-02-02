@@ -5,7 +5,7 @@ from typing import Any
 import gymnasium as gym
 from jaxtyping import Bool, Float
 
-from robot_skills.core.spaces import ArrayLike, BatchedAction, BatchedSpaceValue
+from skillet.core.spaces import ArrayLike, BatchedAction, BatchedSpaceValue
 
 
 class AsGymVectorEnv(gym.vector.VectorEnv):

@@ -5,21 +5,19 @@ A wrapper around IsaacLab Gym environments
 Written by Will Solow and Jeff Jewett, 2026
 """
 
-from typing import TYPE_CHECKING, Any, Generic, Mapping, TypeVar, overload
+from collections.abc import Mapping
+from typing import Generic, TypeVar
 
-from jaxtyping import Bool, Float
 import gymnasium as gym
 import torch
+from jaxtyping import Float
 
-from robot_skills.core.env import BatchedEnvironment
-from robot_skills.core.spaces import ActionSpec
-from robot_skills.envs.utils import AsGymVectorEnv
-if TYPE_CHECKING:
-    from isaaclab.envs import DirectRLEnv, ManagerBasedRLEnv
+from skillet.core import ObservationSpec
+from skillet.core.env import BatchedEnvironment
 
-from robot_skills.core import Environment, TObs, TAction, ObservationSpec
-
-TBatchedObsTorch = TypeVar("TBatchedObsTorch", bound=Float[torch.Tensor, "b ..."] | Mapping[str, Float[torch.Tensor, "b ..."]])
+TBatchedObsTorch = TypeVar(
+    "TBatchedObsTorch", bound=Float[torch.Tensor, "b ..."] | Mapping[str, Float[torch.Tensor, "b ..."]]
+)
 """A generic type of the batched observation tensor returned by the environment.
 
 Can be a batched observation tensor or a dictionary of batched observation tensors.
@@ -31,7 +29,10 @@ TBatchedActionTorch = TypeVar("TBatchedActionTorch", bound=Float[torch.Tensor, "
 torch.Tensor[(b, n), float]
 """
 
-class ROS2EnvWrapper(BatchedEnvironment[TBatchedObsTorch, TBatchedActionTorch], Generic[TBatchedObsTorch, TBatchedActionTorch]):
+
+class ROS2EnvWrapper(
+    BatchedEnvironment[TBatchedObsTorch, TBatchedActionTorch], Generic[TBatchedObsTorch, TBatchedActionTorch]
+):
     """Wrapper for ROS2 Environments.
 
     This assumes that the environment is either a gym.Env and interfaces directly with ROS2.
@@ -91,6 +92,7 @@ class ROS2EnvWrapper(BatchedEnvironment[TBatchedObsTorch, TBatchedActionTorch], 
 
     def supports_observation_spec(self, obs_spec: ObservationSpec) -> bool:
         return obs_spec.name in ["policy", "state"]
+
 
 # class ROS2EnvWrapper(SkillEnvWrapper):
 #     """Wrapper for ROS2 Environments.
