@@ -10,10 +10,12 @@ from typing import Generic, TypeVar
 
 import gymnasium as gym
 import torch
-from jaxtyping import Float
+from jaxtyping import Float, Bool
 
 from skillet.core import ObservationSpec
 from skillet.core.env import BatchedEnvironment
+from skillet.envs.utils import AsGymVectorEnv
+from skillet.core.spaces import ActionSpec
 
 TBatchedObsTorch = TypeVar(
     "TBatchedObsTorch", bound=Float[torch.Tensor, "b ..."] | Mapping[str, Float[torch.Tensor, "b ..."]]
@@ -35,7 +37,7 @@ class ROS2EnvWrapper(
 ):
     """Wrapper for ROS2 Environments.
 
-    This assumes that the environment is either a gym.Env and interfaces directly with ROS2.
+    This assumes that the environment is a gym.Env and interfaces directly with ROS2.
     """
 
     def __init__(self, env: gym.Env) -> None:
@@ -48,35 +50,35 @@ class ROS2EnvWrapper(
             None
 
         """
-        # self._isaac_env = env
-        # self._n_envs = env.unwrapped.cfg.scene.num_envs
-        # device = env.unwrapped.device
-        # vector_env = AsGymVectorEnv(env, num_envs=self._n_envs)
-        # super().__init__(vector_env)
-        # self._obs_spec_policy = ObservationSpec[Float[torch.Tensor, "b ..."]](
-        #     space=vector_env.single_observation_space["policy"],
-        #     name="policy",
-        #     is_torch=True,
-        #     is_batched=True,
-        #     n_envs=-1,
-        #     device=device
-        # )
-        # self._obs_spec_state = ObservationSpec[Mapping[str, Float[torch.Tensor, "b ..."]]](
-        #     space=vector_env.single_observation_space,
-        #     name="state",
-        #     is_torch=True,
-        #     is_batched=True,
-        #     n_envs=-1,
-        #     device=device
-        # )
-        # self._action_spec = ActionSpec[TBatchedActionTorch](
-        #     space=vector_env.single_action_space,
-        #     name="action",
-        #     is_torch=True,
-        #     is_batched=True,
-        #     n_envs=-1,
-        #     device=device
-        # )
+        self._ros_env = env
+        self._n_envs = env.unwrapped.num_envs
+        device = env.unwrapped.device
+        vector_env = AsGymVectorEnv(env, num_envs=self._n_envs)
+        super().__init__(vector_env)
+        self._obs_spec_policy = ObservationSpec[Float[torch.Tensor, "b ..."]](
+            space=vector_env.single_observation_space["policy"],
+            name="policy",
+            is_torch=True,
+            is_batched=True,
+            n_envs=-1,
+            device=device,
+        )
+        self._obs_spec_state = ObservationSpec[Mapping[str, Float[torch.Tensor, "b ..."]]](
+            space=vector_env.single_observation_space,
+            name="state",
+            is_torch=True,
+            is_batched=True,
+            n_envs=-1,
+            device=device,
+        )
+        self._action_spec = ActionSpec[TBatchedActionTorch](
+            space=vector_env.single_action_space,
+            name="action",
+            is_torch=True,
+            is_batched=True,
+            n_envs=-1,
+            device=device,
+        )
 
     @property
     def obs_spec(self):
@@ -92,6 +94,64 @@ class ROS2EnvWrapper(
 
     def supports_observation_spec(self, obs_spec: ObservationSpec) -> bool:
         return obs_spec.name in ["policy", "state"]
+
+    def reset(self) -> tuple[TBatchedObsTorch, dict]:
+        """Reset the environment.
+
+        Args:
+            None
+
+        Returns:
+            A tuple containing the observation of observations tensor (N, obs_dim) and info dictionary
+
+        """
+        obs_dict, info = self.env.reset()
+        self.last_obs = obs_dict
+        obs = (
+            torch.cat([torch.as_tensor(obs_dict["positions"]), torch.as_tensor(obs_dict["velocities"])], dim=0)
+            .to(self.device)
+            .unsqueeze(0)
+        )
+
+        return obs, info
+
+    def get_observation(self, obs_spec=None):  # noqa: ANN001, ANN201, D102
+        if self.last_obs is None:
+            raise ValueError("No observation has been received yet. Call reset() first.")
+        if obs_spec is None or obs_spec.name == "policy":
+            return self.last_obs["policy"]
+        if obs_spec.name == "state":
+            return self.last_obs
+        raise ValueError(f"Observation spec {obs_spec} not supported by environment.")
+
+    def get_state(self) -> TBatchedObsTorch:  # noqa: D102
+        return self.get_observation(self._obs_spec_state)
+
+    def step(
+        self, action: TBatchedActionTorch
+    ) -> tuple[
+        TBatchedObsTorch,
+        Float[torch.Tensor, "b"],  # noqa: F821
+        Bool[torch.Tensor, "b"],  # noqa: F821
+        Bool[torch.Tensor, "b"],  # noqa: F821
+        Mapping[str, torch.Tensor],
+    ]:
+        """Step through the environment.
+
+        Args:
+            action: The action tensor of shape (N, num_actions)
+
+        Returns:
+            A tuple containing the observation of observations tensor (N, obs_dim) and info dictionary
+
+        """
+        obs_dict, reward, term, trunc, info = self.env.step(action)
+        self.last_obs = obs_dict
+        obs = obs_dict["policy"]
+        if isinstance(obs, dict):
+            obs = torch.cat(list(obs.values()), dim=1)
+
+        return obs, reward, term, trunc, info
 
 
 # class ROS2EnvWrapper(SkillEnvWrapper):

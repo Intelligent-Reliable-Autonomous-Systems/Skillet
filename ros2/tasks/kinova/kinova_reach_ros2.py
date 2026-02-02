@@ -13,7 +13,6 @@ import gymnasium as gym
 import numpy as np
 from roslibpy import ActionClient, Ros, Topic
 
-from cfg import configclass
 from ros2.envs import (
     ROS2RLEnv,
     ROS2RLEnvCfg,
@@ -23,6 +22,7 @@ from ros2.envs import (
     wait_for_topic_publish,
     wait_for_topic_subscribe,
 )
+from ros2.envs.utils import configclass
 
 
 @configclass
@@ -74,8 +74,12 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
 
         self.default_joint_positions = np.asarray(self.cfg.default_joint_positions)
 
-        self.observation_space = gym.spaces.Box(float("-inf"), float("inf"), shape=(16,))
-        self.action_space = gym.spaces.Box(float("-inf"), float("inf"), shape=(8,))
+        self.single_observation_space = gym.spaces.Box(float("-inf"), float("inf"), shape=(16,))
+        self.single_action_space = gym.spaces.Box(float("-inf"), float("inf"), shape=(8,))
+
+        self.observation_space = gym.vector.utils.batch_space(self.single_observation_space["policy"], self.num_envs)
+        self.action_space = gym.vector.utils.batch_space(self.single_action_space, self.num_envs)
+
 
         # Launch robot hardware in ROS2
         launch_robot_hardware(cfg, cfg.ros2_workspace, "gen3_py", "gen3.launch.py")

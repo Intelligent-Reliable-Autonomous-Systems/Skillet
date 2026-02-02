@@ -15,7 +15,7 @@ import gymnasium as gym
 import numpy as np
 from roslibpy import Ros
 
-from cfg import configure_seed
+from ros2.envs.utils import configure_seed
 
 from .ros2_rl_env_cfg import ROS2RLEnvCfg
 

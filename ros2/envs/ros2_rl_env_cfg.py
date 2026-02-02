@@ -8,7 +8,7 @@ Written by Will Solow, 2026
 
 from dataclasses import MISSING
 
-from cfg import configclass
+from ros2.envs.utils import configclass
 
 
 @configclass
