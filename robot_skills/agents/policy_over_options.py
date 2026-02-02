@@ -1,0 +1,80 @@
+"""A high level model-free agent that selects options/skills to execute in parallel."""
+
+from typing import Generic, TypeVar
+from jaxtyping import Int
+import torch
+from robot_skills.core.policy import BatchedUPolicy, Policy
+from robot_skills.core.skill import CompositeSkill, Skill
+from robot_skills.core.env import BatchedEnvironment
+from robot_skills.core.spaces import ArrayLike, BatchedAction, BatchedArrayEmpty, BatchedObservation, BatchedSkillParams, Observation
+
+THighLevelObs = TypeVar("THighLevelObs", bound=BatchedObservation)
+"""The type of the high level observation, batched."""
+TLowLevelObs = TypeVar("TLowLevelObs", bound=BatchedObservation)
+"""The type of the low level observation, batched."""
+TSkillParams = TypeVar("TSkillParams", bound=BatchedSkillParams)
+"""The type of the skill parameters, batched."""
+TBAction = TypeVar("TBAction", bound=BatchedAction)
+"""The type of the batched action, batched."""
+
+SelectedSkills = Int[torch.Tensor, "b"]
+"""The indices of the selected skills for each environment according to the order of the skills."""
+
+class PolicyOverOptionsAgent(Generic[THighLevelObs, TLowLevelObs, TBAction, TSkillParams]):
+    """A high level model-free agent that selects options/skills to execute in parallel.
+    
+    Generic type parameters:
+        THighLevelObs: The type of the high level observation, batched.
+        TLowLevelObs: The type of the low level observation, batched.
+        TSkillParams: The type of the skill parameters, batched.
+        TBAction: The type of the batched action, batched.
+
+    Args:
+        skills: The list of skills to execute.
+        high_level_policy: The high level policy to select the skills to execute.
+        params_policy: The policy to sample the parameters for the skills.
+    """
+
+    def __init__(self, skills: list[Skill], 
+            high_level_policy: BatchedUPolicy[THighLevelObs, SelectedSkills],
+            params_policy: BatchedUPolicy[THighLevelObs, TSkillParams] | None = None) -> None:
+        self.skills = skills
+        self.high_level_policy = high_level_policy
+        self.params_policy = params_policy
+
+    def get_high_level_obs(self, env: BatchedEnvironment) -> THighLevelObs:
+        return env.get_observation(self.high_level_policy.obs_spec)
+
+    def get_low_level_obs(self, env: BatchedEnvironment) -> TLowLevelObs:
+        return env.get_observation(self.skills[0].obs_spec)
+
+    def execute(self, env: BatchedEnvironment[TLowLevelObs, TBAction]) -> None:
+        n_envs = env.num_envs
+        terminated: ArrayLike = env.obs_spec.with_n_envs(n_envs).zeros(shape=(n_envs,), dtype=bool)
+        composite_skill = CompositeSkill[TLowLevelObs, TBAction, TSkillParams](self.skills)
+        
+        while not terminated.all():
+            # High level execution
+            high_level_obs = self.get_high_level_obs(env)
+            # 1. Select the skills to execute
+            selected_skills = self.high_level_policy.get_action(high_level_obs)
+            # 2. Sample the parameters for the skills
+            if self.params_policy is not None:
+                params = self.params_policy.get_action(high_level_obs)
+            else:
+                params = self.skills[0].params_spec.with_n_envs(n_envs).zeros()
+
+            # Low level execution
+            # 3. Initiate the composite skill with the selected skills and parameters
+            composite_skill.initiate(env.get_observation(composite_skill.obs_spec), params, selected_skills)
+            print("initiating skills:", [self.skills[i].name for i in selected_skills])
+            # 4. While not terminated, get the next action and take a step in the environment
+            skill_dones = composite_skill.is_terminated(env.get_observation(composite_skill.obs_spec))
+            while not skill_dones.all() and not bool(terminated.all()):
+                # 4a. Get the next action with the low-level observation
+                action = composite_skill.get_action(env.get_observation(composite_skill.obs_spec))
+                # 4b. Take a step in the environment
+                _, r, term, trunc, _ = env.step(action)
+                terminated = terminated | term | trunc
+                # 4c. Check if the composite skill is terminated
+                skill_dones = composite_skill.is_terminated(self.get_low_level_obs(env))
