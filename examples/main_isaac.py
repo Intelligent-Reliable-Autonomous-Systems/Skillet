@@ -56,7 +56,7 @@ from env import import_isaac_wrapper
 from executor import SkillExecutor
 from policy_cfgs import DummyCfg
 
-from robot_skills.env.isaac_env_wrapper import IsaacEnvWrapper
+from robot_skills.envs.isaac_env_wrapper import IsaacEnvWrapper
 
 BxN_Obs = Float[torch.Tensor, "b n"]
 """Environment observation: torch.Tensor[(b, n), float]"""
