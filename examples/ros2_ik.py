@@ -1,13 +1,12 @@
-"""main_ros2.py.
+"""ros2_ik.py.
 
-Test file for executor integration with IsaacSim and ROS2
+Test file for executor integration ROS2 skills
 
 Written by Will Solow and Jeff Jewett, 2026
 
 """
 
 """Script to an environment with random action agent."""
-
 
 import argparse
 
@@ -35,8 +34,10 @@ from ros2.envs.utils import parse_ros2_env_cfg, setup_ros
 from skillet.agents.policy_over_options import PolicyOverOptionsAgent
 from skillet.core.spaces import ActionSpec, ObservationSpec
 from skillet.envs.ros2_env_wrapper import ROS2EnvWrapper
-from skillet.policy.dummy import RandomPolicy, ZeroPolicy
+from skillet.policy.dummy import FixedPolicy, RandomPolicy, ZeroPolicy
+from skillet.policy.ik_ee import PosIKEEPolicy
 from skillet.skill.fixed_length import FixedLengthSkill
+from skillet.skill.reach_xyz import ReachXYZSkill
 
 BxN_Obs = Float[torch.Tensor, "b n"]
 """Environment observation: torch.Tensor[(b, n), float]"""
@@ -81,15 +82,24 @@ def main() -> None:
     # )
 
     # Low-level policies
-    zero_policy = ZeroPolicy[BxN_Obs, BxM_Action](observation_spec, action_spec)
     random_policy = RandomPolicy[BxN_Obs, BxM_Action](observation_spec, action_spec)
+    zero_policy = ZeroPolicy[BxN_Obs, BxM_Action](observation_spec, action_spec)
+    ik_ee_pos_policy = PosIKEEPolicy[BxN_Obs, BxM_Action](observation_spec, action_spec)
     # Skills
-    skill_length = 5
-    zero_skill = FixedLengthSkill[BxN_Obs, BxM_Action, None](name="zero_skill", policy=zero_policy, length=skill_length)
+    skill_length = 40
+    reach_xyz_skill = ReachXYZSkill[BxN_Obs, BxM_Action, None](
+        name="reach_xyz_skill", policy=ik_ee_pos_policy, length=skill_length
+    )
     random_skill = FixedLengthSkill[BxN_Obs, BxM_Action, None](
         name="random_skill", policy=random_policy, length=skill_length
     )
-    skills = [zero_skill, random_skill]
+    zero_skill = FixedLengthSkill[BxN_Obs, BxM_Action, None](name="zero_skill", policy=zero_policy, length=skill_length)
+    skills = [zero_skill, random_skill, reach_xyz_skill]
+
+    # Parameters policy
+    fixed_param_policy = FixedPolicy[BxN_Obs, BxM_Action](
+        observation_spec, action_spec, torch.as_tensor([0.6, 0.1, 0.3], device=args_cli.device)
+    )
 
     # High-level policy
     options_spec = ActionSpec[B_Int_HighLevel](
@@ -102,9 +112,9 @@ def main() -> None:
     policy_over_options = RandomPolicy[BxN_Obs, B_Int_HighLevel](observation_spec, options_spec)
 
     policy_over_options_agent = PolicyOverOptionsAgent[BxN_Obs, BxM_Action, B_Int_HighLevel, None](
-        skills=[zero_skill, random_skill],
+        skills=skills,
         high_level_policy=policy_over_options,
-        params_policy=None,
+        params_policy=fixed_param_policy,
     )
 
     # simulate environment

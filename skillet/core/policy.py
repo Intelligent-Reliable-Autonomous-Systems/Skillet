@@ -11,10 +11,12 @@ from skillet.core.spaces import (
     BatchedAction,
     BatchedArrayEmpty,
     BatchedObservation,
+    BatchedParamDC,
     BatchedSkillParams,
     CommonSpecs,
     Observation,
     ObservationSpec,
+    ParamDC,
     SkillParamsSpec,
 )
 
@@ -87,6 +89,40 @@ class BatchedPolicy(
     """A batched policy that takes a batched observation and outputs a batched action."""
 
     pass
+
+
+class BatchedPPolicy(
+    Policy[TBPolicyObs, TBAction, TBPolicyParams],
+    abc.ABC,
+    Generic[TBPolicyObs, TBAction, TBPolicyParams],
+):
+    """A batched policy that takes a batched observation and outputs a batched action."""
+
+    @property
+    def params_spec(self) -> SkillParamsSpec[BatchedParamDC]:
+        """The specification of the parameters space for the policy."""
+        return replace(CommonSpecs.BatchedArrayEmpty, is_torch=self.action_spec.is_torch)
+
+    def get_action(self, obs: TPolicyObs, params: Any = None) -> TAction:  # noqa: ANN401
+        """Get the next low-level action for the robot based on the observation. The parameters are ignored."""
+        raise NotImplementedError
+
+
+class PPolicy(
+    Policy[TPolicyObs, TAction, TPolicyParams],
+    abc.ABC,
+    Generic[TPolicyObs, TAction, TPolicyParams],
+):
+    """A batched policy that takes a batched observation and outputs a batched action."""
+
+    @property
+    def params_spec(self) -> SkillParamsSpec[ParamDC]:
+        """The specification of the parameters space for the policy."""
+        return replace(CommonSpecs.ArrayEmpty, is_torch=self.action_spec.is_torch)
+
+    def get_action(self, obs: TPolicyObs, params: Any = None) -> TAction:  # noqa: ANN401
+        """Get the next low-level action for the robot based on the observation. The parameters are ignored."""
+        raise NotImplementedError
 
 
 class UPolicy(Policy[TPolicyObs, TAction, Unparameterized], abc.ABC, Generic[TPolicyObs, TAction]):

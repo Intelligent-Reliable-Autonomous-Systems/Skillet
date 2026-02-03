@@ -14,7 +14,7 @@ from skillet.core.env import (
     BatchedEnvironment,
     Environment,
 )
-from skillet.core.policy import BatchedPolicy, BatchedUPolicy, Policy, UPolicy
+from skillet.core.policy import BatchedPolicy, BatchedPPolicy, BatchedUPolicy, Policy, PPolicy, UPolicy
 from skillet.core.skill import BatchedSkill, CompositeSkill, SingleSkill, Skill
 from skillet.core.spaces import (
     ActionSpec,
@@ -29,6 +29,7 @@ __all__ = [
     "BasicBatchedEnvironment",
     "BasicEnvironment",
     "BatchedEnvironment",
+    "BatchedPPolicy",
     "BatchedPolicy",
     "BatchedSkill",
     "BatchedUPolicy",
@@ -36,6 +37,7 @@ __all__ = [
     "CompositeSkill",
     "Environment",
     "ObservationSpec",
+    "PPolicy",
     "Policy",
     "SingleSkill",
     "Skill",

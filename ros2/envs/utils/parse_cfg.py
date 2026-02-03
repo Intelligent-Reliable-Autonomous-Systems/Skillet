@@ -9,11 +9,12 @@ import collections
 import importlib
 import inspect
 import os
+import pathlib
 import re
+from typing import Any
 
 import gymnasium as gym
 import yaml
-from typing import Any
 
 
 def load_cfg_from_registry(task_name: str, entry_point_key: str) -> dict | object:
@@ -82,7 +83,7 @@ def load_cfg_from_registry(task_name: str, entry_point_key: str) -> dict | objec
         )
     # parse the default config file
     if isinstance(cfg_entry_point, str) and cfg_entry_point.endswith(".yaml"):
-        if os.path.exists(cfg_entry_point):
+        if pathlib.Path(cfg_entry_point).exists():
             # absolute path for the config file
             config_file = cfg_entry_point
         else:
@@ -93,7 +94,7 @@ def load_cfg_from_registry(task_name: str, entry_point_key: str) -> dict | objec
             config_file = os.path.join(mod_path, file_name)
         # load the configuration
         print(f"[INFO]: Parsing configuration from: {config_file}")
-        with open(config_file, encoding="utf-8") as f:
+        with pathlib.Path(config_file).open(encoding="utf-8") as f:
             cfg = yaml.full_load(f)
     else:
         if callable(cfg_entry_point):
@@ -143,7 +144,8 @@ def parse_ros2_env_cfg(
     # we assume users always use a class for the configuration
     if isinstance(cfg, dict):
         raise RuntimeError(f"Configuration for the task: '{task_name}' is not a class. Please provide a class.")
-
+    if ros2_workspace is None and cfg.ros2_workspace is None:
+        raise RuntimeError("`ros2_workspace` cannot be none!")
     cfg.device = device
     cfg.num_envs = num_envs
     cfg.ros2_workspace = ros2_workspace
