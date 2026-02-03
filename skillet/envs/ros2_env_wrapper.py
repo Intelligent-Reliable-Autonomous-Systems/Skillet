@@ -120,6 +120,8 @@ class ROS2EnvWrapper(
             raise ValueError("No observation has been received yet. Call reset() first.")
         if obs_spec is None or obs_spec.name == "joints":
             return torch.as_tensor(self.last_obs["joints"], device=self.device).unsqueeze(0)
+        if obs_spec.name == "rgb-d":
+            pass  # check if "rgb-d" in obs_dict
         if obs_spec.name == "state":
             return self.last_obs
         raise ValueError(f"Observation spec {obs_spec} not supported by environment.")
