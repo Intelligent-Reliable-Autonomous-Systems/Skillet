@@ -12,6 +12,7 @@ import torch
 from jaxtyping import Bool, Float
 
 from skillet.core.env import BatchedEnvironment
+from skillet.core.math import matrix_from_quat, quat_inv
 from skillet.core.spaces import ActionSpec
 from skillet.envs.utils import AsGymVectorEnv
 
@@ -153,3 +154,15 @@ class IsaacEnvWrapper(
             obs = torch.cat(list(obs.values()), dim=1)
 
         return obs, reward, term, trunc, info
+
+    """
+    Helper functions
+    """
+
+    def _get_jacobians(self) -> None:
+        """Return the jacobians"""
+        robot_base_pose_w = self._robot.data.body_pose_w[:, self.cfg.base_link_idx]
+        base_rot_matrix = matrix_from_quat(quat_inv(robot_base_pose_w[:, 3:7]))
+        jacobian = self._robot.root_physx_view.get_jacobians()[:, self.cfg.ee_jacobi_idx, :, self.cfg.arm_joint_ids]
+        jacobian[:, :3, :] = torch.bmm(base_rot_matrix, jacobian[:, :3, :])
+        jacobian[:, 3:, :] = torch.bmm(base_rot_matrix, jacobian[:, 3:, :])

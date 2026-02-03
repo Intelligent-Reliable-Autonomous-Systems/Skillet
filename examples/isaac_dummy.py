@@ -16,12 +16,11 @@ Written by Will Solow and Jeff Jewett, 2026
 """Launch Isaac Sim Simulator first."""
 
 import argparse
-import sys
 
-from isaaclab.app import AppLauncher
-from jaxtyping import Float, Int
 import gymnasium as gym
 import torch
+from isaaclab.app import AppLauncher
+from jaxtyping import Float, Int
 
 from skillet.agents.policy_over_options import PolicyOverOptionsAgent
 from skillet.core.spaces import ActionSpec, ObservationSpec
@@ -50,6 +49,7 @@ simulation_app = app_launcher.app
 import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import parse_env_cfg
 
+import isaac_kinova.tasks as tasks  # noqa: F401
 
 BxN_Obs = Float[torch.Tensor, "b n"]
 """Environment observation: torch.Tensor[(b, n), float]"""

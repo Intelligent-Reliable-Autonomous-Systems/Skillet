@@ -924,7 +924,6 @@ def subtract_frame_transforms(
     return t12, q12
 
 
-@torch.jit.script
 def compute_pose_error(
     t01: torch.Tensor,
     q01: torch.Tensor,
