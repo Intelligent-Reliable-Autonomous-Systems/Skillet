@@ -276,3 +276,17 @@ class ROS2RLEnv(gym.Env):
 
         """
         raise NotImplementedError(f"Please implement the '_get_dones' method for {self.__class__.__name__}.")
+
+    """
+    Inverse kinematics related helper functions
+    """
+
+    @property
+    @abstractmethod
+    def _joint_positions(self) -> np.ndarray:
+        raise NotImplementedError(f"Please implement the '_joint_positions' property for {self.__class__.__name__}.")
+
+    @property
+    @abstractmethod
+    def _joint_velocities(self) -> np.ndarray:
+        raise NotImplementedError(f"Please implement the '_joint_velocities' property for {self.__class__.__name__}.")

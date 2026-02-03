@@ -96,7 +96,7 @@ def main() -> None:
     zero_policy = RandomPolicy[BxN_Obs, BxM_Action](observation_spec, action_spec)
     ik_ee_pos_policy = PosAbsIKEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
     # Skills
-    skill_length = 40
+    skill_length = 100
     reach_xyz_skill = ReachXYZSkill[BxN_Obs, BxM_Action, None](
         name="reach_xyz_skill", policy=ik_ee_pos_policy, length=skill_length
     )

@@ -17,7 +17,6 @@ from skillet.core.math import (
     matrix_from_quat,
     quat_apply,
     quat_apply_inverse,
-    quat_from_euler_xyz,
     quat_inv,
     quat_mul,
     subtract_frame_transforms,
@@ -94,6 +93,24 @@ class IsaacEnvWrapper(
             device=self.device,
         )
 
+        # Kinova specific information
+        self.joint_ids = [0, 1, 2, 3, 4, 5, 6, 7]
+
+        self.robot_dof_lower_limits = self._env._robot.data.soft_joint_pos_limits[0, :, 0].to(device=self.device)[
+            self.joint_ids
+        ]
+        self.robot_dof_upper_limits = self._env._robot.data.soft_joint_pos_limits[0, :, 1].to(device=self.device)[
+            self.joint_ids
+        ]
+        self.robot_dof_lower_limits[self.robot_dof_lower_limits == -float("inf")] = -torch.pi
+        self.robot_dof_upper_limits[self.robot_dof_upper_limits == float("inf")] = torch.pi
+
+        self.tcp_offset = (
+            torch.as_tensor([0.120, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0], device=self.device)
+            .unsqueeze(0)
+            .repeat(self._n_envs, 1)
+        )
+
     @property
     def obs_spec(self):  # noqa: ANN201, D102
         return self._obs_spec_policy
@@ -137,15 +154,10 @@ class IsaacEnvWrapper(
         if obs_spec.name == "ik_ee":
             return {
                 "joint_pos": self._get_joint_positions(),
+                "tcp_offset": self.tcp_offset,
                 "jacobians": self._get_jacobians(),
                 "ee_pose_b": self._get_ee_pose_b(),
-            }
-        if obs_spec.name == "ik_ee_callable":
-            return {
-                "joint_pos": self._get_joint_positions,
-                "tcp_pose_xyz_b": self._get_tcp_pose_xyz_b,
-                "jacobians": self._get_jacobians,
-                "ee_pose_b": self._get_ee_pose_b,
+                "tcp_pose_b": self._get_tcp_pose_xyz_b(),
             }
         raise ValueError(f"Observation spec {obs_spec} not supported by environment.")
 
@@ -251,7 +263,6 @@ class IsaacEnvWrapper(
         env_ids: torch.Tensor | None = None,
         ee_link: str = "gripper_base_link",
         gripper_joint: str = "finger_joint",
-        tcp_offset: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """Get the TCP pose of the robot in the robot base frame.
 
@@ -259,7 +270,6 @@ class IsaacEnvWrapper(
             env_ids: environment ids to tcp pose in XYZ
             ee_link: string for the name of the end effector link
             gripper_joint: string for the name of the gripper joint
-            tcp_offset: The offset of the tcp frame from the end effector
 
         Returns:
             Tensor in shape (N,7) with 7 in (X,Y,Z,R,P,Y,Gripper) with 0 being open, 1 being closed
@@ -268,31 +278,26 @@ class IsaacEnvWrapper(
         """
         if env_ids is None:
             env_ids = self._env._robot._ALL_INDICES
-        if tcp_offset is None:
-            tcp_offset = (
-                torch.as_tensor([0.120, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0], device=self.device)
-                .unsqueeze(0)
-                .repeat(env_ids.shape[0], 1)
-            )
 
         gripper_joint_idx = self._env._robot.find_joints(gripper_joint)[0][0]
+        ee_link_idx = self._env._robot.find_bodies(ee_link)[0][0]
 
-        ee_pos_w = self._env._robot.data.body_pos_w[env_ids, ee_link]
-        ee_quat_w = self._env._robot.data.body_quat_w[env_ids, ee_link]
+        ee_pos_w = self._env._robot.data.body_pos_w[env_ids, ee_link_idx]
+        ee_quat_w = self._env._robot.data.body_quat_w[env_ids, ee_link_idx]
         root_pos_w = self._env._robot.data.root_pos_w[env_ids]
         root_quat_w = self._env._robot.data.root_quat_w[env_ids]
 
         ee_pos_b = quat_apply_inverse(root_quat_w, ee_pos_w - root_pos_w)
         ee_quat_b = quat_mul(quat_inv(root_quat_w), ee_quat_w)
 
-        tcp_pos_b = ee_pos_b + quat_apply(ee_quat_b, tcp_offset[env_ids, 0:3])
-        tcp_quat_b = quat_mul(ee_quat_b, tcp_offset[env_ids, 3:7])
+        tcp_pos_b = ee_pos_b + quat_apply(ee_quat_b, self.tcp_offset[env_ids, 0:3])
+        tcp_quat_b = quat_mul(ee_quat_b, self.tcp_offset[env_ids, 3:7])
 
         r, p, y = euler_xyz_from_quat(tcp_quat_b)
 
         gripper_low = self.robot_dof_lower_limits[gripper_joint_idx]
         gripper_high = self.robot_dof_upper_limits[gripper_joint_idx]
-        gripper_pos = (self._robot.data.joint_pos[env_ids, gripper_joint_idx] - gripper_low) / (
+        gripper_pos = (self._env._robot.data.joint_pos[env_ids, gripper_joint_idx] - gripper_low) / (
             gripper_high - gripper_low
         )
 
@@ -342,40 +347,3 @@ class IsaacEnvWrapper(
         )
 
         return torch.cat((robot_ee_pos_b, robot_ee_quat_b), dim=1)
-
-    def _compute_ee_pose_b_from_xyz_b(
-        self, pose_b: torch.Tensor, env_ids: torch.Tensor | None = None, tcp_offset: torch.Tensor | None = None
-    ) -> torch.Tensor:
-        """Compute the goal end effector pose from the goal TCP pose.
-
-        Args:
-            pose_b: The goal TCP pose in the shape (N,6) relative to the robot base frame
-            env_ids: environment ids to compute ee pose in base frame
-            tcp_offset: The offset of the tcp frame from the end effector
-
-
-        Returns:
-            The goal end effector pose in shape (N,7)
-
-        """
-        if env_ids is None:
-            env_ids = self._env._robot._ALL_INDICES
-        if tcp_offset is None:
-            tcp_offset = (
-                torch.as_tensor([0.120, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0], device=self.device)
-                .unsqueeze(0)
-                .repeat(env_ids.shape[0], 1)
-            )
-
-        goal_tcp_quat_b = quat_from_euler_xyz(pose_b[:, 3], pose_b[:, 4], pose_b[:, 5])
-        goal_tcp_pos_b = pose_b[:, 0:3]
-
-        # invert offset
-        q_te = quat_inv(tcp_offset[:, 3:7])
-        p_te = -quat_apply(q_te, tcp_offset[env_ids, 0:3])
-
-        # compose
-        q_be = quat_mul(goal_tcp_quat_b, q_te)
-        p_be = goal_tcp_pos_b + quat_apply(goal_tcp_quat_b, p_te)
-
-        return torch.cat((p_be, q_be), dim=1)

@@ -5,7 +5,7 @@ from typing import Any, Generic
 import torch
 
 from skillet.controllers import DifferentialIKController
-from skillet.core.math import quat_from_euler_xyz
+from skillet.core.math import quat_apply, quat_from_euler_xyz, quat_inv, quat_mul
 from skillet.core.policy import BatchedPPolicy, TBAction, TBPolicyObs
 from skillet.core.spaces import ActionSpec, ObservationSpec
 
@@ -51,9 +51,34 @@ class IKEEPolicy(BatchedPPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[TB
         n_envs = self._obs_spec.n_envs_from(obs)
         self._params = params
         self.diff_ik.reset(n_envs)
+        self.tcp_offset = obs["tcp_offset"]
+
+    def _compute_ee_pose_b_from_xyz_b(self, pose_b: torch.Tensor, tcp_offset: torch.Tensor) -> torch.Tensor:
+        """Compute the goal end effector pose from the goal TCP pose.
+
+        Args:
+            pose_b: The goal TCP pose in the shape (N,6) relative to the robot base frame
+            tcp_offset: The offset of the tcp frame from the end effector
 
 
-# TODO: Make bound classes that represent the callables
+        Returns:
+            The goal end effector pose in shape (N,7)
+
+        """
+        goal_tcp_quat_b = quat_from_euler_xyz(pose_b[:, 3], pose_b[:, 4], pose_b[:, 5])
+        goal_tcp_pos_b = pose_b[:, 0:3]
+
+        # invert offset
+        q_te = quat_inv(tcp_offset[:, 3:7])
+        p_te = -quat_apply(q_te, tcp_offset[:, 0:3])
+
+        # compose
+        q_be = quat_mul(goal_tcp_quat_b, q_te)
+        p_be = goal_tcp_pos_b + quat_apply(goal_tcp_quat_b, p_te)
+
+        return torch.cat((p_be, q_be), dim=1)
+
+
 class PoseAbsIKEEPolicy(IKEEPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, TBAction]):
     """A policy that produces pose ."""
 
@@ -79,8 +104,7 @@ class PoseAbsIKEEPolicy(IKEEPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, 
 
         """
         super().reset(obs, params)
-        goal_quat = quat_from_euler_xyz(params[:, 3], params[:, 4], params[:, 5])
-        goal_pose = torch.cat((params[:, 0:3], goal_quat), dim=1)
+        goal_pose = self._compute_ee_pose_b_from_xyz_b(params[:, 6], obs["tcp_offset"])
         ee_pose_b = obs["ee_pose_b"]
         self.diff_ik.set_command(goal_pose, ee_pose_b[:, 0:3], ee_pose_b[:, 3:7])
 
@@ -111,4 +135,4 @@ class PosAbsIKEEPolicy(IKEEPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, T
         """
         super().reset(obs, params)
         ee_pose_b = obs["ee_pose_b"]
-        self.diff_ik.set_command(params[:, 0:3], ee_pose_b[:, 0:3], ee_pose_b[:, 3:7])
+        self.diff_ik.set_command(params[:, 0:3] - self.tcp_offset[:, 0:3], ee_pose_b[:, 0:3], ee_pose_b[:, 3:7])

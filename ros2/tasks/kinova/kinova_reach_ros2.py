@@ -192,3 +192,13 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
     def _gripper_error_cb(self, err: dict[str, Any]) -> None:
         """Gripper action errpr callback."""
         pass
+
+    @property
+    def _joint_positions(self) -> np.ndarray:
+        """Return current joint positions."""
+        return self.current_joint_positions
+
+    @property
+    def _joint_velocities(self) -> np.ndarray:
+        """Return current joint_velocities"""
+        return self.current_joint_positions

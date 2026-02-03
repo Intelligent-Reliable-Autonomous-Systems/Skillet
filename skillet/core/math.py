@@ -1012,7 +1012,7 @@ def apply_delta_pose(
     rot_delta_quat = torch.where(
         angle.unsqueeze(-1).repeat(1, 4) > eps, quat_from_angle_axis(angle, axis), identity_quat
     )
-    # TODO: Check if this is the correct order for this multiplication.
+
     target_rot = quat_mul(rot_delta_quat, source_rot)
 
     return target_pos, target_rot

@@ -19,7 +19,6 @@ The package is structured as follows:
 from .utils import import_packages
 
 # The blacklist is used to prevent importing configs from sub-packages
-# TODO(@ashwinvk): Remove pick_place from the blacklist once pinocchio from Isaac Sim is compatibility
 _BLACKLIST_PKGS = ["utils"]
 # Import all configs in this package
 import_packages(__name__, _BLACKLIST_PKGS)

@@ -52,34 +52,29 @@ simulation_app = app_launcher.app
 
 
 import gymnasium as gym
-import torch
-
+import isaaclab_tasks  # noqa: F401
 import omni.log
-
+import torch
 from isaaclab.devices import Se3Gamepad, Se3GamepadCfg, Se3Keyboard, Se3KeyboardCfg, Se3SpaceMouse, Se3SpaceMouseCfg
 from isaaclab.devices.openxr import remove_camera_configs
 from isaaclab.devices.teleop_device_factory import create_teleop_device
 from isaaclab.managers import TerminationTermCfg as DoneTerm
-
-import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.manager_based.manipulation.lift import mdp
 from isaaclab_tasks.utils import parse_env_cfg
-from kinova import tasks
-
 
 if args_cli.enable_pinocchio:
     import isaaclab_tasks.manager_based.manipulation.pick_place  # noqa: F401
 
 
 def main() -> None:
-    """
-    Run keyboard teleoperation with Isaac Lab manipulation environment.
+    """Run keyboard teleoperation with Isaac Lab manipulation environment.
 
     Creates the environment, sets up teleoperation interfaces and callbacks,
     and runs the main simulation loop until the application is closed.
 
     Returns:
         None
+
     """
     # parse configuration
     env_cfg = parse_env_cfg(args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs)
@@ -116,39 +111,39 @@ def main() -> None:
 
     # Callback handlers
     def reset_recording_instance() -> None:
-        """
-        Reset the environment to its initial state.
+        """Reset the environment to its initial state.
 
         Sets a flag to reset the environment on the next simulation step.
 
         Returns:
             None
+
         """
         nonlocal should_reset_recording_instance
         should_reset_recording_instance = True
         print("Reset triggered - Environment will reset on next step")
 
     def start_teleoperation() -> None:
-        """
-        Activate teleoperation control of the robot.
+        """Activate teleoperation control of the robot.
 
         Enables the application of teleoperation commands to the environment.
 
         Returns:
             None
+
         """
         nonlocal teleoperation_active
         teleoperation_active = True
         print("Teleoperation activated")
 
     def stop_teleoperation() -> None:
-        """
-        Deactivate teleoperation control of the robot.
+        """Deactivate teleoperation control of the robot.
 
         Disables the application of teleoperation commands to the environment.
 
         Returns:
             None
+
         """
         nonlocal teleoperation_active
         teleoperation_active = False
@@ -242,8 +237,6 @@ def main() -> None:
                     env.step(actions)
                 else:
                     env.sim.render()
-
-                # TODO: Environment reset is not consistent. Need to investigate further
                 if should_reset_recording_instance:
                     env.reset()
                     should_reset_recording_instance = False

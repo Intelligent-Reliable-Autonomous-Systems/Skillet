@@ -2,6 +2,7 @@
 
 from typing import Generic
 
+import torch
 from jaxtyping import Int
 
 from skillet.core.policy import BatchedPPolicy
@@ -60,6 +61,11 @@ class ReachXYZSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[T
     def get_action(self, obs: TBSkillObs) -> TBAction:  # noqa: D102
         action = self.policy.get_action(obs, self._params)
         self._n_steps += 1
+        self._status = torch.where(  # TODO Debug why this doesn't get a lot smaller
+            torch.linalg.vector_norm(obs["tcp_pose_b"][:, 0:3] - self._params[:, 0:3], dim=1) < 0.02,
+            SkillStatusCodes.SUCCESS,
+            self._status,
+        )
         if self._n_steps >= self._length:
             self._status[:] = SkillStatusCodes.SUCCESS
         return action
