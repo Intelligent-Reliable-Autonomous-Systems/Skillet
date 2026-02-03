@@ -58,9 +58,6 @@ class KinovaROS2ReachEnvCfg(ROS2RLEnvCfg):
 class KinovaROS2ReachEnv(ROS2RLEnv):
     """Kinova Gen3 7DoF ROS2 implementation."""
 
-    current_joint_positions: np.ndarray | None
-    current_joint_velocities: np.ndarray | None
-
     def __init__(self, cfg: ROS2RLEnvCfg, ros: Ros, render_mode: str | None = None, **kwargs: dict[str, Any]) -> None:
         """Initialize Kinova Arm ROS2."""
         super().__init__(cfg, ros, render_mode, **kwargs)
@@ -71,6 +68,9 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
         self.joint_state_topic = "/joint_states"
         self.joint_cmd_topic = "/joint_trajectory_controller/joint_trajectory"
         self.gripper_cmd_topic = "/robotiq_gripper_controller/gripper_cmd"
+        self.jacobian_topic = "/jacobian"  # TODO: Max sure these match
+        self.robot_description_topic = "/robot_description"
+        self.body_pose_topic = "/body_pose"
 
         self.default_joint_positions = np.asarray(self.cfg.default_joint_positions)
 
@@ -93,16 +93,16 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
         wait_for_action_server(self.ros, self.gripper_cmd_topic, "control_msgs/action/GripperCommand")
         wait_for_rviz(self.ros)
 
+        # TODO: Fix message type for these
+        wait_for_topic_subscribe(self.ros, self.jacobian_topic, "sensor_msgs/JointState")
+        wait_for_topic_subscribe(self.ros, self.robot_description_topic, "sensor_msgs/JointState")
+        wait_for_topic_subscribe(self.ros, self.body_pose_topic, "sensor_msgs/JointState")
+
         # Subscribe to joint states
         self.joint_states_sub = Topic(self.ros, self.joint_state_topic, "sensor_msgs/JointState")
 
         def _update_robot_state(msg: dict[str, Any]) -> None:
-            """Update the state of the robot by subscribing to robot topics.
-
-            Args:
-                msg: JointState message in JSON (deserialized) format from roslibpy.
-
-            """
+            """Update the state of the robot by subscribing to robot topics."""
             self.current_joint_positions = msg["position"]
             self.current_joint_velocities = msg["velocity"]
 
@@ -116,6 +116,38 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
         self.gripper_client = ActionClient(
             self.ros, "/robotiq_gripper_controller/gripper_cmd", "control_msgs/action/GripperCommand"
         )
+
+        # TODO Fix the current sensor messages
+        # Subscribe to jacobian topic
+        self.jacobian_sub = Topic(self.ros, self.joint_state_topic, "sensor_msgs/JointState")
+
+        def _update_jacobians(msg: dict[str, Any]) -> None:
+            """Update jacobians the robot by subscribing to jacobian topic."""
+            self._current_jacobians = np.asarray(msg["data"]).reshape(msg["rows"], msg["cols"])
+
+        self.jacobian_sub.subscribe(_update_jacobians)
+
+        # Subscribe to robot_description
+        self.robot_description_sub = Topic(self.ros, self.robot_description_topic, "sensor_msgs/JointState")
+
+        def _update_robot_links_and_joints(msg: dict[str, Any]) -> None:
+            """Update the state of the robot by subscribing to robot topics."""
+            self._robot_links = msg["links"]
+            self._robot_joints = msg["joints"]
+            self._current_upper_joint_limits = msg["upper_limits"]
+            self._current_lower_joint_limits = msg["lower_limits"]
+
+        self.robot_description_sub.subscribe(_update_robot_links_and_joints)
+
+        # Subscribe to robot_description
+        self.body_pose_sub = Topic(self.ros, self.body_pose_topic, "sensor_msgs/JointState")
+
+        def _update_body_pose(msg: dict[str, Any]) -> None:
+            """Update the state of the robot by subscribing to robot topics."""
+            self._current_robot_body_pose_w = msg["body_pose"]
+            self._current_robot_root_pose_w = msg["body_pose"]
+
+        self.body_pose_sub.subscribe(_update_body_pose)
 
     def _pre_process_action(self, actions: np.ndarray) -> np.ndarray:
         """Pre process the robot action.
@@ -192,13 +224,3 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
     def _gripper_error_cb(self, err: dict[str, Any]) -> None:
         """Gripper action errpr callback."""
         pass
-
-    @property
-    def _joint_positions(self) -> np.ndarray:
-        """Return current joint positions."""
-        return self.current_joint_positions
-
-    @property
-    def _joint_velocities(self) -> np.ndarray:
-        """Return current joint_velocities"""
-        return self.current_joint_positions

@@ -29,6 +29,16 @@ class ROS2RLEnv(gym.Env):
 
     """
 
+    _current_joint_positions: np.ndarray | None
+    _current_joint_velocities: np.ndarray | None
+    _robot_links: list[str] | None
+    _robot_joints: list[str] | None
+    _current_robot_body_pose_w: np.ndarray | None
+    _current_robot_root_pose_w = np.ndarray | None
+    _current_jacobians: np.ndarray | None
+    _current_upper_joint_limits = np.ndarray | None
+    _current_lower_joint_limits = np.ndarray | None
+
     def __init__(self, cfg: ROS2RLEnvCfg, ros: Ros, render_mode: str | None = None, **kwargs: dict[str, Any]) -> None:
         """Initialize the environment.
 
@@ -68,6 +78,41 @@ class ROS2RLEnv(gym.Env):
     """
     Properties.
     """
+
+    @property
+    def _joint_positions(self) -> np.ndarray:
+        """Return current joint positions."""
+        return self._current_joint_positions
+
+    @property
+    def _joint_velocities(self) -> np.ndarray:
+        """Return current joint_velocities."""
+        return self._current_joint_positions
+
+    @property
+    def _robot_body_pose_w(self) -> np.ndarray:
+        """Return the body pose information in XYZ + Quaternion."""
+        return self._current_robot_body_pose_w
+
+    @property
+    def _robot_root_pose_w(self) -> np.ndarray:
+        """Return the body pose information in XYZ + Quaternion."""
+        return self._current_robot_root_pose_w
+
+    @property
+    def _jacobians(self) -> np.ndarray:
+        """Return the jacobian frame transforms of the robot."""
+        return self._current_jacobians
+
+    @property
+    def _robot_lower_joint_limits(self) -> np.ndarray:
+        """Return the lower limits of the robot joints."""
+        return self._current_lower_joint_limits
+
+    @property
+    def _robot_upper_joint_limits(self) -> np.ndarray:
+        """Return the upper limits of the robot joints."""
+        return self._current_upper_joint_limits
 
     @property
     def physics_dt(self) -> float:
@@ -211,6 +256,30 @@ class ROS2RLEnv(gym.Env):
         # reset the episode length buffer
         self.episode_length_buf = 0
 
+    def _find_link_idx(self, link: str) -> int:
+        """Find the link index in the robot urdf.
+
+        Args:
+            link: string of link name
+
+        Returns:
+            int of index
+
+        """
+        return self._robot_links.index(link)
+
+    def _find_joint_idx(self, joint: str) -> int:
+        """Find the joint index in the robot urdf.
+
+        Args:
+            joint: string of joint name
+
+        Returns:
+            int of index
+
+        """
+        return self._robot_joints.index(joint)
+
     """
     Implementation-specific functions.
     """
@@ -280,13 +349,3 @@ class ROS2RLEnv(gym.Env):
     """
     Inverse kinematics related helper functions
     """
-
-    @property
-    @abstractmethod
-    def _joint_positions(self) -> np.ndarray:
-        raise NotImplementedError(f"Please implement the '_joint_positions' property for {self.__class__.__name__}.")
-
-    @property
-    @abstractmethod
-    def _joint_velocities(self) -> np.ndarray:
-        raise NotImplementedError(f"Please implement the '_joint_velocities' property for {self.__class__.__name__}.")
