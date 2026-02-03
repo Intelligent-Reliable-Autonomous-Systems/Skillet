@@ -58,8 +58,7 @@ class DifferentialIKController:
 
     def __init__(
         self,
-        num_envs: int,
-        device: str,
+        device: str | None = "cuda",
         command_type: Literal["pose", "position"] = "pose",
         use_relative_mode: bool = False,
         ik_method: Literal["pinv", "svd", "trans", "dls"] = "dls",
@@ -67,20 +66,21 @@ class DifferentialIKController:
         """Initialize the controller.
 
         Args:
-            cfg: The configuration for the controller.
             num_envs: The number of environments.
             device: The device to use for computations.
+            command_type: Pose or position
+            use_relative_mode: bool of if to output absolute or relative joint positions
+            ik_method: Inverse kinematics method to use
 
         """
         # store inputs
         self.command_type = command_type
         self.use_relative_mode = use_relative_mode
         self.ik_method = ik_method
-        self.num_envs = num_envs
         self._device = device
-        self.ik_params = self.default_ik_params
+        self.ik_params = self.default_ik_params[self.ik_method]
         # -- input command
-        self._command = torch.zeros(self.num_envs, self.action_dim, device=self._device)
+        self._command = None
         self.ee_pos_des = None
         self.ee_quat_des = None
 
@@ -101,16 +101,17 @@ class DifferentialIKController:
     Operations.
     """
 
-    def reset(self, env_ids: torch.Tensor = None) -> None:
+    def reset(self, n_envs: torch.Tensor = None) -> None:
         """Reset the internals.
 
         Args:
-            env_ids: The environment indices to reset. If None, then all environments are reset.
+            n_envs: The number of environment indices
 
         """
         # create buffers
-        self.ee_pos_des = torch.zeros(env_ids.shape[0], 3, device=self._device)
-        self.ee_quat_des = torch.zeros(env_ids.shape[0], 4, device=self._device)
+        self.ee_pos_des = torch.zeros(n_envs, 3, device=self._device)
+        self.ee_quat_des = torch.zeros(n_envs, 4, device=self._device)
+        self._command = torch.zeros(n_envs, self.action_dim, device=self._device)
 
     def set_command(
         self, command: torch.Tensor, ee_pos: torch.Tensor | None = None, ee_quat: torch.Tensor | None = None

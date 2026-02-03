@@ -2,6 +2,8 @@
 
 from typing import Any, Generic
 
+import torch
+
 from skillet.core.policy import BatchedUPolicy, TAction, TBAction, TBPolicyObs
 from skillet.core.spaces import ActionSpec, ObservationSpec
 
@@ -90,3 +92,39 @@ class FixedPolicy(BatchedUPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, TB
         n_envs = self._obs_spec.n_envs_from(obs)
         # TODO: Make this general regardless of the type (torch/numpy)
         return self._params.unsqueeze(0).repeat(n_envs, 1)
+
+
+class RandomFixedPolicy(BatchedUPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, TBAction]):
+    """A policy that outputs zero actions."""
+
+    def __init__(
+        self, obs_spec: ObservationSpec[TBPolicyObs], action_spec: ActionSpec[TBAction], params: TAction
+    ) -> None:
+        """Initialize the policy.
+
+        Args:
+            obs_spec: The observation specification.
+            action_spec: The action specification.
+            params: The parameters, a 2D array of parameters to choose from
+
+        """
+        self._obs_spec = obs_spec
+        self._action_spec = action_spec
+        self._params = params
+
+    @property
+    def obs_spec(self) -> ObservationSpec[TBPolicyObs]:  # noqa: D102
+        return self._obs_spec
+
+    @property
+    def action_spec(self) -> ActionSpec[TBAction]:  # noqa: D102
+        return self._action_spec
+
+    def get_action(self, obs: TBPolicyObs, params: Any = None) -> TBAction:  # noqa: ANN401, D102
+        n_envs = self._obs_spec.n_envs_from(obs)
+        # TODO: Make this general regardless of the type (torch/numpy)
+
+        indices = torch.multinomial(torch.ones(self._params.shape[0]), num_samples=n_envs, replacement=True)
+
+        # Use these indices to get the random items
+        return self._params[indices]

@@ -123,6 +123,8 @@ class SpaceSpecification(Generic[TSpace]):
     """Whether the space is a PyTorch tensor or numpy array."""
     is_batched: bool
     """Whether the space is batched."""
+    is_callable: bool = False
+    """Whether the space contains callable fucntions."""
     n_envs: int | None = None
     """The number of environments in the batched space. 
 
@@ -172,6 +174,8 @@ class SpaceSpecification(Generic[TSpace]):
         if not self.is_batched:
             raise ValueError("Cannot index a non-batched space.")
         env_ids = torch.as_tensor(env_ids, device=self.device) if self.is_torch else np.asarray(env_ids)
+        if self.is_callable:  # TODO Want to handle when we might return a bound function
+            pass
         if env_ids.ndim == 0:
             raise ValueError("env_ids must be a sequence of booleans or integers.")
         if isinstance(value, Mapping):
@@ -259,6 +263,8 @@ class SpaceSpecification(Generic[TSpace]):
         """Return the number of environments from the given value."""
         if not self.is_batched:
             raise ValueError("Cannot get n_envs from a non-batched space.")
+        if self.is_callable:  # TODO: Want to handle callable functions, this could be needed
+            pass  # TODO bad fix
         if isinstance(value, Mapping):
             return next(iter(value.values())).shape[0]
         return value.shape[0]

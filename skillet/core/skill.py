@@ -181,6 +181,8 @@ class CompositeSkill(
     abc.ABC,
     Generic[TBSkillObs, TBAction, TBSkillParams],
 ):
+    """Group of skills as a high level skill controller."""
+
     def __init__(
         self,
         skills: Sequence[BatchedSkill[TBSkillObs, TBAction, TBSkillParams]],
@@ -243,6 +245,7 @@ class CompositeSkill(
     @property
     def obs_spec(self) -> ObservationSpec[TBSkillObs]:
         """The observation specification is the same as the batched observation specification, but with a fixed n_envs."""
+        # TODO really need to handle multiple obs specifications
         return self.skills[0].obs_spec
 
     @property

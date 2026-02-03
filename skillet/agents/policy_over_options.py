@@ -55,12 +55,15 @@ class PolicyOverOptionsAgent(Generic[THighLevelObs, TLowLevelObs, TBAction, TSki
         self.params_policy = params_policy
 
     def get_high_level_obs(self, env: BatchedEnvironment) -> THighLevelObs:
+        """Get high level policy observations."""
         return env.get_observation(self.high_level_policy.obs_spec)
 
     def get_low_level_obs(self, env: BatchedEnvironment) -> TLowLevelObs:
+        """Get low level policyobservations."""
         return env.get_observation(self.skills[0].obs_spec)
 
     def execute(self, env: BatchedEnvironment[TLowLevelObs, TBAction]) -> None:
+        """Execute the policy over the options configured."""
         n_envs = env.num_envs
         terminated: ArrayLike = env.obs_spec.with_n_envs(n_envs).zeros(shape=(n_envs,), dtype=bool)
         composite_skill = CompositeSkill[TLowLevelObs, TBAction, TSkillParams](self.skills)

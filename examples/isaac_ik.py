@@ -25,8 +25,8 @@ from jaxtyping import Float, Int
 from skillet.agents.policy_over_options import PolicyOverOptionsAgent
 from skillet.core.spaces import ActionSpec, ObservationSpec
 from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
-from skillet.policy.dummy import FixedPolicy, RandomPolicy
-from skillet.policy.ik_ee import PosIKEEPolicy
+from skillet.policy.dummy import RandomFixedPolicy, RandomPolicy
+from skillet.policy.ik_ee import PosAbsIKEEPolicy
 from skillet.skill.fixed_length import FixedLengthSkill
 from skillet.skill.reach_xyz import ReachXYZSkill
 
@@ -50,6 +50,8 @@ simulation_app = app_launcher.app
 # import isaaclab_tasks after app launcher
 import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import parse_env_cfg
+
+import isaac_kinova.tasks as tasks  # noqa: F401
 
 BxN_Obs = Float[torch.Tensor, "b n"]
 """Environment observation: torch.Tensor[(b, n), float]"""
@@ -78,26 +80,21 @@ def main() -> None:
     # Set up Skill executor and environment in framework
     env = IsaacEnvWrapper[BxN_Obs, BxM_Action](env)
 
-    # action_spec = ActionSpec[BxN_Obs](
-    #     space=env.action_space,
-    #     name="isaac_action",
-    #     is_torch=True,
-    #     is_batched=True,
-    #     # n_envs=args_cli.num_envs,
-    # )
     action_spec: ActionSpec[BxM_Action] = env.action_spec
     observation_spec: ObservationSpec[BxN_Obs] = env.obs_spec
-    # observation_spec = ObservationSpec[BxN_Obs](
-    #     space=env.observation_space,
-    #     name="policy",
-    #     is_torch=True,
-    #     is_batched=True,
-    #     # n_envs=args_cli.num_envs,
-    # )
 
     # Low-level policies
+    _obs_spec_ik = ObservationSpec[Float[torch.Tensor, "b ..."]](
+        space=gym.spaces.Dict(),
+        name="ik_ee",
+        is_torch=True,
+        is_batched=True,
+        n_envs=-1,
+        device=env.device,
+    )
+
     zero_policy = RandomPolicy[BxN_Obs, BxM_Action](observation_spec, action_spec)
-    ik_ee_pos_policy = PosIKEEPolicy[BxN_Obs, BxM_Action](observation_spec, action_spec)
+    ik_ee_pos_policy = PosAbsIKEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
     # Skills
     skill_length = 40
     reach_xyz_skill = ReachXYZSkill[BxN_Obs, BxM_Action, None](
@@ -106,10 +103,14 @@ def main() -> None:
     random_skill = FixedLengthSkill[BxN_Obs, BxM_Action, None](
         name="zero_skill", policy=zero_policy, length=skill_length
     )
-    skills = [reach_xyz_skill, random_skill]
+    skills = [reach_xyz_skill]
 
     # Parameters policy
-    fixed_param_policy = FixedPolicy[BxN_Obs, BxM_Action](observation_spec, action_spec, [0.6, 0.1, 0.3])
+    fixed_param_policy = RandomFixedPolicy[BxN_Obs, BxM_Action](
+        observation_spec,
+        action_spec,
+        torch.as_tensor([[0.7, -0.4, 0.3], [0.6, 0.1, 0.5], [0.5, 0.0, 0.7], [0.8, -0.1, 0.4]], device=env.device),
+    )
 
     # High-level policy
     options_spec = ActionSpec[B_Int_HighLevel](
@@ -122,7 +123,7 @@ def main() -> None:
     policy_over_options = RandomPolicy[BxN_Obs, B_Int_HighLevel](observation_spec, options_spec)
 
     policy_over_options_agent = PolicyOverOptionsAgent[BxN_Obs, BxM_Action, B_Int_HighLevel, None](
-        skills=[random_skill, reach_xyz_skill],
+        skills=skills,
         high_level_policy=policy_over_options,
         params_policy=fixed_param_policy,
     )
