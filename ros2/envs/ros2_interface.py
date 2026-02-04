@@ -142,3 +142,15 @@ def wait_for_rviz(ros: Ros, timeout: int = 30) -> None:
         if time.time() - start > timeout:
             raise TimeoutError("RViz did not start")
         time.sleep(0.2)
+
+
+def wait_until_ready(ready: dict, timeout: int = 30) -> None:
+    """Wait until all topics have recieved a value."""
+    start = time.time()
+    print(f"[INFO][ROS2] Waiting for all topics to be ready {ready}...")
+
+    while not all(ready.values()):
+        if time.time() - start > timeout:
+            raise TimeoutError(f"Not all topics ready: {ready}")
+        time.sleep(0.01)
+    print(f"[INFO][ROS2] All topics are ready {ready}...")

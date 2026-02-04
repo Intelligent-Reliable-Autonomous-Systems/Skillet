@@ -60,6 +60,7 @@ class ROS2EnvWrapper(
 
         """
         self._ros_env = env
+        self._env = env.unwrapped
         self._n_envs = env.unwrapped.num_envs
         self.device = env.unwrapped.device
         vector_env = AsGymVectorEnv(env, num_envs=self._n_envs)
@@ -92,14 +93,14 @@ class ROS2EnvWrapper(
         # Kinova specific information
         self.joint_ids = [0, 1, 2, 3, 4, 5, 6, 7]
 
-        self.robot_dof_lower_limits = torch.as_tensor(self._env._robot_lower_joint_limits, device=self.device)[
+        """self.robot_dof_lower_limits = torch.as_tensor(self._env._robot_lower_joint_limits, device=self.device)[
             self.joint_ids
         ]
         self.robot_dof_upper_limits = torch.as_tensor(self._env._robot_upper_joint_limits, device=self.device)[
             self.joint_ids
         ]
-        self.robot_dof_lower_limits[self.robot_dof_lower_limits == -float("inf")] = -torch.pi
-        self.robot_dof_upper_limits[self.robot_dof_upper_limits == float("inf")] = torch.pi
+        self.robot_dof_lower_limits[self.robot_dof_lower_limits == 0] = -2 * torch.pi
+        self.robot_dof_upper_limits[self.robot_dof_upper_limits == 0] = 2 * torch.pi"""
 
         self.tcp_offset = (
             torch.as_tensor([0.120, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0], device=self.device)
@@ -118,6 +119,20 @@ class ROS2EnvWrapper(
     @property
     def n_envs(self) -> int:
         return self._n_envs
+
+    @property
+    def robot_dof_lower_limits(self) -> torch.Tensor:
+        """Process and return lower joint limits."""
+        lower_limits = torch.as_tensor(self._env._robot_lower_joint_limits, device=self.device)[self.joint_ids]
+        lower_limits[lower_limits == 0] = -2 * torch.pi
+        return lower_limits
+
+    @property
+    def robot_dof_upper_limits(self) -> torch.Tensor:
+        """Process and return upper joint limits"""
+        upper_limits = torch.as_tensor(self._env._robot_upper_joint_limits, device=self.device)[self.joint_ids]
+        upper_limits[upper_limits == 0] = -2 * torch.pi
+        return upper_limits
 
     def supports_observation_spec(self, obs_spec: ObservationSpec) -> bool:
         return obs_spec.name in ["policy", "state"]
@@ -212,7 +227,9 @@ class ROS2EnvWrapper(
             env_ids = torch.arange(self.n_envs, device=self.device)
         if joint_ids is None:
             joint_ids = [0, 1, 2, 3, 4, 5, 6]
-        return torch.as_tensor(self._env._joint_positions, device=self.device).unsqueeze(0)[:, joint_ids][env_ids]
+        return torch.as_tensor(self._env._current_joint_positions, device=self.device).unsqueeze(0)[:, joint_ids][
+            env_ids
+        ]
 
     def _get_joint_velocities(self, env_ids: torch.Tensor | None = None, joint_ids: list | None = None) -> torch.Tensor:
         """Return the joint velocities.
@@ -229,7 +246,9 @@ class ROS2EnvWrapper(
         if joint_ids is None:
             joint_ids = [0, 1, 2, 3, 4, 5, 6]
 
-        return torch.as_tensor(self._env._joint_velocities, device=self.device).unsqueeze(0)[:, joint_ids][env_ids]
+        return torch.as_tensor(self._env._current_joint_velocities, device=self.device).unsqueeze(0)[:, joint_ids][
+            env_ids
+        ]
 
     def _get_jacobians(
         self,
@@ -257,13 +276,13 @@ class ROS2EnvWrapper(
         ee_link_idx = self._env._find_link_idx(ee_link)
         base_link_idx = self._env._find_link_idx(base_link)
 
-        robot_base_pose_w = torch.as_tensor(self._env._robot_body_pose_w, device=self.device).unsqueeze(0)[
-            env_ids, base_link_idx
-        ]
+        robot_base_pose_w = torch.as_tensor(
+            self._env._robot_body_pose_w, device=self.device, dtype=torch.float32
+        ).unsqueeze(0)[env_ids, base_link_idx]
 
         base_rot_matrix = matrix_from_quat(quat_inv(robot_base_pose_w[:, 3:7]))
 
-        jacobian = torch.as_tensor(self._env._jacobians, device=self.device).unsqueeze(0)[
+        jacobian = torch.as_tensor(self._env._jacobians, device=self.device, dtype=torch.float32).unsqueeze(0)[
             :, ee_link_idx, :, arm_joint_ids
         ][env_ids]
 
@@ -275,8 +294,8 @@ class ROS2EnvWrapper(
     def _get_tcp_pose_xyz_b(
         self,
         env_ids: torch.Tensor | None = None,
-        ee_link: str = "gripper_base_link",
-        gripper_joint: str = "finger_joint",
+        ee_link: str = "robotiq_85_base_link",
+        gripper_joint: str = "robotiq_85_left_knuckle_joint",
     ) -> torch.Tensor:
         """Get the TCP pose of the robot in the robot base frame.
 
@@ -294,10 +313,14 @@ class ROS2EnvWrapper(
             env_ids = torch.arange(self.n_envs, device=self.device)
 
         gripper_joint_idx = self._env._find_joint_idx(gripper_joint)
-        ee_link_idx = self._env.find_link_idx(ee_link)
+        ee_link_idx = self._env._find_link_idx(ee_link)
 
-        ee_pose_w = torch.as_tensor(self._env.robot_body_pose_w[ee_link_idx], device=self.device).unsqueeze(0)[env_ids]
-        root_pose_w = torch.as_tensor(self._env._robot_root_pose_w, device=self.device).unsqueeze(0)[env_ids]
+        ee_pose_w = torch.as_tensor(
+            self._env._robot_body_pose_w[ee_link_idx], device=self.device, dtype=torch.float32
+        ).unsqueeze(0)[env_ids]
+        root_pose_w = torch.as_tensor(self._env._robot_root_pose_w, device=self.device, dtype=torch.float32).unsqueeze(
+            0
+        )[env_ids]
 
         ee_pos_b = quat_apply_inverse(root_pose_w[:, 3:7], ee_pose_w[:, 0:3] - root_pose_w[:, 0:3])
         ee_quat_b = quat_mul(quat_inv(root_pose_w[:, 3:7]), ee_pose_w[:, 3:7])
@@ -328,7 +351,7 @@ class ROS2EnvWrapper(
     def _get_ee_pose_b(
         self,
         env_ids: torch.Tensor | None = None,
-        ee_link: str = "gripper_base_link",
+        ee_link: str = "robotiq_85_base_link",
         base_link: str = "base_link",
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Compute and return the end effector pose of the robot in the robot's base frame.
@@ -347,14 +370,14 @@ class ROS2EnvWrapper(
         if env_ids is None:
             env_ids = torch.arange(self.n_envs, device=self.device)
         ee_link_idx = self._env._find_link_idx(ee_link)
-        base_link_idx = self._env._find_link_idx(base_link)[0][0]
+        base_link_idx = self._env._find_link_idx(base_link)
 
-        robot_ee_pose_w = torch.as_tensor(self._env._robot_body_pose_w[ee_link_idx], device=self.device).unsqueeze(0)[
-            env_ids
-        ]
-        robot_base_pose_w = torch.as_tensor(self._env._robot_body_pose_w[base_link_idx], device=self.device).unsqueeze(
-            0
-        )[env_ids]
+        robot_ee_pose_w = torch.as_tensor(
+            self._env._robot_body_pose_w[ee_link_idx], device=self.device, dtype=torch.float32
+        ).unsqueeze(0)[env_ids]
+        robot_base_pose_w = torch.as_tensor(
+            self._env._robot_body_pose_w[base_link_idx], device=self.device, dtype=torch.float32
+        ).unsqueeze(0)[env_ids]
 
         robot_ee_pos_b, robot_ee_quat_b = subtract_frame_transforms(
             robot_base_pose_w[:, :3],

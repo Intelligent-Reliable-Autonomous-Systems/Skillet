@@ -29,15 +29,15 @@ class ROS2RLEnv(gym.Env):
 
     """
 
-    _current_joint_positions: np.ndarray | None
-    _current_joint_velocities: np.ndarray | None
-    _robot_links: list[str] | None
-    _robot_joints: list[str] | None
-    _current_robot_body_pose_w: np.ndarray | None
-    _current_robot_root_pose_w = np.ndarray | None
-    _current_jacobians: np.ndarray | None
-    _current_upper_joint_limits = np.ndarray | None
-    _current_lower_joint_limits = np.ndarray | None
+    _current_joint_positions: np.ndarray
+    _current_joint_velocities: np.ndarray
+    _robot_links: list[str]
+    _robot_joints: list[str]
+    _current_robot_body_pose_w: np.ndarray
+    _current_robot_root_pose_w = np.ndarray
+    _current_jacobians: np.ndarray
+    _current_upper_joint_limits = np.ndarray
+    _current_lower_joint_limits = np.ndarray
 
     def __init__(self, cfg: ROS2RLEnvCfg, ros: Ros, render_mode: str | None = None, **kwargs: dict[str, Any]) -> None:
         """Initialize the environment.
