@@ -19,7 +19,7 @@ See [IsaacLab Installation](https://isaac-sim.github.io/IsaacLab/main/source/set
 4. Install IsaacLab: `cd IsaacLab`, `./isaaclab.sh --install`
 5. Navigate back to Robot-Skills repository `cd ../Robot-Skills`
 
-To run experiment with dummy task policy and low level policy: `python3 examples/ros2_dummy.py --num_envs 4 --task Kinova-Reach-Direct-v0`
+To run experiment with dummy task policy and low level policy: `python3 examples/isaac_dummy.py --num_envs 4 --task Kinova-Reach-Direct-v0`
 
 ## ROS2 Integration
 See [ROS2 Installation](https://docs.ros.org/en/jazzy/Installation.html) to install ROS2. Be sure to install on system python (not venv/conda)

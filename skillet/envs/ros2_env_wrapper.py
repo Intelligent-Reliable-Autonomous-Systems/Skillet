@@ -281,7 +281,15 @@ class ROS2EnvWrapper(
         ).unsqueeze(0)[env_ids, base_link_idx]
 
         base_rot_matrix = matrix_from_quat(quat_inv(robot_base_pose_w[:, 3:7]))
-
+        # print(f"[INFO] ROBOT LINKS: {self._env._robot_links}")
+        # print(f"[INFO] ROBOT JOINTS: {self._env._robot_joints}")
+        # print(
+        #     f"[INFO] Jacobian shape: {torch.as_tensor(self._env._jacobians, device=self.device, dtype=torch.float32).unsqueeze(0).shape}"
+        # )
+        # print(f"[INFO] EE link IDX shape: {ee_link_idx}")
+        for jac in torch.as_tensor(self._env._jacobians, device=self.device, dtype=torch.float32).unsqueeze(0)[0]:
+            # print(f"[INFO] {jac}")
+            continue
         jacobian = torch.as_tensor(self._env._jacobians, device=self.device, dtype=torch.float32).unsqueeze(0)[
             :, ee_link_idx, :, arm_joint_ids
         ][env_ids]

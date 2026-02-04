@@ -252,6 +252,10 @@ class IsaacEnvWrapper(
         base_link_idx = self._env._robot.find_bodies(base_link)[0][0]
         robot_base_pose_w = self._env._robot.data.body_pose_w[env_ids, base_link_idx]
         base_rot_matrix = matrix_from_quat(quat_inv(robot_base_pose_w[:, 3:7]))
+        # print(f"[INFO] Jacobian shape: {self._env._robot.root_physx_view.get_jacobians().shape}")
+        # print(f"[INFO] EE link IDX shape: {ee_link_idx}")
+        # for jac in self._env._robot.root_physx_view.get_jacobians()[0]:
+        #     print(f"[INFO] {jac}")
         jacobian = self._env._robot.root_physx_view.get_jacobians()[:, ee_link_idx, :, arm_joint_ids][env_ids]
         jacobian[:, :3, :] = torch.bmm(base_rot_matrix, jacobian[:, :3, :])
         jacobian[:, 3:, :] = torch.bmm(base_rot_matrix, jacobian[:, 3:, :])
