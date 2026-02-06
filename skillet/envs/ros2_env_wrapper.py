@@ -93,15 +93,6 @@ class ROS2EnvWrapper(
         # Kinova specific information
         self.joint_ids = [0, 1, 2, 3, 4, 5, 6, 7]
 
-        """self.robot_dof_lower_limits = torch.as_tensor(self._env._robot_lower_joint_limits, device=self.device)[
-            self.joint_ids
-        ]
-        self.robot_dof_upper_limits = torch.as_tensor(self._env._robot_upper_joint_limits, device=self.device)[
-            self.joint_ids
-        ]
-        self.robot_dof_lower_limits[self.robot_dof_lower_limits == 0] = -2 * torch.pi
-        self.robot_dof_upper_limits[self.robot_dof_upper_limits == 0] = 2 * torch.pi"""
-
         self.tcp_offset = (
             torch.as_tensor([0.120, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0], device=self.device)
             .unsqueeze(0)
@@ -281,15 +272,6 @@ class ROS2EnvWrapper(
         ).unsqueeze(0)[env_ids, base_link_idx]
 
         base_rot_matrix = matrix_from_quat(quat_inv(robot_base_pose_w[:, 3:7]))
-        # print(f"[INFO] ROBOT LINKS: {self._env._robot_links}")
-        # print(f"[INFO] ROBOT JOINTS: {self._env._robot_joints}")
-        # print(
-        #     f"[INFO] Jacobian shape: {torch.as_tensor(self._env._jacobians, device=self.device, dtype=torch.float32).unsqueeze(0).shape}"
-        # )
-        # print(f"[INFO] EE link IDX shape: {ee_link_idx}")
-        for jac in torch.as_tensor(self._env._jacobians, device=self.device, dtype=torch.float32).unsqueeze(0)[0]:
-            # print(f"[INFO] {jac}")
-            continue
         jacobian = torch.as_tensor(self._env._jacobians, device=self.device, dtype=torch.float32).unsqueeze(0)[
             :, ee_link_idx, :, arm_joint_ids
         ][env_ids]

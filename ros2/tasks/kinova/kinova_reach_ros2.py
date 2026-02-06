@@ -33,7 +33,7 @@ class KinovaROS2ReachEnvCfg(ROS2RLEnvCfg):
     """Robot configuration"""
 
     # Whether to spin up real robot or not
-    use_fake_hardware = True
+    use_fake_hardware = "true"
 
     # IP of the robot
     robot_ip = "www.xxx.yyy.zzz"
@@ -42,7 +42,8 @@ class KinovaROS2ReachEnvCfg(ROS2RLEnvCfg):
     vision = False
 
     # Default joint position of robot
-    default_joint_positions = [0, 0.523599, 0, 1.5708, 0, 0.785398, 0, 0.0]
+    # NOTE: Must be in double format to be compatible with ROS2
+    default_joint_positions = [0.0, 0.523599, 0.0, 1.5708, 1.0, 0.785398, 1.0, 0.0]
 
     """RL environment configuration"""
     num_envs = 1
@@ -102,7 +103,9 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
         self._current_joint_velocities = np.zeros(shape=len(self.joint_names))
 
         # Launch robot hardware in ROS2
-        launch_robot_hardware(cfg, cfg.ros2_workspace, "gen3_py", "gen3.launch.py")
+        launch_robot_hardware(
+            cfg, cfg.ros2_workspace, "gen3_py", "gen3.launch.py", default_joint_positions=cfg.default_joint_positions
+        )
 
         # Wait for topics to be exposed before continuing
         wait_for_topic_publish(self.ros, self.joint_cmd_topic, "trajectory_msgs/msg/JointTrajectory")

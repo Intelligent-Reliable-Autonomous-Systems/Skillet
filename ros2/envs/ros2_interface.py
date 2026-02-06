@@ -15,7 +15,9 @@ from roslibpy import Ros, Service, Topic
 from ros2.envs import ROS2RLEnvCfg
 
 
-def launch_robot_hardware(cfg: ROS2RLEnvCfg, workspace_path: str, pkg: str, launch_file: str) -> None:
+def launch_robot_hardware(
+    cfg: ROS2RLEnvCfg, workspace_path: str, pkg: str, launch_file: str, default_joint_positions: list
+) -> None:
     """Launch the robot hardware in separate terminal using system ROS2 installation.
 
     Args:
@@ -30,7 +32,8 @@ def launch_robot_hardware(cfg: ROS2RLEnvCfg, workspace_path: str, pkg: str, laun
         cd {workspace_path}
         source /opt/ros/jazzy/setup.bash 
         source install/setup.bash
-        ros2 launch {pkg} {launch_file} use_fake_hardware:={cfg.use_fake_hardware} robot_ip:={cfg.robot_ip} gripper:=robotiq2f85
+        ros2 launch {pkg} {launch_file} use_fake_hardware:={cfg.use_fake_hardware} robot_ip:={cfg.robot_ip}
+        gripper:=robotiq2f85 default_joint_pos:={default_joint_positions}
         '
         """
     subprocess.Popen(["gnome-terminal", "--", "bash", "-c", cmd])
