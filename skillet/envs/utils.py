@@ -40,7 +40,9 @@ class AsGymVectorEnv(gym.vector.VectorEnv):
 
     def step(  # noqa: D102
         self, actions: BatchedAction
-    ) -> tuple[BatchedSpaceValue, Float[ArrayLike, "b"], Bool[ArrayLike, "b"], Bool[ArrayLike, "b"], dict[str, Any]]:  # noqa: F821
+    ) -> tuple[
+        BatchedSpaceValue, Float[ArrayLike, "b"], Bool[ArrayLike, "b"], Bool[ArrayLike, "b"], dict[str, Any]
+    ]:  # noqa: F821
         return self.env.step(actions)
 
     def render(self):  # noqa: ANN201, D102

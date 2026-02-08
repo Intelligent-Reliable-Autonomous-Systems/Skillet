@@ -163,16 +163,14 @@ class ROS2EnvWrapper(
                 "tcp_offset": self.tcp_offset,
                 "jacobians": self._get_jacobians(),
                 "ee_pose_b": self._get_ee_pose_b(),
-                "tcp_pose_b": self._get_tcp_pose_xyz_b(),
+                "tcp_xyz_b": self._get_tcp_pose_xyz_b(),
             }
         raise ValueError(f"Observation spec {obs_spec} not supported by environment.")
 
     def get_state(self) -> TBatchedObsTorch:  # noqa: D102
         return self.get_observation(self._obs_spec_state)
 
-    def step(
-        self, action: TBatchedActionTorch
-    ) -> tuple[
+    def step(self, action: TBatchedActionTorch) -> tuple[
         TBatchedObsTorch,
         Float[torch.Tensor, "b"],  # noqa: F821
         Bool[torch.Tensor, "b"],  # noqa: F821

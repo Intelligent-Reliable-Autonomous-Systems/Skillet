@@ -26,9 +26,8 @@ from skillet.agents.policy_over_options import PolicyOverOptionsAgent
 from skillet.core.spaces import ActionSpec, ObservationSpec
 from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
 from skillet.policy.dummy import RandomFixedPolicy, RandomPolicy
-from skillet.policy.ik_ee import PosAbsIKEEPolicy, PoseAbsIKEEPolicy
-from skillet.skill.fixed_length import FixedLengthSkill
-from skillet.skill.reach_xyz import ReachXYZSkill
+from skillet.policy.ik_ee import PoseAbsIKEEPolicy
+from skillet.skill.reach_xyz_rpy import ReachXYZRPYSkill
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Main IsaacSim Executor file through IsaacLab.")
@@ -93,25 +92,21 @@ def main() -> None:
         device=env.device,
     )
 
-    zero_policy = RandomPolicy[BxN_Obs, BxM_Action](observation_spec, action_spec)
     ik_ee_pose_policy = PoseAbsIKEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
-    ik_ee_pos_policy = PosAbsIKEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
     # Skills
     skill_length = 100
-    reach_xyz_skill = ReachXYZSkill[BxN_Obs, BxM_Action, None](
-        name="reach_xyz_skill", policy=ik_ee_pos_policy, length=skill_length
+    reach_xyz_skill = ReachXYZRPYSkill[BxN_Obs, BxM_Action, None](
+        name="reach_xyz_skill", policy=ik_ee_pose_policy, length=skill_length
     )
-    random_skill = FixedLengthSkill[BxN_Obs, BxM_Action, None](
-        name="zero_skill", policy=zero_policy, length=skill_length
-    )
+
     skills = [reach_xyz_skill]
 
     # Parameters policy
     fixed_param_policy = RandomFixedPolicy[BxN_Obs, BxM_Action](
         observation_spec,
         action_spec,
-        # torch.as_tensor([[0.7, -0.4, 0.3], [0.6, 0.1, 0.5], [0.5, 0.0, 0.7], [0.8, -0.1, 0.4]], device=env.device),
-        torch.as_tensor([[0.4, 0.1, 0.6]], device=env.device),
+        # torch.as_tensor([[0.6, 0.1, 0.6, 0.0, 1.57, 0.0]], device=env.device),
+        torch.as_tensor([[0.6, 0.1, 0.6, 2.7638, 1.5049, -0.2819]], device=env.device),
     )
 
     # High-level policy

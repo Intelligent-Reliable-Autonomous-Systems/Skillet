@@ -66,6 +66,26 @@ class IsaacEnvWrapper(
         self._env = env.unwrapped
         self._n_envs = env.unwrapped.cfg.scene.num_envs
         self.device = env.unwrapped.device
+
+        if hasattr(self._env, "robot"):
+            self.robot = self._env.robot
+        elif hasattr(self._env, "_robot"):
+            self.robot = self._env._robot
+        elif hasattr(self._env, "scene"):
+            if hasattr(self._env.scene, "_robot"):
+                self.robot = self._env.scene._robot
+            elif hasattr(self._env.scene, "robot"):
+                self.robot = self._env.scene.robot
+            elif hasattr(self._env.scene, "_articulations"):
+                self.robot = self._env.scene._articulations["robot"]
+            else:
+                raise ValueError(
+                    f"Environment `{self._env} `scene.robot` or `scene._robot`. Unable to parse robot Articulation."
+                )
+        else:
+            raise ValueError(
+                f"Environment `{self._env}` has no attribute `_robot` or `robot` or `scene.robot` or `scene._robot`. Unable to parse robot Articulation."
+            )
         vector_env = AsGymVectorEnv(env, num_envs=self._n_envs)
         super().__init__(vector_env)
         self._obs_spec_policy = ObservationSpec[Float[torch.Tensor, "b ..."]](
@@ -96,10 +116,10 @@ class IsaacEnvWrapper(
         # Kinova specific information
         self.joint_ids = [0, 1, 2, 3, 4, 5, 6, 7]
 
-        self.robot_dof_lower_limits = self._env._robot.data.soft_joint_pos_limits[0, :, 0].to(device=self.device)[
+        self.robot_dof_lower_limits = self.robot.data.soft_joint_pos_limits[0, :, 0].to(device=self.device)[
             self.joint_ids
         ]
-        self.robot_dof_upper_limits = self._env._robot.data.soft_joint_pos_limits[0, :, 1].to(device=self.device)[
+        self.robot_dof_upper_limits = self.robot.data.soft_joint_pos_limits[0, :, 1].to(device=self.device)[
             self.joint_ids
         ]
         self.robot_dof_lower_limits[self.robot_dof_lower_limits == -float("inf")] = -torch.pi
@@ -155,18 +175,16 @@ class IsaacEnvWrapper(
             return {
                 "joint_pos": self._get_joint_positions(),
                 "tcp_offset": self.tcp_offset,
-                "jacobians": self._get_jacobians(),
+                "jacobians": self._get_jacobians(),  # ee_link="panda_hand", base_link="panda_link0"
                 "ee_pose_b": self._get_ee_pose_b(),
-                "tcp_pose_b": self._get_tcp_pose_xyz_b(),
+                "tcp_xyz_b": self._get_tcp_pose_xyz_b(),
             }
         raise ValueError(f"Observation spec {obs_spec} not supported by environment.")
 
     def get_state(self) -> TBatchedObsTorch:  # noqa: D102
         return self.get_observation(self._obs_spec_state)
 
-    def step(
-        self, action: TBatchedActionTorch
-    ) -> tuple[
+    def step(self, action: TBatchedActionTorch) -> tuple[
         TBatchedObsTorch,
         Float[torch.Tensor, "b"],  # noqa: F821
         Bool[torch.Tensor, "b"],  # noqa: F821
@@ -205,10 +223,10 @@ class IsaacEnvWrapper(
 
         """
         if env_ids is None:
-            env_ids = self._env._robot._ALL_INDICES
+            env_ids = self.robot._ALL_INDICES
         if joint_ids is None:
             joint_ids = [0, 1, 2, 3, 4, 5, 6]
-        return self._env._robot.data.joint_pos[:, joint_ids][env_ids].clone()
+        return self.robot.data.joint_pos[:, joint_ids][env_ids].clone()
 
     def _get_joint_velocities(self, env_ids: torch.Tensor | None = None, joint_ids: list | None = None) -> torch.Tensor:
         """Return the joint velocities.
@@ -221,10 +239,10 @@ class IsaacEnvWrapper(
 
         """
         if env_ids is None:
-            env_ids = self._env._robot._ALL_INDICES
+            env_ids = self.robot._ALL_INDICES
         if joint_ids is None:
             joint_ids = [0, 1, 2, 3, 4, 5, 6]
-        return self._env._robot.data.joint_vel[:, joint_ids][env_ids].clone()
+        return self.robot.data.joint_vel[:, joint_ids][env_ids].clone()
 
     def _get_jacobians(
         self,
@@ -245,18 +263,14 @@ class IsaacEnvWrapper(
 
         """
         if env_ids is None:
-            env_ids = self._env._robot._ALL_INDICES
+            env_ids = self.robot._ALL_INDICES
         if arm_joint_ids is None:
             arm_joint_ids = [0, 1, 2, 3, 4, 5, 6]
-        ee_link_idx = self._env._robot.find_bodies(ee_link)[0][0]
-        base_link_idx = self._env._robot.find_bodies(base_link)[0][0]
-        robot_base_pose_w = self._env._robot.data.body_pose_w[env_ids, base_link_idx]
+        ee_link_idx = self.robot.find_bodies(ee_link)[0][0]
+        base_link_idx = self.robot.find_bodies(base_link)[0][0]
+        robot_base_pose_w = self.robot.data.body_pose_w[env_ids, base_link_idx]
         base_rot_matrix = matrix_from_quat(quat_inv(robot_base_pose_w[:, 3:7]))
-        # print(f"[INFO] Jacobian shape: {self._env._robot.root_physx_view.get_jacobians().shape}")
-        # print(f"[INFO] EE link IDX shape: {ee_link_idx}")
-        # for jac in self._env._robot.root_physx_view.get_jacobians()[0]:
-        #     print(f"[INFO] {jac}")
-        jacobian = self._env._robot.root_physx_view.get_jacobians()[:, ee_link_idx, :, arm_joint_ids][env_ids]
+        jacobian = self.robot.root_physx_view.get_jacobians()[:, ee_link_idx, :, arm_joint_ids][env_ids]
         jacobian[:, :3, :] = torch.bmm(base_rot_matrix, jacobian[:, :3, :])
         jacobian[:, 3:, :] = torch.bmm(base_rot_matrix, jacobian[:, 3:, :])
 
@@ -281,15 +295,15 @@ class IsaacEnvWrapper(
 
         """
         if env_ids is None:
-            env_ids = self._env._robot._ALL_INDICES
+            env_ids = self.robot._ALL_INDICES
 
-        gripper_joint_idx = self._env._robot.find_joints(gripper_joint)[0][0]
-        ee_link_idx = self._env._robot.find_bodies(ee_link)[0][0]
+        gripper_joint_idx = self.robot.find_joints(gripper_joint)[0][0]
+        ee_link_idx = self.robot.find_bodies(ee_link)[0][0]
 
-        ee_pos_w = self._env._robot.data.body_pos_w[env_ids, ee_link_idx]
-        ee_quat_w = self._env._robot.data.body_quat_w[env_ids, ee_link_idx]
-        root_pos_w = self._env._robot.data.root_pos_w[env_ids]
-        root_quat_w = self._env._robot.data.root_quat_w[env_ids]
+        ee_pos_w = self.robot.data.body_pos_w[env_ids, ee_link_idx]
+        ee_quat_w = self.robot.data.body_quat_w[env_ids, ee_link_idx]
+        root_pos_w = self.robot.data.root_pos_w[env_ids]
+        root_quat_w = self.robot.data.root_quat_w[env_ids]
 
         ee_pos_b = quat_apply_inverse(root_quat_w, ee_pos_w - root_pos_w)
         ee_quat_b = quat_mul(quat_inv(root_quat_w), ee_quat_w)
@@ -301,7 +315,7 @@ class IsaacEnvWrapper(
 
         gripper_low = self.robot_dof_lower_limits[gripper_joint_idx]
         gripper_high = self.robot_dof_upper_limits[gripper_joint_idx]
-        gripper_pos = (self._env._robot.data.joint_pos[env_ids, gripper_joint_idx] - gripper_low) / (
+        gripper_pos = (self.robot.data.joint_pos[env_ids, gripper_joint_idx] - gripper_low) / (
             gripper_high - gripper_low
         )
 
@@ -336,12 +350,12 @@ class IsaacEnvWrapper(
 
         """
         if env_ids is None:
-            env_ids = self._env._robot._ALL_INDICES
-        ee_link_idx = self._env._robot.find_bodies(ee_link)[0][0]
-        base_link_idx = self._env._robot.find_bodies(base_link)[0][0]
+            env_ids = self.robot._ALL_INDICES
+        ee_link_idx = self.robot.find_bodies(ee_link)[0][0]
+        base_link_idx = self.robot.find_bodies(base_link)[0][0]
 
-        robot_ee_pose_w = self._env._robot.data.body_pose_w[:, ee_link_idx]
-        robot_base_pose_w = self._env._robot.data.body_pose_w[:, base_link_idx]
+        robot_ee_pose_w = self.robot.data.body_pose_w[:, ee_link_idx]
+        robot_base_pose_w = self.robot.data.body_pose_w[:, base_link_idx]
 
         robot_ee_pos_b, robot_ee_quat_b = subtract_frame_transforms(
             robot_base_pose_w[:, :3],

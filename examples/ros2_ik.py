@@ -36,7 +36,6 @@ from skillet.core.spaces import ActionSpec, ObservationSpec
 from skillet.envs.ros2_env_wrapper import ROS2EnvWrapper
 from skillet.policy.dummy import RandomFixedPolicy, RandomPolicy
 from skillet.policy.ik_ee import PosAbsIKEEPolicy
-from skillet.skill.fixed_length import FixedLengthSkill
 from skillet.skill.reach_xyz import ReachXYZSkill
 
 BxN_Obs = Float[torch.Tensor, "b n"]
@@ -77,15 +76,11 @@ def main() -> None:
         device=env.device,
     )
 
-    zero_policy = RandomPolicy[BxN_Obs, BxM_Action](observation_spec, action_spec)
     ik_ee_pos_policy = PosAbsIKEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
     # Skills
     skill_length = 40
     reach_xyz_skill = ReachXYZSkill[BxN_Obs, BxM_Action, None](
         name="reach_xyz_skill", policy=ik_ee_pos_policy, length=skill_length
-    )
-    random_skill = FixedLengthSkill[BxN_Obs, BxM_Action, None](
-        name="zero_skill", policy=zero_policy, length=skill_length
     )
     skills = [reach_xyz_skill]
 
@@ -93,7 +88,7 @@ def main() -> None:
     fixed_param_policy = RandomFixedPolicy[BxN_Obs, BxM_Action](
         observation_spec,
         action_spec,
-        torch.as_tensor([[0.7, -0.4, 0.3], [0.6, 0.1, 0.5], [0.5, 0.0, 0.7], [0.8, -0.1, 0.4]], device=env.device),
+        torch.as_tensor([[-0.4, -0.1, 0.6]], device=env.device),
     )
 
     # High-level policy

@@ -332,6 +332,32 @@ class KinovaReachEnv(DirectRLEnv):
         self.prev_actions[env_ids] = torch.clone(self.actions[env_ids])
 
 
+class KinovaReachSkillEnv(KinovaReachEnv):
+    """Use this environment when computing actions with a Diff IK controller or the skills environments."""
+
+    # pre-physics step calls
+    #   |-- _pre_physics_step(action)
+    #   |-- _apply_action()
+    # post-physics step calls
+    #   |-- _get_dones()
+    #   |-- _get_rewards()
+    #   |-- _reset_idx(env_ids)
+    #   |-- _get_observations()
+
+    cfg: KinovaReachEnvCfg
+
+    def __init__(self, cfg: KinovaReachEnvCfg, render_mode: str | None = None, **kwargs):
+        super().__init__(cfg, render_mode, **kwargs)
+
+    # pre-physics step calls
+    def _pre_physics_step(self, actions: torch.Tensor):
+        self.robot_dof_targets = torch.clamp(actions, self.robot_dof_lower_limits, self.robot_dof_upper_limits)
+
+        # Update markers (world frame)
+        self.goal_marker.visualize(self.goal_ee_pos_w, self.goal_ee_quat_w)
+        self.current_marker.visualize(self.robot_ee_pos_w, self.robot_ee_quat_w)
+
+
 @torch.jit.script
 def compute_rewards(
     actions: torch.Tensor,

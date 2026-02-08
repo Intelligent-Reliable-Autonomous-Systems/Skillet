@@ -53,8 +53,10 @@ class IKEEPolicy(BatchedPPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[TB
         self.diff_ik.reset(n_envs)
         self.tcp_offset = obs["tcp_offset"]
 
-    def _compute_ee_pose_b_from_xyz_b(self, pose_b: torch.Tensor, tcp_offset: torch.Tensor) -> torch.Tensor:
-        """Compute the goal end effector pose from the goal TCP pose.
+    def _compute_goal_ee_pose_b_from_goal_tcp_xyz_b(
+        self, pose_b: torch.Tensor, tcp_offset: torch.Tensor
+    ) -> torch.Tensor:
+        """Compute the goal end effector pose (xyz, quat) from the goal TCP pose in XYZ RPY.
 
         Args:
             pose_b: The goal TCP pose in the shape (N,6) relative to the robot base frame
@@ -77,36 +79,6 @@ class IKEEPolicy(BatchedPPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[TB
         p_be = goal_tcp_pos_b + quat_apply(goal_tcp_quat_b, p_te)
 
         return torch.cat((p_be, q_be), dim=1)
-
-
-class PoseAbsIKEEPolicy(IKEEPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, TBAction]):
-    """A policy that produces pose ."""
-
-    def __init__(self, obs_spec: ObservationSpec[TBPolicyObs], action_spec: ActionSpec[TBAction]) -> None:
-        """Initialize the policy.
-
-        Args:
-            obs_spec: The observation specification.
-            action_spec: The action specification.
-
-        """
-        super().__init__(obs_spec, action_spec)
-        self.diff_ik = DifferentialIKController(
-            device=self._obs_spec.device, command_type="pose", use_relative_mode=False
-        )
-
-    def reset(self, obs: TBPolicyObs, params: Any = None) -> None:
-        """Reset the PoseAbsolute IK EE Policy by setting the command of the DiffIK Controlller.
-
-        Args:
-            obs: dict of bound functions
-            params: parameters of shape (num_envs, 6)
-
-        """
-        super().reset(obs, params)
-        goal_pose = self._compute_ee_pose_b_from_xyz_b(params[:, 6], obs["tcp_offset"])
-        ee_pose_b = obs["ee_pose_b"]
-        self.diff_ik.set_command(goal_pose, ee_pose_b[:, 0:3], ee_pose_b[:, 3:7])
 
 
 class PosAbsIKEEPolicy(IKEEPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, TBAction]):
@@ -135,4 +107,38 @@ class PosAbsIKEEPolicy(IKEEPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, T
         """
         super().reset(obs, params)
         ee_pose_b = obs["ee_pose_b"]
-        self.diff_ik.set_command(params[:, 0:3] - self.tcp_offset[:, 0:3], ee_pose_b[:, 0:3], ee_pose_b[:, 3:7])
+        tcp_xyz_b = obs["tcp_xyz_b"]
+        goal_ee_pose = self._compute_goal_ee_pose_b_from_goal_tcp_xyz_b(
+            torch.cat((params[:, 0:3], tcp_xyz_b[:, 3:6]), dim=1), obs["tcp_offset"]
+        )
+
+        self.diff_ik.set_command(goal_ee_pose[:, 0:3], ee_quat=ee_pose_b[:, 3:7])
+
+
+class PoseAbsIKEEPolicy(IKEEPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, TBAction]):
+    """A policy that produces pose ."""
+
+    def __init__(self, obs_spec: ObservationSpec[TBPolicyObs], action_spec: ActionSpec[TBAction]) -> None:
+        """Initialize the policy.
+
+        Args:
+            obs_spec: The observation specification.
+            action_spec: The action specification.
+
+        """
+        super().__init__(obs_spec, action_spec)
+        self.diff_ik = DifferentialIKController(
+            device=self._obs_spec.device, command_type="pose", use_relative_mode=False
+        )
+
+    def reset(self, obs: TBPolicyObs, params: Any = None) -> None:
+        """Reset the PoseAbsolute IK EE Policy by setting the command of the DiffIK Controlller.
+
+        Args:
+            obs: dict of bound functions
+            params: parameters of shape (num_envs, 6)
+
+        """
+        super().reset(obs, params)
+        goal_pose = self._compute_goal_ee_pose_b_from_goal_tcp_xyz_b(params[:, :6], obs["tcp_offset"])
+        self.diff_ik.set_command(goal_pose)

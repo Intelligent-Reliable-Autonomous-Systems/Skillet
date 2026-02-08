@@ -2,9 +2,7 @@
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
-"""
-Franka-Cabinet environment.
-"""
+"""Franka-Cabinet environment."""
 
 import gymnasium as gym
 
@@ -17,6 +15,16 @@ from . import agents
 gym.register(
     id="Kinova-Lift-Cube-Direct-v0",
     entry_point=f"{__name__}.kinova_lift_cube_env:KinovaLiftCubeEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.kinova_lift_cube_env:KinovaLiftCubeEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:KinovaLiftCubePPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Kinova-Lift-Cube-Skill-v0",
+    entry_point=f"{__name__}.kinova_lift_cube_env:KinovaLiftCubeSkillEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.kinova_lift_cube_env:KinovaLiftCubeEnvCfg",

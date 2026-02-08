@@ -439,6 +439,36 @@ class KinovaLiftCubeEnv(DirectRLEnv):
         )
 
 
+class KinovaLiftCubeSkillEnv(KinovaLiftCubeEnv):
+    """Lift cube environment for skillet."""
+
+    # pre-physics step calls
+    #   |-- _pre_physics_step(action)
+    #   |-- _apply_action()
+    # post-physics step calls
+    #   |-- _get_dones()
+    #   |-- _get_rewards()
+    #   |-- _reset_idx(env_ids)
+    #   |-- _get_observations()
+
+    cfg: KinovaLiftCubeEnvCfg
+
+    def __init__(self, cfg: KinovaLiftCubeEnvCfg, render_mode: str | None = None, **kwargs):
+        super().__init__(cfg, render_mode, **kwargs)
+
+    # pre-physics step calls
+    def _pre_physics_step(self, actions: torch.Tensor):
+        self.robot_dof_targets = torch.clamp(actions, self.robot_dof_lower_limits, self.robot_dof_upper_limits)
+
+        # Update markers
+        robot_tcp_rot, robot_tcp_pos = tf_combine(
+            self.robot_ee_quat_w, self.robot_ee_pos_w, self.tcp_offset_quat, self.tcp_offset_pos
+        )
+
+        self.cube_current_marker.visualize(self.cube_pos_w, self.cube_quat_w)
+        self.current_marker.visualize(robot_tcp_pos, robot_tcp_rot)
+
+
 @torch.jit.script
 def compute_rewards(
     actions: torch.Tensor,

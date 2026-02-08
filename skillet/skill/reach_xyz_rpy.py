@@ -16,8 +16,8 @@ from skillet.core.skill import (
 from skillet.core.spaces import ArrayLike
 
 
-class ReachXYZSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSkillObs, TBAction, TBSkillParams]):
-    """A skill that moves the end effector to a specified location."""
+class ReachXYZRPYSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSkillObs, TBAction, TBSkillParams]):
+    """A skill that moves the end effector to a specified location and orientation."""
 
     def __init__(self, name: str, policy: BatchedPPolicy[TBSkillObs, TBAction, TBSkillParams], length: int) -> None:
         """Initialize the fixed length skill.
@@ -61,6 +61,8 @@ class ReachXYZSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[T
     def get_action(self, obs: TBSkillObs) -> TBAction:  # noqa: D102
         action = self.policy.get_action(obs, self._params)
         self._n_steps += 1
+        print(f"[INFO][TCP XYZ B]: {obs['tcp_xyz_b'][:, :6]}")
+        print(f"[INFO][GOAL TCP]: {self._params[:, :6]}")
         self._status = torch.where(
             torch.linalg.vector_norm(obs["tcp_xyz_b"][:, 0:3] - self._params[:, 0:3], dim=1) < 0.02,
             SkillStatusCodes.SUCCESS,

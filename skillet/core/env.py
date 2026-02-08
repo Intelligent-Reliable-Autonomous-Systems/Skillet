@@ -134,7 +134,9 @@ class BasicEnvironment(Environment[TObs, TAction], Generic[TObs, TAction]):
         del obs_spec
         return True  # TODO: compare obs_spec.space with self.env.observation_space
 
-    def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None) -> tuple[TObs, dict]:  # noqa: D102
+    def reset(
+        self, *, seed: int | None = None, options: dict[str, Any] | None = None
+    ) -> tuple[TObs, dict]:  # noqa: D102
         obs, info = self.env.reset(seed=seed, options=options)
         self.last_obs = obs
         return obs, info
