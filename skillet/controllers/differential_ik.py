@@ -50,7 +50,7 @@ class DifferentialIKController:
     """
 
     default_ik_params: ClassVar[dict[str, dict[str, float]]] = {
-        "pinv": {"k_val": 1.0},
+        "pinv": {"k_val": 0.01},
         "svd": {"k_val": 1.0, "min_singular_value": 1e-5},
         "trans": {"k_val": 1.0},
         "dls": {"lambda_val": 0.01},
@@ -61,7 +61,7 @@ class DifferentialIKController:
         device: str | None = "cuda",
         command_type: Literal["pose", "position"] = "pose",
         use_relative_mode: bool = False,
-        ik_method: Literal["pinv", "svd", "trans", "dls"] = "dls",
+        ik_method: Literal["pinv", "svd", "trans", "dls"] = "dls",  # "pinv",
     ) -> None:
         """Initialize the controller.
 
@@ -101,20 +101,30 @@ class DifferentialIKController:
     Operations.
     """
 
-    def reset(self, n_envs: torch.Tensor = None) -> None:
+    def reset(self, n_envs: torch.Tensor = None, env_ids: torch.Tensor = None) -> None:
         """Reset the internals.
 
         Args:
             n_envs: The number of environment indices
+            env_ids: The environment ids to reset
 
         """
         # create buffers
-        self.ee_pos_des = torch.zeros(n_envs, 3, device=self._device)
-        self.ee_quat_des = torch.zeros(n_envs, 4, device=self._device)
-        self._command = torch.zeros(n_envs, self.action_dim, device=self._device)
+        if not hasattr(self, "_command") or env_ids is None:
+            self.ee_pos_des = torch.zeros(n_envs, 3, device=self._device)
+            self.ee_quat_des = torch.zeros(n_envs, 4, device=self._device)
+            self._command = torch.zeros(n_envs, self.action_dim, device=self._device)
+        else:
+            self.ee_pos_des[env_ids] = torch.zeros(env_ids.shape[0], 3, device=self._device)
+            self.ee_quat_des[env_ids] = torch.zeros(env_ids.shape[0], 4, device=self._device)
+            self._command[env_ids] = torch.zeros(env_ids.shape[0], self.action_dim, device=self._device)
 
     def set_command(
-        self, command: torch.Tensor, ee_pos: torch.Tensor | None = None, ee_quat: torch.Tensor | None = None
+        self,
+        command: torch.Tensor,
+        ee_pos: torch.Tensor | None = None,
+        ee_quat: torch.Tensor | None = None,
+        env_ids: torch.Tensor = None,
     ) -> None:
         """Set target end-effector pose command.
 
@@ -128,6 +138,7 @@ class DifferentialIKController:
                 This is only needed if the command type is ``position_rel`` or ``pose_rel``.
             ee_quat: The current end-effector orientation (w, x, y, z) in shape (N, 4).
                 This is only needed if the command type is ``position_*`` or ``pose_rel``.
+            env_ids: The environment ids to reset
 
         Raises:
             ValueError: If the command type is ``position_*`` and :attr:`ee_quat` is None.
@@ -140,8 +151,10 @@ class DifferentialIKController:
                 "Neither desired end-effector position nor orientation can be None. Call `reset()` to initialize "
                 "the correct shape."
             )
+        if env_ids is None:
+            env_ids = torch.ones(command.shape[0], dtype=torch.bool, device=self._device)
         # store command
-        self._command[:] = command
+        self._command[env_ids] = command[env_ids]
         # compute the desired end-effector pose
         if self.command_type == "position":
             # we need end-effector orientation even though we are in position mode
@@ -152,11 +165,11 @@ class DifferentialIKController:
             if self.use_relative_mode:
                 if ee_pos is None:
                     raise ValueError("End-effector position can not be None for `position_rel` command type!")
-                self.ee_pos_des[:] = ee_pos + self._command
-                self.ee_quat_des[:] = ee_quat
+                self.ee_pos_des[env_ids] = ee_pos[env_ids] + self._command[env_ids]
+                self.ee_quat_des[env_ids] = ee_quat[env_ids]
             else:
-                self.ee_pos_des[:] = self._command
-                self.ee_quat_des[:] = ee_quat
+                self.ee_pos_des[env_ids] = self._command[env_ids]
+                self.ee_quat_des[env_ids] = ee_quat[env_ids]
         else:
             # compute targets
             if self.use_relative_mode:
@@ -164,10 +177,12 @@ class DifferentialIKController:
                     raise ValueError(
                         "Neither end-effector position nor orientation can be None for `pose_rel` command type!"
                     )
-                self.ee_pos_des, self.ee_quat_des = apply_delta_pose(ee_pos, ee_quat, self._command)
+                self.ee_pos_des[env_ids], self.ee_quat_des[env_ids] = apply_delta_pose(
+                    ee_pos[env_ids], ee_quat[env_ids], self._command[env_ids]
+                )
             else:
-                self.ee_pos_des = self._command[:, 0:3]
-                self.ee_quat_des = self._command[:, 3:7]
+                self.ee_pos_des[env_ids] = self._command[env_ids][:, 0:3]
+                self.ee_quat_des[env_ids] = self._command[env_ids][:, 3:7]
 
     def compute(
         self, ee_pos: torch.Tensor, ee_quat: torch.Tensor, jacobian: torch.Tensor, joint_pos: torch.Tensor

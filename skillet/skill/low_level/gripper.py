@@ -1,4 +1,4 @@
-"""A skill that moves the end effector to a specified location."""
+"""A skill that opens or closes the gripper."""
 
 from typing import Generic
 
@@ -16,15 +16,15 @@ from skillet.core.skill import (
 from skillet.core.spaces import ArrayLike
 
 
-class ReachXYZRPYSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSkillObs, TBAction, TBSkillParams]):
-    """A skill that moves the end effector to a specified location and orientation."""
+class GripperSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSkillObs, TBAction, TBSkillParams]):
+    """A skill that opens or closes the gripper."""
 
     def __init__(self, name: str, policy: BatchedPPolicy[TBSkillObs, TBAction, TBSkillParams], length: int) -> None:
         """Initialize the fixed length skill.
 
         Args:
             name: The name of the skill.
-            policy: The policy for the skill.
+            policy: The policy for the skill (None).
             length: The number of steps to execute the skill for.
 
         """
@@ -59,12 +59,15 @@ class ReachXYZRPYSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generi
         self._n_steps = 0
 
     def get_action(self, obs: TBSkillObs) -> TBAction:  # noqa: D102
-        action = self.policy.get_action(obs, self._params)
+        gripper_lim = obs["gripper_lim"]
+        gripper_pos = obs["joint_pos"][:, -1]
+        goal_gripper_pos = (self._params[:, 0] - gripper_lim[:, 0]) / (gripper_lim[:, 1] - gripper_lim[:, 0])
+        action = torch.cat((obs["joint_pos"][:, :-1], goal_gripper_pos), dim=1)
+
         self._n_steps += 1
-        print(f"[INFO][TCP XYZ B]: {obs['tcp_xyz_b'][:, :6]}")
-        print(f"[INFO][GOAL TCP]: {self._params[:, :6]}")
+
         self._status = torch.where(
-            torch.linalg.vector_norm(obs["tcp_xyz_b"][:, 0:3] - self._params[:, 0:3], dim=1) < 0.02,
+            torch.linalg.vector_norm(gripper_pos - goal_gripper_pos, dim=1) < 0.02,
             SkillStatusCodes.SUCCESS,
             self._status,
         )

@@ -26,8 +26,9 @@ from skillet.agents.policy_over_options import PolicyOverOptionsAgent
 from skillet.core.spaces import ActionSpec, ObservationSpec
 from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
 from skillet.policy.dummy import RandomFixedPolicy, RandomPolicy
-from skillet.policy.ik_ee import PoseAbsIKEEPolicy
-from skillet.skill.reach_xyz_rpy import ReachXYZRPYSkill
+from skillet.policy.ik_ee import OrientAbsIKEEPolicy, PosAbsIKEEPolicy
+from skillet.policy.joint_pos import GripperPolicy
+from skillet.skill import PickSkill
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Main IsaacSim Executor file through IsaacLab.")
@@ -92,21 +93,26 @@ def main() -> None:
         device=env.device,
     )
 
-    ik_ee_pose_policy = PoseAbsIKEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
+    ik_ee_orient_policy = OrientAbsIKEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
+    ik_ee_pos_policy = PosAbsIKEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
+    gripper_policy = GripperPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
     # Skills
-    skill_length = 100
-    reach_xyz_skill = ReachXYZRPYSkill[BxN_Obs, BxM_Action, None](
-        name="reach_xyz_skill", policy=ik_ee_pose_policy, length=skill_length
+    skill_length = 5000
+    pick_skill = PickSkill[BxN_Obs, BxM_Action, None](
+        name="pick_skill",
+        reach_policy=ik_ee_pos_policy,
+        orient_policy=ik_ee_orient_policy,
+        grasp_policy=gripper_policy,
+        length=skill_length,
     )
 
-    skills = [reach_xyz_skill]
+    skills = [pick_skill]
 
     # Parameters policy
     fixed_param_policy = RandomFixedPolicy[BxN_Obs, BxM_Action](
         observation_spec,
         action_spec,
-        # torch.as_tensor([[0.6, 0.1, 0.6, 0.0, 1.57, 0.0]], device=env.device),
-        torch.as_tensor([[0.6, 0.1, 0.6, 2.7638, 1.5049, -0.2819]], device=env.device),
+        torch.as_tensor([[0.6, 0.1, 0.2, 0.0, 1.57, 0.0]], device=env.device),
     )
 
     # High-level policy
@@ -115,7 +121,6 @@ def main() -> None:
         name="options",
         is_torch=True,
         is_batched=True,
-        # n_envs=args_cli.num_envs,
     )
     policy_over_options = RandomPolicy[BxN_Obs, B_Int_HighLevel](observation_spec, options_spec)
 
@@ -124,9 +129,6 @@ def main() -> None:
         high_level_policy=policy_over_options,
         params_policy=fixed_param_policy,
     )
-
-    # env.step()
-    # skill_executor = SkillExecutor(DummyCfg(), env)
 
     # simulate environment
     while simulation_app.is_running():

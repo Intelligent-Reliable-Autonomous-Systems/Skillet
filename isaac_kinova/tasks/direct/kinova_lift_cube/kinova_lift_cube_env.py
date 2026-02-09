@@ -157,8 +157,10 @@ class KinovaLiftCubeEnvCfg(DirectRLEnvCfg):
     joint_vel_reward_scale = -0.0001
 
     # Cube pose initial ranges
-    init_pos_x = [0.2, 0.6]
-    init_pos_y = [-0.3, 0.3]
+    # init_pos_x = [0.2, 0.6]
+    init_pos_x = [0.5, 0.5]
+    # init_pos_y = [-0.3, 0.3]
+    init_pos_y = [0.1, 0.1]
     init_pos_z = [0.0, 0.0]
     init_roll = [0.0, 0.0]
     init_pitch = [0.0, 0.0]
@@ -379,7 +381,7 @@ class KinovaLiftCubeEnv(DirectRLEnv):
 
     # auxiliary methods
     def _compute_intermediate_values(self, env_ids: torch.Tensor | None = None):
-        """Docstring for _compute_intermediate_values
+        """Docstring for _compute_intermediate_values.
 
         :param self: Description
         :param env_ids: Description
@@ -414,7 +416,7 @@ class KinovaLiftCubeEnv(DirectRLEnv):
 
         self.cube_pose_b[env_ids] = self.cube_init_ranges[:, 0] + (
             self.cube_init_ranges[:, 1] - self.cube_init_ranges[:, 0]
-        ) * torch.rand((len(env_ids), len(self.cube_init_ranges)), device=self.device)
+        )  # * torch.rand((len(env_ids), len(self.cube_init_ranges)), device=self.device)
 
         cube_pos_b = self.cube_pose_b[env_ids, :3]
         cube_quat_b = quat_from_euler_xyz(

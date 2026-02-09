@@ -76,7 +76,7 @@ class Policy(abc.ABC, Generic[TPolicyObs, TAction, TPolicyParams]):
         """Get the next low-level action for the robot based on the observation and parameters."""
         raise NotImplementedError
 
-    def reset(self, obs: TPolicyObs, params: TPolicyParams) -> None:
+    def reset(self, obs: TPolicyObs, params: TPolicyParams, env_ids: BatchedArrayEmpty = None) -> None:
         """Reset the policy. Useful if policy is stateful."""
         pass
 

@@ -175,9 +175,10 @@ class IsaacEnvWrapper(
             return {
                 "joint_pos": self._get_joint_positions(),
                 "tcp_offset": self.tcp_offset,
-                "jacobians": self._get_jacobians(),  # ee_link="panda_hand", base_link="panda_link0"
+                "jacobians": self._get_jacobians(),
                 "ee_pose_b": self._get_ee_pose_b(),
                 "tcp_xyz_b": self._get_tcp_pose_xyz_b(),
+                "gripper_lim": self._get_gripper_lims(),
             }
         raise ValueError(f"Observation spec {obs_spec} not supported by environment.")
 
@@ -225,7 +226,7 @@ class IsaacEnvWrapper(
         if env_ids is None:
             env_ids = self.robot._ALL_INDICES
         if joint_ids is None:
-            joint_ids = [0, 1, 2, 3, 4, 5, 6]
+            joint_ids = [0, 1, 2, 3, 4, 5, 6, 7]
         return self.robot.data.joint_pos[:, joint_ids][env_ids].clone()
 
     def _get_joint_velocities(self, env_ids: torch.Tensor | None = None, joint_ids: list | None = None) -> torch.Tensor:
@@ -365,3 +366,29 @@ class IsaacEnvWrapper(
         )
 
         return torch.cat((robot_ee_pos_b, robot_ee_quat_b), dim=1)
+
+    def _get_gripper_lims(
+        self, env_ids: torch.Tensor | None = None, gripper_joint: str = "finger_joint"
+    ) -> torch.Tensor:
+        """Get the gripper limits (low and high).
+
+        Args:
+            env_ids: environment ids to tcp pose in XYZ
+            gripper_joint: string for the name of the gripper joint
+
+        Returns:
+            A tensor of shape (N, 2) for the gripper lower/upper limits.
+
+        """
+        if env_ids is None:
+            env_ids = self.robot._ALL_INDICES
+
+        gripper_joint_idx = self.robot.find_joints(gripper_joint)[0][0]
+
+        gripper_low = self.robot_dof_lower_limits[gripper_joint_idx]
+        gripper_high = self.robot_dof_upper_limits[gripper_joint_idx]
+
+        return torch.cat(
+            (gripper_low.unsqueeze(0).expand(self.num_envs, 1), gripper_high.unsqueeze(0).expand(self.num_envs, 1)),
+            dim=1,
+        )

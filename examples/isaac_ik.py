@@ -27,8 +27,7 @@ from skillet.core.spaces import ActionSpec, ObservationSpec
 from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
 from skillet.policy.dummy import RandomFixedPolicy, RandomPolicy
 from skillet.policy.ik_ee import PosAbsIKEEPolicy, PoseAbsIKEEPolicy
-from skillet.skill.fixed_length import FixedLengthSkill
-from skillet.skill.reach_xyz import ReachXYZSkill
+from skillet.skill import FixedLengthSkill, ReachXYZSkill
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Main IsaacSim Executor file through IsaacLab.")
