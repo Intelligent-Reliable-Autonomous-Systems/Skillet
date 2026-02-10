@@ -154,8 +154,8 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
             """Update the state of the robot by subscribing to robot topics."""
             self._robot_links = list(msg["links"])
             self._robot_joints = list(msg["joints"])
-            self._current_upper_joint_limits = np.asarray(msg["upper_limits"])
-            self._current_lower_joint_limits = np.asarray(msg["lower_limits"])
+            self._current_upper_joint_limits = np.asarray(msg["upper_limits"], dtype=float)
+            self._current_lower_joint_limits = np.asarray(msg["lower_limits"], dtype=float)
             self._ready["robot_info"] = True
 
         self.robot_description_sub.subscribe(_update_robot_links_and_joints)
@@ -165,8 +165,8 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
 
         def _update_body_pose(msg: dict[str, Any]) -> None:
             """Update the state of the robot by subscribing to robot topics."""
-            self._current_robot_body_pose_w = np.asarray(msg["body_pose_w"]).reshape(msg["num_links"], -1)
-            self._current_robot_root_pose_w = np.asarray(msg["root_pose_w"])
+            self._current_robot_body_pose_w = np.asarray(msg["body_pose_w"], dtype=float).reshape(msg["num_links"], -1)
+            self._current_robot_root_pose_w = np.asarray(msg["root_pose_w"], dtype=float)
             self._ready["body_pose"] = True
 
         self.body_pose_sub.subscribe(_update_body_pose)

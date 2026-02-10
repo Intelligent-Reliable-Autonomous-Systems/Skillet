@@ -62,11 +62,11 @@ class ReachXYZRPYSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generi
     def get_action(self, obs: TBSkillObs) -> TBAction:  # noqa: D102
         action = self.policy.get_action(obs, self._params)
         self._n_steps += 1
-        tcp_rpy = obs["tcp_xyz_b"][:, 3:6]
-        tcp_quat = quat_from_euler_xyz(tcp_rpy[:, 0], tcp_rpy[:, 1], tcp_rpy[:, 2])
+        tcp_quat = obs["tcp_pose_b"][:, 3:7]
+        # tcp_quat = quat_from_euler_xyz(tcp_rpy[:, 0], tcp_rpy[:, 1], tcp_rpy[:, 2])
         goal_tcp_quat = quat_from_euler_xyz(self._params[:, 3], self._params[:, 4], self._params[:, 5])
         self._status = torch.where(
-            torch.linalg.vector_norm(obs["tcp_xyz_b"][:, 0:3] - self._params[:, 0:3], dim=1)
+            torch.linalg.vector_norm(obs["tcp_pose_b"][:, 0:3] - self._params[:, 0:3], dim=1)
             + quat_error_magnitude(tcp_quat, goal_tcp_quat)
             < 0.08,
             SkillStatusCodes.SUCCESS,

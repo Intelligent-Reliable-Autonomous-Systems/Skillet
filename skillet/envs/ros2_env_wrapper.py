@@ -15,6 +15,7 @@ from jaxtyping import Bool, Float
 from skillet.core import ObservationSpec
 from skillet.core.env import BatchedEnvironment
 from skillet.core.math import (
+    convert_quat,
     euler_xyz_from_quat,
     matrix_from_quat,
     quat_apply,
@@ -93,8 +94,13 @@ class ROS2EnvWrapper(
         # Kinova specific information
         self.joint_ids = [0, 1, 2, 3, 4, 5, 6, 7]
 
+        # self.tcp_offset = (
+        #     torch.as_tensor([0.120, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0], device=self.device)
+        #     .unsqueeze(0)
+        #     .repeat(self._n_envs, 1)
+        # )
         self.tcp_offset = (
-            torch.as_tensor([0.120, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0], device=self.device)
+            torch.as_tensor([0.12, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0], device=self.device)
             .unsqueeze(0)
             .repeat(self._n_envs, 1)
         )
@@ -163,7 +169,8 @@ class ROS2EnvWrapper(
                 "tcp_offset": self.tcp_offset,
                 "jacobians": self._get_jacobians(),
                 "ee_pose_b": self._get_ee_pose_b(),
-                "tcp_xyz_b": self._get_tcp_pose_xyz_b(),
+                "tcp_pose_b": self._get_tcp_pose_xyz_b(),
+                "gripper": self._get_gripper_state(),
             }
         raise ValueError(f"Observation spec {obs_spec} not supported by environment.")
 
@@ -242,7 +249,7 @@ class ROS2EnvWrapper(
     def _get_jacobians(
         self,
         env_ids: torch.Tensor | None = None,
-        ee_link: int = "end_effector_link",
+        ee_link: str = "end_effector_link",
         base_link: str = "base_link",
         arm_joint_ids: list | None = None,
     ) -> torch.Tensor:
@@ -269,10 +276,15 @@ class ROS2EnvWrapper(
             self._env._robot_body_pose_w, device=self.device, dtype=torch.float32
         ).unsqueeze(0)[env_ids, base_link_idx]
 
+        # Have to convert quaternion from ROS format (x,y,z,w) to IsaacLab format (w,x,y,z)
+        robot_base_pose_w[:, 3:7] = convert_quat(robot_base_pose_w[:, 3:7], to="wxyz")
         base_rot_matrix = matrix_from_quat(quat_inv(robot_base_pose_w[:, 3:7]))
-        jacobian = torch.as_tensor(self._env._jacobians, device=self.device, dtype=torch.float32).unsqueeze(0)[
-            :, ee_link_idx, :, arm_joint_ids
-        ][env_ids]
+
+        jacobian = torch.as_tensor(self._env._jacobians, device=self.device, dtype=torch.float32) # (N, 6, n_joints)
+        # .unsqueeze(0)[
+        #     :, ee_link_idx, :, arm_joint_ids
+        # ][env_ids]
+        jacobian = jacobian.unsqueeze(0)[env_ids, ee_link_idx][:, :, arm_joint_ids]
 
         jacobian[:, :3, :] = torch.bmm(base_rot_matrix, jacobian[:, :3, :])
         jacobian[:, 3:, :] = torch.bmm(base_rot_matrix, jacobian[:, 3:, :])
@@ -283,7 +295,6 @@ class ROS2EnvWrapper(
         self,
         env_ids: torch.Tensor | None = None,
         ee_link: str = "robotiq_85_base_link",
-        gripper_joint: str = "robotiq_85_left_knuckle_joint",
     ) -> torch.Tensor:
         """Get the TCP pose of the robot in the robot base frame.
 
@@ -300,7 +311,6 @@ class ROS2EnvWrapper(
         if env_ids is None:
             env_ids = torch.arange(self.n_envs, device=self.device)
 
-        gripper_joint_idx = self._env._find_joint_idx(gripper_joint)
         ee_link_idx = self._env._find_link_idx(ee_link)
 
         ee_pose_w = torch.as_tensor(
@@ -316,25 +326,22 @@ class ROS2EnvWrapper(
         tcp_pos_b = ee_pos_b + quat_apply(ee_quat_b, self.tcp_offset[env_ids, 0:3])
         tcp_quat_b = quat_mul(ee_quat_b, self.tcp_offset[env_ids, 3:7])
 
-        r, p, y = euler_xyz_from_quat(tcp_quat_b)
+        return torch.concatenate((tcp_pos_b, tcp_quat_b), dim=1)
 
+    def _get_gripper_state(self, env_ids: torch.Tensor | None = None,
+                           gripper_joint: str = "robotiq_85_left_knuckle_joint") -> torch.Tensor:
+        """Get the gripper state of the robot."""
+        if env_ids is None:
+            env_ids = torch.arange(self.n_envs, device=self.device)
+
+        gripper_joint_idx = self._env._find_joint_idx(gripper_joint)
         gripper_low = self.robot_dof_lower_limits[gripper_joint_idx]
         gripper_high = self.robot_dof_upper_limits[gripper_joint_idx]
         gripper_pos = (
             torch.as_tensor(self._env._joint_positions[gripper_joint_idx], device=self.device).unsqueeze(0)[env_ids]
             - gripper_low
         ) / (gripper_high - gripper_low)
-
-        return torch.concatenate(
-            (
-                tcp_pos_b,
-                r.unsqueeze(1),
-                p.unsqueeze(1),
-                y.unsqueeze(1),
-                gripper_pos.unsqueeze(1),
-            ),
-            dim=1,
-        )
+        return gripper_pos.unsqueeze(1)
 
     def _get_ee_pose_b(
         self,
@@ -360,6 +367,8 @@ class ROS2EnvWrapper(
         ee_link_idx = self._env._find_link_idx(ee_link)
         base_link_idx = self._env._find_link_idx(base_link)
 
+        # Get the pose of the end effector and base in the world frame
+        # (B, 7) with (pos_x, pos_y, pos_z, quat_x, quat_y, quat_z, quat_w)
         robot_ee_pose_w = torch.as_tensor(
             self._env._robot_body_pose_w[ee_link_idx], device=self.device, dtype=torch.float32
         ).unsqueeze(0)[env_ids]
@@ -367,6 +376,13 @@ class ROS2EnvWrapper(
             self._env._robot_body_pose_w[base_link_idx], device=self.device, dtype=torch.float32
         ).unsqueeze(0)[env_ids]
 
+        debug_links = {link:self._env._robot_body_pose_w[self._env._find_link_idx(link)] for link in self._env._robot_links}
+
+        # Have to convert quaternion from ROS format (x,y,z,w) to IsaacLab format (w,x,y,z)
+        robot_ee_pose_w[:, 3:7] = convert_quat(robot_ee_pose_w[:, 3:7], to="wxyz")
+        robot_base_pose_w[:, 3:7] = convert_quat(robot_base_pose_w[:, 3:7], to="wxyz")
+
+        # Compute the end effector pose in the robot base frame
         robot_ee_pos_b, robot_ee_quat_b = subtract_frame_transforms(
             robot_base_pose_w[:, :3],
             robot_base_pose_w[:, 3:7],

@@ -177,7 +177,7 @@ class IsaacEnvWrapper(
                 "tcp_offset": self.tcp_offset,
                 "jacobians": self._get_jacobians(),
                 "ee_pose_b": self._get_ee_pose_b(),
-                "tcp_xyz_b": self._get_tcp_pose_xyz_b(),
+                "tcp_pose_b": self._get_tcp_pose_xyz_b(),
                 "gripper_lim": self._get_gripper_lims(),
             }
         raise ValueError(f"Observation spec {obs_spec} not supported by environment.")

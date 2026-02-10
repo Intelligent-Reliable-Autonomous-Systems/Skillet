@@ -9,18 +9,26 @@ Written by Will Solow and Jeff Jewett, 2026
 """Script to an environment with random action agent."""
 
 import argparse
+import os
+
+from skillet.skill.low_level.reach_xyz_rpy import ReachXYZRPYSkill
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Main ROS2 executor file.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default=None, required=True, help="Name of the task.")
+parser.add_argument("--task", type=str, default="ROS2-Reach-Kinova-v0", help="Name of the task.")
 parser.add_argument("--device", type=str, default="cuda", help="Device to use")
 parser.add_argument(
-    "--ros2_ws", type=str, default=None, required=True, help="Absolute path to ROS2 workspace containing bringup files"
+    "--ros2_ws", type=str, default=None, help="Absolute path to ROS2 workspace containing bringup files"
 )
 
 # parse the arguments
 args_cli = parser.parse_args()
+if args_cli.ros2_ws is None:
+    args_cli.ros2_ws = os.getenv("ROS2_WS", None)
+    if args_cli.ros2_ws is None:
+        raise ValueError("ROS2 workspace path must be provided via --ros2_ws argument or ROS2_WS environment variable.")
+
 
 
 """Rest everything follows."""
@@ -34,9 +42,9 @@ from ros2.envs.utils import parse_ros2_env_cfg, setup_ros
 from skillet.agents.policy_over_options import PolicyOverOptionsAgent
 from skillet.core.spaces import ActionSpec, ObservationSpec
 from skillet.envs.ros2_env_wrapper import ROS2EnvWrapper
-from skillet.policy.dummy import RandomFixedPolicy, RandomPolicy
-from skillet.policy.ik_ee import PosAbsIKEEPolicy
-from skillet.skill.reach_xyz import ReachXYZSkill
+from skillet.policy.dummy import FixedSequencePolicy, RandomFixedPolicy, RandomPolicy
+from skillet.policy.ik_ee import PosAbsIKEEPolicy, PoseAbsIKEEPolicy
+from skillet.skill.low_level.reach_xyz import ReachXYZSkill
 
 BxN_Obs = Float[torch.Tensor, "b n"]
 """Environment observation: torch.Tensor[(b, n), float]"""
@@ -76,19 +84,37 @@ def main() -> None:
         device=env.device,
     )
 
-    ik_ee_pos_policy = PosAbsIKEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
+    # ik_ee_pos_policy = PosAbsIKEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
+    # # Skills
+    # skill_length = 40
+    # reach_xyz_skill = ReachXYZSkill[BxN_Obs, BxM_Action, None](
+    #     name="reach_xyz_skill", policy=ik_ee_pos_policy, length=skill_length
+    # )
+    ik_ee_pose_policy = PoseAbsIKEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
     # Skills
     skill_length = 40
-    reach_xyz_skill = ReachXYZSkill[BxN_Obs, BxM_Action, None](
-        name="reach_xyz_skill", policy=ik_ee_pos_policy, length=skill_length
+    reach_xyz_skill = ReachXYZRPYSkill[BxN_Obs, BxM_Action, None](
+        name="reach_xyz_skill", policy=ik_ee_pose_policy, length=skill_length
     )
     skills = [reach_xyz_skill]
 
     # Parameters policy
-    fixed_param_policy = RandomFixedPolicy[BxN_Obs, BxM_Action](
+    fixed_param_policy = FixedSequencePolicy[BxN_Obs, BxM_Action](
         observation_spec,
         action_spec,
-        torch.as_tensor([[-0.4, -0.1, 0.6]], device=env.device),
+        # torch.as_tensor([[0.4, -0.1, 0.2], [0.5, 0.2, 0.3]], device=env.device),
+        torch.as_tensor([
+            # [0.6, 0.0, 0.4, 0.0, 3.14, 0.0],
+            # [0.6, 0.0, 0.4, 0.0, 1.57, 0.0],
+            # [0.6, 0.0, 0.4, 0.0, 0.0, 0.0],
+            # [0.3, 0.3, 0.4, 1.57, 0.0, 0.0],
+            # [0.3, 0.3, 0.4, 3.14, 0.0, 0.0],
+            # [0.3, 0.3, 0.4, -1.57, 0.0, 0.0]
+            [-0.4, -0.2, 0.4, 0.0, -1.57, 0.0],
+            [-0.4, -0.2, 0.4, 0.0, 0.0, 1.57],
+            [-0.4, -0.2, 0.4, 0.0, 0.0, 3.14],
+            [-0.4, -0.2, 0.4, 0.0, 0.0, -1.57],
+        ], device=env.device),
     )
 
     # High-level policy

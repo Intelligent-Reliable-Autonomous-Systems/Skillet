@@ -104,11 +104,11 @@ class PickSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSki
         prev_pick_status = self._pick_status.clone()
 
         gripper_lim = obs["gripper_lim"]
-        gripper_pos = obs["tcp_xyz_b"][:, -1].unsqueeze(1)
+        gripper_pos = obs["tcp_pose_b"][:, -1].unsqueeze(1)
         goal_open_gripper_pos = (zeros - gripper_lim[:, 0]) / (gripper_lim[:, 1] - gripper_lim[:, 0])
         goal_close_gripper_pos = (ones - gripper_lim[:, 0]) / (gripper_lim[:, 1] - gripper_lim[:, 0])
 
-        tcp_rpy = obs["tcp_xyz_b"][:, 3:6]
+        tcp_rpy = obs["tcp_pose_b"][:, 3:6]
         tcp_quat = quat_from_euler_xyz(tcp_rpy[:, 0], tcp_rpy[:, 1], tcp_rpy[:, 2])
         goal_tcp_quat = quat_from_euler_xyz(self._params[:, 3], self._params[:, 4], self._params[:, 5])
 
@@ -152,7 +152,7 @@ class PickSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSki
         self._pick_status = torch.where(
             self._pick_status
             == PickStatusCodes.REACH
-            & (torch.linalg.vector_norm(obs["tcp_xyz_b"][:, 0:3] - self._params[:, 0:3], dim=1) < 0.05),
+            & (torch.linalg.vector_norm(obs["tcp_pose_b"][:, 0:3] - self._params[:, 0:3], dim=1) < 0.05),
             PickStatusCodes.ORIENT,
             self._pick_status,
         )
@@ -170,7 +170,7 @@ class PickSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSki
             == PickStatusCodes.LOWER
             & (
                 torch.linalg.vector_norm(
-                    obs["tcp_xyz_b"][:, 0:3] - torch.cat((self._params[:, 0:2], zeros + 0.02), dim=1), dim=1
+                    obs["tcp_pose_b"][:, 0:3] - torch.cat((self._params[:, 0:2], zeros + 0.02), dim=1), dim=1
                 )
                 < 0.05
             ),
@@ -190,7 +190,7 @@ class PickSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSki
         self._pick_status = torch.where(
             self._pick_status
             == PickStatusCodes.LIFT
-            & (torch.linalg.vector_norm(obs["tcp_xyz_b"][:, 0:3] - self._params[:, 0:3], dim=1) < 0.05),
+            & (torch.linalg.vector_norm(obs["tcp_pose_b"][:, 0:3] - self._params[:, 0:3], dim=1) < 0.05),
             PickStatusCodes.DONE,
             self._pick_status,
         )

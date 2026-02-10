@@ -62,7 +62,7 @@ class OrientRPYSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[
     def get_action(self, obs: TBSkillObs) -> TBAction:  # noqa: D102
         action = self.policy.get_action(obs, self._params)
         self._n_steps += 1
-        tcp_rpy = obs["tcp_xyz_b"][:, 3:6]
+        tcp_rpy = obs["tcp_pose_b"][:, 3:6]
         tcp_quat = quat_from_euler_xyz(tcp_rpy[:, 0], tcp_rpy[:, 1], tcp_rpy[:, 2])
         goal_tcp_quat = quat_from_euler_xyz(self._params[:, 0], self._params[:, 1], self._params[:, 2])
 

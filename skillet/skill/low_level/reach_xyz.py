@@ -62,7 +62,7 @@ class ReachXYZSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[T
         action = self.policy.get_action(obs, self._params)
         self._n_steps += 1
         self._status = torch.where(
-            torch.linalg.vector_norm(obs["tcp_xyz_b"][:, 0:3] - self._params[:, 0:3], dim=1) < 0.02,
+            torch.linalg.vector_norm(obs["tcp_pose_b"][:, 0:3] - self._params[:, 0:3], dim=1) < 0.02,
             SkillStatusCodes.SUCCESS,
             self._status,
         )

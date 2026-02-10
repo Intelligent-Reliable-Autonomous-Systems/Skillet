@@ -16,10 +16,25 @@ Written by Will Solow and Jeff Jewett, 2026
 """Launch Isaac Sim Simulator first."""
 
 import argparse
+from isaaclab.app import AppLauncher
+# add argparse arguments
+parser = argparse.ArgumentParser(description="Main IsaacSim Executor file through IsaacLab.")
+parser.add_argument(
+    "--disable_fabric", action="store_true", default=False, help="Disable fabric and use USD I/O operations."
+)
+parser.add_argument("--num_envs", type=int, default=4, help="Number of environments to simulate.")
+parser.add_argument("--task", type=str, default="Isaac-Reach-Franka-v0", help="Name of the task.")
+
+# append AppLauncher cli args
+AppLauncher.add_app_launcher_args(parser)
+# parse the arguments
+args_cli = parser.parse_args()
+# launch omniverse app
+app_launcher = AppLauncher(args_cli)
+simulation_app = app_launcher.app
 
 import gymnasium as gym
 import torch
-from isaaclab.app import AppLauncher
 from jaxtyping import Float, Int
 
 from skillet.agents.policy_over_options import PolicyOverOptionsAgent
@@ -29,22 +44,7 @@ from skillet.policy.dummy import RandomFixedPolicy, RandomPolicy
 from skillet.policy.ik_ee import PosAbsIKEEPolicy, PoseAbsIKEEPolicy
 from skillet.skill import FixedLengthSkill, ReachXYZSkill
 
-# add argparse arguments
-parser = argparse.ArgumentParser(description="Main IsaacSim Executor file through IsaacLab.")
-parser.add_argument(
-    "--disable_fabric", action="store_true", default=False, help="Disable fabric and use USD I/O operations."
-)
-parser.add_argument("--num_envs", type=int, default=4, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="Isaac-Reach-Franka-v0", help="Name of the task.")
 
-
-# append AppLauncher cli args
-AppLauncher.add_app_launcher_args(parser)
-# parse the arguments
-args_cli = parser.parse_args()
-# launch omniverse app
-app_launcher = AppLauncher(args_cli)
-simulation_app = app_launcher.app
 
 # import isaaclab_tasks after app launcher
 import isaaclab_tasks  # noqa: F401

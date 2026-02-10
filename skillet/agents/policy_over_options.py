@@ -82,7 +82,7 @@ class PolicyOverOptionsAgent(Generic[THighLevelObs, TLowLevelObs, TBAction, TSki
             # Low level execution
             # 3. Initiate the composite skill with the selected skills and parameters
             composite_skill.initiate(env.get_observation(composite_skill.obs_spec), params, selected_skills)
-            print("initiating skills:", [self.skills[i].name for i in selected_skills])
+            print("initiating skills:", [(self.skills[i].name, p) for i, p in zip(selected_skills, params)])
             # 4. While not terminated, get the next action and take a step in the environment
             skill_dones = composite_skill.is_terminated(env.get_observation(composite_skill.obs_spec))
             while not skill_dones.all() and not bool(terminated.all()):
@@ -93,3 +93,4 @@ class PolicyOverOptionsAgent(Generic[THighLevelObs, TLowLevelObs, TBAction, TSki
                 terminated = terminated | term | trunc
                 # 4c. Check if the composite skill is terminated
                 skill_dones = composite_skill.is_terminated(self.get_low_level_obs(env))
+            print("finished skill at", self.get_low_level_obs(env)["ee_pose_b"])
