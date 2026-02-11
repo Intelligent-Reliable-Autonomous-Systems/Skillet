@@ -11,6 +11,7 @@ Written by Will Solow and Jeff Jewett, 2026
 import argparse
 import os
 
+from skillet.skill.high_level.pick2 import PickSkill
 from skillet.skill.low_level.reach_xyz_rpy import ReachXYZRPYSkill
 
 # add argparse arguments
@@ -43,7 +44,7 @@ from skillet.agents.policy_over_options import PolicyOverOptionsAgent
 from skillet.core.spaces import ActionSpec, ObservationSpec
 from skillet.envs.ros2_env_wrapper import ROS2EnvWrapper
 from skillet.policy.dummy import FixedSequencePolicy, RandomFixedPolicy, RandomPolicy
-from skillet.policy.ik_ee import PosAbsIKEEPolicy, PoseAbsIKEEPolicy, XYZRPYAbsIKEEPolicy
+from skillet.policy.ik_ee import PosAbsIKEEPolicy, PoseAbsIKEEPolicy
 from skillet.skill.low_level.reach_xyz import ReachXYZSkill
 
 BxN_Obs = Float[torch.Tensor, "b n"]
@@ -58,7 +59,8 @@ def main() -> None:
     """Test the executor within the IsaacLab/IsaacSim framework."""
     # create environment configuration
     env_cfg = parse_ros2_env_cfg(
-        args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs, ros2_workspace=args_cli.ros2_ws
+        args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs, ros2_workspace=args_cli.ros2_ws, 
+        # robot_ip="192.168.1.10", use_fake_hardware="false"
     )
     env_cfg.robot_ip="192.168.1.10"
     env_cfg.use_fake_hardware="false"
@@ -93,13 +95,15 @@ def main() -> None:
     # reach_xyz_skill = ReachXYZSkill[BxN_Obs, BxM_Action, None](
     #     name="reach_xyz_skill", policy=ik_ee_pos_policy, length=skill_length
     # )
-    ik_ee_pose_policy = XYZRPYAbsIKEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
+    ik_ee_pose_policy = PoseAbsIKEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
     # Skills
-    skill_length = 40
-    reach_xyz_skill = ReachXYZRPYSkill[BxN_Obs, BxM_Action, None](
-        name="reach_xyz_skill", policy=ik_ee_pose_policy, length=skill_length
+    skill_length = 200
+    pick_skill = PickSkill[BxN_Obs, BxM_Action, None](
+        reach_policy=ik_ee_pose_policy,
+        grasp_policy=None,
+        lift_height=0.23, length=skill_length
     )
-    skills = [reach_xyz_skill]
+    skills = [pick_skill]
 
     # Parameters policy
     fixed_param_policy = FixedSequencePolicy[BxN_Obs, BxM_Action](
@@ -107,17 +111,9 @@ def main() -> None:
         action_spec,
         # torch.as_tensor([[0.4, -0.1, 0.2], [0.5, 0.2, 0.3]], device=env.device),
         torch.as_tensor([
-            # [0.6, 0.0, 0.4, 0.0, 3.14, 0.0],
-            [0.3, 0.2, 0.3, 0.0, 2.7, 0.0],
-            # [0.6, -0.2, 0.03, 3.14, 0.0, 0.0],
-            # [0.6, 0.0, 0.4, 0.0, 0.0, 0.0],
-            # [0.3, 0.3, 0.4, 1.57, 0.0, 0.0],
-            # [0.3, 0.3, 0.4, 3.14, 0.0, 0.0],
-            # [0.3, 0.3, 0.4, -1.57, 0.0, 0.0]
-            # [-0.5, -0.2, 0.4, 0.0, -1.57, 0.0],
-            # [-0.5, -0.2, 0.4, 0.0, 0.0, 1.57],
-            # [-0.5, -0.2, 0.4, 0.0, 0.0, 3.14],
-            # [-0.5, -0.2, 0.4, 0.0, 0.0, -1.57],
+            [0.6, -0.2, 0.03, 0.0],
+            # [0.4, -0.05, 0.1, 0.0],
+            [0.3, 0.2, 0.05, 0.0]
         ], device=env.device),
     )
 

@@ -22,6 +22,8 @@ class ROS2RLEnvCfg:
     # Whether to spin up real robot or not
     use_fake_hardware: str = "true"
 
+    launch_ros: bool = True
+
     # IP of the robot
     robot_ip: str = "www.xxx.yyy.zzz"
 
@@ -36,7 +38,7 @@ class ROS2RLEnvCfg:
 
     device: str = "cuda"
 
-    dt: float = 1 / 60
+    dt: float = 2
 
     decimation: float = 1.0
 

@@ -103,9 +103,10 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
         self._current_joint_velocities = np.zeros(shape=len(self.joint_names))
 
         # Launch robot hardware in ROS2
-        launch_robot_hardware(
-            cfg, cfg.ros2_workspace, "gen3_py", "gen3.launch.py", default_joint_positions=cfg.default_joint_positions
-        )
+        if self.cfg.launch_ros:
+            launch_robot_hardware(
+                cfg, cfg.ros2_workspace, "gen3_py", "gen3.launch.py", default_joint_positions=cfg.default_joint_positions
+            )
 
         # Wait for topics to be exposed before continuing
         wait_for_topic_publish(self.ros, self.joint_cmd_topic, "trajectory_msgs/msg/JointTrajectory")
@@ -134,7 +135,7 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
         )
 
         self.gripper_client = ActionClient(
-            self.ros, "/robotiq_gripper_controller/gripper_cmd", "control_msgs/action/GripperCommand"
+            self.ros, "/robotiq_gripper_controller/gripper_cmd", "control_msgs/action/ParallelGripperCommand"
         )
 
         # Subscribe to jacobian topic
@@ -142,7 +143,7 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
 
         def _update_jacobians(msg: dict[str, Any]) -> None:
             """Update jacobians the robot by subscribing to jacobian topic."""
-            self._current_jacobians = np.asarray(msg["jac_matrix"]).reshape(msg["num_links"], msg["rows"], msg["cols"])
+            self._current_jacobians = np.asarray(msg["jac_matrix"], dtype=float).reshape(msg["num_links"], msg["rows"], msg["cols"])
             self._ready["jacobians"] = True
 
         self.jacobian_sub.subscribe(_update_jacobians)
@@ -186,7 +187,7 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
 
         return self.actions
 
-    def _publish_action_to_robot(self, joint_pos: np.ndarray, duration: float = 1) -> None:
+    def _publish_action_to_robot(self, joint_pos: np.ndarray, duration: float = 3) -> None:
         """Publish the robot action.
 
         Args:
@@ -210,7 +211,15 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
             ],
         }
 
-        gripper_goal = {"command": {"position": float(joint_pos[-1]), "max_effort": 100.0}}
+        # gripper_goal = {"command": {"position": float(joint_pos[-1]), "max_effort": 100.0}}
+        gripper_val = float(joint_pos[-1])
+        gripper_val = max(0, min(gripper_val, 1)) * 0.8
+        gripper_goal = {
+            "command": {
+                "name": ["robotiq_85_left_knuckle_joint"],
+                "position": [gripper_val],
+            }
+        }
 
         self.joint_states_pub.publish(joint_msg)
 

@@ -74,4 +74,5 @@ class ReachXYZRPYSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generi
         )
         if self._n_steps >= self._length:
             self._status[:] = SkillStatusCodes.FAILED
+        action[:, -1] = 0.0  # gripper open
         return action

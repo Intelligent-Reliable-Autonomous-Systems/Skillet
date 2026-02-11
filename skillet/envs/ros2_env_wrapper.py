@@ -100,7 +100,7 @@ class ROS2EnvWrapper(
         #     .repeat(self._n_envs, 1)
         # )
         self.tcp_offset = (
-            torch.as_tensor([0.12, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0], device=self.device)
+            torch.as_tensor([0.0, 0.0, 0.12, 1.0, 0.0, 0.0, 0.0], device=self.device)
             .unsqueeze(0)
             .repeat(self._n_envs, 1)
         )
@@ -319,6 +319,10 @@ class ROS2EnvWrapper(
         root_pose_w = torch.as_tensor(self._env._robot_root_pose_w, device=self.device, dtype=torch.float32).unsqueeze(
             0
         )[env_ids]
+
+        # Have to convert quaternion from ROS format (x,y,z,w) to IsaacLab format (w,x,y,z)
+        ee_pose_w[:, 3:7] = convert_quat(ee_pose_w[:, 3:7], to="wxyz")
+        root_pose_w[:, 3:7] = convert_quat(root_pose_w[:, 3:7], to="wxyz")
 
         ee_pos_b = quat_apply_inverse(root_pose_w[:, 3:7], ee_pose_w[:, 0:3] - root_pose_w[:, 0:3])
         ee_quat_b = quat_mul(quat_inv(root_pose_w[:, 3:7]), ee_pose_w[:, 3:7])

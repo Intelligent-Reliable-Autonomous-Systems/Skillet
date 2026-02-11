@@ -36,3 +36,28 @@ To run:
    - Laucn ROSBridge Node: `ros2 launch rosbridge_server rosbridge_websocket_launch.xml`
 2. Navigate back to Robot-Skills in another terminal. Ensure virtual env is active: `conda activate skills`
 3. Run dummy task policy with ROS2/RViz: `python3 examples/ros2_dummy.py --num_envs 1 --task ROS2-Reach-Kinova-v0 --ros2_ws <absolute-path-to-IRAS/Kinova>`
+
+### Hardware Experiment 1
+Launch IRAS-Kinova
+```bash
+ros2 launch gen3_py gen3.launch.py robot_ip:=192.168.8.10 use_fake_hardware:=false gripper:=robotiq_2f_85 vision:=false
+```
+
+Launch rosbridge
+```bash
+ros2 launch rosbridge_server rosbridge_websocket_launch.xml
+```
+
+Put arm into a good initial position
+```bash
+ros2 topic pub /joint_trajectory_controller/joint_trajectory trajectory_msgs/JointTrajectory "{
+    joint_names: [joint_1, joint_2, joint_3, joint_4, joint_5, joint_6, joint_7],
+    points: [
+        { positions: [0, 0.523599, 0, 1.5708, 0, .785398, 0], time_from_start: { sec: 5 } },
+    ]
+    }" -1
+```
+
+```
+python examples/ros2_pick.py
+```

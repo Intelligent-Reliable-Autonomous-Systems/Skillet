@@ -128,7 +128,8 @@ class ROS2RLEnv(gym.Env):
 
         This is the time-step at which the environment steps forward.
         """
-        return float(self.cfg.dt * self.cfg.decimation)
+        # return float(self.cfg.dt * self.cfg.decimation)
+        return 4.0
 
     @property
     def max_episode_length_s(self) -> float:
@@ -194,13 +195,12 @@ class ROS2RLEnv(gym.Env):
             A tuple containing the observations, rewards, resets (terminated and truncated) and extras.
 
         """
-        time.sleep(1.0)
-
         # Pre process the robot action
         joint_pos = self._pre_process_action(action)
 
         # Send the robot action to hardware
-        self._publish_action_to_robot(joint_pos)
+        self._publish_action_to_robot(joint_pos, duration=self.step_dt)
+        time.sleep(self.step_dt)
 
         self.episode_length_buf += 1
         self.common_step_counter += 1

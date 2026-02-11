@@ -78,7 +78,7 @@ class PolicyOverOptionsAgent(Generic[THighLevelObs, TLowLevelObs, TBAction, TSki
                 params = self.params_policy.get_action(high_level_obs)
             else:
                 params = self.skills[0].params_spec.with_n_envs(n_envs).zeros()
-
+            # override_grip = 0
             # Low level execution
             # 3. Initiate the composite skill with the selected skills and parameters
             composite_skill.initiate(env.get_observation(composite_skill.obs_spec), params, selected_skills)
@@ -88,6 +88,8 @@ class PolicyOverOptionsAgent(Generic[THighLevelObs, TLowLevelObs, TBAction, TSki
             while not skill_dones.all() and not bool(terminated.all()):
                 # 4a. Get the next action with the low-level observation
                 action = composite_skill.get_action(env.get_observation(composite_skill.obs_spec))
+                print("Taking action", action)
+                # action[:, -1] = override_grip
                 # 4b. Take a step in the environment
                 _, r, term, trunc, _ = env.step(action)
                 terminated = terminated | term | trunc
