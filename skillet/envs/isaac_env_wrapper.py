@@ -178,6 +178,7 @@ class IsaacEnvWrapper(
                 "ee_pose_b": self._get_ee_pose_b(),
                 "tcp_pose_b": self._get_tcp_pose_b(),
                 "gripper_lim": self._get_gripper_lims(),
+                "gripper": self._get_gripper_state(),
             }
         raise ValueError(f"Observation spec {obs_spec} not supported by environment.")
 
@@ -267,7 +268,7 @@ class IsaacEnvWrapper(
         if env_ids is None:
             env_ids = self.robot._ALL_INDICES
         if arm_joint_ids is None:
-            arm_joint_ids = self.joint_ids[:, :-1]
+            arm_joint_ids = self.joint_ids[:-1]
         ee_link_idx = self.robot.find_bodies(ee_link)[0][0]
         base_link_idx = self.robot.find_bodies(base_link)[0][0]
         robot_base_pose_w = self.robot.data.body_pose_w[env_ids, base_link_idx]
@@ -326,10 +327,9 @@ class IsaacEnvWrapper(
         gripper_joint_idx = self.robot.find_joints(gripper_joint)[0][0]
         gripper_low = self.robot_dof_lower_limits[gripper_joint_idx]
         gripper_high = self.robot_dof_upper_limits[gripper_joint_idx]
-        gripper_pos = (
-            torch.as_tensor(self._env._joint_positions[gripper_joint_idx], device=self.device).unsqueeze(0)[env_ids]
-            - gripper_low
-        ) / (gripper_high - gripper_low)
+        gripper_pos = (self.robot.data.joint_pos[env_ids, gripper_joint_idx] - gripper_low) / (
+            gripper_high - gripper_low
+        )
         return gripper_pos.unsqueeze(1)
 
     def _get_ee_pose_b(

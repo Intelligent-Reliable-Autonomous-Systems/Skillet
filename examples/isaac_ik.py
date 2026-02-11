@@ -16,7 +16,9 @@ Written by Will Solow and Jeff Jewett, 2026
 """Launch Isaac Sim Simulator first."""
 
 import argparse
+
 from isaaclab.app import AppLauncher
+
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Main IsaacSim Executor file through IsaacLab.")
 parser.add_argument(
@@ -34,23 +36,20 @@ app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
 import gymnasium as gym
-import torch
-from jaxtyping import Float, Int
-
-from skillet.agents.policy_over_options import PolicyOverOptionsAgent
-from skillet.core.spaces import ActionSpec, ObservationSpec
-from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
-from skillet.policy.dummy import RandomFixedPolicy, RandomPolicy
-from skillet.policy.ik_ee import PosAbsIKEEPolicy, PoseAbsIKEEPolicy
-from skillet.skill import FixedLengthSkill, ReachXYZSkill
-
-
 
 # import isaaclab_tasks after app launcher
 import isaaclab_tasks  # noqa: F401
+import torch
 from isaaclab_tasks.utils import parse_env_cfg
+from jaxtyping import Float, Int
 
 import isaac_kinova.tasks as tasks  # noqa: F401
+from skillet.agents.policy_over_options import PolicyOverOptionsAgent
+from skillet.core.spaces import ActionSpec, ObservationSpec
+from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
+from skillet.policy.dummy import FixedSequencePolicy, RandomPolicy
+from skillet.policy.ik_ee import XYZRPYAbsIKEEPolicy
+from skillet.skill import ReachXYZRPYSkill
 
 BxN_Obs = Float[torch.Tensor, "b n"]
 """Environment observation: torch.Tensor[(b, n), float]"""
@@ -92,25 +91,34 @@ def main() -> None:
         device=env.device,
     )
 
-    zero_policy = RandomPolicy[BxN_Obs, BxM_Action](observation_spec, action_spec)
-    ik_ee_pose_policy = PoseAbsIKEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
-    ik_ee_pos_policy = PosAbsIKEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
+    ik_ee_pose_policy = XYZRPYAbsIKEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
     # Skills
     skill_length = 100
-    reach_xyz_skill = ReachXYZSkill[BxN_Obs, BxM_Action, None](
-        name="reach_xyz_skill", policy=ik_ee_pos_policy, length=skill_length
-    )
-    random_skill = FixedLengthSkill[BxN_Obs, BxM_Action, None](
-        name="zero_skill", policy=zero_policy, length=skill_length
+    reach_xyz_skill = ReachXYZRPYSkill[BxN_Obs, BxM_Action, None](
+        name="reach_xyz_skill", policy=ik_ee_pose_policy, length=skill_length
     )
     skills = [reach_xyz_skill]
 
     # Parameters policy
-    fixed_param_policy = RandomFixedPolicy[BxN_Obs, BxM_Action](
+    fixed_param_policy = FixedSequencePolicy[BxN_Obs, BxM_Action](
         observation_spec,
         action_spec,
-        # torch.as_tensor([[0.7, -0.4, 0.3], [0.6, 0.1, 0.5], [0.5, 0.0, 0.7], [0.8, -0.1, 0.4]], device=env.device),
-        torch.as_tensor([[0.4, 0.1, 0.6]], device=env.device),
+        torch.as_tensor(
+            [
+                # [0.6, 0.0, 0.4, 0.0, 3.14, 0.0],
+                [0.3, 0.2, 0.3, 0.0, 2.7, 0.0],
+                [0.6, -0.2, 0.03, 3.14, 0.0, 0.0],
+                [0.6, 0.0, 0.4, 0.0, 0.0, 0.0],
+                [0.3, 0.3, 0.4, 1.57, 0.0, 0.0],
+                # [0.3, 0.3, 0.4, 3.14, 0.0, 0.0],
+                # [0.3, 0.3, 0.4, -1.57, 0.0, 0.0]
+                # [-0.5, -0.2, 0.4, 0.0, -1.57, 0.0],
+                # [-0.5, -0.2, 0.4, 0.0, 0.0, 1.57],
+                # [-0.5, -0.2, 0.4, 0.0, 0.0, 3.14],
+                # [-0.5, -0.2, 0.4, 0.0, 0.0, -1.57],
+            ],
+            device=env.device,
+        ),
     )
 
     # High-level policy
@@ -119,7 +127,6 @@ def main() -> None:
         name="options",
         is_torch=True,
         is_batched=True,
-        # n_envs=args_cli.num_envs,
     )
     policy_over_options = RandomPolicy[BxN_Obs, B_Int_HighLevel](observation_spec, options_spec)
 
@@ -129,12 +136,8 @@ def main() -> None:
         params_policy=fixed_param_policy,
     )
 
-    # env.step()
-    # skill_executor = SkillExecutor(DummyCfg(), env)
-
     # simulate environment
     while simulation_app.is_running():
-        # run everything in inference mode
         with torch.inference_mode():
             env.reset()
             policy_over_options_agent.execute(env)
@@ -146,7 +149,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    # run the main function
     main()
-    # close sim app
     simulation_app.close()
