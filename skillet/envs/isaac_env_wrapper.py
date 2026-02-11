@@ -13,7 +13,6 @@ from jaxtyping import Bool, Float
 
 from skillet.core.env import BatchedEnvironment
 from skillet.core.math import (
-    euler_xyz_from_quat,
     matrix_from_quat,
     quat_apply,
     quat_apply_inverse,
@@ -177,7 +176,7 @@ class IsaacEnvWrapper(
                 "tcp_offset": self.tcp_offset,
                 "jacobians": self._get_jacobians(),
                 "ee_pose_b": self._get_ee_pose_b(),
-                "tcp_pose_b": self._get_tcp_pose_xyz_b(),
+                "tcp_pose_b": self._get_tcp_pose_b(),
                 "gripper_lim": self._get_gripper_lims(),
             }
         raise ValueError(f"Observation spec {obs_spec} not supported by environment.")
@@ -185,7 +184,9 @@ class IsaacEnvWrapper(
     def get_state(self) -> TBatchedObsTorch:  # noqa: D102
         return self.get_observation(self._obs_spec_state)
 
-    def step(self, action: TBatchedActionTorch) -> tuple[
+    def step(
+        self, action: TBatchedActionTorch
+    ) -> tuple[
         TBatchedObsTorch,
         Float[torch.Tensor, "b"],  # noqa: F821
         Bool[torch.Tensor, "b"],  # noqa: F821
@@ -226,7 +227,7 @@ class IsaacEnvWrapper(
         if env_ids is None:
             env_ids = self.robot._ALL_INDICES
         if joint_ids is None:
-            joint_ids = [0, 1, 2, 3, 4, 5, 6, 7]
+            joint_ids = self.joint_ids
         return self.robot.data.joint_pos[:, joint_ids][env_ids].clone()
 
     def _get_joint_velocities(self, env_ids: torch.Tensor | None = None, joint_ids: list | None = None) -> torch.Tensor:
@@ -242,7 +243,7 @@ class IsaacEnvWrapper(
         if env_ids is None:
             env_ids = self.robot._ALL_INDICES
         if joint_ids is None:
-            joint_ids = [0, 1, 2, 3, 4, 5, 6]
+            joint_ids = self.joint_ids
         return self.robot.data.joint_vel[:, joint_ids][env_ids].clone()
 
     def _get_jacobians(
@@ -266,7 +267,7 @@ class IsaacEnvWrapper(
         if env_ids is None:
             env_ids = self.robot._ALL_INDICES
         if arm_joint_ids is None:
-            arm_joint_ids = [0, 1, 2, 3, 4, 5, 6]
+            arm_joint_ids = self.joint_ids[:, :-1]
         ee_link_idx = self.robot.find_bodies(ee_link)[0][0]
         base_link_idx = self.robot.find_bodies(base_link)[0][0]
         robot_base_pose_w = self.robot.data.body_pose_w[env_ids, base_link_idx]
@@ -277,7 +278,7 @@ class IsaacEnvWrapper(
 
         return jacobian
 
-    def _get_tcp_pose_xyz_b(
+    def _get_tcp_pose_b(
         self,
         env_ids: torch.Tensor | None = None,
         ee_link: str = "gripper_base_link",
@@ -291,8 +292,7 @@ class IsaacEnvWrapper(
             gripper_joint: string for the name of the gripper joint
 
         Returns:
-            Tensor in shape (N,7) with 7 in (X,Y,Z,R,P,Y,Gripper) with 0 being open, 1 being closed
-            for the gripper
+            Tensor in shape (N,7) with 7 in (X,Y,Quat) w
 
         """
         if env_ids is None:
@@ -312,24 +312,25 @@ class IsaacEnvWrapper(
         tcp_pos_b = ee_pos_b + quat_apply(ee_quat_b, self.tcp_offset[env_ids, 0:3])
         tcp_quat_b = quat_mul(ee_quat_b, self.tcp_offset[env_ids, 3:7])
 
-        r, p, y = euler_xyz_from_quat(tcp_quat_b)
-
-        gripper_low = self.robot_dof_lower_limits[gripper_joint_idx]
-        gripper_high = self.robot_dof_upper_limits[gripper_joint_idx]
-        gripper_pos = (self.robot.data.joint_pos[env_ids, gripper_joint_idx] - gripper_low) / (
-            gripper_high - gripper_low
-        )
-
         return torch.concatenate(
-            (
-                tcp_pos_b,
-                r.unsqueeze(1),
-                p.unsqueeze(1),
-                y.unsqueeze(1),
-                gripper_pos.unsqueeze(1),
-            ),
+            (tcp_pos_b, tcp_quat_b),
             dim=1,
         )
+
+    def _get_gripper_state(
+        self, env_ids: torch.Tensor | None = None, gripper_joint: str = "finger_joint"
+    ) -> torch.Tensor:
+        """Get the gripper state of the robot."""
+        if env_ids is None:
+            env_ids = self.robot._ALL_INDICES
+        gripper_joint_idx = self.robot.find_joints(gripper_joint)[0][0]
+        gripper_low = self.robot_dof_lower_limits[gripper_joint_idx]
+        gripper_high = self.robot_dof_upper_limits[gripper_joint_idx]
+        gripper_pos = (
+            torch.as_tensor(self._env._joint_positions[gripper_joint_idx], device=self.device).unsqueeze(0)[env_ids]
+            - gripper_low
+        ) / (gripper_high - gripper_low)
+        return gripper_pos.unsqueeze(1)
 
     def _get_ee_pose_b(
         self,

@@ -39,10 +39,10 @@ class IKEEPolicy(BatchedPPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[TB
         """Get the next joint positions by computing differential inverse kinematics."""
         ee_pose_b = obs["ee_pose_b"]
         jacobians = obs["jacobians"]
-        joint_pos = obs["joint_pos"]
+        joint_pos = obs["joint_pos"][:, :-1]  # Ignore gripper
         arm_joint_pos = self.diff_ik.compute(ee_pose_b[:, 0:3], ee_pose_b[:, 3:7], jacobians, joint_pos)
         return torch.cat(
-            (arm_joint_pos, joint_pos[:, -1].unsqueeze(1)),
+            (arm_joint_pos, self.start_gripper_pos),
             dim=1,
         )
 
@@ -52,14 +52,15 @@ class IKEEPolicy(BatchedPPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[TB
         self._params = params
         self.diff_ik.reset(n_envs, env_ids=env_ids)
         self.tcp_offset = obs["tcp_offset"]
+        self.start_gripper_pos = obs["gripper"]
 
-    def _compute_goal_ee_pose_b_from_goal_tcp_xyz_b(
+    def _compute_goal_ee_pose_b_from_goal_tcp_b(
         self, tcp_pose_b: torch.Tensor, tcp_offset: torch.Tensor
     ) -> torch.Tensor:
         """Compute the goal end effector pose (xyz, quat) from the goal TCP pose in XYZ Quat.
 
         Args:
-            pose_b: The goal TCP pose in the shape (N,7) relative to the robot base frame
+            tcp_pose_b: The goal TCP pose in the shape (N,7) relative to the robot base frame
             tcp_offset: The offset of the tcp frame from the end effector
 
 
@@ -110,9 +111,7 @@ class PosAbsIKEEPolicy(IKEEPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, T
         tcp_pose_b = obs["tcp_pose_b"]
         # Use the params for TCP position and keep the current TCP orientation
         goal_pose_b = torch.cat((params[:, 0:3], tcp_pose_b[:, 3:7]), dim=1)
-        goal_ee_pose = self._compute_goal_ee_pose_b_from_goal_tcp_xyz_b(
-            goal_pose_b, obs["tcp_offset"]
-        )
+        goal_ee_pose = self._compute_goal_ee_pose_b_from_goal_tcp_b(goal_pose_b, obs["tcp_offset"])
 
         self.diff_ik.set_command(goal_ee_pose[:, 0:3], ee_quat=goal_ee_pose[:, 3:7], env_ids=env_ids)
 
@@ -143,8 +142,9 @@ class PoseAbsIKEEPolicy(IKEEPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, 
 
         """
         super().reset(obs, params)
-        goal_pose = self._compute_goal_ee_pose_b_from_goal_tcp_xyz_b(params, obs["tcp_offset"])
+        goal_pose = self._compute_goal_ee_pose_b_from_goal_tcp_b(params, obs["tcp_offset"])
         self.diff_ik.set_command(goal_pose, env_ids=env_ids)
+
 
 class XYZRPYAbsIKEEPolicy(IKEEPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, TBAction]):
     """A policy that produces pose ."""
@@ -174,7 +174,7 @@ class XYZRPYAbsIKEEPolicy(IKEEPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs
         super().reset(obs, params)
         target_quat_b = quat_from_euler_xyz(params[:, 3], params[:, 4], params[:, 5])
         goal_tcp_b = torch.cat((params[:, 0:3], target_quat_b), dim=1)
-        goal_pose = self._compute_goal_ee_pose_b_from_goal_tcp_xyz_b(goal_tcp_b, obs["tcp_offset"])
+        goal_pose = self._compute_goal_ee_pose_b_from_goal_tcp_b(goal_tcp_b, obs["tcp_offset"])
         self.diff_ik.set_command(goal_pose, env_ids=env_ids)
 
 
@@ -208,7 +208,5 @@ class OrientAbsIKEEPolicy(IKEEPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs
         target_quat = quat_from_euler_xyz(params[:, 0], params[:, 1], params[:, 2])
         # Keep the current TCP position and use the target orientation from the params
         goal_pose_b = torch.cat((tcp_pose_b[:, 0:3], target_quat), dim=1)
-        goal_ee_pose = self._compute_goal_ee_pose_b_from_goal_tcp_xyz_b(
-            goal_pose_b, obs["tcp_offset"]
-        )
+        goal_ee_pose = self._compute_goal_ee_pose_b_from_goal_tcp_b(goal_pose_b, obs["tcp_offset"])
         self.diff_ik.set_command(goal_ee_pose, env_ids=env_ids)

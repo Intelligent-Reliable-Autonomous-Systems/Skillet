@@ -60,7 +60,7 @@ def main() -> None:
     )
     env_cfg.robot_ip = "192.168.1.10"
     env_cfg.use_fake_hardware = "true"
-    env_cfg.launch_ros = True
+    env_cfg.launch_ros = False
 
     # create environment
     env = gym.make(args_cli.task, cfg=env_cfg, ros=setup_ros())
@@ -85,12 +85,6 @@ def main() -> None:
         device=env.device,
     )
 
-    # ik_ee_pos_policy = PosAbsIKEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
-    # # Skills
-    # skill_length = 40
-    # reach_xyz_skill = ReachXYZSkill[BxN_Obs, BxM_Action, None](
-    #     name="reach_xyz_skill", policy=ik_ee_pos_policy, length=skill_length
-    # )
     ik_ee_pose_policy = XYZRPYAbsIKEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
     # Skills
     skill_length = 40
@@ -103,7 +97,6 @@ def main() -> None:
     fixed_param_policy = FixedSequencePolicy[BxN_Obs, BxM_Action](
         observation_spec,
         action_spec,
-        # torch.as_tensor([[0.4, -0.1, 0.2], [0.5, 0.2, 0.3]], device=env.device),
         torch.as_tensor(
             [
                 # [0.6, 0.0, 0.4, 0.0, 3.14, 0.0],
@@ -128,7 +121,6 @@ def main() -> None:
         name="options",
         is_torch=True,
         is_batched=True,
-        # n_envs=args_cli.num_envs,
     )
     policy_over_options = RandomPolicy[BxN_Obs, B_Int_HighLevel](observation_spec, options_spec)
 
@@ -140,7 +132,6 @@ def main() -> None:
 
     # simulate environment
     while True:
-        # run everything in inference mode
         with torch.inference_mode():
             env.reset()
             policy_over_options_agent.execute(env)
@@ -152,5 +143,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    # run the main function
     main()
