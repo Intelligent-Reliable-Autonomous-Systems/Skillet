@@ -12,7 +12,6 @@ import argparse
 import os
 
 from skillet.skill.high_level.pick2 import PickSkill
-from skillet.skill.low_level.reach_xyz_rpy import ReachXYZRPYSkill
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Main ROS2 executor file.")
@@ -31,7 +30,6 @@ if args_cli.ros2_ws is None:
         raise ValueError("ROS2 workspace path must be provided via --ros2_ws argument or ROS2_WS environment variable.")
 
 
-
 """Rest everything follows."""
 
 import gymnasium as gym
@@ -43,9 +41,8 @@ from ros2.envs.utils import parse_ros2_env_cfg, setup_ros
 from skillet.agents.policy_over_options import PolicyOverOptionsAgent
 from skillet.core.spaces import ActionSpec, ObservationSpec
 from skillet.envs.ros2_env_wrapper import ROS2EnvWrapper
-from skillet.policy.dummy import FixedSequencePolicy, RandomFixedPolicy, RandomPolicy
-from skillet.policy.ik_ee import PosAbsIKEEPolicy, PoseAbsIKEEPolicy
-from skillet.skill.low_level.reach_xyz import ReachXYZSkill
+from skillet.policy.dummy import FixedSequencePolicy, RandomPolicy
+from skillet.policy.ik_ee import PoseAbsIKEEPolicy
 
 BxN_Obs = Float[torch.Tensor, "b n"]
 """Environment observation: torch.Tensor[(b, n), float]"""
@@ -59,12 +56,15 @@ def main() -> None:
     """Test the executor within the IsaacLab/IsaacSim framework."""
     # create environment configuration
     env_cfg = parse_ros2_env_cfg(
-        args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs, ros2_workspace=args_cli.ros2_ws, 
+        args_cli.task,
+        device=args_cli.device,
+        num_envs=args_cli.num_envs,
+        ros2_workspace=args_cli.ros2_ws,
         # robot_ip="192.168.1.10", use_fake_hardware="false"
     )
-    env_cfg.robot_ip="192.168.1.10"
-    env_cfg.use_fake_hardware="false"
-    env_cfg.launch_ros=False
+    env_cfg.robot_ip = "192.168.1.10"
+    env_cfg.use_fake_hardware = "true"
+    env_cfg.launch_ros = False
 
     # create environment
     env = gym.make(args_cli.task, cfg=env_cfg, ros=setup_ros())
@@ -99,9 +99,7 @@ def main() -> None:
     # Skills
     skill_length = 200
     pick_skill = PickSkill[BxN_Obs, BxM_Action, None](
-        reach_policy=ik_ee_pose_policy,
-        grasp_policy=None,
-        lift_height=0.23, length=skill_length
+        reach_policy=ik_ee_pose_policy, grasp_policy=None, lift_height=0.23, length=skill_length
     )
     skills = [pick_skill]
 
@@ -110,11 +108,14 @@ def main() -> None:
         observation_spec,
         action_spec,
         # torch.as_tensor([[0.4, -0.1, 0.2], [0.5, 0.2, 0.3]], device=env.device),
-        torch.as_tensor([
-            [0.6, -0.2, 0.03, 0.0],
-            # [0.4, -0.05, 0.1, 0.0],
-            [0.3, 0.2, 0.05, 0.0]
-        ], device=env.device),
+        torch.as_tensor(
+            [
+                [0.6, -0.2, 0.03, 0.0],
+                # [0.4, -0.05, 0.1, 0.0],
+                [0.3, 0.2, 0.05, 0.0],
+            ],
+            device=env.device,
+        ),
     )
 
     # High-level policy

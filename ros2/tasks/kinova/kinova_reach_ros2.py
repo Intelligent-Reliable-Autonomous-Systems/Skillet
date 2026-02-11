@@ -105,7 +105,11 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
         # Launch robot hardware in ROS2
         if self.cfg.launch_ros:
             launch_robot_hardware(
-                cfg, cfg.ros2_workspace, "gen3_py", "gen3.launch.py", default_joint_positions=cfg.default_joint_positions
+                cfg,
+                cfg.ros2_workspace,
+                "gen3_py",
+                "gen3.launch.py",
+                default_joint_positions=cfg.default_joint_positions,
             )
 
         # Wait for topics to be exposed before continuing
@@ -143,7 +147,9 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
 
         def _update_jacobians(msg: dict[str, Any]) -> None:
             """Update jacobians the robot by subscribing to jacobian topic."""
-            self._current_jacobians = np.asarray(msg["jac_matrix"], dtype=float).reshape(msg["num_links"], msg["rows"], msg["cols"])
+            self._current_jacobians = np.asarray(msg["jac_matrix"], dtype=float).reshape(
+                msg["num_links"], msg["rows"], msg["cols"]
+            )
             self._ready["jacobians"] = True
 
         self.jacobian_sub.subscribe(_update_jacobians)

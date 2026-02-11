@@ -30,7 +30,7 @@ def launch_robot_hardware(
     cmd = f"""
         bash -c '
         cd {workspace_path}
-        source /opt/ros/jazzy/setup.bash 
+        source /opt/ros/jazzy/setup.bash
         source install/setup.bash
         ros2 launch {pkg} {launch_file} use_fake_hardware:={cfg.use_fake_hardware} robot_ip:={cfg.robot_ip}
         gripper:=robotiq2f85 default_joint_pos:={default_joint_positions}

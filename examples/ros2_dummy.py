@@ -10,11 +10,12 @@ Written by Will Solow and Jeff Jewett, 2026
 
 
 import argparse
+import os
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Main ROS2 executor file.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default=None, required=True, help="Name of the task.")
+parser.add_argument("--task", type=str, default="ROS2-Reach-Kinova-v0", required=True, help="Name of the task.")
 parser.add_argument("--device", type=str, default="cuda", help="Device to use")
 parser.add_argument(
     "--ros2_ws", type=str, default=None, required=True, help="Absolute path to ROS2 workspace containing bringup files"
@@ -22,6 +23,10 @@ parser.add_argument(
 
 # parse the arguments
 args_cli = parser.parse_args()
+if args_cli.ros2_ws is None:
+    args_cli.ros2_ws = os.getenv("ROS2_WS", None)
+    if args_cli.ros2_ws is None:
+        raise ValueError("ROS2 workspace path must be provided via --ros2_ws argument or ROS2_WS environment variable.")
 
 
 """Rest everything follows."""
@@ -36,7 +41,7 @@ from skillet.agents.policy_over_options import PolicyOverOptionsAgent
 from skillet.core.spaces import ActionSpec, ObservationSpec
 from skillet.envs.ros2_env_wrapper import ROS2EnvWrapper
 from skillet.policy.dummy import RandomPolicy, ZeroPolicy
-from skillet.skill.fixed_length import FixedLengthSkill
+from skillet.skill import FixedLengthSkill
 
 BxN_Obs = Float[torch.Tensor, "b n"]
 """Environment observation: torch.Tensor[(b, n), float]"""
