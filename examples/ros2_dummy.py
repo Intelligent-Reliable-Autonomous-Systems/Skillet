@@ -54,6 +54,9 @@ def main() -> None:
     env_cfg = parse_ros2_env_cfg(
         args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs, ros2_workspace=args_cli.ros2_ws
     )
+    env_cfg.robot_ip = "192.168.1.10"
+    env_cfg.use_fake_hardware = "true"
+    env_cfg.launch_ros = False
 
     # create environment
     env = gym.make(args_cli.task, cfg=env_cfg, ros=setup_ros())

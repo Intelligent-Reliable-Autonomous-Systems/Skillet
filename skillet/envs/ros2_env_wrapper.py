@@ -333,12 +333,9 @@ class ROS2EnvWrapper(
             env_ids = torch.arange(self.n_envs, device=self.device)
 
         gripper_joint_idx = self._env._find_joint_idx(gripper_joint)
-        gripper_low = self.robot_dof_lower_limits[gripper_joint_idx]
-        gripper_high = self.robot_dof_upper_limits[gripper_joint_idx]
-        gripper_pos = (
-            torch.as_tensor(self._env._joint_positions[gripper_joint_idx], device=self.device).unsqueeze(0)[env_ids]
-            - gripper_low
-        ) / (gripper_high - gripper_low)
+        gripper_pos = torch.as_tensor(self._env._joint_positions[gripper_joint_idx], device=self.device).unsqueeze(0)[
+            env_ids
+        ]
         return gripper_pos.unsqueeze(1)
 
     def _get_ee_pose_b(
@@ -406,9 +403,9 @@ class ROS2EnvWrapper(
 
         gripper_joint_idx = self._env._find_joint_idx(gripper_joint)
 
-        gripper_low = self.robot_dof_lower_limits[gripper_joint_idx]
+        # gripper_low = self.robot_dof_lower_limits[gripper_joint_idx]
+        gripper_low = torch.tensor([0], device=self.device)
         gripper_high = self.robot_dof_upper_limits[gripper_joint_idx]
-
         return torch.cat(
             (gripper_low.unsqueeze(0).expand(self.num_envs, 1), gripper_high.unsqueeze(0).expand(self.num_envs, 1)),
             dim=1,

@@ -323,12 +323,8 @@ class IsaacEnvWrapper(
         if env_ids is None:
             env_ids = self.robot._ALL_INDICES
         gripper_joint_idx = self.robot.find_joints(gripper_joint)[0][0]
-        gripper_low = self.robot_dof_lower_limits[gripper_joint_idx]
-        gripper_high = self.robot_dof_upper_limits[gripper_joint_idx]
-        gripper_pos = (self.robot.data.joint_pos[env_ids, gripper_joint_idx] - gripper_low) / (
-            gripper_high - gripper_low
-        )
-        return gripper_pos.unsqueeze(1)
+
+        return self.robot.data.joint_pos[env_ids, gripper_joint_idx].unsqueeze(1)
 
     def _get_ee_pose_b(
         self,

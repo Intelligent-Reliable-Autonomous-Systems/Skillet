@@ -1,4 +1,4 @@
-"""A skill that opens or closes the gripper."""
+"""A skill that orients the end effector about the yaw axis."""
 
 from typing import Generic
 
@@ -6,6 +6,7 @@ import numpy as np
 import torch
 from jaxtyping import Int
 
+from skillet.core.math import euler_xyz_from_quat, quat_error_magnitude, quat_from_euler_xyz
 from skillet.core.policy import BatchedPPolicy
 from skillet.core.skill import (
     BatchedSkill,
@@ -17,15 +18,15 @@ from skillet.core.skill import (
 from skillet.core.spaces import ArrayLike
 
 
-class GripperOCSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSkillObs, TBAction, TBSkillParams]):
-    """A skill that opens or closes the gripper."""
+class OrientYSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSkillObs, TBAction, TBSkillParams]):
+    """A skill that orients the end effector about the yaw axis."""
 
     def __init__(self, name: str, policy: BatchedPPolicy[TBSkillObs, TBAction, TBSkillParams], length: int) -> None:
         """Initialize the fixed length skill.
 
         Args:
             name: The name of the skill.
-            policy: The policy for the skill (None).
+            policy: The policy for the skill.
             length: The number of steps to execute the skill for.
 
         """
@@ -59,23 +60,31 @@ class GripperOCSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[
         self._params = params
         self._n_steps = 0
 
-        self._pos_threshold = 0.01
-        gripper_lim = obs["gripper_lim"]
-        print(f"[INFO] {gripper_lim}")
-        self._goal_gripper_pos = (params[:, 0:1] - gripper_lim[:, 0]) * (gripper_lim[:, 1] - gripper_lim[:, 0])
+        self._quat_threshold = 0.08
 
-        self.policy.reset(obs, self._params)
+        ee_pose_b = obs["tcp_pose_b"]
+        target_poses = spec.zeros(shape=(self.n_envs, 7), dtype=float)
+        roll, pitch, _ = euler_xyz_from_quat(ee_pose_b[:, 3:7])
+        target_poses[:, 3:7] = quat_from_euler_xyz(roll, pitch, self._params[:, 0])
+        target_poses[:, 0:3] = ee_pose_b[:, 0:3]
+
+        self._target_poses = target_poses
+
+        self.policy.reset(obs, self._target_poses)
 
     def get_action(self, obs: TBSkillObs) -> TBAction:  # noqa: D102
         np.set_printoptions(precision=3, suppress=True)
         print(
-            f"[INFO][GRIPPER OC]: {self._status.cpu().numpy()[0]} | target OC: {self._goal_gripper_pos.cpu().numpy()[0]} | gripper OC: {obs['gripper'].cpu().numpy()[0]}"
+            f"[INFO][ORIENT Y]: {self._status.cpu().numpy()[0]} | target pose: {self._target_poses.cpu().numpy()[0]} | obs tcp pose: {obs['tcp_pose_b'].cpu().numpy()[0]}"
         )
 
         self._n_steps += 1
 
+        ee_pose_b = obs["tcp_pose_b"]
+        reached_quat = quat_error_magnitude(ee_pose_b[:, 3:7], self._target_poses[:, 3:7]) < self._quat_threshold
+
         self._status = torch.where(
-            torch.linalg.vector_norm(obs["gripper"] - self._goal_gripper_pos, dim=1) < self._pos_threshold,
+            reached_quat,
             SkillStatusCodes.SUCCESS,
             self._status,
         )

@@ -11,7 +11,7 @@ Written by Will Solow and Jeff Jewett, 2026
 import argparse
 import os
 
-from skillet.skill.low_level.reach_xyz_rpy import ReachXYZRPYSkill
+from skillet.skill.low_level import GripperOCSkill, OrientRPYSkill, OrientYSkill, ReachXYZRPYSkill, ReachXYZSkill
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Main ROS2 executor file.")
@@ -41,8 +41,9 @@ from kinova_tasks.envs.utils import parse_ros2_env_cfg, setup_ros
 from skillet.agents.policy_over_options import PolicyOverOptionsAgent
 from skillet.core.spaces import ActionSpec, ObservationSpec
 from skillet.envs.ros2_env_wrapper import ROS2EnvWrapper
-from skillet.policy.dummy import FixedSequencePolicy, RandomPolicy
-from skillet.policy.ik_ee import XYZRPYAbsIKEEPolicy
+from skillet.policy.dummy import FixedSequencePolicy, FixedSkillSequencePolicy
+from skillet.policy.ik_ee import PosAbsIKEEPolicy, PoseAbsIKEEPolicy, XYZRPYAbsIKEEPolicy
+from skillet.policy.joint_pos import GripperPolicy
 
 BxN_Obs = Float[torch.Tensor, "b n"]
 """Environment observation: torch.Tensor[(b, n), float]"""
@@ -85,13 +86,26 @@ def main() -> None:
         device=env.device,
     )
 
-    ik_ee_pose_policy = XYZRPYAbsIKEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
+    ik_ee_xyzrpy_policy = XYZRPYAbsIKEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
+    ik_ee_pos_policy = PosAbsIKEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
+    ik_ee_pose_policy = PoseAbsIKEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
+    gripper_policy = GripperPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
     # Skills
     skill_length = 40
-    reach_xyz_skill = ReachXYZRPYSkill[BxN_Obs, BxM_Action, None](
-        name="reach_xyz_skill", policy=ik_ee_pose_policy, length=skill_length
+    reach_xyzrpy_skill = ReachXYZRPYSkill[BxN_Obs, BxM_Action, None](
+        name="reach_xyzrpy_skill", policy=ik_ee_pose_policy, length=skill_length
     )
-    skills = [reach_xyz_skill]
+    reach_xyz_skill = ReachXYZSkill[BxN_Obs, BxM_Action, None](
+        name="reach_xyz_skill", policy=ik_ee_pos_policy, length=skill_length
+    )
+    orient_rpy_skill = OrientRPYSkill[BxN_Obs, BxM_Action, None](
+        name="orient_rpy_skill", policy=ik_ee_pose_policy, length=skill_length
+    )
+    orient_y_skill = OrientYSkill[BxN_Obs, BxM_Action, None](
+        name="orient_rpy_skill", policy=ik_ee_pose_policy, length=skill_length
+    )
+    gripper_skill = GripperOCSkill[BxN_Obs, BxM_Action, None](name="gripper_oc_skill", policy=gripper_policy, length=4)
+    skills = [reach_xyzrpy_skill, reach_xyz_skill, orient_rpy_skill, orient_y_skill, gripper_skill]
 
     # Parameters policy
     fixed_param_policy = FixedSequencePolicy[BxN_Obs, BxM_Action](
@@ -99,17 +113,11 @@ def main() -> None:
         action_spec,
         torch.as_tensor(
             [
-                # [0.6, 0.0, 0.4, 0.0, 3.14, 0.0],
-                [0.3, 0.2, 0.3, 0.0, 2.7, 0.0],
-                # [0.6, -0.2, 0.03, 3.14, 0.0, 0.0],
-                # [0.6, 0.0, 0.4, 0.0, 0.0, 0.0],
-                # [0.3, 0.3, 0.4, 1.57, 0.0, 0.0],
-                # [0.3, 0.3, 0.4, 3.14, 0.0, 0.0],
-                # [0.3, 0.3, 0.4, -1.57, 0.0, 0.0]
-                # [-0.5, -0.2, 0.4, 0.0, -1.57, 0.0],
-                # [-0.5, -0.2, 0.4, 0.0, 0.0, 1.57],
-                # [-0.5, -0.2, 0.4, 0.0, 0.0, 3.14],
-                # [-0.5, -0.2, 0.4, 0.0, 0.0, -1.57],
+                [1.57, 0.2, 0.3, 0.0, 2.7, 0.0],
+                # [0.5, 0.1, 0.3, 0.0, 0.0, 0.0],
+                [0.0, 1.57, 0.0, 0.0, 0.0, 0.0],
+                [1.0, 1.57, 0.0, 0.0, 0.0, 0.0],
+                [0.0, 1.57, 0.0, 0.0, 0.0, 0.0],
             ],
             device=env.device,
         ),
@@ -122,7 +130,15 @@ def main() -> None:
         is_torch=True,
         is_batched=True,
     )
-    policy_over_options = RandomPolicy[BxN_Obs, B_Int_HighLevel](observation_spec, options_spec)
+    policy_over_options = FixedSkillSequencePolicy[BxN_Obs, B_Int_HighLevel](
+        observation_spec,
+        options_spec,
+        torch.as_tensor(
+            [3, 4, 4, 4],
+            device=env.device,
+            dtype=torch.int32,
+        ),
+    )
 
     policy_over_options_agent = PolicyOverOptionsAgent[BxN_Obs, BxM_Action, B_Int_HighLevel, None](
         skills=skills,

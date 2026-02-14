@@ -132,8 +132,12 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
 
         def _update_robot_state(msg: dict[str, Any]) -> None:
             """Update the state of the robot by subscribing to robot topics."""
-            self._current_joint_positions = msg["position"]
-            self._current_joint_velocities = msg["velocity"]
+            self._current_joint_positions = np.asarray(
+                [msg["position"][msg["name"].index(j)] for j in self.joint_names]
+            ).astype(np.float32)
+            self._current_joint_velocities = np.asarray(
+                [msg["velocity"][msg["name"].index(j)] for j in self.joint_names]
+            ).astype(np.float32)
             self._ready["joint_states"] = True
 
         self.joint_states_sub.subscribe(_update_robot_state)

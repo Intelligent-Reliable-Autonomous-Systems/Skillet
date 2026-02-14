@@ -2,6 +2,7 @@
 
 from typing import Generic
 
+import numpy as np
 import torch
 from jaxtyping import Int
 
@@ -52,25 +53,42 @@ class OrientRPYSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[
         return self._status
 
     def initiate(self, obs: TBSkillObs, params: TBSkillParams) -> None:  # noqa: D102
-        n_envs = self.obs_spec.n_envs_from(obs)
-        self._status = self.policy.obs_spec.with_n_envs(n_envs).zeros(shape=(n_envs,), dtype=int)
+        self.n_envs = self.obs_spec.n_envs_from(obs)
+        spec = self.policy.obs_spec.with_n_envs(self.n_envs)
+        self._status = spec.zeros(shape=(self.n_envs,), dtype=int)
         self._status[:] = SkillStatusCodes.RUNNING
-        self.policy.reset(obs, params)
         self._params = params
         self._n_steps = 0
 
+        self._quat_threshold = 0.08
+
+        ee_pose_b = obs["tcp_pose_b"]
+        target_poses = spec.zeros(shape=(self.n_envs, 7), dtype=float)
+        target_poses[:, 3:7] = quat_from_euler_xyz(self._params[:, 0], self._params[:, 1], self._params[:, 2])
+        target_poses[:, 0:3] = ee_pose_b[:, 0:3]
+
+        self._target_poses = target_poses
+
+        self.policy.reset(obs, self._target_poses)
+
     def get_action(self, obs: TBSkillObs) -> TBAction:  # noqa: D102
-        action = self.policy.get_action(obs, self._params)
+        np.set_printoptions(precision=3, suppress=True)
+        print(
+            f"[INFO][ORIENT RPY]: {self._status.cpu().numpy()[0]} | target pose: {self._target_poses.cpu().numpy()[0]} | obs tcp pose: {obs['tcp_pose_b'].cpu().numpy()[0]}"
+        )
+
         self._n_steps += 1
-        tcp_rpy = obs["tcp_pose_b"][:, 3:6]
-        tcp_quat = quat_from_euler_xyz(tcp_rpy[:, 0], tcp_rpy[:, 1], tcp_rpy[:, 2])
-        goal_tcp_quat = quat_from_euler_xyz(self._params[:, 0], self._params[:, 1], self._params[:, 2])
+
+        ee_pose_b = obs["tcp_pose_b"]
+        reached_quat = quat_error_magnitude(ee_pose_b[:, 3:7], self._target_poses[:, 3:7]) < self._quat_threshold
 
         self._status = torch.where(
-            quat_error_magnitude(goal_tcp_quat, tcp_quat) < 0.02,
+            reached_quat,
             SkillStatusCodes.SUCCESS,
             self._status,
         )
+        action = self.policy.get_action(obs)
+
         if self._n_steps >= self._length:
             self._status[:] = SkillStatusCodes.FAILED
         return action

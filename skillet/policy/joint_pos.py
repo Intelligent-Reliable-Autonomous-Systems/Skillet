@@ -33,11 +33,9 @@ class GripperPolicy(BatchedPPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic
         return self._action_spec
 
     def get_action(self, obs: TBPolicyObs, params: Any = None) -> TBAction:
-        """Get the next joint positions by computing differential inverse kinematics."""
-        gripper_lim = obs["gripper_lim"]
-        goal_gripper_pos = (params[:, 0] - gripper_lim[:, 0]) / (gripper_lim[:, 1] - gripper_lim[:, 0])
-        return torch.cat((obs["joint_pos"][:, :-1], goal_gripper_pos.unsqueeze(1)), dim=1)
+        """Get the next gripper position."""
+        return torch.cat((obs["joint_pos"][:, :-1], self._goal_gripper_pos), dim=1).to(torch.float32)
 
     def reset(self, obs: TBPolicyObs, params: Any = None, env_ids: torch.Tensor = None) -> None:
         """Reset the policy. Useful if policy is stateful."""
-        pass
+        self._goal_gripper_pos = params[:, :1]
