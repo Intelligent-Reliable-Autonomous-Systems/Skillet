@@ -1,4 +1,4 @@
-"""A pick skill for picking an object up at a location and lifting to a desired height."""
+"""A place skill for placing an object down at a location and height after lifting to specified height."""
 
 from enum import IntEnum
 from typing import Generic
@@ -19,7 +19,7 @@ from skillet.core.skill import (
 from skillet.core.spaces import ArrayLike
 
 
-class PickStatusCodes(IntEnum):
+class PlaceStatusCodes(IntEnum):
     """The codes for the status of a skill."""
 
     IDLE = 0
@@ -30,18 +30,18 @@ class PickStatusCodes(IntEnum):
     """The skill is reaching the hovering position."""
     LOWER = 3
     """The skill is lowering to the object."""
-    GRASP = 4
-    """The skill is grasping the object."""
+    RELEASE = 4
+    """The skill is releasing the object."""
     LIFT = 5
     """The skill lifting the object."""
     DONE = 6
     """The skill has lifted the ojbect."""
 
 
-class PickSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSkillObs, TBAction, TBSkillParams]):
-    """A pick skill for picking an object up at a location and lifting to a desired height.
+class PlaceSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSkillObs, TBAction, TBSkillParams]):
+    """A place skill for placing an object down at a location and height after lifting to specified height.
 
-    Parameterized by [x,y,z, yaw] the x y z location to perform the pick action and orientation
+    Parameterized by [x,y,z, yaw] the x y z location to perform the place action and orientation
     """
 
     def __init__(
@@ -51,7 +51,7 @@ class PickSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSki
         lift_height: float,
         length: int,
     ) -> None:
-        """Initialize the pick skill.
+        """Initialize the place skill.
 
         Args:
             reach_policy: The policy for reaching.
@@ -61,13 +61,13 @@ class PickSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSki
             length: The number of steps to execute the skill for.
 
         """
-        self._name = "pick_skill"
+        self._name = "place_skill"
         self._reach_policy = reach_policy
         self._gripper_policy = gripper_policy
         self._lift_height = lift_height
         self._length = length
         self._status = None
-        self._pick_status = None
+        self._place_status = None
         self._params = None
 
     @property
@@ -87,20 +87,19 @@ class PickSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSki
         return self._status
 
     def initiate(self, obs: TBSkillObs, params: TBSkillParams) -> None:
-        """Initiate the pick skill.
+        """Initiate the place skill.
 
         Args:
             obs: The low-level observation for the skill.
-            params: The pick parameters, (x, y, z, yaw) as shape (b, 4)
+            params: The place parameters, (x, y, z, yaw) as shape (b, 4)
 
         """
         self.n_envs = self.obs_spec.n_envs_from(obs)
         spec = self.policy.obs_spec.with_n_envs(self.n_envs)
         self._status = spec.zeros(shape=(self.n_envs,), dtype=int)
-        self._pick_status = spec.zeros(shape=(self.n_envs,), dtype=int)
+        self._place_status = spec.zeros(shape=(self.n_envs,), dtype=int)
         self._status[:] = SkillStatusCodes.RUNNING
-        self._pick_status[:] = PickStatusCodes.ASCEND
-        # self._gripper_policy.reset(obs, params)
+        self._place_status[:] = PlaceStatusCodes.ASCEND
         self._params = params
         self._n_steps = 0
 
@@ -109,32 +108,32 @@ class PickSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSki
 
         ee_pose_b = obs["tcp_pose_b"]
 
-        # Define the target poses for each stage of the pick skill, indexed by PickStatusCodes
+        # Define the target poses for each stage of the place skill, indexed by PlaceStatusCodes
         # (n_envs, num_pick_stages, 7)
         target_poses = spec.zeros(shape=(self.n_envs, 7, 7), dtype=float)
         # ASCEND[1]: Go up to lift height (gripper open)
-        target_poses[:, PickStatusCodes.ASCEND, :7] = ee_pose_b
-        target_poses[:, PickStatusCodes.ASCEND, 2] = self._lift_height
+        target_poses[:, PlaceStatusCodes.ASCEND, :7] = ee_pose_b
+        target_poses[:, PlaceStatusCodes.ASCEND, 2] = self._lift_height
 
         # HOVER[2]: Go over to the target x,y position, oriented downward (gripper open)
-        target_poses[:, PickStatusCodes.HOVER, :2] = params[:, :2]  # (x,y) from params
-        target_poses[:, PickStatusCodes.HOVER, 2] = self._lift_height
+        target_poses[:, PlaceStatusCodes.HOVER, :2] = params[:, :2]  # (x,y) from params
+        target_poses[:, PlaceStatusCodes.HOVER, 2] = self._lift_height
         zero_vec = spec.zeros(shape=(self.n_envs,), dtype=float)
         pi_vec = torch.full_like(zero_vec, fill_value=torch.pi)
-        target_poses[:, PickStatusCodes.HOVER, 3:7] = quat_from_euler_xyz(pi_vec, zero_vec, params[:, 3])
+        target_poses[:, PlaceStatusCodes.HOVER, 3:7] = quat_from_euler_xyz(pi_vec, zero_vec, params[:, 3])
         # LOWER[3]: Go down to the target z position (gripper open)
-        target_poses[:, PickStatusCodes.LOWER, :7] = target_poses[:, PickStatusCodes.HOVER, :7]
-        target_poses[:, PickStatusCodes.LOWER, 2] = params[:, 2]
-        # GRASP[4]: Close gripper
-        target_poses[:, PickStatusCodes.GRASP, :7] = target_poses[:, PickStatusCodes.LOWER, :7]
+        target_poses[:, PlaceStatusCodes.LOWER, :7] = target_poses[:, PlaceStatusCodes.HOVER, :7]
+        target_poses[:, PlaceStatusCodes.LOWER, 2] = params[:, 2]
+        # RELEASE[4]: Open gripper
+        target_poses[:, PlaceStatusCodes.RELEASE, :7] = target_poses[:, PlaceStatusCodes.LOWER, :7]
         # LIFT[5]: Lift up to the target z position (gripper closed)
-        target_poses[:, PickStatusCodes.LIFT, :7] = target_poses[:, PickStatusCodes.HOVER, :7]
+        target_poses[:, PlaceStatusCodes.LIFT, :7] = target_poses[:, PlaceStatusCodes.HOVER, :7]
         self._target_poses = target_poses
 
         # Start the skill by going to the ASCEND pose
         idx = torch.arange(self.n_envs, device=target_poses.device)
         valid_idx = self._status == SkillStatusCodes.RUNNING
-        self._current_target_poses = target_poses[idx, self._pick_status]
+        self._current_target_poses = target_poses[idx, self._place_status]
         env_ids = torch.nonzero(valid_idx, as_tuple=False).squeeze(-1)
         if env_ids.numel():
             self._reach_policy.reset(obs, self._current_target_poses, env_ids=env_ids)
@@ -142,17 +141,17 @@ class PickSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSki
     def get_action(self, obs: TBSkillObs) -> TBAction:  # noqa: D102
         np.set_printoptions(precision=3, suppress=True)
         print(
-            f"[INFO][PICK STATUS]: {self._pick_status.cpu().numpy()[0]} | target pose: {self._current_target_poses.cpu().numpy()[0]} | obs tcp pose: {obs['tcp_pose_b'].cpu().numpy()[0]}"
+            f"[INFO][PLACE STATUS]: {self._place_status.cpu().numpy()[0]} | target pose: {self._current_target_poses.cpu().numpy()[0]} | obs tcp pose: {obs['tcp_pose_b'].cpu().numpy()[0]}"
         )
 
-        # prev_pick_status = self._pick_status.clone()
+        # prev_place_status = self._place_status.clone()
 
         ee_pose_b = obs["tcp_pose_b"]
         reached_pos = (
             torch.linalg.vector_norm(ee_pose_b[:, 0:3] - self._current_target_poses[:, 0:3], dim=1)
             < self._pos_threshold
         )
-        reached_height = self._pick_status == PickStatusCodes.ASCEND & (
+        reached_height = self._place_status == PlaceStatusCodes.ASCEND & (
             ee_pose_b[:, 2] >= self._current_target_poses[:, 2]
         )
         reached_quat = (
@@ -163,11 +162,11 @@ class PickSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSki
         if reached_pose.any():
             idx = torch.arange(self.n_envs, device=reached_pose.device)
             valid_idx = (self._status == SkillStatusCodes.RUNNING) & (reached_pose)
-            self._pick_status[valid_idx] += 1
-            valid_idx = valid_idx & (self._pick_status < PickStatusCodes.DONE)
-            print(f"[INFO][PICK STATUS UPDATE]: {self._pick_status.cpu().numpy()[0]} | reached_pose: {reached_pose}")
-            # Update the target pose based on the new pick status
-            self._current_target_poses[valid_idx] = self._target_poses[idx[valid_idx], self._pick_status[valid_idx]]
+            self._place_status[valid_idx] += 1
+            valid_idx = valid_idx & (self._place_status < PlaceStatusCodes.DONE)
+            print(f"[INFO][PLACE STATUS UPDATE]: {self._place_status.cpu().numpy()[0]} | reached_pose: {reached_pose}")
+            # Update the target pose based on the new place status
+            self._current_target_poses[valid_idx] = self._target_poses[idx[valid_idx], self._place_status[valid_idx]]
 
             env_ids = torch.nonzero(valid_idx, as_tuple=False).squeeze(-1)
             if env_ids.numel():
@@ -175,13 +174,13 @@ class PickSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSki
 
         reach_actions = self._reach_policy.get_action(obs)
         reach_actions[:, -1] = torch.where(
-            self._pick_status >= PickStatusCodes.GRASP,
-            torch.ones_like(reach_actions[:, -1]),  # Close gripper
+            self._place_status >= PlaceStatusCodes.RELEASE,
             torch.zeros_like(reach_actions[:, -1]),  # Open gripper
+            torch.ones_like(reach_actions[:, -1]),  # Close gripper
         )
 
         self._n_steps += 1
-        self._status[self._pick_status == PickStatusCodes.DONE] = SkillStatusCodes.SUCCESS
+        self._status[self._place_status == PlaceStatusCodes.DONE] = SkillStatusCodes.SUCCESS
         if self._n_steps >= self._length:
             self._status[self._status == SkillStatusCodes.RUNNING] = SkillStatusCodes.FAILED
 

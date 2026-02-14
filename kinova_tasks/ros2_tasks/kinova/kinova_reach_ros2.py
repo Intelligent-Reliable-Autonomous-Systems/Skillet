@@ -82,6 +82,11 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
         self.jacobian_topic = "/jacobian"
         self.robot_description_topic = "/robot_info"
         self.body_pose_topic = "/robot_body_pose_w"
+        self.gripper_topic_type = (
+            "control_msgs/action/GripperCommand"
+            if cfg.use_fake_hardware == "true"
+            else "control_msgs/action/ParallelGripperCommand"
+        )
 
         self._ready = {
             "joint_states": False,
@@ -114,7 +119,7 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
 
         # Wait for topics to be exposed before continuing
         wait_for_topic_publish(self.ros, self.joint_cmd_topic, "trajectory_msgs/msg/JointTrajectory")
-        wait_for_action_server(self.ros, self.gripper_cmd_topic, "control_msgs/action/GripperCommand")
+        wait_for_action_server(self.ros, self.gripper_cmd_topic, self.gripper_topic_type)
         wait_for_topic_subscribe(self.ros, self.joint_state_topic, "sensor_msgs/JointState")
         wait_for_rviz(self.ros)
 
@@ -134,13 +139,9 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
         self.joint_states_sub.subscribe(_update_robot_state)
 
         # Set up joint trajectory publisher
-        self.joint_states_pub = Topic(
-            self.ros, "/joint_trajectory_controller/joint_trajectory", "trajectory_msgs/JointTrajectory"
-        )
+        self.joint_states_pub = Topic(self.ros, self.joint_cmd_topic, "trajectory_msgs/JointTrajectory")
 
-        self.gripper_client = ActionClient(
-            self.ros, "/robotiq_gripper_controller/gripper_cmd", "control_msgs/action/ParallelGripperCommand"
-        )
+        self.gripper_client = ActionClient(self.ros, self.gripper_cmd_topic, self.gripper_topic_type)
 
         # Subscribe to jacobian topic
         self.jacobian_sub = Topic(self.ros, self.jacobian_topic, "gen3_cpp/msg/Jacobian")
@@ -217,15 +218,12 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
             ],
         }
 
-        # gripper_goal = {"command": {"position": float(joint_pos[-1]), "max_effort": 100.0}}
         gripper_val = float(joint_pos[-1])
         gripper_val = max(0, min(gripper_val, 1)) * 0.8
-        gripper_goal = {
-            "command": {
-                "name": ["robotiq_85_left_knuckle_joint"],
-                "position": [gripper_val],
-            }
-        }
+        if self.cfg.use_fake_hardware == "true":
+            gripper_goal = {"command": {"position": gripper_val, "max_effort": 100.0}}
+        else:
+            gripper_goal = {"command": {"name": ["robotiq_85_left_knuckle_joint"], "position": [gripper_val]}}
 
         self.joint_states_pub.publish(joint_msg)
 
@@ -261,5 +259,5 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
         pass
 
     def _gripper_error_cb(self, err: dict[str, Any]) -> None:
-        """Gripper action errpr callback."""
+        """Gripper action error callback."""
         pass

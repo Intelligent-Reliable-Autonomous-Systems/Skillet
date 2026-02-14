@@ -1,6 +1,6 @@
-"""ros2_ik.py.
+"""ros2_place.py.
 
-Test file for executor integration ROS2 skills
+Test file pace skill
 
 Written by Will Solow and Jeff Jewett, 2026
 
@@ -11,7 +11,7 @@ Written by Will Solow and Jeff Jewett, 2026
 import argparse
 import os
 
-from skillet.skill.high_level.pick import PickSkill
+from skillet.skill.high_level.place import PlaceSkill
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Main ROS2 executor file.")
@@ -91,8 +91,8 @@ def main() -> None:
     ik_ee_pose_policy = PoseAbsIKEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
     # Skills
     skill_length = 200
-    pick_skill = PickSkill[BxN_Obs, BxM_Action, None](
-        reach_policy=ik_ee_pose_policy, gripper_policy=None, lift_height=0.23, length=skill_length
+    pick_skill = PlaceSkill[BxN_Obs, BxM_Action, None](
+        reach_policy=ik_ee_pose_policy, gripper_policy=None, lift_height=0.3, length=skill_length
     )
     skills = [pick_skill]
 
@@ -102,8 +102,8 @@ def main() -> None:
         action_spec,
         torch.as_tensor(
             [
-                [0.6, -0.2, 0.03, 0.0],
-                [0.3, 0.2, 0.05, 0.0],
+                [0.6, -0.2, 0.1, 0.0],
+                [0.4, 0.2, 0.2, 0.0],
             ],
             device=env.device,
         ),
