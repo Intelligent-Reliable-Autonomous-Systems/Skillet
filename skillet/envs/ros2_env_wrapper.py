@@ -172,9 +172,7 @@ class ROS2EnvWrapper(
     def get_state(self) -> TBatchedObsTorch:  # noqa: D102
         return self.get_observation(self._obs_spec_state)
 
-    def step(
-        self, action: TBatchedActionTorch
-    ) -> tuple[
+    def step(self, action: TBatchedActionTorch) -> tuple[
         TBatchedObsTorch,
         Float[torch.Tensor, "b"],  # noqa: F821
         Bool[torch.Tensor, "b"],  # noqa: F821

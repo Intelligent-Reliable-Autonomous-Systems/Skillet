@@ -3,6 +3,7 @@
 from enum import IntEnum
 from typing import Generic
 
+import numpy as np
 import torch
 from jaxtyping import Int
 
@@ -21,12 +22,12 @@ from skillet.core.spaces import ArrayLike
 class PickStatusCodes(IntEnum):
     """The codes for the status of a skill."""
 
-    OPEN = 0
-    """The skill is opening the gripper"""
-    REACH = 1
+    IDLE = 0
+    """The skill is idle."""
+    ASCEND = 1
+    """The skill is ascending to the lift height."""
+    HOVER = 2
     """The skill is reaching the hovering position."""
-    ORIENT = 2
-    """The skill is orienting above the object."""
     LOWER = 3
     """The skill is lowering to the object."""
     GRASP = 4
@@ -42,26 +43,25 @@ class PickSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSki
 
     def __init__(
         self,
-        name: str,
         reach_policy: BatchedPPolicy[TBSkillObs, TBAction, TBSkillParams],
-        orient_policy: BatchedPPolicy[TBSkillObs, TBAction, TBSkillParams],
         grasp_policy: BatchedPPolicy[TBSkillObs, TBAction, TBSkillParams],
+        lift_height: float,
         length: int,
     ) -> None:
         """Initialize the pick skill.
 
         Args:
-            name: The name of the skill.
             reach_policy: The policy for reaching.
             orient_policy: The policy for orienting.
             grasp_policy: The policy for grasping.
+            lift_height: The height to lift the object to.
             length: The number of steps to execute the skill for.
 
         """
-        self._name = name
+        self._name = "pick_skill"
         self._reach_policy = reach_policy
-        self._orient_policy = orient_policy
         self._grasp_policy = grasp_policy
+        self._lift_height = lift_height
         self._length = length
         self._status = None
         self._pick_status = None
@@ -83,142 +83,103 @@ class PickSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSki
             raise ValueError("The status is not initialized. Must call initiate() before using this property.")
         return self._status
 
-    def initiate(self, obs: TBSkillObs, params: TBSkillParams) -> None:  # noqa: D102
+    def initiate(self, obs: TBSkillObs, params: TBSkillParams) -> None:
+        """Initiate the pick skill.
+
+        Args:
+            obs: The low-level observation for the skill.
+            params: The pick parameters, (x, y, z, yaw) as shape (b, 4)
+
+        """
         self.n_envs = self.obs_spec.n_envs_from(obs)
-        self._status = self.policy.obs_spec.with_n_envs(self.n_envs).zeros(shape=(self.n_envs,), dtype=int)
-        self._pick_status = self.policy.obs_spec.with_n_envs(self.n_envs).zeros(shape=(self.n_envs,), dtype=int)
+        spec = self.policy.obs_spec.with_n_envs(self.n_envs)
+        self._status = spec.zeros(shape=(self.n_envs,), dtype=int)
+        self._pick_status = spec.zeros(shape=(self.n_envs,), dtype=int)
         self._status[:] = SkillStatusCodes.RUNNING
-        self._pick_status[:] = PickStatusCodes.OPEN
-        self._reach_policy.reset(obs, params[:, 0:3])
-        self._orient_policy.reset(obs, params[:, 3:6])
-        self._grasp_policy.reset(obs, params)
+        self._pick_status[:] = PickStatusCodes.ASCEND
+        # self._grasp_policy.reset(obs, params)
         self._params = params
         self._n_steps = 0
 
+        self._pos_threshold = 0.02
+        self._quat_threshold = 0.08
+
+        ee_pose_b = obs["tcp_pose_b"]
+
+        # Define the target poses for each stage of the pick skill, indexed by PickStatusCodes
+        # (n_envs, num_pick_stages, 7)
+        target_poses = spec.zeros(shape=(self.n_envs, 7, 7), dtype=float)
+        # ASCEND[1]: Go up to lift height (gripper open)
+        target_poses[:, PickStatusCodes.ASCEND, :7] = ee_pose_b
+        target_poses[:, PickStatusCodes.ASCEND, 2] = self._lift_height
+
+        # HOVER[2]: Go over to the target x,y position, oriented downward (gripper open)
+        target_poses[:, PickStatusCodes.HOVER, :2] = params[:, :2]  # (x,y) from params
+        target_poses[:, PickStatusCodes.HOVER, 2] = self._lift_height
+        zero_vec = spec.zeros(shape=(self.n_envs,), dtype=float)
+        pi_vec = torch.full_like(zero_vec, fill_value=torch.pi)
+        target_poses[:, PickStatusCodes.HOVER, 3:7] = quat_from_euler_xyz(pi_vec, zero_vec, params[:, 3])
+        # LOWER[3]: Go down to the target z position (gripper open)
+        target_poses[:, PickStatusCodes.LOWER, :7] = target_poses[:, PickStatusCodes.HOVER, :7]
+        target_poses[:, PickStatusCodes.LOWER, 2] = params[:, 2]
+        # GRASP[4]: Close gripper
+        target_poses[:, PickStatusCodes.GRASP, :7] = target_poses[:, PickStatusCodes.LOWER, :7]
+        # LIFT[5]: Lift up to the target z position (gripper closed)
+        target_poses[:, PickStatusCodes.LIFT, :7] = target_poses[:, PickStatusCodes.HOVER, :7]
+        self._target_poses = target_poses
+
+        # Start the skill by going to the ASCEND pose
+        idx = torch.arange(self.n_envs, device=target_poses.device)
+        valid_idx = self._status == SkillStatusCodes.RUNNING
+        self._current_target_poses = target_poses[idx, self._pick_status]
+        env_ids = torch.nonzero(valid_idx, as_tuple=False).squeeze(-1)
+        if env_ids.numel():
+            self._reach_policy.reset(obs, self._current_target_poses, env_ids=env_ids)
+
     def get_action(self, obs: TBSkillObs) -> TBAction:  # noqa: D102
-        print(f"[INFO][PICK STATUS]: {self._pick_status}")
-
-        zeros = torch.zeros((self.n_envs, 1), device=self._params.device)
-        ones = torch.ones((self.n_envs, 1), device=self._params.device)
-
-        prev_pick_status = self._pick_status.clone()
-
-        gripper_lim = obs["gripper_lim"]
-        gripper_pos = obs["tcp_pose_b"][:, -1].unsqueeze(1)
-        goal_open_gripper_pos = (zeros - gripper_lim[:, 0]) / (gripper_lim[:, 1] - gripper_lim[:, 0])
-        goal_close_gripper_pos = (ones - gripper_lim[:, 0]) / (gripper_lim[:, 1] - gripper_lim[:, 0])
-
-        tcp_rpy = obs["tcp_pose_b"][:, 3:6]
-        tcp_quat = quat_from_euler_xyz(tcp_rpy[:, 0], tcp_rpy[:, 1], tcp_rpy[:, 2])
-        goal_tcp_quat = quat_from_euler_xyz(self._params[:, 3], self._params[:, 4], self._params[:, 5])
-
-        open_action = self._grasp_policy.get_action(obs, zeros)[self._pick_status == PickStatusCodes.OPEN]
-
-        reach_action = self._reach_policy.get_action(obs, self._params[:, 0:3])[
-            self._pick_status == PickStatusCodes.REACH
-        ]
-
-        orient_action = self._orient_policy.get_action(obs, self._params[:, 3:6])[
-            self._pick_status == PickStatusCodes.ORIENT
-        ]
-
-        lower_action = self._reach_policy.get_action(obs, torch.cat((self._params[:, 0:2], zeros + 0.02), dim=1))[
-            self._pick_status == PickStatusCodes.LOWER
-        ]
-
-        grasp_action = self._grasp_policy.get_action(obs, ones)[self._pick_status == PickStatusCodes.GRASP]
-
-        lift_action = self._reach_policy.get_action(obs, self._params[:, 0:3])[
-            self._pick_status == PickStatusCodes.LIFT
-        ]
-
-        action = torch.zeros((self.n_envs, open_action.shape[1]), device=self._params.device)
-        action[self._pick_status == PickStatusCodes.OPEN] = open_action
-        action[self._pick_status == PickStatusCodes.REACH] = reach_action
-        action[self._pick_status == PickStatusCodes.ORIENT] = orient_action
-        action[self._pick_status == PickStatusCodes.LOWER] = lower_action
-        action[self._pick_status == PickStatusCodes.GRASP] = grasp_action
-        action[self._pick_status == PickStatusCodes.LIFT] = lift_action
-
-        # Transition from opening to reaching
-        self._pick_status = torch.where(
-            self._pick_status
-            == PickStatusCodes.OPEN & (torch.linalg.vector_norm(gripper_pos - goal_open_gripper_pos, dim=1) < 0.02),
-            PickStatusCodes.REACH,
-            self._pick_status,
+        np.set_printoptions(precision=3, suppress=True)
+        print(
+            f"[INFO][PICK STATUS]: {self._pick_status.cpu().numpy()[0]} | target pose: {self._current_target_poses.cpu().numpy()[0]} | obs tcp pose: {obs['tcp_pose_b'].cpu().numpy()[0]}"
         )
 
-        # Transition from reaching to orienting
-        self._pick_status = torch.where(
-            self._pick_status
-            == PickStatusCodes.REACH
-            & (torch.linalg.vector_norm(obs["tcp_pose_b"][:, 0:3] - self._params[:, 0:3], dim=1) < 0.05),
-            PickStatusCodes.ORIENT,
-            self._pick_status,
-        )
+        # prev_pick_status = self._pick_status.clone()
 
-        # Transition from orienting to lowering
-        self._pick_status = torch.where(
-            self._pick_status == PickStatusCodes.ORIENT & (quat_error_magnitude(tcp_quat, goal_tcp_quat) < 0.03),
-            PickStatusCodes.LOWER,
-            self._pick_status,
+        ee_pose_b = obs["tcp_pose_b"]
+        reached_pos = (
+            torch.linalg.vector_norm(ee_pose_b[:, 0:3] - self._current_target_poses[:, 0:3], dim=1)
+            < self._pos_threshold
         )
-
-        # Transition from lowering to grasping
-        self._pick_status = torch.where(
-            self._pick_status
-            == PickStatusCodes.LOWER
-            & (
-                torch.linalg.vector_norm(
-                    obs["tcp_pose_b"][:, 0:3] - torch.cat((self._params[:, 0:2], zeros + 0.02), dim=1), dim=1
-                )
-                < 0.05
-            ),
-            PickStatusCodes.GRASP,
-            self._pick_status,
+        reached_height = self._pick_status == PickStatusCodes.ASCEND & (
+            ee_pose_b[:, 2] >= self._current_target_poses[:, 2]
         )
-
-        # Transition from grasping to lifting
-        self._pick_status = torch.where(
-            self._pick_status
-            == PickStatusCodes.GRASP & (torch.linalg.vector_norm(gripper_pos - goal_close_gripper_pos, dim=1) < 0.05),
-            PickStatusCodes.LIFT,
-            self._pick_status,
+        reached_quat = (
+            quat_error_magnitude(ee_pose_b[:, 3:7], self._current_target_poses[:, 3:7]) < self._quat_threshold
         )
+        reached_pose = (reached_pos & reached_quat) | reached_height
 
-        # Transition from lifting to done
-        self._pick_status = torch.where(
-            self._pick_status
-            == PickStatusCodes.LIFT
-            & (torch.linalg.vector_norm(obs["tcp_pose_b"][:, 0:3] - self._params[:, 0:3], dim=1) < 0.05),
-            PickStatusCodes.DONE,
-            self._pick_status,
+        if reached_pose.any():
+            idx = torch.arange(self.n_envs, device=reached_pose.device)
+            valid_idx = (self._status == SkillStatusCodes.RUNNING) & (reached_pose)
+            self._pick_status[valid_idx] += 1
+            valid_idx = valid_idx & (self._pick_status < PickStatusCodes.DONE)
+            print(f"[INFO][PICK STATUS UPDATE]: {self._pick_status} | reached_pose: {reached_pose}")
+            # Update the target pose based on the new pick status
+            self._current_target_poses[valid_idx] = self._target_poses[idx[valid_idx], self._pick_status[valid_idx]]
+
+            env_ids = torch.nonzero(valid_idx, as_tuple=False).squeeze(-1)
+            if env_ids.numel():
+                self._reach_policy.reset(obs, self._current_target_poses, env_ids=env_ids)
+
+        reach_actions = self._reach_policy.get_action(obs)
+        reach_actions[:, -1] = torch.where(
+            self._pick_status >= PickStatusCodes.GRASP,
+            torch.ones_like(reach_actions[:, -1]),  # Close gripper
+            torch.zeros_like(reach_actions[:, -1]),  # Open gripper
         )
-
-        # self._grasp_policy.reset(obs, self._params, prev_pick_status != self._pick_status)
-        # self._reach_policy.reset(obs, self._params, prev_pick_status != self._pick_status)
-        if ((prev_pick_status != self._pick_status) & (self._pick_status == PickStatusCodes.ORIENT)).any():
-            self._orient_policy.reset(obs, self._params[:, 3:6], env_ids=prev_pick_status != self._pick_status)
-        if ((prev_pick_status != self._pick_status) & (self._pick_status == PickStatusCodes.LOWER)).any():
-            self._reach_policy.reset(
-                obs,
-                torch.cat((self._params[:, 0:2], zeros + 0.02), dim=1),
-                env_ids=prev_pick_status != self._pick_status,
-            )
-        if ((prev_pick_status != self._pick_status) & (self._pick_status == PickStatusCodes.LIFT)).any():
-            self._reach_policy.reset(
-                obs,
-                self._params[:, 0:3],
-                env_ids=prev_pick_status != self._pick_status,
-            )
 
         self._n_steps += 1
-
-        self._status = torch.where(
-            self._pick_status == PickStatusCodes.DONE,
-            SkillStatusCodes.SUCCESS,
-            self._status,
-        )
+        self._status[self._pick_status == PickStatusCodes.DONE] = SkillStatusCodes.SUCCESS
         if self._n_steps >= self._length:
-            self._status[:] = SkillStatusCodes.FAILED
-        return action
+            self._status[self._status == SkillStatusCodes.RUNNING] = SkillStatusCodes.FAILED
+
+        return reach_actions

@@ -129,6 +129,7 @@ class RandomFixedPolicy(BatchedUPolicy[TBPolicyObs, TBAction], Generic[TBPolicyO
         # Use these indices to get the random items
         return self._params[indices]
 
+
 class FixedSequencePolicy(BatchedUPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, TBAction]):
     """A policy that outputs a predefined sequence of actions actions."""
 

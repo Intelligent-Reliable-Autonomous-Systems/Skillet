@@ -235,6 +235,7 @@ __marimo__/
 # Outputs
 **/output/*
 **/outputs/*
+**/_outputs/*
 **/videos/*
 **/wandb/*
 **/.neptune/*
@@ -250,6 +251,7 @@ _build
 # RL-Games
 **/runs/*
 **/logs/*
+**/_logs/*
 **/recordings/*
 
 # Pre-Trained Checkpoints

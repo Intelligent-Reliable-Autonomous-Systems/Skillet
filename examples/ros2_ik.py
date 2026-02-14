@@ -36,8 +36,8 @@ import gymnasium as gym
 import torch
 from jaxtyping import Float, Int
 
-import ros2  # noqa: F401
-from ros2.envs.utils import parse_ros2_env_cfg, setup_ros
+import kinova_tasks  # noqa: F401
+from kinova_tasks.envs.utils import parse_ros2_env_cfg, setup_ros
 from skillet.agents.policy_over_options import PolicyOverOptionsAgent
 from skillet.core.spaces import ActionSpec, ObservationSpec
 from skillet.envs.ros2_env_wrapper import ROS2EnvWrapper

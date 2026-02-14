@@ -11,7 +11,7 @@ Written by Will Solow and Jeff Jewett, 2026
 import argparse
 import os
 
-from skillet.skill.high_level.pick2 import PickSkill
+from skillet.skill.high_level.pick import PickSkill
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Main ROS2 executor file.")
@@ -36,8 +36,8 @@ import gymnasium as gym
 import torch
 from jaxtyping import Float, Int
 
-import ros2  # noqa: F401
-from ros2.envs.utils import parse_ros2_env_cfg, setup_ros
+import kinova_tasks  # noqa: F401
+from kinova_tasks.envs.utils import parse_ros2_env_cfg, setup_ros
 from skillet.agents.policy_over_options import PolicyOverOptionsAgent
 from skillet.core.spaces import ActionSpec, ObservationSpec
 from skillet.envs.ros2_env_wrapper import ROS2EnvWrapper
@@ -60,7 +60,6 @@ def main() -> None:
         device=args_cli.device,
         num_envs=args_cli.num_envs,
         ros2_workspace=args_cli.ros2_ws,
-        # robot_ip="192.168.1.10", use_fake_hardware="false"
     )
     env_cfg.robot_ip = "192.168.1.10"
     env_cfg.use_fake_hardware = "true"
@@ -89,12 +88,6 @@ def main() -> None:
         device=env.device,
     )
 
-    # ik_ee_pos_policy = PosAbsIKEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
-    # # Skills
-    # skill_length = 40
-    # reach_xyz_skill = ReachXYZSkill[BxN_Obs, BxM_Action, None](
-    #     name="reach_xyz_skill", policy=ik_ee_pos_policy, length=skill_length
-    # )
     ik_ee_pose_policy = PoseAbsIKEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
     # Skills
     skill_length = 200
@@ -107,11 +100,9 @@ def main() -> None:
     fixed_param_policy = FixedSequencePolicy[BxN_Obs, BxM_Action](
         observation_spec,
         action_spec,
-        # torch.as_tensor([[0.4, -0.1, 0.2], [0.5, 0.2, 0.3]], device=env.device),
         torch.as_tensor(
             [
                 [0.6, -0.2, 0.03, 0.0],
-                # [0.4, -0.05, 0.1, 0.0],
                 [0.3, 0.2, 0.05, 0.0],
             ],
             device=env.device,
@@ -140,13 +131,10 @@ def main() -> None:
         with torch.inference_mode():
             env.reset()
             policy_over_options_agent.execute(env)
-            # skill_executor.execute()
             print("[INFO][Main] finished run of skill executor, resetting")
 
-    # close the simulator
     env.close()
 
 
 if __name__ == "__main__":
-    # run the main function
     main()

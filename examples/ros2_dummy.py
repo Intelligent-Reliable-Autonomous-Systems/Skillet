@@ -1,13 +1,10 @@
-"""main_ros2.py.
+"""ros2_dummy.py.
 
-Test file for executor integration with IsaacSim and ROS2
+Script to an environment with random action agent in ROS2
 
 Written by Will Solow and Jeff Jewett, 2026
 
 """
-
-"""Script to an environment with random action agent."""
-
 
 import argparse
 import os
@@ -35,8 +32,8 @@ import gymnasium as gym
 import torch
 from jaxtyping import Float, Int
 
-import ros2  # noqa: F401
-from ros2.envs.utils import parse_ros2_env_cfg, setup_ros
+import kinova_tasks  # noqa: F401
+from kinova_tasks.envs.utils import parse_ros2_env_cfg, setup_ros
 from skillet.agents.policy_over_options import PolicyOverOptionsAgent
 from skillet.core.spaces import ActionSpec, ObservationSpec
 from skillet.envs.ros2_env_wrapper import ROS2EnvWrapper
@@ -68,22 +65,8 @@ def main() -> None:
     # Set up Skill executor and environment in framework
     env = ROS2EnvWrapper[BxN_Obs, BxM_Action](env)
 
-    # action_spec = ActionSpec[BxN_Obs](
-    #     space=env.action_space,
-    #     name="isaac_action",
-    #     is_torch=True,
-    #     is_batched=True,
-    #     # n_envs=args_cli.num_envs,
-    # )
     action_spec: ActionSpec[BxM_Action] = env.action_spec
     observation_spec: ObservationSpec[BxN_Obs] = env.obs_spec
-    # observation_spec = ObservationSpec[BxN_Obs](
-    #     space=env.observation_space,
-    #     name="policy",
-    #     is_torch=True,
-    #     is_batched=True,
-    #     # n_envs=args_cli.num_envs,
-    # )
 
     # Low-level policies
     zero_policy = ZeroPolicy[BxN_Obs, BxM_Action](observation_spec, action_spec)
@@ -102,7 +85,6 @@ def main() -> None:
         name="options",
         is_torch=True,
         is_batched=True,
-        # n_envs=args_cli.num_envs,
     )
     policy_over_options = RandomPolicy[BxN_Obs, B_Int_HighLevel](observation_spec, options_spec)
 
@@ -114,17 +96,12 @@ def main() -> None:
 
     # simulate environment
     while True:
-        # run everything in inference mode
         with torch.inference_mode():
             env.reset()
             policy_over_options_agent.execute(env)
-            # skill_executor.execute()
             print("[INFO][Main] finished run of skill executor, resetting")
-
-    # close the simulator
     env.close()
 
 
 if __name__ == "__main__":
-    # run the main function
     main()
