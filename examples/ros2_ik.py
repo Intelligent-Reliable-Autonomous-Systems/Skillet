@@ -11,7 +11,15 @@ Written by Will Solow and Jeff Jewett, 2026
 import argparse
 import os
 
-from skillet.skill.low_level import GripperOCSkill, OrientRPYSkill, OrientYSkill, ReachXYZRPYSkill, ReachXYZSkill
+from skillet.skill.low_level import (
+    GripperGraspSkill,
+    GripperOpenSkill,
+    JointPosSkill,
+    OrientRPYSkill,
+    OrientYSkill,
+    ReachXYZRPYSkill,
+    ReachXYZSkill,
+)
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Main ROS2 executor file.")
@@ -36,14 +44,14 @@ import gymnasium as gym
 import torch
 from jaxtyping import Float, Int
 
-import kinova_tasks  # noqa: F401
+import kinova_tasks.ros2_tasks  # noqa: F401
 from kinova_tasks.envs.utils import parse_ros2_env_cfg, setup_ros
 from skillet.agents.policy_over_options import PolicyOverOptionsAgent
 from skillet.core.spaces import ActionSpec, ObservationSpec
 from skillet.envs.ros2_env_wrapper import ROS2EnvWrapper
 from skillet.policy.dummy import FixedSequencePolicy, FixedSkillSequencePolicy
 from skillet.policy.ik_ee import PosAbsIKEEPolicy, PoseAbsIKEEPolicy, XYZRPYAbsIKEEPolicy
-from skillet.policy.joint_pos import GripperPolicy
+from skillet.policy.joint_pos import GripperPolicy, JointPosPolicy
 
 BxN_Obs = Float[torch.Tensor, "b n"]
 """Environment observation: torch.Tensor[(b, n), float]"""
@@ -90,6 +98,9 @@ def main() -> None:
     ik_ee_pos_policy = PosAbsIKEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
     ik_ee_pose_policy = PoseAbsIKEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
     gripper_policy = GripperPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
+    joint_pos_policy = JointPosPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
+
+    print(gripper_policy.action_spec)
     # Skills
     skill_length = 40
     reach_xyzrpy_skill = ReachXYZRPYSkill[BxN_Obs, BxM_Action, None](
@@ -104,8 +115,22 @@ def main() -> None:
     orient_y_skill = OrientYSkill[BxN_Obs, BxM_Action, None](
         name="orient_rpy_skill", policy=ik_ee_pose_policy, length=skill_length
     )
-    gripper_skill = GripperOCSkill[BxN_Obs, BxM_Action, None](name="gripper_oc_skill", policy=gripper_policy, length=4)
-    skills = [reach_xyzrpy_skill, reach_xyz_skill, orient_rpy_skill, orient_y_skill, gripper_skill]
+    gripper_grasp_skill = GripperGraspSkill[BxN_Obs, BxM_Action, None](
+        name="gripper_c_skill", policy=gripper_policy, length=4
+    )
+    gripper_open_skill = GripperOpenSkill[BxN_Obs, BxM_Action, None](
+        name="gripper_o_skill", policy=gripper_policy, length=4
+    )
+    joint_pos_skill = JointPosSkill[BxN_Obs, BxM_Action, None](name="joint_skill", policy=joint_pos_policy, length=10)
+    skills = [
+        reach_xyzrpy_skill,
+        reach_xyz_skill,
+        orient_rpy_skill,
+        orient_y_skill,
+        gripper_grasp_skill,
+        gripper_open_skill,
+        joint_pos_skill,
+    ]
 
     # Parameters policy
     fixed_param_policy = FixedSequencePolicy[BxN_Obs, BxM_Action](
@@ -113,11 +138,11 @@ def main() -> None:
         action_spec,
         torch.as_tensor(
             [
-                [1.57, 0.2, 0.3, 0.0, 2.7, 0.0],
+                [1.57, 0.2, 0.3, 0.0, 0.1, 0.0, 0.0, 0.6],
                 # [0.5, 0.1, 0.3, 0.0, 0.0, 0.0],
-                [0.0, 1.57, 0.0, 0.0, 0.0, 0.0],
-                [1.0, 1.57, 0.0, 0.0, 0.0, 0.0],
-                [0.0, 1.57, 0.0, 0.0, 0.0, 0.0],
+                # [0.0, 1.57, 0.0, 0.0, 0.0, 0.0],
+                # [1.0, 1.57, 0.0, 0.0, 0.0, 0.0],
+                # [0.0, 1.57, 0.0, 0.0, 0.0, 0.0],
             ],
             device=env.device,
         ),
@@ -134,7 +159,7 @@ def main() -> None:
         observation_spec,
         options_spec,
         torch.as_tensor(
-            [3, 4, 4, 4],
+            [6],
             device=env.device,
             dtype=torch.int32,
         ),

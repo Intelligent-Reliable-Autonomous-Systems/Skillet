@@ -256,12 +256,48 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
 
     def _gripper_result_cb(self, result: dict[str, Any]) -> None:
         """Gripper action result callback."""
+        status = result.get("status")
+        message = result.get("message", "")
+
+        if status == "SUCCEEDED":
+            print(f"[INFO] Gripper succeeded: {message}")
+            self.gripper_ok = True
+
+        elif status == "ABORTED":
+            print(f"[INFO] Gripper aborted: {message}")
+            self.gripper_ok = False
+
+        elif status == "CANCELED":
+            print(f"[INFO] Gripper canceled: {message}")
+            self.gripper_ok = False
+
+        else:
+            print(f"[INFO] Unknown gripper result: {result}")
+            self.gripper_ok = False
         pass
 
     def _gripper_feedback_cb(self, feedback: dict[str, Any]) -> None:
         """Gripper action feedback callback."""
+        pos = feedback.get("position")
+        effort = feedback.get("effort")
+        stalled = feedback.get("stalled", False)
+
+        print(f"[INFO] Gripper feedback: pos={pos}, effort={effort}, stalled={stalled}")
+
+        if stalled:
+            print("[INFO] Gripper stalled before reaching goal")
+
         pass
 
     def _gripper_error_cb(self, err: dict[str, Any]) -> None:
         """Gripper action error callback."""
+        code = err.get("code")
+        message = err.get("message", "Unknown error")
+        details = err.get("details")
+
+        print(f"[INFO] Gripper error! code={code}, message={message}, details={details}")
+
+        # Set internal state so higher-level logic can react
+        self.gripper_ok = False
+        self.last_gripper_error = err
         pass

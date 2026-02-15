@@ -166,6 +166,7 @@ class ROS2EnvWrapper(
                 "tcp_pose_b": self._get_tcp_pose_b(),
                 "gripper": self._get_gripper_state(),
                 "gripper_lim": self._get_gripper_lims(),
+                "joint_lims": self._get_joint_lims(),
             }
         raise ValueError(f"Observation spec {obs_spec} not supported by environment.")
 
@@ -218,9 +219,11 @@ class ROS2EnvWrapper(
             env_ids = torch.arange(self.n_envs, device=self.device)
         if joint_ids is None:
             joint_ids = self.joint_ids
-        return torch.as_tensor(self._env._current_joint_positions, device=self.device).unsqueeze(0)[:, joint_ids][
-            env_ids
-        ]
+        return (
+            torch.as_tensor(self._env._current_joint_positions, device=self.device)
+            .unsqueeze(0)[:, joint_ids][env_ids]
+            .to(torch.float32)
+        )
 
     def _get_joint_velocities(self, env_ids: torch.Tensor | None = None, joint_ids: list | None = None) -> torch.Tensor:
         """Return the joint velocities.
@@ -237,9 +240,11 @@ class ROS2EnvWrapper(
         if joint_ids is None:
             joint_ids = self.joint_ids
 
-        return torch.as_tensor(self._env._current_joint_velocities, device=self.device).unsqueeze(0)[:, joint_ids][
-            env_ids
-        ]
+        return (
+            torch.as_tensor(self._env._current_joint_velocities, device=self.device)
+            .unsqueeze(0)[:, joint_ids][env_ids]
+            .to(torch.float32)
+        )
 
     def _get_jacobians(
         self,
@@ -284,7 +289,7 @@ class ROS2EnvWrapper(
         jacobian[:, :3, :] = torch.bmm(base_rot_matrix, jacobian[:, :3, :])
         jacobian[:, 3:, :] = torch.bmm(base_rot_matrix, jacobian[:, 3:, :])
 
-        return jacobian
+        return jacobian.to(torch.float32)
 
     def _get_tcp_pose_b(
         self,
@@ -323,7 +328,7 @@ class ROS2EnvWrapper(
         tcp_pos_b = ee_pos_b + quat_apply(ee_quat_b, self.tcp_offset[env_ids, 0:3])
         tcp_quat_b = quat_mul(ee_quat_b, self.tcp_offset[env_ids, 3:7])
 
-        return torch.concatenate((tcp_pos_b, tcp_quat_b), dim=1)
+        return torch.concatenate((tcp_pos_b, tcp_quat_b), dim=1).to(torch.float32)
 
     def _get_gripper_state(
         self, env_ids: torch.Tensor | None = None, gripper_joint: str = "robotiq_85_left_knuckle_joint"
@@ -336,7 +341,7 @@ class ROS2EnvWrapper(
         gripper_pos = torch.as_tensor(self._env._joint_positions[gripper_joint_idx], device=self.device).unsqueeze(0)[
             env_ids
         ]
-        return gripper_pos.unsqueeze(1)
+        return gripper_pos.unsqueeze(1).to(torch.float32)
 
     def _get_ee_pose_b(
         self,
@@ -383,7 +388,7 @@ class ROS2EnvWrapper(
             robot_ee_pose_w[:, 3:7],
         )
 
-        return torch.cat((robot_ee_pos_b, robot_ee_quat_b), dim=1)
+        return torch.cat((robot_ee_pos_b, robot_ee_quat_b), dim=1).to(torch.float32)
 
     def _get_gripper_lims(
         self, env_ids: torch.Tensor | None = None, gripper_joint: str = "robotiq_85_left_knuckle_joint"
@@ -407,6 +412,29 @@ class ROS2EnvWrapper(
         gripper_low = torch.tensor([0], device=self.device)
         gripper_high = self.robot_dof_upper_limits[gripper_joint_idx]
         return torch.cat(
-            (gripper_low.unsqueeze(0).expand(self.num_envs, 1), gripper_high.unsqueeze(0).expand(self.num_envs, 1)),
+            (
+                gripper_low.unsqueeze(0).expand(env_ids.shape[0], 1),
+                gripper_high.unsqueeze(0).expand(env_ids.shape[0], 1),
+            ),
             dim=1,
+        ).to(torch.float32)
+
+    def _get_joint_lims(self, env_ids: torch.Tensor | None = None) -> torch.Tensor:
+        """Get the joint limits (low and high).
+
+        Args:
+            env_ids: environment ids to tcp pose in XYZ
+
+        Returns:
+            A tensor of shape (N, 2) for the gripper lower/upper limits.
+
+        """
+        if env_ids is None:
+            env_ids = torch.arange(self.n_envs, device=self.device)
+
+        return (
+            torch.cat((self.robot_dof_lower_limits.unsqueeze(0), self.robot_dof_upper_limits.unsqueeze(0)), dim=0)
+            .unsqueeze(0)
+            .repeat(env_ids.shape[0], 1, 1)
+            .to(torch.float32)
         )

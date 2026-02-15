@@ -179,13 +179,16 @@ class IsaacEnvWrapper(
                 "tcp_pose_b": self._get_tcp_pose_b(),
                 "gripper_lim": self._get_gripper_lims(),
                 "gripper": self._get_gripper_state(),
+                "joint_lims": self._get_joint_lims(),
             }
         raise ValueError(f"Observation spec {obs_spec} not supported by environment.")
 
     def get_state(self) -> TBatchedObsTorch:  # noqa: D102
         return self.get_observation(self._obs_spec_state)
 
-    def step(self, action: TBatchedActionTorch) -> tuple[
+    def step(
+        self, action: TBatchedActionTorch
+    ) -> tuple[
         TBatchedObsTorch,
         Float[torch.Tensor, "b"],  # noqa: F821
         Bool[torch.Tensor, "b"],  # noqa: F821
@@ -386,4 +389,23 @@ class IsaacEnvWrapper(
         return torch.cat(
             (gripper_low.unsqueeze(0).expand(self.num_envs, 1), gripper_high.unsqueeze(0).expand(self.num_envs, 1)),
             dim=1,
+        )
+
+    def _get_joint_lims(self, env_ids: torch.Tensor | None = None) -> torch.Tensor:
+        """Get the joint limits (low and high).
+
+        Args:
+            env_ids: environment ids to tcp pose in XYZ
+
+        Returns:
+            A tensor of shape (N, 2) for the gripper lower/upper limits.
+
+        """
+        if env_ids is None:
+            env_ids = self.robot._ALL_INDICES
+
+        return (
+            torch.cat((self.robot_dof_lower_limits, self.robot_dof_upper_limits), dim=0)
+            .unsqueeze(0)
+            .repeat(env_ids.shape[0], 1, 1)
         )

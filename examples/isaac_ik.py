@@ -43,7 +43,7 @@ import torch
 from isaaclab_tasks.utils import parse_env_cfg
 from jaxtyping import Float, Int
 
-import isaac_kinova.tasks as tasks  # noqa: F401
+import kinova_tasks.isaac_tasks as tasks  # noqa: F401
 from skillet.agents.policy_over_options import PolicyOverOptionsAgent
 from skillet.core.spaces import ActionSpec, ObservationSpec
 from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper

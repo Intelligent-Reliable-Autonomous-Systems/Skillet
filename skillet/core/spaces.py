@@ -233,6 +233,62 @@ class SpaceSpecification(Generic[TSpace]):
 
         return zeros_for_space(self.space)
 
+    @overload
+    def ones(self) -> TSpace: ...
+    @overload
+    def ones(self, shape: tuple[int, ...]) -> ArrayLike: ...
+    @overload
+    def ones(self, shape: tuple[int, ...], dtype: torch.dtype | np.dtype) -> ArrayLike: ...
+
+    def ones(self, shape: Any = None, dtype: Any = None) -> Any:
+        """Create a one-filled tensor or array conforming to the Gym space (including handling Dict spaces).
+
+        Optionally specify the shape of the tensor or array.
+        """
+        if shape is not None:
+            dtype = dtype or self.space.dtype
+            if shape[0] == -1:
+                if self.n_envs == -1:
+                    raise ValueError("n_envs not specified. Cannot infer shape with first dimension -1. \
+                            Use with_n_envs() to set the batch size.")
+                shape = (self.n_envs, *shape[1:])
+            if self.is_torch:
+                return torch.ones(shape, dtype=as_torch_dtype(dtype), device=self.device)
+            return np.ones(shape, dtype=dtype)
+
+        if self.is_batched and self.n_envs == -1:
+            raise ValueError(
+                "Cannot create ones for a variable batch size space. Use with_n_envs() to set the batch size."
+            )
+
+        def ones_for_space(space: gym.Space[Any]) -> TSpace:
+            if isinstance(space, gym.spaces.Box):
+                if self.is_torch:
+                    return torch.ones(
+                        space.shape,
+                        dtype=as_torch_dtype(space.dtype),
+                        device=self.device,
+                    )
+                return np.ones(space.shape, dtype=space.dtype)
+            if isinstance(space, gym.spaces.Dict):
+                # Recursively fill dict space
+                return {key: ones_for_space(subspace) for key, subspace in space.spaces.items()}
+            if isinstance(space, gym.spaces.Discrete):
+                if self.is_torch:
+                    return torch.ones((), dtype=torch.long, device=self.device)
+                return np.ones((), dtype=int)
+            if isinstance(space, gym.spaces.MultiDiscrete):
+                if self.is_torch:
+                    return torch.ones(space.nvec.shape, dtype=torch.long, device=self.device)
+                return np.ones(space.nvec.shape, dtype=int)
+            if isinstance(space, gym.spaces.MultiBinary):
+                if self.is_torch:
+                    return torch.ones(space.n, dtype=torch.long, device=self.device)
+                return np.ones(space.n, dtype=int)
+            raise NotImplementedError(f"ones() not implemented for space type: {type(space)}")
+
+        return ones_for_space(self.space)
+
     def sample(self) -> TSpace:
         """Sample a random value from the space."""
         sampled = self.space.sample()

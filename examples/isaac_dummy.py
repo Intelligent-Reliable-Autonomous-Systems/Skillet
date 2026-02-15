@@ -21,12 +21,12 @@ import gymnasium as gym
 import torch
 from isaaclab.app import AppLauncher
 from jaxtyping import Float, Int
+from skillet.skill.fixed_length import FixedLengthSkill
 
 from skillet.agents.policy_over_options import PolicyOverOptionsAgent
 from skillet.core.spaces import ActionSpec, ObservationSpec
 from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
 from skillet.policy.dummy import RandomPolicy, ZeroPolicy
-from skillet.skill.fixed_length import FixedLengthSkill
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Main IsaacSim Executor file through IsaacLab.")
@@ -49,7 +49,7 @@ simulation_app = app_launcher.app
 import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import parse_env_cfg
 
-import isaac_kinova.tasks as tasks  # noqa: F401
+import kinova_tasks.isaac_tasks as tasks  # noqa: F401
 
 BxN_Obs = Float[torch.Tensor, "b n"]
 """Environment observation: torch.Tensor[(b, n), float]"""
