@@ -63,6 +63,10 @@ class PushSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSki
         self._params = None
 
     @property
+    def param_dim(self) -> int:
+        return 6
+
+    @property
     def name(self) -> str:  # noqa: D102
         return self._name
 

@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Generic, TypeVar
 
 import torch
 from jaxtyping import Bool, Float
+from tensordict import TensorDict
 
 from skillet.core.env import AsGymVectorEnv, BatchedEnvironment
 from skillet.core.math import (
@@ -177,16 +178,19 @@ class IsaacEnvWrapper(
         if obs_spec.name == "state":
             return self.last_obs
         if obs_spec.name == "ik_ee":
-            return {
-                "joint_pos": self._get_joint_positions(),
-                "tcp_offset": self.tcp_offset,
-                "jacobians": self._get_jacobians(),
-                "ee_pose_b": self._get_ee_pose_b(),
-                "tcp_pose_b": self._get_tcp_pose_b(),
-                "gripper_lim": self._get_gripper_lims(),
-                "gripper": self._get_gripper_state(),
-                "joint_lims": self._get_joint_lims(),
-            }
+            return TensorDict(
+                {
+                    "joint_pos": self._get_joint_positions(),
+                    "tcp_offset": self.tcp_offset,
+                    "jacobians": self._get_jacobians(),
+                    "ee_pose_b": self._get_ee_pose_b(),
+                    "tcp_pose_b": self._get_tcp_pose_b(),
+                    "gripper_lim": self._get_gripper_lims(),
+                    "gripper": self._get_gripper_state(),
+                    "joint_lims": self._get_joint_lims(),
+                },
+                batch_size=self.num_envs,
+            )
         raise ValueError(f"Observation spec {obs_spec} not supported by environment.")
 
     def get_state(self) -> TBatchedObsTorch:  # noqa: D102

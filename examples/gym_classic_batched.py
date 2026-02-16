@@ -10,7 +10,7 @@ from skillet.core.spaces import (
     ActionSpec,
 )
 from skillet.policy.dummy import RandomPolicy, ZeroPolicy
-from skillet.skill.fixed_length import FixedLengthSkill
+from skillet.skill import FixedLengthSkill
 
 CartPoleAction = Int[np.ndarray, "b 2"]
 """A batched Discrete(2) numpy array."""

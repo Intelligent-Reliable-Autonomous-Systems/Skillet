@@ -71,6 +71,10 @@ class PlaceSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSk
         self._params = None
 
     @property
+    def param_dim(self) -> int:
+        return 4
+
+    @property
     def name(self) -> str:  # noqa: D102
         return self._name
 

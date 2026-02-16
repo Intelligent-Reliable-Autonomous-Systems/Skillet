@@ -152,6 +152,7 @@ def parse_ros2_env_cfg(
     cfg.num_envs = num_envs
     cfg.ros2_workspace = ros2_workspace
 
+    print(cfg.ros2_workspace)
     p = pathlib.Path(cfg.ros2_workspace)
 
     # Assert path exists

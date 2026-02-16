@@ -36,6 +36,10 @@ class GripperOCSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[
         self._params = None
 
     @property
+    def param_dim(self) -> int:
+        return 1
+
+    @property
     def name(self) -> str:  # noqa: D102
         return self._name
 
@@ -105,6 +109,10 @@ class GripperOpenSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generi
         self._length = length
         self._status = None
         self._params = None
+
+    @property
+    def param_dim(self) -> int:
+        return 0
 
     @property
     def name(self) -> str:  # noqa: D102
@@ -179,6 +187,10 @@ class GripperGraspSkill(
         self._length = length
         self._status = None
         self._params = None
+
+    @property
+    def param_dim(self) -> int:
+        return 0
 
     @property
     def name(self) -> str:  # noqa: D102

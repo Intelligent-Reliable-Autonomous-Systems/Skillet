@@ -36,6 +36,10 @@ class JointPosSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[T
         self._params = None
 
     @property
+    def param_dim(self) -> int:
+        return 8  # TODO: address this based on env
+
+    @property
     def name(self) -> str:  # noqa: D102
         return self._name
 

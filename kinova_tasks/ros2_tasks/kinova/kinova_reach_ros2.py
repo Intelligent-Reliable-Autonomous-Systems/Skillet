@@ -56,6 +56,8 @@ class KinovaROS2ReachEnvCfg(ROS2RLEnvCfg):
 
     episode_length_s = 5.0
 
+    skills = ["reach_xyz"]
+
 
 class KinovaROS2ReachEnv(ROS2RLEnv):
     """Kinova Gen3 7DoF ROS2 implementation."""

@@ -36,6 +36,10 @@ class ReachXYZSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[T
         self._params = None
 
     @property
+    def param_dim(self) -> int:
+        return 3
+
+    @property
     def name(self) -> str:  # noqa: D102
         return self._name
 

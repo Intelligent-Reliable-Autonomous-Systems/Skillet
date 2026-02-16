@@ -62,7 +62,8 @@ import torch
 from jaxtyping import Float, Int
 
 import kinova_tasks  # noqa: F401
-from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
+from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper  # noqa: F401
+from skillet.envs.skill_isaac_env_wrapper import SkillIsaacEnvWrapper
 from skillet.envs.util import get_checkpoint_path
 from skillet.envs.util.dict import print_dict
 from skillet.envs.util.hydra import hydra_task_config
@@ -142,7 +143,8 @@ def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
         env = gym.wrappers.RecordVideo(env, **video_kwargs)
 
     # wrap around environment for rsl-rl
-    env = IsaacEnvWrapper[BxN_Obs, BxM_Action](env)
+    # env = IsaacEnvWrapper[BxN_Obs, BxM_Action](env)
+    env = SkillIsaacEnvWrapper[BxN_Obs, BxM_Action](env)
     env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
 
     # create runner from rsl-rl

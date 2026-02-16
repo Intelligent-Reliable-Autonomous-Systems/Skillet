@@ -3,6 +3,7 @@ from collections.abc import Sequence
 from enum import IntEnum
 from typing import Generic, TypeAlias, TypeVar
 
+import numpy as np
 from jaxtyping import Bool, Int
 
 from skillet.core.policy import BatchedPolicy, Policy
@@ -79,6 +80,12 @@ class Skill(abc.ABC, Generic[TSkillObs, TAction, TSkillParams]):
         TObs: The type of the observation from the environment.
         TParams: The type of the parameters of the skill.
     """
+
+    @property
+    @abc.abstractmethod
+    def param_dim(self) -> int:
+        """The number of parameters expected by the skill."""
+        raise NotImplementedError
 
     @property
     def name(self) -> str:
@@ -214,6 +221,11 @@ class CompositeSkill(
         # self._observation_spec = replace(self.skills[0].obs_spec, n_envs=len(env_indices))
         # self._action_spec = replace(self.skills[0].action_spec, n_envs=len(env_indices))
         self._status: Int[ArrayLike, b] | None = None  # noqa: F821
+
+    @property
+    def param_dim(self) -> int:
+        """Return the maximum number of allowable parameters."""
+        return int(np.sum(s.param_dim for s in self.skills))
 
     @property
     def name(self) -> str:

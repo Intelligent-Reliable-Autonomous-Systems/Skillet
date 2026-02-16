@@ -34,6 +34,10 @@ class FixedLengthSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generi
         self._params = None
 
     @property
+    def param_dim(self) -> int:
+        return 0  # Adjust this depending on policy passed
+
+    @property
     def name(self) -> str:  # noqa: D102
         return self._name
 

@@ -13,10 +13,10 @@ import torch
 from jaxtyping import Bool, Float
 
 from skillet.core.skill_controller import SkillController
-from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
+from skillet.envs.ros2_env_wrapper import ROS2EnvWrapper
 
 if TYPE_CHECKING:
-    from isaaclab.envs import DirectRLEnv, ManagerBasedRLEnv
+    from skillet.envs.ros2.ros2_rl_env import ROS2RLEnv
 
 TBatchedObsTorch = TypeVar(
     "TBatchedObsTorch", bound=Float[torch.Tensor, "b ..."] | Mapping[str, Float[torch.Tensor, "b ..."]]
@@ -33,15 +33,15 @@ torch.Tensor[(b, n), float]
 """
 
 
-class SkillIsaacEnvWrapper(
-    IsaacEnvWrapper[TBatchedObsTorch, TBatchedActionTorch],
+class SkillROS2EnvWrapper(
+    ROS2EnvWrapper[TBatchedObsTorch, TBatchedActionTorch],
 ):
     """Wrapper for IsaacLab Environments.
 
-    This assumes that the environment is either a DirectRLEnv or ManagerBasedRLEnv.
+    This assumes that the environment is a ROS2RLEnv.
     """
 
-    def __init__(self, env: "ManagerBasedRLEnv | DirectRLEnv") -> None:
+    def __init__(self, env: "ROS2RLEnv") -> None:
         """Initialize the environment.
 
         Args:
