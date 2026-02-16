@@ -9,22 +9,23 @@ from isaaclab.controllers.differential_ik_cfg import DifferentialIKControllerCfg
 from isaaclab.envs.mdp.actions.actions_cfg import DifferentialInverseKinematicsActionCfg
 from isaaclab.sensors import FrameTransformerCfg
 from isaaclab.sensors.frame_transformer.frame_transformer_cfg import OffsetCfg
-from isaaclab.utils import configclass
 from isaaclab_tasks.manager_based.manipulation.lift import mdp
 from isaaclab_tasks.manager_based.manipulation.reach.reach_env_cfg import ReachEnvCfg
 
+from kinova_tasks.envs.utils import configclass
+
 from isaaclab.markers.config import FRAME_MARKER_CFG  # isort: skip
+
+##
+# Pre-defined configs
+##
+from isaac_kinova.assets.kinova_gen3_2f85 import KINOVA_GEN3_2F85_CFG, KINOVA_GEN3_2F85_HIGH_CFG
 from isaaclab.devices.device_base import DeviceBase, DevicesCfg
 from isaaclab.devices.keyboard import Se3KeyboardCfg
 from isaaclab.devices.openxr.openxr_device import OpenXRDeviceCfg
 from isaaclab.devices.openxr.retargeters.manipulator.gripper_retargeter import GripperRetargeterCfg
 from isaaclab.devices.openxr.retargeters.manipulator.se3_rel_retargeter import Se3RelRetargeterCfg
 from isaaclab.managers import SceneEntityCfg
-
-##
-# Pre-defined configs
-##
-from isaac_kinova.assets.kinova_gen3_2f85 import KINOVA_GEN3_2F85_CFG, KINOVA_GEN3_2F85_HIGH_CFG
 
 ##
 # Environment configuration

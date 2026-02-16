@@ -3,8 +3,14 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-from isaaclab.utils import configclass
-from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg
+from isaaclab_rl.rsl_rl import RslRlPpoActorCriticCfg
+
+from kinova_tasks.envs.utils import configclass
+from skillet.rl.cfg import (
+    RslRlOnPolicyRunnerCfg,
+    RslRlPpoAlgorithmCfg,
+    RslRlPpoPolicyCfg,
+)
 
 
 @configclass
@@ -17,6 +23,16 @@ class KinovaReachPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     obs_groups = {"policy": ["policy"], "critic": ["policy"]}
     resume = False
     empirical_normalization = False
+    actor = RslRlPpoPolicyCfg(
+        init_noise_std=1.0,
+        hidden_dims=[64, 64],
+        activation="elu",
+    )
+    critic = RslRlPpoPolicyCfg(
+        init_noise_std=1.0,
+        hidden_dims=[64, 64],
+        activation="elu",
+    )
     policy = RslRlPpoActorCriticCfg(
         init_noise_std=1.0,
         actor_hidden_dims=[64, 64],

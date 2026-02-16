@@ -15,12 +15,12 @@ from isaaclab.markers.config import FRAME_MARKER_CFG
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
-from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 from isaaclab.utils.math import quat_error_magnitude, quat_from_euler_xyz, sample_uniform
 from isaacsim.core.utils.torch.transformations import tf_combine
 
 from kinova_tasks.assets.utils import KINOVA_ASSET_DIR
+from kinova_tasks.envs.utils import configclass
 
 
 @configclass

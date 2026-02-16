@@ -8,7 +8,8 @@ from __future__ import annotations
 import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
-from isaaclab.utils import configclass
+
+from kinova_tasks.envs.utils import configclass
 
 from .kinova_reach_env import KinovaReachEnv, KinovaReachEnvCfg
 

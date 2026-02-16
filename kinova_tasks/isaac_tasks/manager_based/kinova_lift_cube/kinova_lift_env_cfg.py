@@ -12,18 +12,19 @@ from isaaclab.sensors import FrameTransformerCfg
 from isaaclab.sensors.frame_transformer.frame_transformer_cfg import OffsetCfg
 from isaaclab.sim.schemas.schemas_cfg import RigidBodyPropertiesCfg
 from isaaclab.sim.spawners.from_files.from_files_cfg import UsdFileCfg
-from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 from isaaclab_tasks.manager_based.manipulation.lift import mdp
 from isaaclab_tasks.manager_based.manipulation.lift.lift_env_cfg import LiftEnvCfg
 
+from kinova_tasks.envs.utils import configclass
+
 from isaaclab.markers.config import FRAME_MARKER_CFG  # isort: skip
-from isaaclab.managers import SceneEntityCfg
 
 ##
 # Pre-defined configs
 ##
 from isaac_kinova.assets.kinova_gen3_2f85 import KINOVA_GEN3_2F85_CFG
+from isaaclab.managers import SceneEntityCfg
 
 ##
 # Environment configuration

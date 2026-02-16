@@ -16,6 +16,8 @@ from typing import Any
 import gymnasium as gym
 import yaml
 
+from .dict import class_to_dict
+
 
 def load_cfg_from_registry(task_name: str, entry_point_key: str) -> dict | object:
     """Load default configuration given its entry point from the gym registry.
@@ -218,3 +220,29 @@ def get_checkpoint_path(
     checkpoint_file = model_checkpoints[-1]
 
     return os.path.join(run_path, checkpoint_file)
+
+
+def dump_yaml(filename: str, data: dict | object, sort_keys: bool = False):
+    """Saves data into a YAML file safely.
+
+    Note:
+        The function creates any missing directory along the file's path.
+
+    Args:
+        filename: The path to save the file at.
+        data: The data to save either a dictionary or class object.
+        sort_keys: Whether to sort the keys in the output file. Defaults to False.
+
+    """
+    # check ending
+    if not filename.endswith("yaml"):
+        filename += ".yaml"
+    # create directory
+    if not pathlib.Path(os.path.dirname(filename)).exists():
+        pathlib.Path(os.path.dirname(filename)).mkdir(exist_ok=True, parents=True)
+    # convert data into dictionary
+    if not isinstance(data, dict):
+        data = class_to_dict(data)
+    # save data
+    with pathlib.Path(filename).open("w") as f:
+        yaml.dump(data, f, default_flow_style=False, sort_keys=sort_keys)
