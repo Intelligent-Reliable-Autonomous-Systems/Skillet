@@ -8,7 +8,7 @@ Written by Will Solow, 2026
 
 from dataclasses import MISSING
 
-from kinova_tasks.envs.utils import configclass
+from skillet.envs.util import configclass
 
 
 @configclass

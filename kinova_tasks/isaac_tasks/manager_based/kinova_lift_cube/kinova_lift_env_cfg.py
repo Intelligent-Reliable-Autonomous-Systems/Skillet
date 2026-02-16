@@ -16,7 +16,7 @@ from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 from isaaclab_tasks.manager_based.manipulation.lift import mdp
 from isaaclab_tasks.manager_based.manipulation.lift.lift_env_cfg import LiftEnvCfg
 
-from kinova_tasks.envs.utils import configclass
+from skillet.envs.util import configclass
 
 from isaaclab.markers.config import FRAME_MARKER_CFG  # isort: skip
 

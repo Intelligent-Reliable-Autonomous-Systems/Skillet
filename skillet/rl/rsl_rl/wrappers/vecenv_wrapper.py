@@ -6,8 +6,10 @@
 import gymnasium as gym
 import torch
 from isaaclab.envs import DirectRLEnv, ManagerBasedRLEnv
-from rsl_rl.env import VecEnv
 from tensordict import TensorDict
+
+from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
+from skillet.rl.rsl_rl.env import VecEnv
 
 
 class RslRlVecEnvWrapper(VecEnv):
@@ -37,9 +39,13 @@ class RslRlVecEnvWrapper(VecEnv):
 
         """
         # check that input is valid
-        if not isinstance(env.unwrapped, ManagerBasedRLEnv) and not isinstance(env.unwrapped, DirectRLEnv):
+        if (
+            not isinstance(env.unwrapped, ManagerBasedRLEnv)
+            and not isinstance(env.unwrapped, DirectRLEnv)
+            and not isinstance(env, IsaacEnvWrapper)
+        ):
             raise ValueError(
-                "The environment must be inherited from ManagerBasedRLEnv or DirectRLEnv. Environment type:"
+                "The environment must be inherited from ManagerBasedRLEnv, DirectRLEnv, or IsaacEnvWrapper. Environment type:"
                 f" {type(env)}"
             )
 
@@ -140,12 +146,14 @@ class RslRlVecEnvWrapper(VecEnv):
         obs_dict, extras = self.env.reset()
         return TensorDict(obs_dict, batch_size=[self.num_envs]), extras
 
-    def get_observations(self) -> TensorDict:
+    def get_observation(self) -> TensorDict:
         """Returns the current observations of the environment."""
         if hasattr(self.unwrapped, "observation_manager"):
             obs_dict = self.unwrapped.observation_manager.compute()
-        else:
+        elif isinstance(self.unwrapped, ManagerBasedRLEnv) or isinstance(self.unwrapped, DirectRLEnv):
             obs_dict = self.unwrapped._get_observations()
+        else:  # Is a IsaacEnvWrapper
+            obs_dict = self.env.get_observation()
         return TensorDict(obs_dict, batch_size=[self.num_envs])
 
     def step(self, actions: torch.Tensor) -> tuple[TensorDict, torch.Tensor, torch.Tensor, dict]:

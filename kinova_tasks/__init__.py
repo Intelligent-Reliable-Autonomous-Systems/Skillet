@@ -16,7 +16,7 @@ The package is structured as follows:
 # Register Gym environments.
 ##
 
-from .utils import import_packages
+from skillet.envs.util import import_packages
 
 # The blacklist is used to prevent importing configs from sub-packages
 _BLACKLIST_PKGS = ["utils"]

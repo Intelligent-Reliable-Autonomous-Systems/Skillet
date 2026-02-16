@@ -5,7 +5,7 @@
 
 from dataclasses import MISSING
 
-from kinova_tasks.envs.utils import configclass
+from skillet.envs.util import configclass
 
 
 @configclass

@@ -19,7 +19,7 @@ from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 from isaaclab.utils.math import quat_from_euler_xyz, sample_uniform, subtract_frame_transforms
 from isaacsim.core.utils.torch.transformations import tf_combine
 
-from kinova_tasks.envs.utils import configclass
+from skillet.envs.util import configclass
 
 
 @configclass

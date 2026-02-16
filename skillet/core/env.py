@@ -18,6 +18,7 @@ from skillet.core.spaces import (
     ArrayLike,
     BatchedAction,
     BatchedObservation,
+    BatchedSpaceValue,
     Observation,
     ObservationSpec,
     State,
@@ -134,9 +135,7 @@ class BasicEnvironment(Environment[TObs, TAction], Generic[TObs, TAction]):
         del obs_spec
         return True  # TODO: compare obs_spec.space with self.env.observation_space
 
-    def reset(
-        self, *, seed: int | None = None, options: dict[str, Any] | None = None
-    ) -> tuple[TObs, dict]:  # noqa: D102
+    def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None) -> tuple[TObs, dict]:
         obs, info = self.env.reset(seed=seed, options=options)
         self.last_obs = obs
         return obs, info
@@ -239,3 +238,66 @@ class BasicBatchedEnvironment(BatchedEnvironment[TBObs, TBAction], Generic[TBObs
 
     def get_state(self) -> TObs:  # noqa: D102
         return self.get_observation()
+
+
+class AsGymVectorEnv(gym.vector.VectorEnv):
+    """A wrapper for gym.Env environments that already have a vectorized interface to the new gymnasium vector environment."""
+
+    def __init__(self, env: gym.Env, num_envs: int | None = None) -> None:
+        """Initialize the environment.
+
+        Args:
+            env: The gym.Env to wrap. Must have a single observation space and action space.
+            num_envs: Optionally, the number of environments to wrap
+
+        """
+        self.env = env
+        self.num_envs = num_envs or env.get_wrapper_attr("num_envs")
+        if self.num_envs is None:
+            raise ValueError("The environment does not have a number of environments .num_envs")
+        if not env.has_wrapper_attr("single_observation_space") or not env.has_wrapper_attr("single_action_space"):
+            raise ValueError("The environment does not have a single observation space or action space.")
+        self.single_observation_space = env.get_wrapper_attr("single_observation_space")
+        self.single_action_space = env.get_wrapper_attr("single_action_space")
+        self.observation_space = env.observation_space
+        self.action_space = env.action_space
+        self.device = env.unwrapped.device if hasattr(env.unwrapped, "device") else None
+        self.max_episode_length = (
+            env.unwrapped.max_episode_length if hasattr(env.unwrapped, "max_episode_length") else None
+        )
+        self.cfg = env.unwrapped.cfg if hasattr(env.unwrapped, "cfg") else None
+
+    def reset(  # noqa: D102
+        self,
+        *,
+        seed: int | None = None,
+        options: dict[str, Any] | None = None,
+    ) -> tuple[BatchedSpaceValue, dict[str, Any]]:
+        return self.env.reset(seed=seed, options=options)
+
+    def step(  # noqa: D102
+        self, actions: BatchedAction
+    ) -> tuple[BatchedSpaceValue, Float[ArrayLike, "b"], Bool[ArrayLike, "b"], Bool[ArrayLike, "b"], dict[str, Any]]:
+        return self.env.step(actions)
+
+    def render(self):  # noqa: ANN201, D102
+        return self.env.render()
+
+    def close(self, **kwargs: Any) -> None:  # noqa: D102
+        return self.env.close(**kwargs)
+
+    @property
+    def episode_length_buf(self):
+        return self.env.unwrapped.episode_length_buf if hasattr(self.env.unwrapped, "episode_length_buf") else None
+
+    @episode_length_buf.setter
+    def episode_length_buf(self, value):
+        """Set the episode length buffer.
+
+        Note:
+            This is needed to perform random initialization of episode lengths in RSL-RL.
+
+        """
+        if not hasattr(self.env.unwrapped, "episode_length_buf"):
+            raise ValueError(f"`{self.env.unwrapped}` has no attribute `episode length buf`.")
+        self.env.unwrapped.episode_length_buf = value

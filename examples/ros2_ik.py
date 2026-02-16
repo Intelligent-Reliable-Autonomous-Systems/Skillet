@@ -45,10 +45,10 @@ import torch
 from jaxtyping import Float, Int
 
 import kinova_tasks.ros2_tasks  # noqa: F401
-from kinova_tasks.envs.utils import parse_ros2_env_cfg, setup_ros
 from skillet.agents.policy_over_options import PolicyOverOptionsAgent
 from skillet.core.spaces import ActionSpec, ObservationSpec
 from skillet.envs.ros2_env_wrapper import ROS2EnvWrapper
+from skillet.envs.util import parse_ros2_env_cfg, setup_ros
 from skillet.policy.dummy import FixedSequencePolicy, FixedSkillSequencePolicy
 from skillet.policy.ik_ee import PosAbsIKEEPolicy, PoseAbsIKEEPolicy, XYZRPYAbsIKEEPolicy
 from skillet.policy.joint_pos import GripperPolicy, JointPosPolicy

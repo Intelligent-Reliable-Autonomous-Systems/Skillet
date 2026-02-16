@@ -20,7 +20,7 @@ from isaaclab.utils.math import quat_error_magnitude, quat_from_euler_xyz, sampl
 from isaacsim.core.utils.torch.transformations import tf_combine
 
 from kinova_tasks.assets.utils import KINOVA_ASSET_DIR
-from kinova_tasks.envs.utils import configclass
+from skillet.envs.util import configclass
 
 
 @configclass

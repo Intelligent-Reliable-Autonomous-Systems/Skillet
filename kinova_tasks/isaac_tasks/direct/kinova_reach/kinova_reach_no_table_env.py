@@ -9,7 +9,7 @@ import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 
-from kinova_tasks.envs.utils import configclass
+from skillet.envs.util import configclass
 
 from .kinova_reach_env import KinovaReachEnv, KinovaReachEnvCfg
 

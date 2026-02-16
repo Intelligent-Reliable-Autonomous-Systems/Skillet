@@ -3,8 +3,8 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-from kinova_tasks.envs.utils import configclass
-from skillet.rl.cfg import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg
+from skillet.envs.util import configclass
+from skillet.rl.cfg import RslRlOnPolicyRunnerCfg, RslRlPpoAlgorithmCfg, RslRlPpoPolicyCfg
 
 
 @configclass
@@ -17,10 +17,14 @@ class Gen3ReachPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     resume = False
     obs_groups = {"policy": ["policy"], "critic": ["policy"]}
     empirical_normalization = False
-    policy = RslRlPpoActorCriticCfg(
+    actor = RslRlPpoPolicyCfg(
         init_noise_std=1.0,
-        actor_hidden_dims=[64, 64],
-        critic_hidden_dims=[64, 64],
+        hidden_dims=[64, 64],
+        activation="elu",
+    )
+    critic = RslRlPpoPolicyCfg(
+        init_noise_std=1.0,
+        hidden_dims=[64, 64],
         activation="elu",
     )
     algorithm = RslRlPpoAlgorithmCfg(

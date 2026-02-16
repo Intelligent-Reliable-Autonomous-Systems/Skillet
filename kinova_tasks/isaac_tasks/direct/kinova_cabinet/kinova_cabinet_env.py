@@ -19,7 +19,7 @@ from isaacsim.core.utils.stage import get_current_stage
 from isaacsim.core.utils.torch.transformations import tf_combine, tf_inverse, tf_vector
 from pxr import UsdGeom
 
-from kinova_tasks.envs.utils import configclass
+from skillet.envs.util import configclass
 
 
 @configclass

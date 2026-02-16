@@ -60,11 +60,11 @@ import gymnasium as gym
 import isaaclab_tasks  # noqa: F401
 import numpy as np
 import torch
+from kinova_tasks.utils.hydra import hydra_task_config
+from skillet.envs.utils.dict import print_dict
 
 import kinova_tasks  # noqa: F401
-from kinova_tasks.envs.utils import get_checkpoint_path
-from kinova_tasks.envs.utils.dict import print_dict
-from kinova_tasks.utils.hydra import hydra_task_config
+from skillet.envs.util import get_checkpoint_path
 from skillet.rl.cfg import RslRlBaseRunnerCfg
 from skillet.rl.exporter import export_policy_as_jit, export_policy_as_onnx
 from skillet.rl.rsl_rl.runners import OnPolicyRunner

@@ -59,12 +59,14 @@ from datetime import datetime
 import gymnasium as gym
 import isaaclab_tasks  # noqa: F401
 import torch
+from jaxtyping import Float, Int
+from kinova_tasks.utils.hydra import hydra_task_config
+from skillet.envs.utils.dict import print_dict
+from skillet.envs.utils.parse_cfg import dump_yaml
 
 import kinova_tasks  # noqa: F401
-from kinova_tasks.envs.utils import get_checkpoint_path
-from kinova_tasks.envs.utils.dict import print_dict
-from kinova_tasks.envs.utils.parse_cfg import dump_yaml
-from kinova_tasks.utils.hydra import hydra_task_config
+from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
+from skillet.envs.util import get_checkpoint_path
 from skillet.rl.cfg import RslRlBaseRunnerCfg
 from skillet.rl.rsl_rl.runners import OnPolicyRunner
 from skillet.rl.rsl_rl.wrappers import RslRlVecEnvWrapper
@@ -73,6 +75,12 @@ torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 torch.backends.cudnn.deterministic = False
 torch.backends.cudnn.benchmark = False
+
+BxN_Obs = Float[torch.Tensor, "b n"]
+"""Environment observation: torch.Tensor[(b, n), float]"""
+BxM_Action = Float[torch.Tensor, "b m"]
+"""Environment action: torch.Tensor[(b, m), float]"""
+B_Int_HighLevel = Int[torch.Tensor, "b"]
 
 
 @hydra_task_config(args_cli.task, args_cli.agent)
@@ -134,6 +142,7 @@ def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
         env = gym.wrappers.RecordVideo(env, **video_kwargs)
 
     # wrap around environment for rsl-rl
+    env = IsaacEnvWrapper[BxN_Obs, BxM_Action](env)
     env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
 
     # create runner from rsl-rl

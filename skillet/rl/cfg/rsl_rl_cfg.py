@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import MISSING
 from typing import Literal
 
-from kinova_tasks.envs.utils import configclass
+from skillet.envs.util import configclass
 
 from .rnd_cfg import RslRlRndCfg
 from .symmetry_cfg import RslRlSymmetryCfg
@@ -77,7 +77,7 @@ class RslRlPpoActorCriticCfg:
 
 
 @configclass
-class RslRlPpoActorCriticRecurrentCfg(RslRlPpoActorCriticCfg):
+class RslRlPpoActorCriticRecurrentCfg(RslRlPpoPolicyCfg):
     """Configuration for the PPO actor-critic networks with recurrent layers."""
 
     class_name: str = "ActorCriticRecurrent"
@@ -254,7 +254,7 @@ class RslRlOnPolicyRunnerCfg(RslRlBaseRunnerCfg):
     class_name: str = "OnPolicyRunner"
     """The runner class name. Default is OnPolicyRunner."""
 
-    policy: RslRlPpoActorCriticCfg = MISSING
+    policy: RslRlPpoPolicyCfg = MISSING
     """The policy configuration."""
 
     algorithm: RslRlPpoAlgorithmCfg = MISSING

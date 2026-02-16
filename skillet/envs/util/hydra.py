@@ -16,9 +16,9 @@ try:
 except ImportError:
     raise ImportError("Hydra is not installed. Please install it by running 'pip install hydra-core'.")
 
-from kinova_tasks.envs.utils import load_cfg_from_registry
-from kinova_tasks.envs.utils.dict import replace_slices_with_strings, replace_strings_with_slices
-from kinova_tasks.envs.utils.spaces import (
+from .dict import replace_slices_with_strings, replace_strings_with_slices
+from .parse_cfg import load_cfg_from_registry
+from .spaces import (
     replace_env_cfg_spaces_with_strings,
     replace_strings_with_env_cfg_spaces,
 )

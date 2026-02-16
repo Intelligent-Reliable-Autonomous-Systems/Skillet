@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Generic, TypeVar
 import torch
 from jaxtyping import Bool, Float
 
-from skillet.core.env import BatchedEnvironment
+from skillet.core.env import AsGymVectorEnv, BatchedEnvironment
 from skillet.core.math import (
     matrix_from_quat,
     quat_apply,
@@ -21,7 +21,6 @@ from skillet.core.math import (
     subtract_frame_transforms,
 )
 from skillet.core.spaces import ActionSpec
-from skillet.envs.utils import AsGymVectorEnv
 
 if TYPE_CHECKING:
     from isaaclab.envs import DirectRLEnv, ManagerBasedRLEnv
@@ -63,8 +62,8 @@ class IsaacEnvWrapper(
         """
         self._isaac_env = env
         self._env = env.unwrapped
-        self._n_envs = env.unwrapped.cfg.scene.num_envs
         self.device = env.unwrapped.device
+        self.max_episode_length = env.unwrapped.max_episode_length
 
         if hasattr(self._env, "robot"):
             self.robot = self._env.robot
@@ -85,7 +84,7 @@ class IsaacEnvWrapper(
             raise ValueError(
                 f"Environment `{self._env}` has no attribute `_robot` or `robot` or `scene.robot` or `scene._robot`. Unable to parse robot Articulation."
             )
-        vector_env = AsGymVectorEnv(env, num_envs=self._n_envs)
+        vector_env = AsGymVectorEnv(env, num_envs=self.num_envs)
         super().__init__(vector_env)
         self._obs_spec_policy = ObservationSpec[Float[torch.Tensor, "b ..."]](
             space=vector_env.single_observation_space["policy"],
@@ -127,8 +126,12 @@ class IsaacEnvWrapper(
         self.tcp_offset = (
             torch.as_tensor([0.120, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0], device=self.device)
             .unsqueeze(0)
-            .repeat(self._n_envs, 1)
+            .repeat(self.num_envs, 1)
         )
+
+    @property
+    def episode_length_buf(self) -> torch.Tensor:
+        return self.env.unwrapped.episode_length_buf
 
     @property
     def obs_spec(self):  # noqa: ANN201, D102
@@ -140,7 +143,11 @@ class IsaacEnvWrapper(
 
     @property
     def n_envs(self) -> int:  # noqa: D102
-        return self._n_envs
+        return self._env.unwrapped.num_envs
+
+    @property
+    def num_envs(self) -> int:  # noqa: D102
+        return self._env.unwrapped.num_envs
 
     def supports_observation_spec(self, obs_spec: ObservationSpec) -> bool:  # noqa: D102
         return obs_spec.name in ["policy", "state"]
@@ -157,16 +164,15 @@ class IsaacEnvWrapper(
         """
         obs_dict, info = self.env.reset()
         self.last_obs = obs_dict
-        obs = obs_dict["policy"]
-        if isinstance(obs, dict):
-            obs = torch.cat(list(obs.values()), dim=1)
 
-        return obs, info
+        return obs_dict, info
 
     def get_observation(self, obs_spec=None):  # noqa: ANN001, ANN201, D102
         if self.last_obs is None:
             raise ValueError("No observation has been received yet. Call reset() first.")
-        if obs_spec is None or obs_spec.name == "policy":
+        if obs_spec is None:
+            return self.last_obs
+        if obs_spec.name == "policy":
             return self.last_obs["policy"]
         if obs_spec.name == "state":
             return self.last_obs
@@ -204,11 +210,8 @@ class IsaacEnvWrapper(
         """
         obs_dict, reward, term, trunc, info = self.env.step(action)
         self.last_obs = obs_dict
-        obs = obs_dict["policy"]
-        if isinstance(obs, dict):
-            obs = torch.cat(list(obs.values()), dim=1)
 
-        return obs, reward, term, trunc, info
+        return obs_dict, reward, term, trunc, info
 
     """
     Helper functions

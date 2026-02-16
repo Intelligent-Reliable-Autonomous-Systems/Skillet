@@ -3,8 +3,8 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-from kinova_tasks.envs.utils import configclass
-from skillet.rl.cfg import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg
+from skillet.envs.util import configclass
+from skillet.rl.cfg import RslRlOnPolicyRunnerCfg, RslRlPpoAlgorithmCfg, RslRlPpoPolicyCfg
 
 
 @configclass
@@ -14,12 +14,14 @@ class KinovaLiftCubePPORunnerCfg(RslRlOnPolicyRunnerCfg):
     save_interval = 50
     experiment_name = "kinova_lift_cube_direct"
     obs_groups = {"policy": ["policy"], "critic": ["policy"]}
-    policy = RslRlPpoActorCriticCfg(
+    actor = RslRlPpoPolicyCfg(
         init_noise_std=1.0,
-        actor_obs_normalization=False,
-        critic_obs_normalization=False,
-        actor_hidden_dims=[256, 128, 64],
-        critic_hidden_dims=[256, 128, 64],
+        hidden_dims=[256, 128, 64],
+        activation="elu",
+    )
+    critic = RslRlPpoPolicyCfg(
+        init_noise_std=1.0,
+        hidden_dims=[256, 128, 64],
         activation="elu",
     )
     algorithm = RslRlPpoAlgorithmCfg(

@@ -15,7 +15,7 @@ import gymnasium as gym
 import numpy as np
 from roslibpy import Ros
 
-from kinova_tasks.envs.utils import configure_seed
+from skillet.envs.util import configure_seed
 
 from .ros2_rl_env_cfg import ROS2RLEnvCfg
 

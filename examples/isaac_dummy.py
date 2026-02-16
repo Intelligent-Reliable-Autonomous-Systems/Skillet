@@ -21,12 +21,12 @@ import gymnasium as gym
 import torch
 from isaaclab.app import AppLauncher
 from jaxtyping import Float, Int
-from skillet.skill.fixed_length import FixedLengthSkill
 
 from skillet.agents.policy_over_options import PolicyOverOptionsAgent
 from skillet.core.spaces import ActionSpec, ObservationSpec
 from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
 from skillet.policy.dummy import RandomPolicy, ZeroPolicy
+from skillet.skill.low_level import FixedLengthSkill
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Main IsaacSim Executor file through IsaacLab.")
@@ -78,22 +78,8 @@ def main() -> None:
     # Set up Skill executor and environment in framework
     env = IsaacEnvWrapper[BxN_Obs, BxM_Action](env)
 
-    # action_spec = ActionSpec[BxN_Obs](
-    #     space=env.action_space,
-    #     name="isaac_action",
-    #     is_torch=True,
-    #     is_batched=True,
-    #     # n_envs=args_cli.num_envs,
-    # )
     action_spec: ActionSpec[BxM_Action] = env.action_spec
     observation_spec: ObservationSpec[BxN_Obs] = env.obs_spec
-    # observation_spec = ObservationSpec[BxN_Obs](
-    #     space=env.observation_space,
-    #     name="policy",
-    #     is_torch=True,
-    #     is_batched=True,
-    #     # n_envs=args_cli.num_envs,
-    # )
 
     # Low-level policies
     zero_policy = ZeroPolicy[BxN_Obs, BxM_Action](observation_spec, action_spec)
