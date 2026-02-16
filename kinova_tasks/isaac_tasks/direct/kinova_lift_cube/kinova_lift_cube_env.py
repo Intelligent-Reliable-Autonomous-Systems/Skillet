@@ -9,7 +9,7 @@ import isaaclab.sim as sim_utils
 import torch
 from isaaclab.actuators.actuator_cfg import ImplicitActuatorCfg
 from isaaclab.assets import Articulation, ArticulationCfg, RigidObject, RigidObjectCfg
-from isaaclab.envs import DirectRLEnv, DirectRLEnvCfg
+from isaaclab.envs import DirectRLEnv
 from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 from isaaclab.markers.config import FRAME_MARKER_CFG
 from isaaclab.scene import InteractiveSceneCfg
@@ -19,11 +19,12 @@ from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 from isaaclab.utils.math import quat_from_euler_xyz, sample_uniform, subtract_frame_transforms
 from isaacsim.core.utils.torch.transformations import tf_combine
 
+from skillet.envs.isaac import SkillsDirectRLEnvCfg
 from skillet.envs.util import configclass
 
 
 @configclass
-class KinovaLiftCubeEnvCfg(DirectRLEnvCfg):
+class KinovaLiftCubeEnvCfg(SkillsDirectRLEnvCfg):
     # env
     episode_length_s = 2.0  # 500 timesteps
     decimation = 2

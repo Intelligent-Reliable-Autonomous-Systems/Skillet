@@ -5,12 +5,9 @@
 
 """Script to train RL agent with RSL-RL."""
 
-"""Launch Isaac Sim Simulator first."""
-
 import argparse
+import os
 import sys
-
-from isaaclab.app import AppLauncher
 
 # local imports
 from skillet.rl.rsl_rl import cli_args  # isort: skip
@@ -31,10 +28,20 @@ parser.add_argument(
     "--distributed", action="store_true", default=False, help="Run training with multiple GPUs or nodes."
 )
 parser.add_argument("--export_io_descriptors", action="store_true", default=False, help="Export IO descriptors.")
+parser.add_argument(
+    "--ros2_ws", type=str, default=None, required=True, help="Absolute path to ROS2 workspace containing bringup files"
+)
+parser.add_argument("--device", type=str, default="cuda", choices={"cuda", "cpu"}, help="Device to run on: cuda/cpu")
+
+# parse the arguments
+args_cli = parser.parse_args()
+if args_cli.ros2_ws is None:
+    args_cli.ros2_ws = os.getenv("ROS2_WS", None)
+    if args_cli.ros2_ws is None:
+        raise ValueError("ROS2 workspace path must be provided via --ros2_ws argument or ROS2_WS environment variable.")
 # append RSL-RL cli arguments
 cli_args.add_rsl_rl_args(parser)
 # append AppLauncher cli args
-AppLauncher.add_app_launcher_args(parser)
 args_cli, hydra_args = parser.parse_known_args()
 
 # always enable cameras to record video
@@ -44,9 +51,6 @@ if args_cli.video:
 # clear out sys.argv for Hydra
 sys.argv = [sys.argv[0]] + hydra_args
 
-# launch omniverse app
-app_launcher = AppLauncher(args_cli)
-simulation_app = app_launcher.app
 
 """Check for minimum supported RSL-RL version."""
 
@@ -57,13 +61,12 @@ import os
 from datetime import datetime
 
 import gymnasium as gym
-import isaaclab_tasks  # noqa: F401
 import torch
 from jaxtyping import Float, Int
 
 import kinova_tasks  # noqa: F401
-from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
-from skillet.envs.util import get_checkpoint_path
+from skillet.envs.ros2_env_wrapper import ROS2EnvWrapper
+from skillet.envs.util import get_checkpoint_path, setup_ros
 from skillet.envs.util.dict import print_dict
 from skillet.envs.util.hydra import hydra_task_config
 from skillet.envs.util.parse_cfg import dump_yaml
@@ -88,7 +91,7 @@ def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
     """Train with RSL-RL agent."""
     # override configurations with non-hydra CLI arguments
     agent_cfg = cli_args.update_rsl_rl_cfg(agent_cfg, args_cli)
-    env_cfg.scene.num_envs = args_cli.num_envs if args_cli.num_envs is not None else env_cfg.scene.num_envs
+    env_cfg.num_envs = args_cli.num_envs if args_cli.num_envs is not None else env_cfg.num_envs
     agent_cfg.max_iterations = (
         args_cli.max_iterations if args_cli.max_iterations is not None else agent_cfg.max_iterations
     )
@@ -96,17 +99,7 @@ def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
     # set the environment seed
     # note: certain randomizations occur in the environment initialization so we set the seed here
     env_cfg.seed = agent_cfg.seed
-    env_cfg.sim.device = args_cli.device if args_cli.device is not None else env_cfg.sim.device
-
-    # multi-gpu training configuration
-    if args_cli.distributed:
-        env_cfg.sim.device = f"cuda:{app_launcher.local_rank}"
-        agent_cfg.device = f"cuda:{app_launcher.local_rank}"
-
-        # set seed to have diversity in different threads
-        seed = agent_cfg.seed + app_launcher.local_rank
-        env_cfg.seed = seed
-        agent_cfg.seed = seed
+    env_cfg.device = args_cli.device if args_cli.device is not None else env_cfg.device
 
     # specify directory for logging experiments
     log_root_path = os.path.join("_logs", "rsl_rl", agent_cfg.experiment_name)
@@ -121,9 +114,10 @@ def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
 
     # set the log directory for the environment (works for all environment types)
     env_cfg.log_dir = log_dir
+    env_cfg.launch_ros = False
 
     # create environment
-    env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
+    env = gym.make(args_cli.task, cfg=env_cfg, ros=setup_ros())
 
     # save resume path before creating a new log_dir
     if agent_cfg.resume:
@@ -142,7 +136,7 @@ def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
         env = gym.wrappers.RecordVideo(env, **video_kwargs)
 
     # wrap around environment for rsl-rl
-    env = IsaacEnvWrapper[BxN_Obs, BxM_Action](env)
+    env = ROS2EnvWrapper[BxN_Obs, BxM_Action](env)
     env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
 
     # create runner from rsl-rl
@@ -173,5 +167,3 @@ def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
 if __name__ == "__main__":
     # run the main function
     main()
-    # close sim app
-    simulation_app.close()

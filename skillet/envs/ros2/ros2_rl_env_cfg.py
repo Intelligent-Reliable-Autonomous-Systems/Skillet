@@ -35,11 +35,25 @@ class ROS2RLEnvCfg:
 
     """RL environment configuration"""
     num_envs: int = 1
+    """Number of parallel environments, will always be 1 for ROS"""
 
     device: str = "cuda"
+    """GPU device"""
 
     dt: float = 2
+    """Delta time per step"""
 
     decimation: float = 1.0
+    """Decimation (steps through physics)"""
 
     episode_length_s: float = 5.0
+    """Episode length in seconds"""
+
+    skills: list[str] | None = None
+    """List of behavior primitives available"""
+
+    seed: int = MISSING
+    """Seed for the environment"""
+
+    is_finite_horizon: bool = False
+    """Whether learning is treated as a finite or infinite horizon problem"""

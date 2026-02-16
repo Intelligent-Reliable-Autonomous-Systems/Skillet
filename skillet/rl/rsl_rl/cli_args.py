@@ -44,7 +44,7 @@ def parse_rsl_rl_cfg(task_name: str, args_cli: argparse.Namespace) -> RslRlBaseR
         The parsed configuration for RSL-RL agent based on inputs.
 
     """
-    from skillet.envs.utils.parse_cfg import load_cfg_from_registry
+    from skillet.envs.util.parse_cfg import load_cfg_from_registry
 
     # load the default configuration
     rslrl_cfg: RslRlBaseRunnerCfg = load_cfg_from_registry(task_name, "rsl_rl_cfg_entry_point")

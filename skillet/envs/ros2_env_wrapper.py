@@ -101,7 +101,11 @@ class ROS2EnvWrapper(
 
     @property
     def episode_length_buf(self) -> torch.Tensor:
-        return self.env.unwrapped.episode_length_buf
+        return torch.tensor([self.env.unwrapped.episode_length_buf], device=self.device)
+
+    @episode_length_buf.setter
+    def episode_length_buf(self, value):
+        self.env.unwrapped.episode_length_buf = value.squeeze().item()
 
     @property
     def obs_spec(self):
@@ -148,6 +152,8 @@ class ROS2EnvWrapper(
         """
         obs_dict, info = self.env.reset()
         self.last_obs = obs_dict
+        for k, v in obs_dict.items():
+            obs_dict[k] = torch.as_tensor(v, device=self.device).unsqueeze(0)
 
         return obs_dict, info
 
@@ -196,10 +202,12 @@ class ROS2EnvWrapper(
         """
         obs_dict, reward, term, trunc, info = self.env.step(action)
         self.last_obs = obs_dict
+        for k, v in obs_dict.items():
+            obs_dict[k] = torch.as_tensor(v, device=self.device).unsqueeze(0)
 
-        reward = torch.as_tensor(reward, device=self.device).unsqueeze(0)
-        term = torch.as_tensor([term], device=self.device).unsqueeze(0)
-        trunc = torch.as_tensor([trunc], device=self.device).unsqueeze(0)
+        reward = torch.as_tensor(reward, device=self.device)
+        term = torch.as_tensor([term], device=self.device)
+        trunc = torch.as_tensor([trunc], device=self.device)
 
         return obs_dict, reward, term, trunc, info
 

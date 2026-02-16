@@ -9,7 +9,7 @@ import isaaclab.sim as sim_utils
 import torch
 from isaaclab.actuators.actuator_cfg import ImplicitActuatorCfg
 from isaaclab.assets import Articulation, ArticulationCfg
-from isaaclab.envs import DirectRLEnv, DirectRLEnvCfg
+from isaaclab.envs import DirectRLEnv
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.terrains import TerrainImporterCfg
@@ -19,11 +19,12 @@ from isaacsim.core.utils.stage import get_current_stage
 from isaacsim.core.utils.torch.transformations import tf_combine, tf_inverse, tf_vector
 from pxr import UsdGeom
 
+from skillet.envs.isaac import SkillsDirectRLEnvCfg
 from skillet.envs.util import configclass
 
 
 @configclass
-class KinovaCabinetEnvCfg(DirectRLEnvCfg):
+class KinovaCabinetEnvCfg(SkillsDirectRLEnvCfg):
     # env
     episode_length_s = 8.3333  # 500 timesteps
     decimation = 2

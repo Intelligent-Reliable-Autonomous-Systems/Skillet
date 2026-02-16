@@ -10,6 +10,7 @@ import abc
 from typing import Any, Generic, TypeVar, overload
 
 import gymnasium as gym
+import torch
 from jaxtyping import Bool, Float
 
 from skillet.core.spaces import (
@@ -288,7 +289,12 @@ class AsGymVectorEnv(gym.vector.VectorEnv):
 
     @property
     def episode_length_buf(self):
-        return self.env.unwrapped.episode_length_buf if hasattr(self.env.unwrapped, "episode_length_buf") else None
+        buf = self.env.unwrapped.episode_length_buf if hasattr(self.env.unwrapped, "episode_length_buf") else None
+        if isinstance(buf, torch.Tensor):
+            return buf
+        if isinstance(buf, int):
+            return torch.as_tensor([buf], device=self.device).unsqueeze(0)
+        raise ValueError(f"Unsupported `episode_length_buf` type {type(buf)}")
 
     @episode_length_buf.setter
     def episode_length_buf(self, value):
@@ -300,4 +306,9 @@ class AsGymVectorEnv(gym.vector.VectorEnv):
         """
         if not hasattr(self.env.unwrapped, "episode_length_buf"):
             raise ValueError(f"`{self.env.unwrapped}` has no attribute `episode length buf`.")
-        self.env.unwrapped.episode_length_buf = value
+        if isinstance(self.env.unwrapped.episode_length_buf, torch.Tensor):
+            self.env.unwrapped.episode_length_buf = value
+        elif isinstance(self.env.unwrapped.episode_length_buf, int):
+            self.env.unwrapped.episode_length_buf = value.squeeze().item()
+        else:
+            raise ValueError(f"Unsupported `episode_length_buf` type {type(self.env.unwrapped.episode_length_buf)}")
