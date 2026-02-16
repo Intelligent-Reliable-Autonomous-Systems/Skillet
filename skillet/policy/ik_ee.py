@@ -53,8 +53,7 @@ class IKEEPolicy(BatchedPPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[TB
         self.diff_ik.reset(n_envs, env_ids=env_ids)
         self.tcp_offset = obs["tcp_offset"]
         gripper_lim = obs["gripper_lim"]
-        self.start_gripper_pos = (obs["gripper"] - gripper_lim[:, 0]) / (gripper_lim[:, 1] - gripper_lim[:, 0])
-        print(f"[INFO][GRIPPER START] {self.start_gripper_pos}")
+        self.start_gripper_pos = (obs["gripper"] - gripper_lim[:, 0:1]) / (gripper_lim[:, 1:] - gripper_lim[:, 0:1])
 
     def _compute_goal_ee_pose_b_from_goal_tcp_b(
         self, tcp_pose_b: torch.Tensor, tcp_offset: torch.Tensor

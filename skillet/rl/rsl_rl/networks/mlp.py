@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2026, ETH Zurich and NVIDIA CORPORATION
+# Copyright (c) 2021-2025, ETH Zurich and NVIDIA CORPORATION
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -10,7 +10,7 @@ from functools import reduce
 import torch
 import torch.nn as nn
 
-from skillet.rl.rsl_rl.utils import get_param, resolve_nn_activation
+from skillet.rl.rsl_rl.utils import resolve_nn_activation
 
 
 class MLP(nn.Sequential):
@@ -85,13 +85,29 @@ class MLP(nn.Sequential):
             scales: Scale factor for the weights.
 
         """
+
+        def get_scale(idx: int) -> float:
+            """Get the scale factor for the weights of the MLP.
+
+            Args:
+                idx: Index of the layer.
+
+            """
+            return scales[idx] if isinstance(scales, (list, tuple)) else scales
+
+        # Initialize the weights
         for idx, module in enumerate(self):
             if isinstance(module, nn.Linear):
-                nn.init.orthogonal_(module.weight, gain=get_param(scales, idx))
+                nn.init.orthogonal_(module.weight, gain=get_scale(idx))
                 nn.init.zeros_(module.bias)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass of the MLP."""
+        """Forward pass of the MLP.
+
+        Args:
+            x: Input tensor.
+
+        """
         for layer in self:
             x = layer(x)
         return x

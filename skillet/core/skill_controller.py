@@ -30,6 +30,7 @@ class SkillController:
         self.action_dim = self.num_skills + self.param_dim
         self._env_action_dim = int(np.prod(env.single_action_space.shape))
         self._obs_func = env.get_observation
+        self.num_calls = 0
 
         self._dones = torch.zeros((self.num_envs,), dtype=torch.bool, device=self.device)
 
@@ -53,6 +54,7 @@ class SkillController:
             sk.initiate(self._obs_func(sk.obs_spec)[sk_env_ids], self._skills_params[sk_env_ids])
         self._action = torch.zeros((self.num_envs, self._env_action_dim), device=self.device)
         self._dones = torch.zeros((self.num_envs,), dtype=torch.bool, device=self.device)
+        self.num_calls = 0
 
     def get_action(self, obs: TBPolicyObs) -> TBAction:
         """Step through the skills, getting the next joint position for each.
@@ -64,12 +66,18 @@ class SkillController:
             TBAction in shape (num_envs, num_joints)
 
         """
+        action = torch.zeros((self.num_envs, self._env_action_dim), device=self.device)
         for i, sk in enumerate(self.skills):
             sk_env_ids = self.env_ids[self._skills_idx == i]
 
             if sk_env_ids.shape[0] == 0:
                 continue
-            self._action[sk_env_ids] = sk.get_action(self._obs_func(sk.obs_spec)[sk_env_ids])
+            action[sk_env_ids] = sk.get_action(self._obs_func(sk.obs_spec)[sk_env_ids])
+
+        self._action = (
+            action if self.num_calls == 0 else torch.where(self.dones.unsqueeze(-1), self._action, action)
+        )  # TODO Check that this is the behavior we want
+        self.num_calls += 1
 
         return self._action
 

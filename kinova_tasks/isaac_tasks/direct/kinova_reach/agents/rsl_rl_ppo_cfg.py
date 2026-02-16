@@ -4,14 +4,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 
-from isaaclab_rl.rsl_rl import RslRlPpoActorCriticCfg
-
 from skillet.envs.util import configclass
-from skillet.rl.cfg import (
-    RslRlOnPolicyRunnerCfg,
-    RslRlPpoAlgorithmCfg,
-    RslRlPpoPolicyCfg,
-)
+from skillet.rl.cfg import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg, RslRlPpoPolicyCfg
 
 
 @configclass

@@ -13,7 +13,7 @@ import sys
 from isaaclab.app import AppLauncher
 
 # local imports
-import cli_args  # isort: skip
+from skillet.rl.rsl_rl import cli_args  # isort: skip
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Train an RL agent with RSL-RL.")
@@ -28,6 +28,7 @@ parser.add_argument(
     "--agent", type=str, default="rsl_rl_cfg_entry_point", help="Name of the RL agent configuration entry point."
 )
 parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment")
+parser.add_argument("--skill", action="store_true", help="If to use a skill environment or not")
 parser.add_argument(
     "--use_pretrained_checkpoint",
     action="store_true",
@@ -60,8 +61,11 @@ import gymnasium as gym
 import isaaclab_tasks  # noqa: F401
 import numpy as np
 import torch
+from jaxtyping import Float, Int
 
 import kinova_tasks  # noqa: F401
+from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
+from skillet.envs.skill_isaac_env_wrapper import SkillIsaacEnvWrapper
 from skillet.envs.util import get_checkpoint_path
 from skillet.envs.util.dict import print_dict
 from skillet.envs.util.hydra import hydra_task_config
@@ -70,9 +74,15 @@ from skillet.rl.exporter import export_policy_as_jit, export_policy_as_onnx
 from skillet.rl.rsl_rl.runners import OnPolicyRunner
 from skillet.rl.rsl_rl.wrappers import RslRlVecEnvWrapper
 
+BxN_Obs = Float[torch.Tensor, "b n"]
+"""Environment observation: torch.Tensor[(b, n), float]"""
+BxM_Action = Float[torch.Tensor, "b m"]
+"""Environment action: torch.Tensor[(b, m), float]"""
+B_Int_HighLevel = Int[torch.Tensor, "b"]
+
 
 @hydra_task_config(args_cli.task, args_cli.agent)
-def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agent_cfg: RslRlBaseRunnerCfg):
+def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
     """Play with RSL-RL agent."""
     np.set_printoptions(suppress=True, precision=4)
 
@@ -115,6 +125,9 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         env = gym.wrappers.RecordVideo(env, **video_kwargs)
 
     # wrap around environment for rsl-rl
+    env = (
+        SkillIsaacEnvWrapper[BxN_Obs, BxM_Action](env) if args_cli.skill else IsaacEnvWrapper[BxN_Obs, BxM_Action](env)
+    )
     env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
 
     print(f"[INFO]: Loading model checkpoint from: {resume_path}")
@@ -151,7 +164,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     export_policy_as_onnx(policy_nn, normalizer=normalizer, path=export_model_dir, filename="policy.onnx")
 
     # reset environment
-    obs = env.get_observations()
+    obs = env.get_observation()
     timestep = 0
     # simulate environment
     while simulation_app.is_running():

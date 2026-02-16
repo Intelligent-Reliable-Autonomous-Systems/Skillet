@@ -13,7 +13,7 @@ import sys
 from isaaclab.app import AppLauncher
 
 # local imports
-import cli_args  # isort: skip
+from skillet.rl.rsl_rl import cli_args  # isort: skip
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Train an RL agent with RSL-RL.")
@@ -95,7 +95,8 @@ from isaaclab.utils.io import dump_yaml
 from isaaclab_rl.rsl_rl import RslRlBaseRunnerCfg, RslRlVecEnvWrapper
 from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
-from rsl_rl.runners import DistillationRunner, OnPolicyRunner
+
+from skillet.rl.rsl_rl.runners import DistillationRunner, OnPolicyRunner
 
 # import logger
 logger = logging.getLogger(__name__)

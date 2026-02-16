@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2026, ETH Zurich and NVIDIA CORPORATION
+# Copyright (c) 2021-2025, ETH Zurich and NVIDIA CORPORATION
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -12,7 +12,7 @@ import torch.nn as nn
 from tensordict import TensorDict
 
 from skillet.rl.rsl_rl.env import VecEnv
-from skillet.rl.rsl_rl.modules import MLP, EmpiricalDiscountedVariationNormalization, EmpiricalNormalization
+from skillet.rl.rsl_rl.networks import MLP, EmpiricalDiscountedVariationNormalization, EmpiricalNormalization
 
 
 class RandomNetworkDistillation(nn.Module):
@@ -90,15 +90,13 @@ class RandomNetworkDistillation(nn.Module):
 
         # Normalization of input gates
         if state_normalization:
-            self.state_normalizer = EmpiricalNormalization(shape=[self.num_states], until=int(1.0e8)).to(self.device)
+            self.state_normalizer = EmpiricalNormalization(shape=[self.num_states], until=1.0e8).to(self.device)
         else:
             self.state_normalizer = torch.nn.Identity()
 
         # Normalization of intrinsic reward
         if reward_normalization:
-            self.reward_normalizer = EmpiricalDiscountedVariationNormalization(shape=[], until=int(1.0e8)).to(
-                self.device
-            )
+            self.reward_normalizer = EmpiricalDiscountedVariationNormalization(shape=[], until=1.0e8).to(self.device)
         else:
             self.reward_normalizer = torch.nn.Identity()
 
@@ -165,7 +163,7 @@ class RandomNetworkDistillation(nn.Module):
         # Normalize the state
         if self.state_normalization:
             rnd_state = self.get_rnd_state(obs)
-            self.state_normalizer.update(rnd_state)  # type: ignore
+            self.state_normalizer.update(rnd_state)
 
     def _constant_weight_schedule(self, step: int, **kwargs: dict[str, Any]) -> float:
         return self.initial_weight
@@ -209,7 +207,5 @@ def resolve_rnd_config(alg_cfg: dict, obs: TensorDict, obs_groups: dict[str, lis
         alg_cfg["rnd_cfg"]["num_states"] = num_rnd_state
         alg_cfg["rnd_cfg"]["obs_groups"] = obs_groups
         # Scale down the rnd weight with timestep
-        alg_cfg["rnd_cfg"]["weight"] *= env.unwrapped.step_dt  # type: ignore
-    else:
-        alg_cfg["rnd_cfg"] = None
+        alg_cfg["rnd_cfg"]["weight"] *= env.unwrapped.step_dt
     return alg_cfg

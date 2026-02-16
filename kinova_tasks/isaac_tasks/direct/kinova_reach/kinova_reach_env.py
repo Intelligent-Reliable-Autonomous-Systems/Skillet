@@ -16,7 +16,7 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
-from isaaclab.utils.math import quat_error_magnitude, quat_from_euler_xyz, sample_uniform
+from isaaclab.utils.math import quat_from_euler_xyz, sample_uniform
 from isaacsim.core.utils.torch.transformations import tf_combine
 
 from kinova_tasks.assets.utils import KINOVA_ASSET_DIR
@@ -35,7 +35,7 @@ class KinovaReachEnvCfg(SkillsDirectRLEnvCfg):
 
     joint_ids = [0, 1, 2, 3, 4, 5, 6, 7]
 
-    skills = ["reach_xyz"]
+    skills = ["reach_xyz", "orient_y"]
 
     # simulation
     sim: SimulationCfg = SimulationCfg(
@@ -384,11 +384,9 @@ def compute_rewards(
         1 - torch.tanh(ee_distance / ee_dist_reward_fine_grained_std)
     )
 
-    orientation_reward = ee_orientation_reward_scale * quat_error_magnitude(ee_quat, goal_ee_quat)
+    # orientation_reward = ee_orientation_reward_scale * quat_error_magnitude(ee_quat, goal_ee_quat)
 
     action_rate_reward = action_rate_reward_scale * torch.sum(torch.square(actions - prev_actions), dim=1)
-    joint_vel_reward = joint_vel_reward_scale * torch.sum(torch.square(joint_vel), dim=1)
-
-    return (dist_reward + dist_fine_grained_rew + orientation_reward + action_rate_reward + joint_vel_reward).clamp(
-        -1, 1
-    )
+    joint_vel_reward = (joint_vel_reward_scale * torch.sum(torch.square(joint_vel), dim=1)).clamp(-1, 1)
+    # TODO removed action rate
+    return (dist_reward + dist_fine_grained_rew + joint_vel_reward).clamp(-1, 1)

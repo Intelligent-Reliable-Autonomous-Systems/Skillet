@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2026, ETH Zurich and NVIDIA CORPORATION
+# Copyright (c) 2021-2025, ETH Zurich and NVIDIA CORPORATION
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -23,7 +23,6 @@ class EmpiricalNormalization(nn.Module):
             shape: Shape of input values except batch axis.
             eps: Small value for stability.
             until: If this arg is specified, the module learns input values until the sum of batch sizes exceeds it.
-
         """
         super().__init__()
         self.eps = eps
@@ -35,7 +34,7 @@ class EmpiricalNormalization(nn.Module):
 
     @property
     def mean(self) -> torch.Tensor:
-        return self._mean.squeeze(0).clone()  # type: ignore
+        return self._mean.squeeze(0).clone()
 
     @property
     def std(self) -> torch.Tensor:
@@ -93,9 +92,10 @@ class EmpiricalDiscountedVariationNormalization(nn.Module):
             self.emp_norm.update(avg)
 
         # Normalize rewards with the empirical std
-        if self.emp_norm._std > 0:  # type: ignore
-            return rew / self.emp_norm._std  # type: ignore
-        return rew
+        if self.emp_norm._std > 0:
+            return rew / self.emp_norm._std
+        else:
+            return rew
 
 
 class _DiscountedAverage:

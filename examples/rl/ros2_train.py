@@ -27,6 +27,7 @@ parser.add_argument("--max_iterations", type=int, default=None, help="RL Policy 
 parser.add_argument(
     "--distributed", action="store_true", default=False, help="Run training with multiple GPUs or nodes."
 )
+parser.add_argument("--skill", action="store_true", help="If to use a skill environment or not")
 parser.add_argument("--export_io_descriptors", action="store_true", default=False, help="Export IO descriptors.")
 parser.add_argument(
     "--ros2_ws", type=str, default=None, required=True, help="Absolute path to ROS2 workspace containing bringup files"
@@ -66,6 +67,7 @@ from jaxtyping import Float, Int
 
 import kinova_tasks  # noqa: F401
 from skillet.envs.ros2_env_wrapper import ROS2EnvWrapper
+from skillet.envs.skill_ros2_env_wrapper import SkillROS2EnvWrapper
 from skillet.envs.util import get_checkpoint_path, setup_ros
 from skillet.envs.util.dict import print_dict
 from skillet.envs.util.hydra import hydra_task_config
@@ -136,7 +138,7 @@ def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
         env = gym.wrappers.RecordVideo(env, **video_kwargs)
 
     # wrap around environment for rsl-rl
-    env = ROS2EnvWrapper[BxN_Obs, BxM_Action](env)
+    env = SkillROS2EnvWrapper if args_cli.skill else ROS2EnvWrapper[BxN_Obs, BxM_Action](env)
     env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
 
     # create runner from rsl-rl

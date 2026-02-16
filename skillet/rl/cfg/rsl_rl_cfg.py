@@ -75,6 +75,9 @@ class RslRlPpoActorCriticCfg:
     activation: str = MISSING
     """The activation function for the actor and critic networks."""
 
+    hierarchical_policy: bool = True
+    """If to load a hierarchical skills policy"""
+
 
 @configclass
 class RslRlPpoActorCriticRecurrentCfg(RslRlPpoPolicyCfg):
@@ -201,7 +204,7 @@ class RslRlBaseRunnerCfg:
     This way, the policy will receive the "policy" and "images" observations, and the critic will
     receive the "policy" and "privileged" observations.
 
-    For more details, please check ``vec_env.py`` in the rsl_rl library.
+    For more details, please check ``vec_env.py`` in the skillet.rl.rsl_rl library.
     """
 
     clip_actions: float | None = None

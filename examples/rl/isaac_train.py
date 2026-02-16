@@ -26,6 +26,7 @@ parser.add_argument(
     "--agent", type=str, default="rsl_rl_cfg_entry_point", help="Name of the RL agent configuration entry point."
 )
 parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment")
+parser.add_argument("--skill", action="store_true", help="If to use a skill environment or not")
 parser.add_argument("--max_iterations", type=int, default=None, help="RL Policy training iterations.")
 parser.add_argument(
     "--distributed", action="store_true", default=False, help="Run training with multiple GPUs or nodes."
@@ -62,7 +63,7 @@ import torch
 from jaxtyping import Float, Int
 
 import kinova_tasks  # noqa: F401
-from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper  # noqa: F401
+from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
 from skillet.envs.skill_isaac_env_wrapper import SkillIsaacEnvWrapper
 from skillet.envs.util import get_checkpoint_path
 from skillet.envs.util.dict import print_dict
@@ -144,7 +145,9 @@ def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
 
     # wrap around environment for rsl-rl
     # env = IsaacEnvWrapper[BxN_Obs, BxM_Action](env)
-    env = SkillIsaacEnvWrapper[BxN_Obs, BxM_Action](env)
+    env = (
+        SkillIsaacEnvWrapper[BxN_Obs, BxM_Action](env) if args_cli.skill else IsaacEnvWrapper[BxN_Obs, BxM_Action](env)
+    )
     env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
 
     # create runner from rsl-rl
