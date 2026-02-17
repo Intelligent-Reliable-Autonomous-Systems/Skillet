@@ -296,6 +296,36 @@ class SpaceSpecification(Generic[TSpace]):
             return torch.tensor(sampled, device=self.device)
         return sampled
 
+    def cast(self, value: SpaceValue) -> TSpace:
+        """Cast a value to the type of the space."""
+
+        def cast_array(v: Any, expected_shape: tuple[int, ...], dtype: Any, key: str = "") -> Any:  # noqa: ANN401
+            if self.is_torch:
+                arr = torch.as_tensor(v, dtype=as_torch_dtype(dtype), device=self.device)
+                if arr.shape != expected_shape:
+                    if self.n_envs != -1 and \
+                        arr.shape == expected_shape[1:]:
+                        arr = arr.unsqueeze(0)
+                        arr = arr.expand((self.n_envs, *expected_shape[1:]))
+                    else:
+                        raise ValueError(f"Expected shape {expected_shape} but got {arr.shape} for value {key}.")
+                return arr
+            arr = np.asarray(v, dtype=dtype)
+            if arr.shape != expected_shape:
+                if self.n_envs != -1 and \
+                    arr.shape == expected_shape[1:]:
+                    arr = arr[np.newaxis, ...]
+                    arr = np.broadcast_to(arr, (self.n_envs, *expected_shape[1:]))
+                else:
+                    raise ValueError(f"Expected shape {expected_shape} but got {arr.shape} for value {key}.")
+            return arr
+        if isinstance(self.space, gym.spaces.Dict):
+            if not isinstance(value, Mapping):
+                raise TypeError(f"Expected a mapping for a Dict space but got {type(value).__name__}.")
+            return {key: cast_array(v, self.space.spaces[key].shape, self.space.spaces[key].dtype, key=key)
+                    for key, v in value.items()}  # type: ignore[return-value]
+        return cast_array(value, self.space.shape, self.space.dtype)
+
     def with_n_envs(self, n_envs: int) -> SpaceSpecification[TSpace]:
         """Return a new space specification with the given number of environments."""
         if not self.is_batched:
@@ -312,6 +342,15 @@ class SpaceSpecification(Generic[TSpace]):
         if isinstance(value, Mapping):
             return next(iter(value.values())).shape[0]
         return value.shape[0]
+
+    def unbatched(self) -> SpaceSpecification[Any]:
+        """Return a new space specification with the batch dimension removed."""
+        if not self.is_batched:
+            return self
+        if self.n_envs == -1:
+            return replace(self, is_batched=False, n_envs=None)
+        # TODO: implement unbatched for pre-batched spaces (n_envs != -1)
+        raise NotImplementedError("unbatched() not available for pre-batched spaces")
 
 
 # =============================================
@@ -515,6 +554,10 @@ def as_torch_dtype(dtype: type[int] | type[float] | type[bool] | np.dtype | torc
     if dtype is bool:
         return torch.bool
     if isinstance(dtype, np.dtype):
+        if dtype == np.uint8:
+            return torch.uint8
+        if dtype == np.uint16:
+            return torch.uint16
         if dtype == np.int32:
             return torch.int32
         if dtype == np.int64:
