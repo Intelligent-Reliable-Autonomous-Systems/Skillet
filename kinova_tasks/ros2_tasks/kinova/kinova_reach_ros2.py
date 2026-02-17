@@ -6,12 +6,14 @@ Written by Will Solow, 2026
 
 """
 
+import base64
 import math
 from typing import Any
 
+import cv2
 import gymnasium as gym
 import numpy as np
-from roslibpy import ActionClient, Ros, Topic
+from roslibpy import ActionClient, Ros, Service, Topic
 
 from skillet.envs.ros2 import (
     ROS2RLEnv,
@@ -94,6 +96,8 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
             if cfg.use_fake_hardware == "true"
             else "control_msgs/action/ParallelGripperCommand"
         )
+        self.realsense_snapshot_service = "/table_camera/realsense/get_latest_frame"
+        self.realsense_snapshot_service_type = "iras_realsense_msgs/srv/GetLatestRgbd"
 
         self._ready = {
             "joint_states": False,
@@ -153,6 +157,11 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
         self.joint_states_pub = Topic(self.ros, self.joint_cmd_topic, "trajectory_msgs/JointTrajectory")
 
         self.gripper_client = ActionClient(self.ros, self.gripper_cmd_topic, self.gripper_topic_type)
+        self.realsense_service = Service(
+            self.ros,
+            self.realsense_snapshot_service,
+            self.realsense_snapshot_service_type,
+        )
 
         # Subscribe to jacobian topic
         self.jacobian_sub = Topic(self.ros, self.jacobian_topic, "gen3_cpp/msg/Jacobian")
@@ -308,3 +317,84 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
         self.gripper_ok = False
         self.last_gripper_error = err
         pass
+
+    def _get_latest_rgbd(self) -> dict[str, Any]:
+        """Request and decode the latest RGB-D snapshot synchronously.
+
+        Returns:
+            A dictionary containing:
+                - rgb: HxWx3 uint8 RGB image
+                - depth: HxW float32 depth image in meters
+                - intrinsic_k: 3x3 float64 camera intrinsic matrix
+                - camera_pose: 7D float64 array of camera pose in world frame (x, y, z, qx, qy, qz, qw)
+                - timestamp: float timestamp of the RGB-D capture
+
+        """
+        result = self.realsense_service.call({})
+
+        data = result.data
+        if not data.get("success", False):
+            raise RuntimeError(f"RGB-D snapshot request failed: {data.get('message', 'unknown error')}")
+
+        rgb_jpeg = self._decode_uint8_payload(data["rgb_jpeg"], field_name="rgb_jpeg")
+        if rgb_jpeg.size < 2 or not (rgb_jpeg[0] == 0xFF and rgb_jpeg[1] == 0xD8):
+            raise RuntimeError("rgb_jpeg payload does not have a JPEG SOI header (0xFFD8)")
+        rgb_bgr = cv2.imdecode(rgb_jpeg, cv2.IMREAD_COLOR)
+        if rgb_bgr is None:
+            raise RuntimeError("Failed to decode RGB JPEG from service response")
+        rgb = cv2.cvtColor(rgb_bgr, cv2.COLOR_BGR2RGB)
+
+        depth_png = self._decode_uint8_payload(data["depth_png"], field_name="depth_png")
+        if depth_png.size < 8 or not np.array_equal(depth_png[:8], np.asarray([137, 80, 78, 71, 13, 10, 26, 10])):
+            raise RuntimeError("depth_png payload does not have a PNG signature")
+        depth = cv2.imdecode(depth_png, cv2.IMREAD_UNCHANGED)
+        if depth is None:
+            raise RuntimeError("Failed to decode depth PNG from service response")
+        if depth.dtype != np.uint16:
+            depth = depth.astype(np.uint16, copy=False)
+
+        camera_info = data["camera_info"]
+        k = np.asarray(camera_info["k"], dtype=np.float64).reshape(3, 3)
+
+        tf_msg = data["t_world_cam"]
+        t = tf_msg["transform"]["translation"]
+        q = tf_msg["transform"]["rotation"]
+        translation = np.asarray([t["x"], t["y"], t["z"]], dtype=np.float64)
+        quat_xyzw = np.asarray([q["x"], q["y"], q["z"], q["w"]], dtype=np.float64)
+        camera_pos_quat = np.concatenate((translation, quat_xyzw), axis=0)
+
+        stamp = data.get("stamp", {"sec": 0, "nanosec": 0})
+        timestamp = float(stamp.get("sec", 0)) + float(stamp.get("nanosec", 0)) * 1e-9
+
+        return {
+            "rgb": rgb,
+            "depth": depth,
+            "intrinsic_k": k,
+            "camera_pose": camera_pos_quat,
+            "timestamp": timestamp,
+        }
+
+    @staticmethod
+    def _decode_uint8_payload(payload: Any, field_name: str) -> np.ndarray:
+        """Decode rosbridge-serialized uint8[] payload into np.uint8."""
+        if isinstance(payload, (bytes, bytearray, memoryview)):
+            return np.frombuffer(payload, dtype=np.uint8)
+
+        if isinstance(payload, list):
+            return np.asarray(payload, dtype=np.uint8)
+
+        if isinstance(payload, dict):
+            if "bytes" in payload:
+                return KinovaROS2ReachEnv._decode_uint8_payload(payload["bytes"], field_name=field_name)
+            if "data" in payload:
+                return KinovaROS2ReachEnv._decode_uint8_payload(payload["data"], field_name=field_name)
+
+        if isinstance(payload, str):
+            try:
+                # rosbridge commonly serializes uint8[] as base64 strings.
+                return np.frombuffer(base64.b64decode(payload, validate=True), dtype=np.uint8)
+            except Exception:
+                # Fallback for raw byte-preserving strings.
+                return np.frombuffer(payload.encode("latin-1"), dtype=np.uint8)
+
+        raise TypeError(f"Unsupported payload type for {field_name}: {type(payload).__name__}")

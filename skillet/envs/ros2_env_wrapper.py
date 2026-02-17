@@ -6,15 +6,16 @@ Written by Will Solow and Jeff Jewett, 2026
 """
 
 from collections.abc import Mapping
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar, overload
 
 import gymnasium as gym
+import numpy as np
 import torch
 from jaxtyping import Bool, Float
 from tensordict import TensorDict
 
 from skillet.core import ObservationSpec
-from skillet.core.env import AsGymVectorEnv, BatchedEnvironment
+from skillet.core.env import AsGymVectorEnv, BatchedEnvironment, TSpecObs
 from skillet.core.math import (
     convert_quat,
     matrix_from_quat,
@@ -82,6 +83,20 @@ class ROS2EnvWrapper(
             n_envs=-1,
             device=self.device,
         )
+        self._obs_spec_rgbd = ObservationSpec[Mapping[str, Float[torch.Tensor, "b ..."]]](
+            space=gym.spaces.Dict({
+                "rgb": gym.spaces.Box(low=0, high=255, shape=(480, 640, 3), dtype=np.uint8),
+                "depth": gym.spaces.Box(low=0, high=1000, shape=(480, 640), dtype=np.uint16),
+                "intrinsic_k": gym.spaces.Box(low=0.0, high=2000.0, shape=(3, 3), dtype=np.float32),
+                "camera_pose": gym.spaces.Box(low=-10.0, high=10.0, shape=(7,), dtype=np.float32),
+                "timestamp": gym.spaces.Box(low=0.0, high=1e10, shape=(), dtype=np.float64),
+            }),
+            name="rgb-d",
+            is_torch=True,
+            is_batched=True,
+            n_envs=-1,
+            device=self.device,
+        )
         self._action_spec = ActionSpec[TBatchedActionTorch](
             space=vector_env.single_action_space,
             name="action",
@@ -99,6 +114,8 @@ class ROS2EnvWrapper(
         self.gripper_joint_name = env.unwrapped.cfg.gripper_joint_name
 
         self.tcp_offset = torch.as_tensor(self.tcp_offset, device=self.device).unsqueeze(0).repeat(self.num_envs, 1)
+
+        self.last_obs = None
 
     @property
     def episode_length_buf(self) -> torch.Tensor:
@@ -139,7 +156,7 @@ class ROS2EnvWrapper(
         return upper_limits
 
     def supports_observation_spec(self, obs_spec: ObservationSpec) -> bool:
-        return obs_spec.name in ["policy", "state"]
+        return obs_spec.name in ["policy", "state", "rgb-d"]
 
     def reset(self) -> tuple[TBatchedObsTorch, dict]:
         """Reset the environment.
@@ -158,15 +175,22 @@ class ROS2EnvWrapper(
 
         return obs_dict, info
 
-    def get_observation(self, obs_spec=None):  # noqa: ANN001, ANN201, D102
+    @overload
+    def get_observation(self) -> TBatchedObsTorch: ...
+    @overload
+    def get_observation(self, obs_spec: ObservationSpec[TSpecObs]) -> TSpecObs: ...
+    def get_observation(self, obs_spec: ObservationSpec[TSpecObs] | None = None) -> Any:  # noqa: D102
         if self.last_obs is None:
             raise ValueError("No observation has been received yet. Call reset() first.")
         if obs_spec is None:
             return self.last_obs  # TODO convert to TensorDict
+        if obs_spec.is_batched:
+            obs_spec = obs_spec.with_n_envs(self.n_envs)
         if obs_spec.name == "policy":
             return torch.as_tensor(self.last_obs["policy"], device=self.device).unsqueeze(0)
         if obs_spec.name == "rgb-d":
-            pass  # check if "rgb-d" in obs_dict
+            latest = self._env._get_latest_rgbd()
+            return obs_spec.cast(latest)
         if obs_spec.name == "state":
             return self.last_obs
         if obs_spec.name == "ik_ee":
