@@ -45,6 +45,7 @@ from jaxtyping import Float, Int
 
 import kinova_tasks.isaac_tasks as tasks  # noqa: F401
 from skillet.agents.policy_over_options import PolicyOverOptionsAgent
+from skillet.core.math import euler_xyz_from_quat
 from skillet.core.spaces import ActionSpec, ObservationSpec
 from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
 from skillet.policy.dummy import FixedSequencePolicy, RandomPolicy
@@ -93,29 +94,22 @@ def main() -> None:
 
     osc_ee_pose_policy = PoseAbsOSCEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
     # Skills
-    skill_length = 100
+    skill_length = 40
     reach_xyz_skill = ReachXYZRPYSkill[BxN_Obs, BxM_Action, None](
         name="reach_xyz_skill", policy=osc_ee_pose_policy, length=skill_length
     )
     skills = [reach_xyz_skill]
 
+    r, p, y = euler_xyz_from_quat(torch.tensor([[0.0, 0.92387953, 0.0, 0.38268343]]))
     # Parameters policy
     fixed_param_policy = FixedSequencePolicy[BxN_Obs, BxM_Action](
         observation_spec,
         action_spec,
         torch.as_tensor(
             [
-                # [0.6, 0.0, 0.4, 0.0, 3.14, 0.0],
-                [0.6, 0.2, 0.3, 0.0, 1.57, 0.0],
-                [0.2, -0.2, 0.03, 0.0, 0.0, 0.0],
-                [0.7, 0.1, 0.6, 0.0, 1.57, 0.0],
-                [0.3, 0.3, 0.4, 1.57, 0.0, 0.0],
-                # [0.3, 0.3, 0.4, 3.14, 0.0, 0.0],
-                # [0.3, 0.3, 0.4, -1.57, 0.0, 0.0]
-                # [-0.5, -0.2, 0.4, 0.0, -1.57, 0.0],
-                # [-0.5, -0.2, 0.4, 0.0, 0.0, 1.57],
-                # [-0.5, -0.2, 0.4, 0.0, 0.0, 3.14],
-                # [-0.5, -0.2, 0.4, 0.0, 0.0, -1.57],
+                [0.6, 0.15, 0.3, r.item(), p.item(), y.item()],
+                [0.6, -0.3, 0.3, r.item(), p.item(), y.item()],
+                [0.8, 0.0, 0.5, r.item(), p.item(), y.item()],
             ],
             device=env.device,
         ),

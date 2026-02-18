@@ -5,7 +5,7 @@ from typing import Any, Generic
 import torch
 
 from skillet.controllers import OperationalSpaceController
-from skillet.core.math import quat_apply, quat_from_euler_xyz, quat_inv, quat_mul
+from skillet.core.math import quat_apply, quat_from_euler_xyz, quat_inv, quat_mul, subtract_frame_transforms
 from skillet.core.policy import BatchedPPolicy, TBAction, TBPolicyObs
 from skillet.core.spaces import ActionSpec, ObservationSpec
 
@@ -99,6 +99,43 @@ class OSCEEPolicy(BatchedPPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[T
 
         return torch.cat((p_be, q_be), dim=1)
 
+    def convert_to_task_frame(
+        self, command: torch.tensor, ee_target_pose_b: torch.tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Convert the target commands to the task frame.
+
+        Args:
+            osc: OperationalSpaceController object.
+            command: Command to be converted.
+            ee_target_pose_b: Target pose in the body frame.
+
+        Returns:
+            command (torch.tensor): Target command in the task frame.
+            task_frame_pose_b (torch.tensor): Target pose in the task frame.
+
+        Raises:
+            ValueError: Undefined target_type.
+
+        """
+        command = command.clone()
+        task_frame_pose_b = ee_target_pose_b.clone()
+
+        cmd_idx = 0
+        for target_type in self.osc.target_types:
+            if target_type == "pose_abs":
+                command[:, :3], command[:, 3:7] = subtract_frame_transforms(
+                    task_frame_pose_b[:, :3], task_frame_pose_b[:, 3:], command[:, :3], command[:, 3:7]
+                )
+                cmd_idx += 7
+            elif target_type == "wrench_abs":
+                # These are already defined in target frame for ee_goal_wrench_set_tilted_task (since it is
+                # easier), so not transforming
+                cmd_idx += 6
+            else:
+                raise ValueError("Undefined target_type within _convert_to_task_frame().")
+
+        return command, task_frame_pose_b
+
 
 class PoseAbsOSCEEPolicy(OSCEEPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, TBAction]):
     """A policy that produces pose ."""
@@ -131,6 +168,7 @@ class PoseAbsOSCEEPolicy(OSCEEPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs
             (goal_pose, wrench.repeat(goal_pose.shape[0], 1), kp.repeat(goal_pose.shape[0], 1)), dim=1
         )
         ee_pose_b = obs["ee_pose_b"][env_ids]
+        # command, task_frame_pose_b = self.convert_to_task_frame(command=goal_task_command, ee_target_pose_b=goal_pose)
         self.osc.set_command(goal_task_command, current_ee_pose_b=ee_pose_b, env_ids=env_ids)
 
 

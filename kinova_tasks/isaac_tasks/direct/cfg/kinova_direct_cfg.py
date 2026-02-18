@@ -21,7 +21,7 @@ class KinovaBaseCfg(SkillsDirectRLEnvCfg):
     base_link_name = "base_link"
     gripper_joint_names = ["finger_joint"]
 
-    skills = ["reach_xyz"]
+    skills = ["reach_xyz", "orient_rpy", "gripper_oc"]
 
     # simulation
     sim: SimulationCfg = SimulationCfg(
