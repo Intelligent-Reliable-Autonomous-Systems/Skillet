@@ -353,6 +353,8 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
         t = tf_msg["transform"]["translation"]
         q = tf_msg["transform"]["rotation"]
         translation = np.asarray([t["x"], t["y"], t["z"]], dtype=np.float64)
+        # quaternion is in xyzw ROS format, to be consistent with joint states
+        # wrapper must convert to wxyz format
         quat_xyzw = np.asarray([q["x"], q["y"], q["z"], q["w"]], dtype=np.float64)
         camera_pos_quat = np.concatenate((translation, quat_xyzw), axis=0)
 

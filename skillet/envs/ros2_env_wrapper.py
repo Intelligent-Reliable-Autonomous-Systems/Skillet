@@ -84,8 +84,8 @@ class ROS2EnvWrapper(
         )
         self._obs_spec_rgbd = ObservationSpec[Mapping[str, Float[torch.Tensor, "b ..."]]](
             space=gym.spaces.Dict({
-                "rgb": gym.spaces.Box(low=0, high=255, shape=(480, 640, 3), dtype=np.uint8),
-                "depth": gym.spaces.Box(low=0, high=1000, shape=(480, 640), dtype=np.uint16),
+                "rgb": gym.spaces.Box(low=0, high=255, shape=(3, 480, 640), dtype=np.uint8),
+                "depth": gym.spaces.Box(low=0, high=1000, shape=(1, 480, 640), dtype=np.uint16),
                 "intrinsic_k": gym.spaces.Box(low=0.0, high=2000.0, shape=(3, 3), dtype=np.float32),
                 "camera_pose": gym.spaces.Box(low=-10.0, high=10.0, shape=(7,), dtype=np.float32),
                 "timestamp": gym.spaces.Box(low=0.0, high=1e10, shape=(), dtype=np.float64),
@@ -189,6 +189,13 @@ class ROS2EnvWrapper(
             return torch.as_tensor(self.last_obs["policy"], device=self.device).unsqueeze(0)
         if obs_spec.name == "rgb-d":
             latest = self._env._get_latest_rgbd()
+            # ROS xyzw format -> IsaacLab wxyz format
+            q = latest["camera_pose"][3:7]
+            latest["camera_pose"][3:7] = q[[3, 0, 1, 2]]
+            # RGB is (H, W, 3) -> (3, H, W)
+            latest["rgb"] = latest["rgb"].transpose((2, 0, 1))
+            # Depth is (H, W) -> (1, H, W)
+            latest["depth"] = np.expand_dims(latest["depth"], axis=0)
             return obs_spec.cast(latest)
         if obs_spec.name == "state":
             return self.last_obs

@@ -118,9 +118,9 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
         wait_for_topic_subscribe(self.ros, self.joint_state_topic, "sensor_msgs/JointState")
         wait_for_rviz(self.ros)
 
-        wait_for_topic_subscribe(self.ros, self.jacobian_topic, "gen3_cpp/msg/Jacobian")
-        wait_for_topic_subscribe(self.ros, self.robot_description_topic, "gen3_cpp/msg/RobotInfo")
-        wait_for_topic_subscribe(self.ros, self.body_pose_topic, "gen3_cpp/msg/BodyPose")
+        # wait_for_topic_subscribe(self.ros, self.jacobian_topic, "gen3_cpp/msg/Jacobian")
+        # wait_for_topic_subscribe(self.ros, self.robot_description_topic, "gen3_cpp/msg/RobotInfo")
+        # wait_for_topic_subscribe(self.ros, self.body_pose_topic, "gen3_cpp/msg/BodyPose")
 
         # Subscribe to joint states
         self.joint_states_sub = Topic(self.ros, self.joint_state_topic, "sensor_msgs/JointState")
