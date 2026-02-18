@@ -6,11 +6,15 @@ import time
 
 import cv2
 import gymnasium as gym
+import torch
 
 import kinova_tasks.ros2_tasks  # noqa: F401
 from kinova_tasks.ros2_tasks.kinova.kinova_reach_ros2 import KinovaROS2ReachEnv
 from skillet.envs.ros2_env_wrapper import ROS2EnvWrapper
 from skillet.envs.util import parse_ros2_env_cfg, setup_ros
+from skillet.perception.object_localization import segmented_rgbd_to_point_cloud
+from skillet.perception.visualize import visualize_point_cloud
+from skillet.perception.sam3.sam3 import SAM3
 
 
 def _depth_to_colormap(depth_mm):
@@ -56,15 +60,19 @@ def main() -> None:
     env_cfg.use_fake_hardware = args_cli.use_fake_hardware
     env_cfg.launch_ros = args_cli.launch_ros
 
+    sam3 = SAM3(device=args_cli.device)
+    # rgb = torch.zeros((3, 480, 640), dtype=torch.uint8, device=args_cli.device)
+    # seg, seg_indices = sam3.predict(rgb, ["figurine"])
+    # print(f"Found {len(seg)} objects: {seg_indices} with areas {seg.sum(dim=(1,2))}")
+
     # env = gym.make(args_cli.task, cfg=env_cfg, ros=setup_ros())
     env = KinovaROS2ReachEnv(cfg=env_cfg, ros=setup_ros())
     env = ROS2EnvWrapper(env)
     env.reset()
     rgbd_spec = env._obs_spec_rgbd.unbatched()
-    base_env = env.unwrapped if hasattr(env, "unwrapped") else env
 
-    cv2.namedWindow("RGB", cv2.WINDOW_NORMAL)
-    cv2.namedWindow("Depth", cv2.WINDOW_NORMAL)
+    # cv2.namedWindow("RGB", cv2.WINDOW_NORMAL)
+    # cv2.namedWindow("Depth", cv2.WINDOW_NORMAL)
 
     print("[INFO] Press 'q' in an image window to quit.")
     prev_frame_t = None
@@ -72,25 +80,37 @@ def main() -> None:
     fps_window_count = 0
     fps_window_start = time.perf_counter()
 
-    obs = env.get_observation(rgbd_spec)
     try:
-        rgb = obs["rgb"]
-        depth = obs["depth"]
-
-        rgb_bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
-        depth_color = _depth_to_colormap(depth)
         while True:
 
             frame_t = time.perf_counter()
-            obs = base_env._get_latest_rgbd()
-            rgb = obs["rgb"]
-            depth = obs["depth"]
+            print('getting observation')
+            obs = env.get_observation(rgbd_spec)
+            # mask = torch.zeros((4, 480, 640), dtype=torch.bool, device=obs["depth"].device)
+            # mask[0, :240, :320] = True
+            # mask[1, 240:, :320] = True
+            # mask[2, :240, 320:] = True
+            # mask[3, 240:, 320:] = True
+            mask, prompt_indices = sam3.predict(obs["rgb"], ["figurine"])
+            print(f"Found {len(mask)} objects: {prompt_indices} with areas {mask.sum(dim=(1,2))}")
+            # for i in range(480):
+            #     obs["depth"][0, i, :] = 500 + i
+            # obs["depth"].fill_(500)
+            print('converting to point cloud')
+            point_cloud, segment_indices = segmented_rgbd_to_point_cloud(
+                obs["depth"], mask, obs["intrinsic_k"], obs["camera_pose"],
+                rgb=obs["rgb"], use_perspective=False)
+            print('visualizing point cloud')
+            visualize_point_cloud(point_cloud, segment_indices=segment_indices)
+            # pc = point_cloud.reshape((1, 480, 640, 3))
+            rgb = obs["rgb"].cpu().numpy().transpose((1, 2, 0))
+            depth = obs["depth"].cpu().numpy()[0]
 
             rgb_bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
             depth_color = _depth_to_colormap(depth)
 
-            cv2.imshow("RGB", rgb_bgr)
-            cv2.imshow("Depth", depth_color)
+            # cv2.imshow("RGB", rgb_bgr)
+            # cv2.imshow("Depth", depth_color)
 
             # time.sleep(0.3)
 
