@@ -1,0 +1,170 @@
+"""
+Kinova Gen3 environment with a configurable RGBD camera.
+
+Env config + scene setup.
+  - Robot:  KINOVA_GEN3_2F85_ARM_CFG
+  - Camera: RGBDCameraCfg  (spawnable at any world-frame position)
+"""
+
+from __future__ import annotations
+
+import torch
+import isaaclab.sim as sim_utils
+from isaaclab.assets import Articulation
+from isaaclab.envs import DirectRLEnv
+from isaaclab.scene import InteractiveSceneCfg
+from isaaclab.sensors import Camera
+from isaaclab.sim import SimulationCfg
+from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
+
+from kinova_tasks.assets.kinova_gen3_2f85_arm import KINOVA_GEN3_2F85_ARM_CFG
+from skillet.envs.isaac import RGBDCameraCfg, SkillsDirectRLEnvCfg
+from skillet.envs.util import configclass
+
+@configclass
+class KinovaGenCameraEnvCfg(SkillsDirectRLEnvCfg):
+    """
+    Env config for the Kinova Gen3 arm with an RGBD camera.
+
+    Customize the camera spawn pose by overriding ``camera_cfg``::
+
+        cfg = KinovaGenCameraEnvCfg()
+        cfg.camera_cfg.pos = (1.0, 0.0, 1.2)   # 1 m in front, 1.2 m high
+    """
+
+    # --- env timing ---
+    episode_length_s = 5.0
+    decimation = 2
+
+    # --- spaces (to be updated when RGBD obs are added) ---
+    action_space = 8
+    observation_space = 25
+    state_space = 0
+
+    joint_ids = [0, 1, 2, 3, 4, 5, 6, 7]
+    tcp_offset = [0.120, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0]
+    ee_link_name = "end_effector_link"
+    base_link_name = "base_link"
+    gripper_joint_name = "robotiq_85_left_knuckle_joint"
+
+    # --- simulation ---
+    sim: SimulationCfg = SimulationCfg(
+        dt=1 / 120,
+        render_interval=decimation,
+        physics_material=sim_utils.RigidBodyMaterialCfg(
+            friction_combine_mode="multiply",
+            restitution_combine_mode="multiply",
+            static_friction=1.0,
+            dynamic_friction=1.0,
+            restitution=0.0,
+        ),
+    )
+
+    # --- scene ---
+    scene: InteractiveSceneCfg = InteractiveSceneCfg(
+        num_envs=1, env_spacing=2.5, replicate_physics=True
+    )
+
+    # --- robot: Kinova Gen3 arm (Kinova_Gen3.usd) ---
+    robot = KINOVA_GEN3_2F85_ARM_CFG.replace(
+        prim_path="/World/envs/env_.*/Robot"
+    )
+
+    # --- camera: mounted on bracelet_link (wrist camera) ---
+    # prim_path attaches the camera to the wrist link; it moves with the robot.
+    # pos/rot are offsets in the bracelet_link local frame
+    camera_cfg: RGBDCameraCfg = RGBDCameraCfg(
+        prim_path="/World/envs/env_.*/Robot/Arm/bracelet_link/wrist_mounted_camera",
+        pos=(0.0, 0.05, 0.05),
+        rot=(0.0, 1.0, 0.0, 0.0),       
+        width=640,
+        height=480,
+        convention="ros",
+    )
+
+
+class KinovaGenCameraEnv(DirectRLEnv):
+    """Kinova Gen3 + RGBD camera environment.
+
+    Implements _setup_scene; observations are stubs for now.
+    """
+
+    cfg: KinovaGenCameraEnvCfg
+
+    def __init__(self, cfg: KinovaGenCameraEnvCfg, render_mode: str | None = None, **kwargs):
+        super().__init__(cfg, render_mode, **kwargs)
+
+        self.actions = torch.zeros((self.num_envs, self.cfg.action_space), device=self.device)
+
+        # joint limit tensors (arm joints only)
+        self.robot_dof_lower_limits = self._robot.data.soft_joint_pos_limits[0, :, 0].to(
+            device=self.device
+        )[self.cfg.joint_ids]
+        self.robot_dof_upper_limits = self._robot.data.soft_joint_pos_limits[0, :, 1].to(
+            device=self.device
+        )[self.cfg.joint_ids]
+        self.robot_dof_targets = torch.zeros(
+            (self.num_envs, len(self.cfg.joint_ids)), device=self.device
+        )
+        self.default_joint_pos = self._robot.data.default_joint_pos[:, self.cfg.joint_ids]
+
+    # ------------------------------------------------------------------
+    # Scene setup
+    # ------------------------------------------------------------------
+
+    def _setup_scene(self):
+        # Ground plane
+        spawn_ground_plane(prim_path="/World/ground", cfg=GroundPlaneCfg())
+
+        # Robot
+        self._robot = Articulation(self.cfg.robot)
+        self.scene.articulations["robot"] = self._robot
+
+        # Camera
+        isaac_cam_cfg = self.cfg.camera_cfg.to_isaac_cfg()
+        self._camera = Camera(isaac_cam_cfg)
+        self.scene.sensors["camera"] = self._camera
+
+        # Lighting
+        light_cfg = sim_utils.DomeLightCfg(intensity=2000.0, color=(0.75, 0.75, 0.75))
+        light_cfg.func("/World/Light", light_cfg)
+
+        # Clone + replicate
+        self.scene.clone_environments(copy_from_source=False)
+        if self.device == "cpu":
+            self.scene.filter_collisions(global_prim_paths=[self.cfg.terrain.prim_path])
+
+    # ------------------------------------------------------------------
+    # Step stubs
+    # ------------------------------------------------------------------
+
+    def _pre_physics_step(self, actions: torch.Tensor):
+        self.actions = actions.clone()
+        targets = self.default_joint_pos + self.actions
+        self.robot_dof_targets = torch.clamp(
+            targets, self.robot_dof_lower_limits, self.robot_dof_upper_limits
+        )
+
+    def _apply_action(self):
+        self._robot.set_joint_position_target(self.robot_dof_targets, joint_ids=self.cfg.joint_ids)
+
+    def _get_observations(self) -> dict:
+        # Stubbed
+        joint_pos = self._robot.data.joint_pos[:, self.cfg.joint_ids]
+        return {"policy": joint_pos}
+
+    def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
+        truncated = self.episode_length_buf >= self.max_episode_length - 1
+        return torch.zeros(self.num_envs, dtype=torch.bool, device=self.device), truncated
+
+    def _get_rewards(self) -> torch.Tensor:
+        return torch.zeros(self.num_envs, device=self.device)
+
+    def _reset_idx(self, env_ids: torch.Tensor | None):
+        super()._reset_idx(env_ids)
+        joint_pos = self._robot.data.default_joint_pos[env_ids][:, self.cfg.joint_ids]
+        # joint_vel must cover ALL robot joints, not just the arm subset
+        joint_vel = torch.zeros((self.num_envs, self._robot.num_joints), device=self.device)[env_ids]
+        self._robot.set_joint_position_target(joint_pos, env_ids=env_ids, joint_ids=self.cfg.joint_ids)
+        self._robot.write_joint_position_to_sim(joint_pos, env_ids=env_ids, joint_ids=self.cfg.joint_ids)
+        self._robot.write_joint_velocity_to_sim(joint_vel, env_ids=env_ids)
