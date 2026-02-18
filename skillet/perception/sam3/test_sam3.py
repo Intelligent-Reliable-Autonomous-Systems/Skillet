@@ -15,19 +15,38 @@ except Exception as import_error:  # pragma: no cover
     raise import_error
 
 
+def _default_repo_root() -> Path:
+    """Repo root: skillet/perception/sam3/test_sam3.py -> skillet (or workspace root)."""
+    return Path(__file__).resolve().parents[3]
+
+
+def _default_model_path() -> Path:
+    """Path to SAM3 weights (data/models/sam3.pt)."""
+    return _default_repo_root() / "data" / "models" / "sam3.pt"
+
+
+def _default_image_path() -> Path:
+    """Default image: first image in data/images, or data/images/image.jpg."""
+    images_dir = _default_repo_root() / "data" / "images"
+    if images_dir.is_dir():
+        for p in sorted(images_dir.iterdir()):
+            if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".bmp", ".webp"}:
+                return p
+    return images_dir / "image.jpg"
+
+
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Test Ultralytics SAM3 model with text prompts and visualize the results."
     )
-    default_repo_root = Path(__file__).resolve().parents[1]
-    default_model = default_repo_root / "sam3" / "sam3.pt"
-    default_image = default_repo_root / "notebooks" / "images" / "groceries.jpg"
+    default_model = _default_model_path()
+    default_image = _default_image_path()
 
     parser.add_argument(
         "--source",
         type=str,
         default=str(default_image),
-        help="Path to image or video file.",
+        help="Path to image or video file. Default: first image in data/images or data/images/image.jpg.",
     )
     parser.add_argument(
         "--prompts",
@@ -40,7 +59,7 @@ def parse_arguments() -> argparse.Namespace:
         "--model",
         type=str,
         default=str(default_model),
-        help="Path to SAM3 model (.pt). Defaults to repo sam3/sam3.pt.",
+        help="Path to SAM3 model (.pt). Default: data/models/sam3.pt.",
     )
     parser.add_argument(
         "--conf",
@@ -80,7 +99,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--out-dir",
         type=str,
-        default=str(default_repo_root / "sam3" / "runs"),
+        default=str(_default_repo_root() / "data" / "runs" / "sam3"),
         help="Output directory for saved results.",
     )
     return parser.parse_args()
@@ -226,6 +245,15 @@ def visualize_video(
 
 def main() -> None:
     args = parse_arguments()
+
+    if not Path(args.model).exists():
+        print(f"Error: Model weights not found: {args.model}", file=sys.stderr)
+        print("  Place sam3.pt in data/models/ or pass --model /path/to/sam3.pt", file=sys.stderr)
+        sys.exit(1)
+    if not Path(args.source).exists():
+        print(f"Error: Source not found: {args.source}", file=sys.stderr)
+        print("  Add an image to data/images/ or pass --source /path/to/image.jpg", file=sys.stderr)
+        sys.exit(1)
 
     source_path = args.source
     prompts = args.prompts
