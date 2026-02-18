@@ -22,8 +22,18 @@ gym.register(
 )
 
 gym.register(
-    id="Franka-Reach-Skill-v0",
-    entry_point=f"{__name__}.franka_reach_env:FrankaReachSkillEnv",
+    id="Franka-Reach-IK-v0",
+    entry_point=f"{__name__}.franka_reach_env:FrankaReachIKEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.franka_reach_env:FrankaReachEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:FrankaReachPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Franka-Reach-OSC-v0",
+    entry_point=f"{__name__}.franka_reach_env:FrankaReachOSCEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.franka_reach_env:FrankaReachEnvCfg",

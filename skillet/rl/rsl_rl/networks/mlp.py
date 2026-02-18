@@ -44,7 +44,7 @@ class MLP(nn.Sequential):
 
         """
         super().__init__()
-
+        self.input_dim = input_dim
         # Resolve activation functions
         activation_mod = resolve_nn_activation(activation)
         last_activation_mod = resolve_nn_activation(last_activation) if last_activation is not None else None

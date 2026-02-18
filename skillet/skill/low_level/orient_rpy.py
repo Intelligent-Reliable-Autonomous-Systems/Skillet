@@ -77,9 +77,10 @@ class OrientRPYSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[
 
     def get_action(self, obs: TBSkillObs) -> TBAction:  # noqa: D102
         np.set_printoptions(precision=3, suppress=True)
-        print(
-            f"[INFO][ORIENT RPY]: {self._status.cpu().numpy()[0]} | target pose: {self._target_poses.cpu().numpy()[0]} | obs tcp pose: {obs['tcp_pose_b'].cpu().numpy()[0]}"
-        )
+        if False:
+            print(
+                f"[INFO][ORIENT RPY]: {self._status.cpu().numpy()[0]} | target pose: {self._target_poses.cpu().numpy()[0]} | obs tcp pose: {obs['tcp_pose_b'].cpu().numpy()[0]}"
+            )
 
         self._n_steps += 1
 

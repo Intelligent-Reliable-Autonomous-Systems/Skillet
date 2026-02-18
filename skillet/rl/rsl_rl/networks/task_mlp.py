@@ -30,6 +30,7 @@ class TaskMLP(nn.Module):
         last_activation: str | None = None,
     ) -> None:
         super().__init__()
+        self.input_dim = input_dim
         self.num_skills = num_skills
         self.output_dim = output_dim
         self.param_networks = nn.ModuleList(
@@ -55,9 +56,13 @@ class TaskMLP(nn.Module):
 
         out = torch.zeros(size=(x.shape[0], self.output_dim), device=x.device)
         out[:, : self.num_skills] = logits
-        for k in range(self.num_skills):
+        for k, net in enumerate(self.param_networks):
             mask = idx == k
             if mask.any():
-                out[mask, self.num_skills :] = self.param_networks[k](x[mask])
+                out[mask, self.num_skills :] = net(x[mask])
+        """for k in range(self.num_skills):
+            mask = idx == k
+            if mask.any():
+                out[mask, self.num_skills :] = self.param_networks[k](x[mask])"""
 
         return out

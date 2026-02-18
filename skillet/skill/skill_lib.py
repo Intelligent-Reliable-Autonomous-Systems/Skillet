@@ -76,25 +76,25 @@ def make_joint_pos_policy(env: AsGymVectorEnv) -> JointPosPolicy:
     return JointPosPolicy[BxN_Obs, BxM_Action](make_joint_obs_spec(env.device), env.action_spec)
 
 
-def make_reach_xyzrpy_skill(env: AsGymVectorEnv, skill_length: int = 5) -> Skill:
+def make_reach_xyzrpy_skill(env: AsGymVectorEnv, skill_length: int = 10) -> Skill:
     return ReachXYZRPYSkill[BxN_Obs, BxM_Action, None](
         name="reach_xyzrpy_skill", policy=make_ik_ee_pose_policy(env), length=skill_length
     )
 
 
-def make_reach_xyz_skill(env: AsGymVectorEnv, skill_length: int = 5) -> Skill:
+def make_reach_xyz_skill(env: AsGymVectorEnv, skill_length: int = 10) -> Skill:
     return ReachXYZSkill[BxN_Obs, BxM_Action, None](
         name="reach_xyz_skill", policy=make_ik_ee_pos_policy(env), length=skill_length
     )
 
 
-def make_orient_rpy_skill(env: AsGymVectorEnv, skill_length: int = 5) -> Skill:
+def make_orient_rpy_skill(env: AsGymVectorEnv, skill_length: int = 10) -> Skill:
     return OrientRPYSkill[BxN_Obs, BxM_Action, None](
         name="orient_rpy_skill", policy=make_ik_ee_pose_policy(env), length=skill_length
     )
 
 
-def make_orient_y_skill(env: AsGymVectorEnv, skill_length: int = 5) -> Skill:
+def make_orient_y_skill(env: AsGymVectorEnv, skill_length: int = 10) -> Skill:
     return OrientYSkill[BxN_Obs, BxM_Action, None](
         name="orient_y_skill", policy=make_ik_ee_pose_policy(env), length=skill_length
     )

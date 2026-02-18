@@ -88,7 +88,7 @@ class PolicyOverOptionsAgent(Generic[THighLevelObs, TLowLevelObs, TBAction, TSki
             while not skill_dones.all() and not bool(terminated.all()):
                 # 4a. Get the next action with the low-level observation
                 action = composite_skill.get_action(env.get_observation(composite_skill.obs_spec))
-                print("Taking action", action)
+                # print("Taking action", action)
                 # action[:, -1] = override_grip
                 # 4b. Take a step in the environment
                 _, r, term, trunc, _ = env.step(action)

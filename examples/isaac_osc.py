@@ -17,18 +17,7 @@ Written by Will Solow and Jeff Jewett, 2026
 
 import argparse
 
-import gymnasium as gym
-import torch
 from isaaclab.app import AppLauncher
-from jaxtyping import Float, Int
-
-from skillet.agents.policy_over_options import PolicyOverOptionsAgent
-from skillet.core.spaces import ActionSpec, ObservationSpec
-from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
-from skillet.policy.dummy import RandomFixedPolicy, RandomPolicy
-from skillet.policy.ik_ee import OrientAbsIKEEPolicy, PosAbsIKEEPolicy
-from skillet.policy.joint_pos import GripperPolicy
-from skillet.skill import PickSkill
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Main IsaacSim Executor file through IsaacLab.")
@@ -38,7 +27,6 @@ parser.add_argument(
 parser.add_argument("--num_envs", type=int, default=4, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default="Isaac-Reach-Franka-v0", help="Name of the task.")
 
-
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
 # parse the arguments
@@ -47,11 +35,21 @@ args_cli = parser.parse_args()
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
+import gymnasium as gym
+
 # import isaaclab_tasks after app launcher
 import isaaclab_tasks  # noqa: F401
+import torch
 from isaaclab_tasks.utils import parse_env_cfg
+from jaxtyping import Float, Int
 
 import kinova_tasks.isaac_tasks as tasks  # noqa: F401
+from skillet.agents.policy_over_options import PolicyOverOptionsAgent
+from skillet.core.spaces import ActionSpec, ObservationSpec
+from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
+from skillet.policy.dummy import FixedSequencePolicy, RandomPolicy
+from skillet.policy.osc_ee import PoseAbsOSCEEPolicy
+from skillet.skill import ReachXYZRPYSkill
 
 BxN_Obs = Float[torch.Tensor, "b n"]
 """Environment observation: torch.Tensor[(b, n), float]"""
@@ -86,33 +84,41 @@ def main() -> None:
     # Low-level policies
     _obs_spec_ik = ObservationSpec[Float[torch.Tensor, "b ..."]](
         space=gym.spaces.Dict(),
-        name="ik_ee",
+        name="osc",
         is_torch=True,
         is_batched=True,
         n_envs=-1,
         device=env.device,
     )
 
-    ik_ee_orient_policy = OrientAbsIKEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
-    ik_ee_pos_policy = PosAbsIKEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
-    gripper_policy = GripperPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
+    osc_ee_pose_policy = PoseAbsOSCEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
     # Skills
-    skill_length = 5000
-    pick_skill = PickSkill[BxN_Obs, BxM_Action, None](
-        name="pick_skill",
-        reach_policy=ik_ee_pos_policy,
-        orient_policy=ik_ee_orient_policy,
-        gripper_policy=gripper_policy,
-        length=skill_length,
+    skill_length = 100
+    reach_xyz_skill = ReachXYZRPYSkill[BxN_Obs, BxM_Action, None](
+        name="reach_xyz_skill", policy=osc_ee_pose_policy, length=skill_length
     )
-
-    skills = [pick_skill]
+    skills = [reach_xyz_skill]
 
     # Parameters policy
-    fixed_param_policy = RandomFixedPolicy[BxN_Obs, BxM_Action](
+    fixed_param_policy = FixedSequencePolicy[BxN_Obs, BxM_Action](
         observation_spec,
         action_spec,
-        torch.as_tensor([[0.6, 0.1, 0.2, 0.0, 1.57, 0.0]], device=env.device),
+        torch.as_tensor(
+            [
+                # [0.6, 0.0, 0.4, 0.0, 3.14, 0.0],
+                [0.6, 0.2, 0.3, 0.0, 1.57, 0.0],
+                [0.2, -0.2, 0.03, 0.0, 0.0, 0.0],
+                [0.7, 0.1, 0.6, 0.0, 1.57, 0.0],
+                [0.3, 0.3, 0.4, 1.57, 0.0, 0.0],
+                # [0.3, 0.3, 0.4, 3.14, 0.0, 0.0],
+                # [0.3, 0.3, 0.4, -1.57, 0.0, 0.0]
+                # [-0.5, -0.2, 0.4, 0.0, -1.57, 0.0],
+                # [-0.5, -0.2, 0.4, 0.0, 0.0, 1.57],
+                # [-0.5, -0.2, 0.4, 0.0, 0.0, 3.14],
+                # [-0.5, -0.2, 0.4, 0.0, 0.0, -1.57],
+            ],
+            device=env.device,
+        ),
     )
 
     # High-level policy
@@ -132,7 +138,6 @@ def main() -> None:
 
     # simulate environment
     while simulation_app.is_running():
-        # run everything in inference mode
         with torch.inference_mode():
             env.reset()
             policy_over_options_agent.execute(env)
@@ -144,7 +149,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    # run the main function
     main()
-    # close sim app
     simulation_app.close()

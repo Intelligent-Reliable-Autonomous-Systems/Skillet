@@ -7,107 +7,21 @@ from __future__ import annotations
 
 import isaaclab.sim as sim_utils
 import torch
-from isaaclab.actuators.actuator_cfg import ImplicitActuatorCfg
-from isaaclab.assets import Articulation, ArticulationCfg
+from isaaclab.assets import Articulation
 from isaaclab.envs import DirectRLEnv
 from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 from isaaclab.markers.config import FRAME_MARKER_CFG
-from isaaclab.scene import InteractiveSceneCfg
-from isaaclab.sim import SimulationCfg
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
-from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR, ISAACLAB_NUCLEUS_DIR
+from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 from isaaclab.utils.math import quat_error_magnitude, quat_from_euler_xyz, sample_uniform
 from isaacsim.core.utils.torch.transformations import tf_combine
 
-from skillet.envs.isaac import SkillsDirectRLEnvCfg
+from kinova_tasks.isaac_tasks.direct.cfg import FrankaBaseCfg
 from skillet.envs.util import configclass
 
 
 @configclass
-class FrankaReachEnvCfg(SkillsDirectRLEnvCfg):
-    # env
-    episode_length_s = 6.0  # 500 timesteps
-    decimation = 2
-    action_space = 9
-    observation_space = 31
-    state_space = 0
-
-    joint_ids = [0, 1, 2, 3, 4, 5, 6, 7, 8]
-    tcp_offset = [0.0, 0.0, 0.1034, 0.0, 0.0, 0.0, 0.0]
-    ee_link_name = "panda_hand"
-    base_link_name = "base_link"
-    gripper_joint_name = "panda_finger_joint1"
-
-    skills = ["reach_xyz"]
-
-    # simulation
-    sim: SimulationCfg = SimulationCfg(
-        dt=1 / 120,
-        render_interval=decimation,
-        physics_material=sim_utils.RigidBodyMaterialCfg(
-            friction_combine_mode="multiply",
-            restitution_combine_mode="multiply",
-            static_friction=1.0,
-            dynamic_friction=1.0,
-            restitution=0.0,
-        ),
-    )
-
-    # scene
-    scene: InteractiveSceneCfg = InteractiveSceneCfg(
-        num_envs=4096, env_spacing=2.5, replicate_physics=True, clone_in_fabric=True
-    )
-
-    # robot
-    robot = ArticulationCfg(
-        prim_path="/World/envs/env_.*/Robot",
-        spawn=sim_utils.UsdFileCfg(
-            usd_path=f"{ISAACLAB_NUCLEUS_DIR}/Robots/FrankaEmika/panda_instanceable.usd",
-            activate_contact_sensors=False,
-            rigid_props=sim_utils.RigidBodyPropertiesCfg(
-                disable_gravity=False,
-                max_depenetration_velocity=5.0,
-            ),
-            articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-                enabled_self_collisions=False, solver_position_iteration_count=12, solver_velocity_iteration_count=1
-            ),
-        ),
-        init_state=ArticulationCfg.InitialStateCfg(
-            joint_pos={
-                "panda_joint1": 1.157,
-                "panda_joint2": -1.066,
-                "panda_joint3": -0.155,
-                "panda_joint4": -2.239,
-                "panda_joint5": -1.841,
-                "panda_joint6": 1.003,
-                "panda_joint7": 0.469,
-                "panda_finger_joint.*": 0.035,
-            },
-            pos=(0.0, 0.0, 0.0),
-            rot=(0.0, 0.0, 0.0, 0.0),
-        ),
-        actuators={
-            "panda_shoulder": ImplicitActuatorCfg(
-                joint_names_expr=["panda_joint[1-4]"],
-                effort_limit_sim=87.0,
-                stiffness=80.0,
-                damping=4.0,
-            ),
-            "panda_forearm": ImplicitActuatorCfg(
-                joint_names_expr=["panda_joint[5-7]"],
-                effort_limit_sim=12.0,
-                stiffness=80.0,
-                damping=4.0,
-            ),
-            "panda_hand": ImplicitActuatorCfg(
-                joint_names_expr=["panda_finger_joint.*"],
-                effort_limit_sim=200.0,
-                stiffness=2e3,
-                damping=1e2,
-            ),
-        },
-    )
-
+class FrankaReachEnvCfg(FrankaBaseCfg):
     action_scale = 0.5
     dof_velocity_scale = 0.1
 
@@ -175,6 +89,7 @@ class FrankaReachEnv(DirectRLEnv):
         self.robot_dof_upper_limits = self._robot.data.soft_joint_pos_limits[0, :, 1].to(device=self.device)[
             self.cfg.joint_ids
         ]
+        self.robot_effort_limits = self._robot.data.joint_effort_limits[0, :].to(device=self.device)[self.cfg.joint_ids]
         self.robot_dof_lower_limits[self.robot_dof_lower_limits == -float("inf")] = -torch.pi
         self.robot_dof_upper_limits[self.robot_dof_upper_limits == float("inf")] = torch.pi
 
@@ -318,7 +233,7 @@ class FrankaReachEnv(DirectRLEnv):
         self.prev_actions[env_ids] = torch.clone(self.actions[env_ids])
 
 
-class FrankaReachSkillEnv(FrankaReachEnv):
+class FrankaReachIKEnv(FrankaReachEnv):
     """Use this environment when computing actions with a Diff IK controller or the skills environments."""
 
     # pre-physics step calls
@@ -342,6 +257,41 @@ class FrankaReachSkillEnv(FrankaReachEnv):
         # Update markers (world frame)
         self.goal_marker.visualize(self.goal_ee_pos_w, self.goal_ee_quat_w)
         self.current_marker.visualize(self.robot_ee_pos_w, self.robot_ee_quat_w)
+
+
+class FrankaReachOSCEnv(FrankaReachEnv):
+    """Use this environment when computing actions with a Diff IK controller or the skills environments."""
+
+    # pre-physics step calls
+    #   |-- _pre_physics_step(action)
+    #   |-- _apply_action()
+    # post-physics step calls
+    #   |-- _get_dones()
+    #   |-- _get_rewards()
+    #   |-- _reset_idx(env_ids)
+    #   |-- _get_observations()
+
+    cfg: FrankaReachEnvCfg
+
+    def __init__(self, cfg: FrankaReachEnvCfg, render_mode: str | None = None, **kwargs):
+        cfg.robot.actuators["panda_shoulder"].stiffness = 0.0
+        cfg.robot.actuators["panda_shoulder"].damping = 0.0
+        cfg.robot.actuators["panda_forearm"].stiffness = 0.0
+        cfg.robot.actuators["panda_forearm"].damping = 0.0
+        cfg.robot.actuators["panda_hand"].stiffness = 0.0
+        cfg.robot.actuators["panda_hand"].damping = 0.0
+        super().__init__(cfg, render_mode, **kwargs)
+
+    # pre-physics step calls
+    def _pre_physics_step(self, actions: torch.Tensor):
+        self.robot_dof_targets = torch.clamp(actions, self.robot_dof_lower_limits, self.robot_dof_upper_limits)
+
+        # Update markers (world frame)
+        self.goal_marker.visualize(self.goal_ee_pos_w, self.goal_ee_quat_w)
+        self.current_marker.visualize(self.robot_ee_pos_w, self.robot_ee_quat_w)
+
+    def _apply_action(self):
+        self._robot.set_joint_effort_target(self.robot_dof_targets, joint_ids=self.cfg.joint_ids)
 
 
 @torch.jit.script

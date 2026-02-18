@@ -7,128 +7,21 @@ from __future__ import annotations
 
 import isaaclab.sim as sim_utils
 import torch
-from isaaclab.actuators.actuator_cfg import ImplicitActuatorCfg
-from isaaclab.assets import Articulation, ArticulationCfg
+from isaaclab.assets import Articulation
 from isaaclab.envs import DirectRLEnv
 from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 from isaaclab.markers.config import FRAME_MARKER_CFG
-from isaaclab.scene import InteractiveSceneCfg
-from isaaclab.sim import SimulationCfg
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 from isaaclab.utils.math import quat_error_magnitude, quat_from_euler_xyz, sample_uniform
 from isaacsim.core.utils.torch.transformations import tf_combine
 
-from kinova_tasks.assets.utils import KINOVA_ASSET_DIR
-from skillet.envs.isaac import SkillsDirectRLEnvCfg
+from kinova_tasks.isaac_tasks.direct.cfg import KinovaBaseCfg
 from skillet.envs.util import configclass
 
 
 @configclass
-class KinovaReachEnvCfg(SkillsDirectRLEnvCfg):
-    # env
-    episode_length_s = 6.0  # 500 timesteps
-    decimation = 2
-    action_space = 8
-    observation_space = 31
-    state_space = 0
-
-    joint_ids = [0, 1, 2, 3, 4, 5, 6, 7]
-    tcp_offset = [0.120, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0]
-    ee_link_name = "gripper_base_link"
-    base_link_name = "base_link"
-    gripper_joint_name = "finger_joint"
-
-    skills = ["reach_xyz"]
-
-    # simulation
-    sim: SimulationCfg = SimulationCfg(
-        dt=1 / 120,
-        render_interval=decimation,
-        physics_material=sim_utils.RigidBodyMaterialCfg(
-            friction_combine_mode="multiply",
-            restitution_combine_mode="multiply",
-            static_friction=1.0,
-            dynamic_friction=1.0,
-            restitution=0.0,
-        ),
-    )
-
-    # scene
-    scene: InteractiveSceneCfg = InteractiveSceneCfg(
-        num_envs=4096, env_spacing=2.5, replicate_physics=True, clone_in_fabric=True
-    )
-
-    # robot
-    robot = ArticulationCfg(
-        prim_path="/World/envs/env_.*/Robot",
-        spawn=sim_utils.UsdFileCfg(
-            usd_path=f"{KINOVA_ASSET_DIR}/robots/kinova/kinova_gen3_robotiq_2f_85_action_graph.usd",
-            rigid_props=sim_utils.RigidBodyPropertiesCfg(
-                disable_gravity=False,
-                max_depenetration_velocity=5.0,
-            ),
-            articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-                enabled_self_collisions=False, solver_position_iteration_count=12, solver_velocity_iteration_count=1
-            ),
-        ),
-        init_state=ArticulationCfg.InitialStateCfg(
-            joint_pos={
-                "joint_1": 0.0,
-                "joint_2": 0.523599,
-                "joint_3": 0.0,
-                "joint_4": 1.5708,
-                "joint_5": 0.0,
-                "joint_6": 0.785398,
-                "joint_7": 0.0,
-                "finger_joint": 0.0,  # left outer knuckle joint for manipulation
-                "right_outer_knuckle_joint": 0.0,
-                "left_outer_finger_joint": 0.0,
-                "right_outer_finger_joint": 0.0,
-                "left_inner_finger_joint": 0.0,
-                "right_inner_finger_joint": 0.0,
-                "right_inner_finger_knuckle_joint": 0.0,
-                "left_inner_finger_knuckle_joint": 0.0,
-            },
-            pos=(0.0, 0.0, 0.0),
-            rot=(0.0, 0.0, 0.0, 0.0),
-        ),
-        actuators={
-            "arm": ImplicitActuatorCfg(
-                joint_names_expr=["joint_[1-7]"],
-                velocity_limit_sim=100.0,
-                effort_limit_sim={
-                    "joint_[1-2]": 80.0,
-                    "joint_[3]": 40.0,
-                    "joint_[4-7]": 20.0,
-                },
-                stiffness={
-                    "joint_[1-3]": 4000.0,
-                    "joint_[5-7]": 1500.0,
-                },
-                damping={
-                    "joint_[1-3]": 1000.0,
-                    "joint_[4-7]": 500.0,
-                },
-            ),
-            "gripper": ImplicitActuatorCfg(
-                joint_names_expr=[
-                    "finger_joint",
-                    "right_outer_knuckle_joint",
-                    "left_outer_finger_joint",
-                    "right_outer_finger_joint",
-                    "left_inner_finger_joint",
-                    "right_inner_finger_joint",
-                    "right_inner_finger_knuckle_joint",
-                    "left_inner_finger_knuckle_joint",
-                ],
-                effort_limit_sim=10,
-                stiffness=2000.0,
-                damping=200.0,
-            ),
-        },
-    )
-
+class KinovaReachEnvCfg(KinovaBaseCfg):
     action_scale = 0.5
     dof_velocity_scale = 0.1
 
@@ -190,12 +83,13 @@ class KinovaReachEnv(DirectRLEnv):
         self.prev_actions = torch.zeros_like(self.actions, device=self.device)
 
         # Limits and targets
-        self.robot_dof_lower_limits = self._robot.data.soft_joint_pos_limits[0, :, 0].to(device=self.device)[
+        self.robot_dof_lower_limits = self._robot.data.joint_pos_limits[0, :, 0].to(device=self.device)[
             self.cfg.joint_ids
         ]
-        self.robot_dof_upper_limits = self._robot.data.soft_joint_pos_limits[0, :, 1].to(device=self.device)[
+        self.robot_dof_upper_limits = self._robot.data.joint_pos_limits[0, :, 1].to(device=self.device)[
             self.cfg.joint_ids
         ]
+        self.robot_effort_limits = self._robot.data.joint_effort_limits[0, :].to(device=self.device)[self.cfg.joint_ids]
         self.robot_dof_lower_limits[self.robot_dof_lower_limits == -float("inf")] = -torch.pi
         self.robot_dof_upper_limits[self.robot_dof_upper_limits == float("inf")] = torch.pi
 
@@ -339,7 +233,7 @@ class KinovaReachEnv(DirectRLEnv):
         self.prev_actions[env_ids] = torch.clone(self.actions[env_ids])
 
 
-class KinovaReachSkillEnv(KinovaReachEnv):
+class KinovaReachIKEnv(KinovaReachEnv):
     """Use this environment when computing actions with a Diff IK controller or the skills environments."""
 
     # pre-physics step calls
@@ -363,6 +257,39 @@ class KinovaReachSkillEnv(KinovaReachEnv):
         # Update markers (world frame)
         self.goal_marker.visualize(self.goal_ee_pos_w, self.goal_ee_quat_w)
         self.current_marker.visualize(self.robot_ee_pos_w, self.robot_ee_quat_w)
+
+
+class KinovaReachOSCEnv(KinovaReachEnv):
+    """Use this environment when computing actions with a OSC controlller."""
+
+    # pre-physics step calls
+    #   |-- _pre_physics_step(action)
+    #   |-- _apply_action()
+    # post-physics step calls
+    #   |-- _get_dones()
+    #   |-- _get_rewards()
+    #   |-- _reset_idx(env_ids)
+    #   |-- _get_observations()
+
+    cfg: KinovaReachEnvCfg
+
+    def __init__(self, cfg: KinovaReachEnvCfg, render_mode: str | None = None, **kwargs):
+        cfg.robot.actuators["arm"].stiffness = 0.0
+        cfg.robot.actuators["arm"].damping = 0.0
+        cfg.robot.actuators["gripper"].stiffness = 0.0
+        cfg.robot.actuators["gripper"].damping = 0.0
+        super().__init__(cfg, render_mode, **kwargs)
+
+    # pre-physics step calls
+    def _pre_physics_step(self, actions: torch.Tensor):
+        self.robot_dof_targets = torch.min(actions, self.robot_effort_limits)
+
+        # Update markers (world frame)
+        self.goal_marker.visualize(self.goal_ee_pos_w, self.goal_ee_quat_w)
+        self.current_marker.visualize(self.robot_ee_pos_w, self.robot_ee_quat_w)
+
+    def _apply_action(self):
+        self._robot.set_joint_effort_target(self.robot_dof_targets, joint_ids=self.cfg.joint_ids)
 
 
 @torch.jit.script

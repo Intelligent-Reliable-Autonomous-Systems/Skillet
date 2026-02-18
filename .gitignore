@@ -274,3 +274,5 @@ tests/
 **/build/*
 **/install/*
 **/log/*
+
+scripts.txt

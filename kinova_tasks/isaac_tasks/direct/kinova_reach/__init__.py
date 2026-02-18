@@ -22,8 +22,18 @@ gym.register(
 )
 
 gym.register(
-    id="Kinova-Reach-Skill-v0",
-    entry_point=f"{__name__}.kinova_reach_env:KinovaReachSkillEnv",
+    id="Kinova-Reach-IK-v0",
+    entry_point=f"{__name__}.kinova_reach_env:KinovaReachIKEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.kinova_reach_env:KinovaReachEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:KinovaReachPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Kinova-Reach-OSC-v0",
+    entry_point=f"{__name__}.kinova_reach_env:KinovaReachOSCEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.kinova_reach_env:KinovaReachEnvCfg",

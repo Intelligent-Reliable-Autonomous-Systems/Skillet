@@ -205,7 +205,7 @@ class _OnnxPolicyExporter(torch.nn.Module):
             else:
                 raise NotImplementedError(f"Unsupported RNN type: {self.rnn_type}")
         else:
-            obs = torch.zeros(1, self.actor[0].in_features)
+            obs = torch.zeros(1, self.actor.input_dim)  # torch.zeros(1, self.actor[0].in_features)
             torch.onnx.export(
                 self,
                 obs,

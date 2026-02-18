@@ -23,8 +23,8 @@ from isaaclab.app import AppLauncher
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Tutorial on using the operational space controller.")
-parser.add_argument("--num_envs", type=int, default=128, help="Number of environments to spawn.")
-parser.add_argument("--robot", type=str, default="kinova", help="Name of the robot.")
+parser.add_argument("--num_envs", type=int, default=24, help="Number of environments to spawn.")
+parser.add_argument("--robot", type=str, default="franka_panda", help="Name of the robot.")
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
 # parse the arguments
@@ -39,7 +39,6 @@ simulation_app = app_launcher.app
 import isaaclab.sim as sim_utils
 import torch
 from isaaclab.assets import Articulation, AssetBaseCfg
-from isaaclab.controllers import OperationalSpaceController, OperationalSpaceControllerCfg
 from isaaclab.markers import VisualizationMarkers
 from isaaclab.markers.config import FRAME_MARKER_CFG
 from isaaclab.scene import InteractiveScene, InteractiveSceneCfg
@@ -58,6 +57,7 @@ from isaaclab.utils.math import (
 ##
 from isaaclab_assets import FRANKA_PANDA_HIGH_PD_CFG  # isort:skip
 from kinova_tasks.assets.kinova_gen3_2f85 import KINOVA_GEN3_2F85_CFG
+from skillet.controllers import OperationalSpaceController
 
 
 @configclass
@@ -103,7 +103,7 @@ class SceneCfg(InteractiveSceneCfg):
         robot.actuators["panda_shoulder"].damping = 0.0
         robot.actuators["panda_forearm"].stiffness = 0.0
         robot.actuators["panda_forearm"].damping = 0.0
-        robot.spawn.rigid_props.disable_gravity = True
+        robot.spawn.rigid_props.disable_gravity = False
     elif args_cli.robot == "kinova":
         robot = KINOVA_GEN3_2F85_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
         robot.actuators["arm"].stiffness = 0.0
@@ -134,7 +134,7 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
     arm_joint_ids = robot.find_joints(arm_joint_names)[0]
 
     # Create the OSC
-    osc_cfg = OperationalSpaceControllerCfg(
+    """osc_cfg = OperationalSpaceControllerCfg(
         target_types=["pose_abs", "wrench_abs"],
         impedance_mode="variable_kp",
         inertial_dynamics_decoupling=True,
@@ -145,8 +145,8 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
         motion_control_axes_task=[1, 1, 0, 1, 1, 1],
         contact_wrench_control_axes_task=[0, 0, 1, 0, 0, 0],
         nullspace_control="position",
-    )
-    osc = OperationalSpaceController(osc_cfg, num_envs=scene.num_envs, device=sim.device)
+    )"""
+    osc = OperationalSpaceController(device=sim.device, impedance_mode="variable_kp", gravity_compensation=True)
 
     # Markers
     frame_marker_cfg = FRAME_MARKER_CFG.copy()
@@ -165,7 +165,7 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
     )
     ee_goal_wrench_set_tilted_task = torch.tensor(
         [
-            [0.0, 0.0, 10.0, 0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
             [0.0, 0.0, 10.0, 0.0, 0.0, 0.0],
             [0.0, 0.0, 10.0, 0.0, 0.0, 0.0],
         ],
@@ -173,9 +173,9 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
     )
     kp_set_task = torch.tensor(
         [
-            [360.0, 360.0, 360.0, 360.0, 360.0, 360.0],
-            [420.0, 420.0, 420.0, 420.0, 420.0, 420.0],
-            [320.0, 320.0, 320.0, 320.0, 320.0, 320.0],
+            [360.0, 360.0, 360.0, 360.0, 360.0, 360.0, 0.0, 0.0, 10.0, 0.0, 0.0, 0.0],
+            [420.0, 420.0, 420.0, 420.0, 420.0, 420.0, 0.0, 0.0, 10.0, 0.0, 0.0, 0.0],
+            [320.0, 320.0, 320.0, 320.0, 320.0, 320.0, 0.0, 0.0, 10.0, 0.0, 0.0, 0.0],
         ],
         device=sim.device,
     )
@@ -233,14 +233,25 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
             contact_forces.reset()
             # reset target pose
             robot.update(sim_dt)
-            _, _, _, ee_pose_b, _, _, _, _, _, _ = update_states(
+            (
+                _,
+                _,
+                _,
+                ee_pose_b,
+                _,
+                _,
+                _,
+                _,
+                _,
+                _,
+            ) = update_states(
                 sim, scene, robot, ee_frame_idx, arm_joint_ids, contact_forces
             )  # at reset, the jacobians are not updated to the latest state
             command, ee_target_pose_b, ee_target_pose_w, current_goal_idx = update_target(
                 sim, scene, osc, root_pose_w, ee_target_set, current_goal_idx
             )
             # set the osc command
-            osc.reset()
+            osc.reset(24)
             command, task_frame_pose_b = convert_to_task_frame(osc, command=command, ee_target_pose_b=ee_target_pose_b)
             osc.set_command(command=command, current_ee_pose_b=ee_pose_b, current_task_frame_pose_b=task_frame_pose_b)
         else:
@@ -411,11 +422,11 @@ def update_target(
     """
     # update the ee desired command
     command = torch.zeros(scene.num_envs, osc.action_dim, device=sim.device)
-    command[:] = ee_target_set[current_goal_idx]
+    command[:] = ee_target_set[current_goal_idx, : osc.action_dim]
 
     # update the ee desired pose
     ee_target_pose_b = torch.zeros(scene.num_envs, 7, device=sim.device)
-    for target_type in osc.cfg.target_types:
+    for target_type in osc.target_types:
         if target_type == "pose_abs":
             ee_target_pose_b[:] = command[:, :7]
         elif target_type == "wrench_abs":
@@ -455,7 +466,7 @@ def convert_to_task_frame(osc: OperationalSpaceController, command: torch.tensor
     task_frame_pose_b = ee_target_pose_b.clone()
 
     cmd_idx = 0
-    for target_type in osc.cfg.target_types:
+    for target_type in osc.target_types:
         if target_type == "pose_abs":
             command[:, :3], command[:, 3:7] = subtract_frame_transforms(
                 task_frame_pose_b[:, :3], task_frame_pose_b[:, 3:], command[:, :3], command[:, 3:7]

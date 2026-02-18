@@ -101,7 +101,7 @@ class DifferentialIKController:
     Operations.
     """
 
-    def reset(self, n_envs: torch.Tensor = None, env_ids: torch.Tensor = None) -> None:
+    def reset(self, n_envs: int | None = None, env_ids: torch.Tensor = None) -> None:
         """Reset the internals.
 
         Args:
@@ -111,6 +111,7 @@ class DifferentialIKController:
         """
         # create buffers
         if not hasattr(self, "_command") or env_ids is None:
+            assert n_envs is not None, "n_envs cannot be none when `self._command` is not set."
             self.ee_pos_des = torch.zeros(n_envs, 3, device=self._device)
             self.ee_quat_des = torch.zeros(n_envs, 4, device=self._device)
             self._command = torch.zeros(n_envs, self.action_dim, device=self._device)
