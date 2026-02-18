@@ -15,29 +15,28 @@ from isaaclab.markers.config import FRAME_MARKER_CFG
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
-from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
+from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR, ISAACLAB_NUCLEUS_DIR
 from isaaclab.utils.math import quat_error_magnitude, quat_from_euler_xyz, sample_uniform
 from isaacsim.core.utils.torch.transformations import tf_combine
 
-from kinova_tasks.assets.utils import KINOVA_ASSET_DIR
 from skillet.envs.isaac import SkillsDirectRLEnvCfg
 from skillet.envs.util import configclass
 
 
 @configclass
-class KinovaReachEnvCfg(SkillsDirectRLEnvCfg):
+class FrankaReachEnvCfg(SkillsDirectRLEnvCfg):
     # env
     episode_length_s = 6.0  # 500 timesteps
     decimation = 2
-    action_space = 8
+    action_space = 9
     observation_space = 31
     state_space = 0
 
-    joint_ids = [0, 1, 2, 3, 4, 5, 6, 7]
-    tcp_offset = [0.120, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0]
-    ee_link_name = "gripper_base_link"
+    joint_ids = [0, 1, 2, 3, 4, 5, 6, 7, 8]
+    tcp_offset = [0.0, 0.0, 0.1034, 0.0, 0.0, 0.0, 0.0]
+    ee_link_name = "panda_hand"
     base_link_name = "base_link"
-    gripper_joint_name = "finger_joint"
+    gripper_joint_name = "panda_finger_joint1"
 
     skills = ["reach_xyz"]
 
@@ -63,7 +62,8 @@ class KinovaReachEnvCfg(SkillsDirectRLEnvCfg):
     robot = ArticulationCfg(
         prim_path="/World/envs/env_.*/Robot",
         spawn=sim_utils.UsdFileCfg(
-            usd_path=f"{KINOVA_ASSET_DIR}/robots/kinova/kinova_gen3_robotiq_2f_85_action_graph.usd",
+            usd_path=f"{ISAACLAB_NUCLEUS_DIR}/Robots/FrankaEmika/panda_instanceable.usd",
+            activate_contact_sensors=False,
             rigid_props=sim_utils.RigidBodyPropertiesCfg(
                 disable_gravity=False,
                 max_depenetration_velocity=5.0,
@@ -74,57 +74,36 @@ class KinovaReachEnvCfg(SkillsDirectRLEnvCfg):
         ),
         init_state=ArticulationCfg.InitialStateCfg(
             joint_pos={
-                "joint_1": 0.0,
-                "joint_2": 0.523599,
-                "joint_3": 0.0,
-                "joint_4": 1.5708,
-                "joint_5": 0.0,
-                "joint_6": 0.785398,
-                "joint_7": 0.0,
-                "finger_joint": 0.0,  # left outer knuckle joint for manipulation
-                "right_outer_knuckle_joint": 0.0,
-                "left_outer_finger_joint": 0.0,
-                "right_outer_finger_joint": 0.0,
-                "left_inner_finger_joint": 0.0,
-                "right_inner_finger_joint": 0.0,
-                "right_inner_finger_knuckle_joint": 0.0,
-                "left_inner_finger_knuckle_joint": 0.0,
+                "panda_joint1": 1.157,
+                "panda_joint2": -1.066,
+                "panda_joint3": -0.155,
+                "panda_joint4": -2.239,
+                "panda_joint5": -1.841,
+                "panda_joint6": 1.003,
+                "panda_joint7": 0.469,
+                "panda_finger_joint.*": 0.035,
             },
             pos=(0.0, 0.0, 0.0),
             rot=(0.0, 0.0, 0.0, 0.0),
         ),
         actuators={
-            "arm": ImplicitActuatorCfg(
-                joint_names_expr=["joint_[1-7]"],
-                velocity_limit_sim=100.0,
-                effort_limit_sim={
-                    "joint_[1-2]": 80.0,
-                    "joint_[3]": 40.0,
-                    "joint_[4-7]": 20.0,
-                },
-                stiffness={
-                    "joint_[1-3]": 4000.0,
-                    "joint_[5-7]": 1500.0,
-                },
-                damping={
-                    "joint_[1-3]": 1000.0,
-                    "joint_[4-7]": 500.0,
-                },
+            "panda_shoulder": ImplicitActuatorCfg(
+                joint_names_expr=["panda_joint[1-4]"],
+                effort_limit_sim=87.0,
+                stiffness=80.0,
+                damping=4.0,
             ),
-            "gripper": ImplicitActuatorCfg(
-                joint_names_expr=[
-                    "finger_joint",
-                    "right_outer_knuckle_joint",
-                    "left_outer_finger_joint",
-                    "right_outer_finger_joint",
-                    "left_inner_finger_joint",
-                    "right_inner_finger_joint",
-                    "right_inner_finger_knuckle_joint",
-                    "left_inner_finger_knuckle_joint",
-                ],
-                effort_limit_sim=10,
-                stiffness=2000.0,
-                damping=200.0,
+            "panda_forearm": ImplicitActuatorCfg(
+                joint_names_expr=["panda_joint[5-7]"],
+                effort_limit_sim=12.0,
+                stiffness=80.0,
+                damping=4.0,
+            ),
+            "panda_hand": ImplicitActuatorCfg(
+                joint_names_expr=["panda_finger_joint.*"],
+                effort_limit_sim=200.0,
+                stiffness=2e3,
+                damping=1e2,
             ),
         },
     )
@@ -160,7 +139,7 @@ class KinovaReachEnvCfg(SkillsDirectRLEnvCfg):
     current_pose_visualizer_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)
 
 
-class KinovaReachEnv(DirectRLEnv):
+class FrankaReachEnv(DirectRLEnv):
     # pre-physics step calls
     #   |-- _pre_physics_step(action)
     #   |-- _apply_action()
@@ -170,9 +149,9 @@ class KinovaReachEnv(DirectRLEnv):
     #   |-- _reset_idx(env_ids)
     #   |-- _get_observations()
 
-    cfg: KinovaReachEnvCfg
+    cfg: FrankaReachEnvCfg
 
-    def __init__(self, cfg: KinovaReachEnvCfg, render_mode: str | None = None, **kwargs):
+    def __init__(self, cfg: FrankaReachEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
 
         self.dt = self.cfg.sim.dt * self.cfg.decimation
@@ -322,7 +301,7 @@ class KinovaReachEnv(DirectRLEnv):
     # auxiliary methods
 
     def _compute_intermediate_values(self, env_ids: torch.Tensor | None = None):
-        """Docstring for _compute_intermediate_values
+        """Docstring for _compute_intermediate_values.
 
         :param self: Description
         :param env_ids: Description
@@ -339,7 +318,7 @@ class KinovaReachEnv(DirectRLEnv):
         self.prev_actions[env_ids] = torch.clone(self.actions[env_ids])
 
 
-class KinovaReachSkillEnv(KinovaReachEnv):
+class FrankaReachSkillEnv(FrankaReachEnv):
     """Use this environment when computing actions with a Diff IK controller or the skills environments."""
 
     # pre-physics step calls
@@ -351,9 +330,9 @@ class KinovaReachSkillEnv(KinovaReachEnv):
     #   |-- _reset_idx(env_ids)
     #   |-- _get_observations()
 
-    cfg: KinovaReachEnvCfg
+    cfg: FrankaReachEnvCfg
 
-    def __init__(self, cfg: KinovaReachEnvCfg, render_mode: str | None = None, **kwargs):
+    def __init__(self, cfg: FrankaReachEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
 
     # pre-physics step calls

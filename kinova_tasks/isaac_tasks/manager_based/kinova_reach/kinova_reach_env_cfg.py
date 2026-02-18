@@ -19,13 +19,14 @@ from isaaclab.markers.config import FRAME_MARKER_CFG  # isort: skip
 ##
 # Pre-defined configs
 ##
-from isaac_kinova.assets.kinova_gen3_2f85 import KINOVA_GEN3_2F85_CFG, KINOVA_GEN3_2F85_HIGH_CFG
 from isaaclab.devices.device_base import DeviceBase, DevicesCfg
 from isaaclab.devices.keyboard import Se3KeyboardCfg
 from isaaclab.devices.openxr.openxr_device import OpenXRDeviceCfg
 from isaaclab.devices.openxr.retargeters.manipulator.gripper_retargeter import GripperRetargeterCfg
 from isaaclab.devices.openxr.retargeters.manipulator.se3_rel_retargeter import Se3RelRetargeterCfg
 from isaaclab.managers import SceneEntityCfg
+
+from kinova_tasks.assets.kinova_gen3_2f85 import KINOVA_GEN3_2F85_CFG, KINOVA_GEN3_2F85_HIGH_CFG
 
 ##
 # Environment configuration

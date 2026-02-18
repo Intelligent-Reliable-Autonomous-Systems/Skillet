@@ -58,6 +58,12 @@ class KinovaROS2ReachEnvCfg(ROS2RLEnvCfg):
 
     skills = ["reach_xyz"]
 
+    joint_ids = [0, 1, 2, 3, 4, 5, 6, 7]
+    tcp_offset = [0.0, 0.0, 0.12, 1.0, 0.0, 0.0, 0.0]
+    ee_link_name = "robotiq_85_base_link"
+    base_link_name = "base_link"
+    gripper_joint_name = "robotiq_85_left_knuckle_joint"
+
 
 class KinovaROS2ReachEnv(ROS2RLEnv):
     """Kinova Gen3 7DoF ROS2 implementation."""
@@ -229,7 +235,7 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
         if self.cfg.use_fake_hardware == "true":
             gripper_goal = {"command": {"position": gripper_val, "max_effort": 100.0}}
         else:
-            gripper_goal = {"command": {"name": ["robotiq_85_left_knuckle_joint"], "position": [gripper_val]}}
+            gripper_goal = {"command": {"name": [self.cfg.gripper_joint_name], "position": [gripper_val]}}
 
         self.joint_states_pub.publish(joint_msg)
 

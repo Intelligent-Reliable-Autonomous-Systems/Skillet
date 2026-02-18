@@ -112,8 +112,12 @@ class IsaacEnvWrapper(
             device=self.device,
         )
 
-        # Kinova specific information
-        self.joint_ids = [0, 1, 2, 3, 4, 5, 6, 7]
+        # Robot specific information
+        self.joint_ids = env.unwrapped.cfg.joint_ids
+        self.tcp_offset = env.unwrapped.cfg.tcp_offset
+        self.ee_link_name = env.unwrapped.cfg.ee_link_name
+        self.base_link_name = env.unwrapped.cfg.base_link_name
+        self.gripper_joint_name = env.unwrapped.cfg.gripper_joint_name
 
         self.robot_dof_lower_limits = self.robot.data.soft_joint_pos_limits[0, :, 0].to(device=self.device)[
             self.joint_ids
@@ -124,11 +128,7 @@ class IsaacEnvWrapper(
         self.robot_dof_lower_limits[self.robot_dof_lower_limits == -float("inf")] = -torch.pi
         self.robot_dof_upper_limits[self.robot_dof_upper_limits == float("inf")] = torch.pi
 
-        self.tcp_offset = (
-            torch.as_tensor([0.120, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0], device=self.device)
-            .unsqueeze(0)
-            .repeat(self.num_envs, 1)
-        )
+        self.tcp_offset = torch.as_tensor(self.tcp_offset, device=self.device).unsqueeze(0).repeat(self.num_envs, 1)
 
     @property
     def episode_length_buf(self) -> torch.Tensor:
@@ -180,13 +180,14 @@ class IsaacEnvWrapper(
         if obs_spec.name == "ik_ee":
             return TensorDict(
                 {
-                    "joint_pos": self._get_joint_positions(),
+                    "joint_pos": self._get_joint_positions(joint_ids=self.joint_ids),
+                    "joint_vel": self._get_joint_velocities(joint_ids=self.joint_ids),
                     "tcp_offset": self.tcp_offset,
-                    "jacobians": self._get_jacobians(),
-                    "ee_pose_b": self._get_ee_pose_b(),
-                    "tcp_pose_b": self._get_tcp_pose_b(),
-                    "gripper_lim": self._get_gripper_lims(),
-                    "gripper": self._get_gripper_state(),
+                    "jacobians": self._get_jacobians(ee_link=self.ee_link_name, base_link=self.base_link_name),
+                    "ee_pose_b": self._get_ee_pose_b(ee_link=self.ee_link_name, base_link=self.base_link_name),
+                    "tcp_pose_b": self._get_tcp_pose_b(ee_link=self.ee_link_name),
+                    "gripper_lim": self._get_gripper_lims(gripper_joint=self.gripper_joint_name),
+                    "gripper": self._get_gripper_state(gripper_joint=self.gripper_joint_name),
                     "joint_lims": self._get_joint_lims(),
                 },
                 batch_size=self.num_envs,
@@ -289,7 +290,6 @@ class IsaacEnvWrapper(
         self,
         env_ids: torch.Tensor | None = None,
         ee_link: str = "gripper_base_link",
-        gripper_joint: str = "finger_joint",
     ) -> torch.Tensor:
         """Get the TCP pose of the robot in the robot base frame.
 
@@ -305,7 +305,6 @@ class IsaacEnvWrapper(
         if env_ids is None:
             env_ids = self.robot._ALL_INDICES
 
-        gripper_joint_idx = self.robot.find_joints(gripper_joint)[0][0]
         ee_link_idx = self.robot.find_bodies(ee_link)[0][0]
 
         ee_pos_w = self.robot.data.body_pos_w[env_ids, ee_link_idx]

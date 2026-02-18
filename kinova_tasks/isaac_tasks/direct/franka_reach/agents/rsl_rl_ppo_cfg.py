@@ -1,21 +1,22 @@
-# Copyright (c) 2022-2025, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2025, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
+
 
 from skillet.envs.util import configclass
 from skillet.rl.cfg import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg, RslRlPpoPolicyCfg
 
 
 @configclass
-class Gen3ReachPPORunnerCfg(RslRlOnPolicyRunnerCfg):
+class FrankaReachPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
     max_iterations = 1000
     save_interval = 50
-    experiment_name = "reach_gen3"
+    experiment_name = "franka_reach_direct"
     run_name = ""
-    resume = False
     obs_groups = {"policy": ["policy"], "critic": ["policy"]}
+    resume = False
     empirical_normalization = False
     actor = RslRlPpoPolicyCfg(
         init_noise_std=1.0,

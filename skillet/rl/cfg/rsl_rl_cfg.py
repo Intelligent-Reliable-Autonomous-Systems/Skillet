@@ -75,7 +75,7 @@ class RslRlPpoActorCriticCfg:
     activation: str = MISSING
     """The activation function for the actor and critic networks."""
 
-    hierarchical_policy: bool = True
+    hierarchical_policy: bool = False
     """If to load a hierarchical skills policy"""
 
 

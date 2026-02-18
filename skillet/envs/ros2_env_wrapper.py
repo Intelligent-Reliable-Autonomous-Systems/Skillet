@@ -91,14 +91,14 @@ class ROS2EnvWrapper(
             device=self.device,
         )
 
-        # Kinova specific information
-        self.joint_ids = [0, 1, 2, 3, 4, 5, 6, 7]
+        # Robot specific information
+        self.joint_ids = env.unwrapped.cfg.joint_ids
+        self.tcp_offset = env.unwrapped.cfg.tcp_offset
+        self.ee_link_name = env.unwrapped.cfg.ee_link_name
+        self.base_link_name = env.unwrapped.cfg.base_link_name
+        self.gripper_joint_name = env.unwrapped.cfg.gripper_joint_name
 
-        self.tcp_offset = (
-            torch.as_tensor([0.0, 0.0, 0.12, 1.0, 0.0, 0.0, 0.0], device=self.device)
-            .unsqueeze(0)
-            .repeat(self.num_envs, 1)
-        )
+        self.tcp_offset = torch.as_tensor(self.tcp_offset, device=self.device).unsqueeze(0).repeat(self.num_envs, 1)
 
     @property
     def episode_length_buf(self) -> torch.Tensor:
@@ -172,13 +172,14 @@ class ROS2EnvWrapper(
         if obs_spec.name == "ik_ee":
             return TensorDict(
                 {
-                    "joint_pos": self._get_joint_positions(),
+                    "joint_pos": self._get_joint_positions(joint_ids=self.joint_ids),
+                    "joint_vel": self._get_joint_velocities(joint_ids=self.joint_ids),
                     "tcp_offset": self.tcp_offset,
-                    "jacobians": self._get_jacobians(),
-                    "ee_pose_b": self._get_ee_pose_b(),
-                    "tcp_pose_b": self._get_tcp_pose_b(),
-                    "gripper": self._get_gripper_state(),
-                    "gripper_lim": self._get_gripper_lims(),
+                    "jacobians": self._get_jacobians(ee_link=self.ee_link_name, base_link=self.base_link_name),
+                    "ee_pose_b": self._get_ee_pose_b(ee_link=self.ee_link_name, base_link=self.base_link_name),
+                    "tcp_pose_b": self._get_tcp_pose_b(ee_link=self.ee_link_name),
+                    "gripper_lim": self._get_gripper_lims(gripper_joint=self.gripper_joint_name),
+                    "gripper": self._get_gripper_state(gripper_joint=self.gripper_joint_name),
                     "joint_lims": self._get_joint_lims(),
                 },
                 batch_size=self.num_envs,
@@ -263,7 +264,7 @@ class ROS2EnvWrapper(
     def _get_jacobians(
         self,
         env_ids: torch.Tensor | None = None,
-        ee_link: str = "end_effector_link",
+        ee_link: str = "robotiq_85_base_link",
         base_link: str = "base_link",
         arm_joint_ids: list | None = None,
     ) -> torch.Tensor:
