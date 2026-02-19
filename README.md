@@ -8,7 +8,7 @@ Primary Developers: Jeff Jewett (jewettje@oregonstate.edu) and Will Solow (solow
 
 1. Create a conda environment: `conda create -n skills python=3.11`
 2. Activate conda environment: `conda activate skills`
-3. Install requirements via pip: `pip install numpy torch gymnasium roslibpy`
+3. Install requirements via pip: `pip install -e .`
 
 ### IsaacSim/IsaacLab integration
 See [IsaacLab Installation](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/pip_installation.html) for additional information
@@ -21,6 +21,16 @@ See [IsaacLab Installation](https://isaac-sim.github.io/IsaacLab/main/source/set
 
 To run experiment with dummy task policy and low level policy: `python3 examples/isaac_dummy.py --num_envs 4 --task Kinova-Reach-Skill-v0`
 To run experiment with an inverse kinematics controller low level policy: `python3 examples/isaac_ik.py --num_envs 4 --task Kinova-Reach-Skill-v0`
+
+### Perception installation
+
+1. Make sure to activate conda environment: `conda activate skills`
+2. Install `open3d`: `conda install -c conda-forge open3d`
+3. Install perception python packages: `pip install -e ".[perception]"`
+4. Unlike other Ultralytics models, SAM 3 weights (sam3.pt) are not automatically downloaded. You must first request access for the model weights on the [SAM 3 model page on Hugging Face](https://huggingface.co/facebook/sam3) and then, once approved, download the sam3.pt file. Place the downloaded sam3.pt file at `data/models/sam3.pt`.
+
+
+Perception relies on some additional modules.
 
 ## ROS2 Integration
 See [ROS2 Installation](https://docs.ros.org/en/jazzy/Installation.html) to install ROS2. Be sure to install on system python (not venv/conda)

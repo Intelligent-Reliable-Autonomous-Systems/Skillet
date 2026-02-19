@@ -5,34 +5,20 @@ import os
 import time
 
 import cv2
-import gymnasium as gym
-import torch
+import numpy as np
+from jaxtyping import Int
 
-import kinova_tasks.ros2_tasks  # noqa: F401
 from kinova_tasks.ros2_tasks.kinova.kinova_reach_ros2 import KinovaROS2ReachEnv
+from kinova_tasks.tasks.kinova.kinova_reach_ros2 import KinovaROS2ReachEnvCfg
 from skillet.envs.ros2_env_wrapper import ROS2EnvWrapper
-from skillet.envs.util import parse_ros2_env_cfg, setup_ros
+from skillet.envs.util import setup_ros
 from skillet.perception.object_localization import segmented_rgbd_to_point_cloud
-from skillet.perception.visualize import visualize_point_cloud
 from skillet.perception.sam3.sam3 import SAM3
 
-
-def _depth_to_colormap(depth_mm):
-    valid = depth_mm > 0
-    if not valid.any():
-        return cv2.applyColorMap(depth_mm.astype("uint8"), cv2.COLORMAP_TURBO)
-
-    depth_valid = depth_mm[valid].astype("float32")
-    lo = float(depth_valid.min())
-    hi = float(depth_valid.max())
-    if hi <= lo:
-        hi = lo + 1.0
-    depth_norm = ((depth_mm.astype("float32") - lo) / (hi - lo) * 255.0).clip(0, 255).astype("uint8")
-    depth_norm[~valid] = 0
-    return cv2.applyColorMap(depth_norm, cv2.COLORMAP_TURBO)
-
-
 parser = argparse.ArgumentParser(description="Visualize latest RGB-D frame from ROS2 service.")
+parser.add_argument(
+    "--prompts", nargs="+", type=str, default=["block", "eraser"], help="Prompts to use for segmentation."
+)
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default="ROS2-Reach-Kinova-v0", help="Name of the task.")
 parser.add_argument("--device", type=str, default="cuda", help="Device to use")
@@ -53,19 +39,16 @@ if args_cli.ros2_ws is None:
 
 def main() -> None:
     """Visualize RGB + depth color map from _get_latest_rgbd()."""
-    env_cfg = parse_ros2_env_cfg(
-        args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs, ros2_workspace=args_cli.ros2_ws
+    env_cfg = KinovaROS2ReachEnvCfg(
+        robot_ip=args_cli.robot_ip,
+        use_fake_hardware=args_cli.use_fake_hardware,
+        launch_ros=args_cli.launch_ros,
+        device=args_cli.device,
+        num_envs=args_cli.num_envs,
+        ros2_workspace=args_cli.ros2_ws,
     )
-    env_cfg.robot_ip = args_cli.robot_ip
-    env_cfg.use_fake_hardware = args_cli.use_fake_hardware
-    env_cfg.launch_ros = args_cli.launch_ros
 
     sam3 = SAM3(device=args_cli.device)
-    # rgb = torch.zeros((3, 480, 640), dtype=torch.uint8, device=args_cli.device)
-    # seg, seg_indices = sam3.predict(rgb, ["figurine"])
-    # print(f"Found {len(seg)} objects: {seg_indices} with areas {seg.sum(dim=(1,2))}")
-
-    # env = gym.make(args_cli.task, cfg=env_cfg, ros=setup_ros())
     env = KinovaROS2ReachEnv(cfg=env_cfg, ros=setup_ros())
     env = ROS2EnvWrapper(env)
     env.reset()
@@ -82,35 +65,23 @@ def main() -> None:
 
     try:
         while True:
-
             frame_t = time.perf_counter()
-            print('getting observation')
             obs = env.get_observation(rgbd_spec)
-            # mask = torch.zeros((4, 480, 640), dtype=torch.bool, device=obs["depth"].device)
-            # mask[0, :240, :320] = True
-            # mask[1, 240:, :320] = True
-            # mask[2, :240, 320:] = True
-            # mask[3, 240:, 320:] = True
             mask, prompt_indices = sam3.predict(obs["rgb"], ["figurine"])
-            print(f"Found {len(mask)} objects: {prompt_indices} with areas {mask.sum(dim=(1,2))}")
-            # for i in range(480):
-            #     obs["depth"][0, i, :] = 500 + i
-            # obs["depth"].fill_(500)
-            print('converting to point cloud')
+
             point_cloud, segment_indices = segmented_rgbd_to_point_cloud(
-                obs["depth"], mask, obs["intrinsic_k"], obs["camera_pose"],
-                rgb=obs["rgb"], use_perspective=False)
-            print('visualizing point cloud')
-            visualize_point_cloud(point_cloud, segment_indices=segment_indices)
-            # pc = point_cloud.reshape((1, 480, 640, 3))
+                obs["depth"], mask, obs["intrinsic_k"], obs["camera_pose"], rgb=obs["rgb"], use_perspective=False
+            )
+            # visualize_point_cloud(point_cloud, segment_indices=segment_indices)
+
             rgb = obs["rgb"].cpu().numpy().transpose((1, 2, 0))
             depth = obs["depth"].cpu().numpy()[0]
 
             rgb_bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
             depth_color = _depth_to_colormap(depth)
 
-            # cv2.imshow("RGB", rgb_bgr)
-            # cv2.imshow("Depth", depth_color)
+            cv2.imshow("RGB", rgb_bgr)
+            cv2.imshow("Depth", depth_color)
 
             # time.sleep(0.3)
 
@@ -127,8 +98,7 @@ def main() -> None:
             if elapsed >= 1.0:
                 fps_window = fps_window_count / elapsed
                 fps_ema_str = f"{fps_ema:.2f}" if fps_ema is not None else "n/a"
-                print(
-                    f"[INFO] ts={obs['timestamp']:.3f} fps={fps_window:.2f} fps_ema={fps_ema_str} ")
+                print(f"[INFO] ts={obs['timestamp']:.3f} fps={fps_window:.2f} fps_ema={fps_ema_str} ")
                 fps_window_count = 0
                 fps_window_start = frame_t
 
@@ -137,6 +107,21 @@ def main() -> None:
     finally:
         cv2.destroyAllWindows()
         env.close()
+
+
+def _depth_to_colormap(depth_mm: Int[np.ndarray, "h w"]) -> Int[np.ndarray, "h w 3"]:
+    valid = depth_mm > 0
+    if not valid.any():
+        return cv2.applyColorMap(depth_mm.astype("uint8"), cv2.COLORMAP_TURBO)
+
+    depth_valid = depth_mm[valid].astype("float32")
+    lo = float(depth_valid.min())
+    hi = float(depth_valid.max())
+    if hi <= lo:
+        hi = lo + 1.0
+    depth_norm = ((depth_mm.astype("float32") - lo) / (hi - lo) * 255.0).clip(0, 255).astype("uint8")
+    depth_norm[~valid] = 0
+    return cv2.applyColorMap(depth_norm, cv2.COLORMAP_TURBO)
 
 
 if __name__ == "__main__":
