@@ -36,7 +36,6 @@ class KinovaGenCameraEnvCfg(SkillsDirectRLEnvCfg):
     episode_length_s = 5.0
     decimation = 2
 
-    # --- spaces (to be updated when RGBD obs are added) ---
     action_space = 8
     observation_space = 25
     state_space = 0
@@ -86,7 +85,17 @@ class KinovaGenCameraEnvCfg(SkillsDirectRLEnvCfg):
 class KinovaGenCameraEnv(DirectRLEnv):
     """Kinova Gen3 + RGBD camera environment.
 
-    Implements _setup_scene; observations are stubs for now.
+    Observations returned from ``_get_observations()`` are a nested dict
+    under the ``"policy"`` key::
+
+        {
+            "policy": {
+                "rgb":       (N, H, W, 3)  float32  [0, 1]  - RGB
+                "depth":     (N, H, W, 1)  float32  metres  - distance to image plane
+                "joint_pos": (N, num_joints) float32
+                "joint_vel": (N, num_joints) float32
+            }
+        }
     """
 
     cfg: KinovaGenCameraEnvCfg
@@ -149,9 +158,25 @@ class KinovaGenCameraEnv(DirectRLEnv):
         self._robot.set_joint_position_target(self.robot_dof_targets, joint_ids=self.cfg.joint_ids)
 
     def _get_observations(self) -> dict:
-        # Stubbed
+        cam_out = self._camera.data.output
+
+        # RGB: uint8 (N, H, W, 3) → float32 [0, 1]
+        rgb = cam_out["rgb"].float() / 255.0
+
+        # Depth: float32 (N, H, W, 1) in metres
+        depth = cam_out["distance_to_image_plane"]
+
         joint_pos = self._robot.data.joint_pos[:, self.cfg.joint_ids]
-        return {"policy": joint_pos}
+        joint_vel = self._robot.data.joint_vel[:, self.cfg.joint_ids]
+
+        return {
+            "policy": {
+                "rgb":       rgb,
+                "depth":     depth,
+                "joint_pos": joint_pos,
+                "joint_vel": joint_vel,
+            }
+        }
 
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
         truncated = self.episode_length_buf >= self.max_episode_length - 1
