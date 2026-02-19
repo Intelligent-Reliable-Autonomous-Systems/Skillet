@@ -13,7 +13,7 @@ from skillet.rl.rsl_rl.env import VecEnv
 
 
 class RslRlVecEnvWrapper(VecEnv):
-    """Wraps around Isaac Lab environment for the RSL-RL library
+    """Wraps around Isaac Lab environment for the RSL-RL library.
 
     .. caution::
         This class must be the last wrapper in the wrapper chain. This is because the wrapper does not follow
@@ -25,10 +25,9 @@ class RslRlVecEnvWrapper(VecEnv):
     """
 
     def __init__(self, env, clip_actions: float | None = None):
-        """Initializes the wrapper.
+        """Initialize the wrapper.
 
-        Note:
-            The wrapper calls :meth:`reset` at the start since the RSL-RL runner does not call reset.
+        The wrapper calls :meth:`reset` at the start since the RSL-RL runner does not call reset.
 
         Args:
             env: The environment to wrap around.
@@ -124,8 +123,7 @@ class RslRlVecEnvWrapper(VecEnv):
     def episode_length_buf(self, value: torch.Tensor):
         """Set the episode length buffer.
 
-        Note:
-            This is needed to perform random initialization of episode lengths in RSL-RL.
+        This is needed to perform random initialization of episode lengths in RSL-RL.
 
         """
         self.unwrapped.episode_length_buf = value
@@ -181,7 +179,7 @@ class RslRlVecEnvWrapper(VecEnv):
             return
 
         # modify the action space to the clip range
-        # note: this is only possible for the box action space. we need to change it in the future for other
+        # this is only possible for the box action space. we need to change it in the future for other
         #   action spaces.
         self.env.unwrapped.single_action_space = gym.spaces.Box(
             low=-self.clip_actions, high=self.clip_actions, shape=(self.num_actions,)

@@ -224,10 +224,9 @@ def get_checkpoint_path(
 
 
 def dump_yaml(filename: str, data: dict | object, sort_keys: bool = False):
-    """Saves data into a YAML file safely.
+    """Save data into a YAML file safely.
 
-    Note:
-        The function creates any missing directory along the file's path.
+    The function creates any missing directory along the file's path.
 
     Args:
         filename: The path to save the file at.

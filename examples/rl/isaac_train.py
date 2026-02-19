@@ -96,7 +96,6 @@ def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
     )
 
     # set the environment seed
-    # note: certain randomizations occur in the environment initialization so we set the seed here
     env_cfg.seed = agent_cfg.seed
     env_cfg.sim.device = args_cli.device if args_cli.device is not None else env_cfg.sim.device
 

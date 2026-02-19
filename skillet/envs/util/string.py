@@ -29,6 +29,7 @@ def to_camel_case(snake_str: str, to: str = "cC") -> str:
 
     Returns:
         A string in camel-case format.
+
     """
     # check input is correct
     if to not in ["cC", "CC"]:
@@ -40,9 +41,8 @@ def to_camel_case(snake_str: str, to: str = "cC") -> str:
         # We capitalize the first letter of each component except the first one
         # with the 'title' method and join them together.
         return components[0] + "".join(x.title() for x in components[1:])
-    else:
-        # Capitalize first letter in all the components
-        return "".join(x.title() for x in components)
+    # Capitalize first letter in all the components
+    return "".join(x.title() for x in components)
 
 
 def to_snake_case(camel_str: str) -> str:
@@ -53,6 +53,7 @@ def to_snake_case(camel_str: str) -> str:
 
     Returns:
         A string in snake case (i.e. with '_')
+
     """
     camel_str = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", camel_str)
     return re.sub("([a-z0-9])([A-Z])", r"\1_\2", camel_str).lower()
@@ -66,6 +67,7 @@ def string_to_slice(s: str):
 
     Returns:
         The slice object.
+
     """
     # extract the content inside the slice()
     match = re.match(r"slice\((.*),(.*),(.*)\)", s)
@@ -97,6 +99,7 @@ def is_lambda_expression(name: str) -> bool:
 
     Returns:
         Whether the input string is a lambda expression.
+
     """
     try:
         ast.parse(name)
@@ -116,6 +119,7 @@ def callable_to_string(value: Callable) -> str:
 
     Returns:
         A string representation of the callable object.
+
     """
     # check if callable
     if not callable(value):
@@ -127,12 +131,11 @@ def callable_to_string(value: Callable) -> str:
         lambda_line = inspect.getsourcelines(value)[0][0].strip().split("lambda")[1].strip().split(",")[0]
         lambda_line = re.sub(r"#.*$", "", lambda_line).rstrip()
         return f"lambda {lambda_line}"
-    else:
-        # get the module and function name
-        module_name = value.__module__
-        function_name = value.__name__
-        # return the string
-        return f"{module_name}:{function_name}"
+    # get the module and function name
+    module_name = value.__module__
+    function_name = value.__name__
+    # return the string
+    return f"{module_name}:{function_name}"
 
 
 def string_to_callable(name: str) -> Callable:
@@ -148,6 +151,7 @@ def string_to_callable(name: str) -> Callable:
 
     Returns:
         Callable: The function loaded from the module.
+
     """
     try:
         if is_lambda_expression(name):
@@ -159,8 +163,7 @@ def string_to_callable(name: str) -> Callable:
         # check if attribute is callable
         if callable(callable_object):
             return callable_object
-        else:
-            raise AttributeError(f"The imported object is not callable: '{name}'")
+        raise AttributeError(f"The imported object is not callable: '{name}'")
     except (ValueError, ModuleNotFoundError) as e:
         msg = (
             f"Could not resolve the input string '{name}' into callable object."
@@ -195,8 +198,7 @@ def resolve_matching_names(
     strings as: ([0, 1, 2], ['a', 'b', 'c']). When :attr:`preserve_order` is True, it will return them as:
     ([0, 2, 1], ['a', 'c', 'b']).
 
-    Note:
-        The function does not sort the indices. It returns the indices in the order they are found.
+    The function does not sort the indices. It returns the indices in the order they are found.
 
     Args:
         keys: A regular expression or a list of regular expressions to match the strings in the list.
@@ -209,6 +211,7 @@ def resolve_matching_names(
     Raises:
         ValueError: When multiple matches are found for a string in the list.
         ValueError: When not all regular expressions are matched.
+
     """
     # resolve name keys
     if isinstance(keys, str):
@@ -305,6 +308,7 @@ def resolve_matching_names_values(
         TypeError: When the input argument :attr:`data` is not a dictionary.
         ValueError: When multiple matches are found for a string in the dictionary.
         ValueError: When not all regular expressions in the data keys are matched (if strict is True).
+
     """
     # check valid input
     if not isinstance(data, dict):
@@ -376,11 +380,14 @@ def find_unique_string_name(initial_name: str, is_unique_fn: Callable[[str], boo
     """Find a unique string name based on the predicate function provided.
     The string is appended with "_N", where N is a natural number till the resultant string
     is unique.
+
     Args:
         initial_name (str): The initial string name.
         is_unique_fn (Callable[[str], bool]): The predicate function to validate against.
+
     Returns:
         str: A unique string based on input function.
+
     """
     if is_unique_fn(initial_name):
         return initial_name
@@ -394,11 +401,14 @@ def find_unique_string_name(initial_name: str, is_unique_fn: Callable[[str], boo
 
 def find_root_prim_path_from_regex(prim_path_regex: str) -> tuple[str, int]:
     """Find the first prim above the regex pattern prim and its position.
+
     Args:
         prim_path_regex (str): full prim path including the regex pattern prim.
+
     Returns:
         Tuple[str, int]: First position is the prim path to the parent of the regex prim.
                     Second position represents the level of the regex prim in the USD stage tree representation.
+
     """
     prim_paths_list = str(prim_path_regex).split("/")
     root_idx = None

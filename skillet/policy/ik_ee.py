@@ -111,7 +111,7 @@ class PosAbsIKEEPolicy(IKEEPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, T
             env_ids: environment ids to reset
 
         """
-        super().reset(obs, params)
+        super().reset(obs, params, env_ids=env_ids)
         tcp_pose_b = obs["tcp_pose_b"]
         # Use the params for TCP position and keep the current TCP orientation
         goal_pose_b = torch.cat((params[:, 0:3], tcp_pose_b[:, 3:7]), dim=1)
@@ -145,7 +145,7 @@ class PoseAbsIKEEPolicy(IKEEPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, 
             env_ids: environment ids to reset
 
         """
-        super().reset(obs, params)
+        super().reset(obs, params, env_ids=env_ids)
         goal_pose = self._compute_goal_ee_pose_b_from_goal_tcp_b(params, obs["tcp_offset"])
         self.diff_ik.set_command(goal_pose, env_ids=env_ids)
 
@@ -175,7 +175,7 @@ class XYZRPYAbsIKEEPolicy(IKEEPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs
             env_ids: environment ids to reset
 
         """
-        super().reset(obs, params)
+        super().reset(obs, params, env_ids=env_ids)
         target_quat_b = quat_from_euler_xyz(params[:, 3], params[:, 4], params[:, 5])
         goal_tcp_b = torch.cat((params[:, 0:3], target_quat_b), dim=1)
         goal_pose = self._compute_goal_ee_pose_b_from_goal_tcp_b(goal_tcp_b, obs["tcp_offset"])
@@ -207,7 +207,7 @@ class OrientAbsIKEEPolicy(IKEEPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs
             env_ids: environment ids to reset
 
         """
-        super().reset(obs, params)
+        super().reset(obs, params, env_ids=env_ids)
         tcp_pose_b = obs["tcp_pose_b"]
         target_quat = quat_from_euler_xyz(params[:, 0], params[:, 1], params[:, 2])
         # Keep the current TCP position and use the target orientation from the params

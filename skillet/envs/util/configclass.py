@@ -90,7 +90,7 @@ def configclass(cls: Any, **kwargs: dict[str, Any]) -> Any:  # noqa: ANN401
     # add field factory
     _process_mutable_types(cls)
     # copy mutable members
-    # note: we check if user defined __post_init__ function exists and augment it with our own
+    # we check if user defined __post_init__ function exists and augment it with our own
     if hasattr(cls, "__post_init__"):
         cls.__post_init__ = _combined_function(cls.__post_init__, _custom_post_init)
     else:
@@ -214,7 +214,7 @@ def _add_annotation_types(cls) -> None:
         # directly add all annotations from base class
         hints.update(ann)
         # iterate over base class members
-        # Note: Do not change this to dir(base) since it orders the members alphabetically.
+        # Do not change this to dir(base) since it orders the members alphabetically.
         #   This is not desirable since the order of the members is important in some cases.
         for key in base.__dict__:
             # get class member
@@ -236,12 +236,12 @@ def _add_annotation_types(cls) -> None:
                     # add type annotation
                     hints[key] = type(value)
             elif key != value.__name__:
-                # note: we don't want to add type annotations for nested configclass. Thus, we check if
+                # we don't want to add type annotations for nested configclass. Thus, we check if
                 #   the name of the type matches the name of the variable.
                 # since Python 3.10, type hints are stored as strings
                 hints[key] = f"type[{value.__name__}]"
 
-    # Note: Do not change this line. `cls.__dict__.get("__annotations__", {})` is different from
+    # Do not change this line. `cls.__dict__.get("__annotations__", {})` is different from
     #   `cls.__annotations__` because of inheritance.
     cls.__annotations__ = cls.__dict__.get("__annotations__", {})
     cls.__annotations__ = hints
@@ -327,7 +327,7 @@ def _process_mutable_types(cls):
            If the function is NOT used, the following value-error is returned:
            ValueError: mutable default <class 'list'> for field pos is not allowed: use default_factory
     """
-    # note: Need to set this up in the same order as annotations. Otherwise, it
+    # Need to set this up in the same order as annotations. Otherwise, it
     #   complains about missing positional arguments.
     ann = cls.__dict__.get("__annotations__", {})
 
@@ -356,7 +356,7 @@ def _process_mutable_types(cls):
                 class_members[key] = f
 
     # check that all annotations are present in class members
-    # note: mainly for debugging purposes
+    # mainly for debugging purposes
     if len(class_members) != len(ann):
         raise ValueError(
             f"In class '{cls.__name__}', number of annotations ({len(ann)}) does not match number of class members"
@@ -373,10 +373,9 @@ def _process_mutable_types(cls):
         if origin is ClassVar:
             continue
         # check if f is MISSING
-        # note: commented out for now since it causes issue with inheritance
+        # commented out for now since it causes issue with inheritance
         #   of dataclasses when parent have some positional and some keyword arguments.
         # Ref: https://stackoverflow.com/questions/51575931/class-inheritance-in-python-3-7-dataclasses
-        # TODO: check if this is fixed in Python 3.10
         # if f is MISSING:
         #     continue
         if isinstance(value, Field):

@@ -52,19 +52,19 @@ class FrankaBaseCfg(SkillsDirectRLEnvCfg):
                 max_depenetration_velocity=5.0,
             ),
             articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-                enabled_self_collisions=False, solver_position_iteration_count=12, solver_velocity_iteration_count=1
+                enabled_self_collisions=True, solver_position_iteration_count=8, solver_velocity_iteration_count=1
             ),
         ),
         init_state=ArticulationCfg.InitialStateCfg(
             joint_pos={
-                "panda_joint1": 1.157,
-                "panda_joint2": -1.066,
-                "panda_joint3": -0.155,
-                "panda_joint4": -2.239,
-                "panda_joint5": -1.841,
-                "panda_joint6": 1.003,
-                "panda_joint7": 0.469,
-                "panda_finger_joint.*": 0.035,
+                "panda_joint1": 0.0,
+            "panda_joint2": -0.569,
+            "panda_joint3": 0.0,
+            "panda_joint4": -2.810,
+            "panda_joint5": 0.0,
+            "panda_joint6": 3.037,
+            "panda_joint7": 0.741,
+            "panda_finger_joint.*": 0.04,
             },
             pos=(0.0, 0.0, 0.0),
             rot=(0.0, 0.0, 0.0, 0.0),
@@ -89,4 +89,5 @@ class FrankaBaseCfg(SkillsDirectRLEnvCfg):
                 damping=1e2,
             ),
         },
+        soft_joint_pos_limit_factor=1.0,
     )

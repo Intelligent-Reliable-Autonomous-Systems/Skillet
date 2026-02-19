@@ -7,21 +7,20 @@ from __future__ import annotations
 
 import isaaclab.sim as sim_utils
 import torch
-from isaaclab.assets import Articulation
+from isaaclab.assets import Articulation, RigidObject, RigidObjectCfg
 from isaaclab.envs import DirectRLEnv
 from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 from isaaclab.markers.config import FRAME_MARKER_CFG
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
-from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
-from isaaclab.utils.math import quat_error_magnitude, quat_from_euler_xyz, sample_uniform
+from isaaclab.utils.math import quat_error_magnitude, quat_from_euler_xyz
 from isaacsim.core.utils.torch.transformations import tf_combine
 
-from kinova_tasks.isaac_tasks.direct.cfg import KinovaBaseCfg
+from kinova_tasks.isaac_tasks.direct.cfg import FrankaBaseCfg
 from skillet.envs.util import configclass
 
 
 @configclass
-class KinovaReachEnvCfg(KinovaBaseCfg):
+class FrankaTiltedEnvCfg(FrankaBaseCfg):
     action_scale = 0.5
     dof_velocity_scale = 0.1
 
@@ -52,8 +51,23 @@ class KinovaReachEnvCfg(KinovaBaseCfg):
     goal_pose_visualizer_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)
     current_pose_visualizer_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)
 
+    # Tilted wall
+    tilted_wall = RigidObjectCfg(
+        prim_path="/World/envs/env_.*/TiltedWall",
+        spawn=sim_utils.CuboidCfg(
+            size=(2.0, 1.5, 0.01),
+            collision_props=sim_utils.CollisionPropertiesCfg(),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0), opacity=0.1),
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=True),
+            activate_contact_sensors=True,
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(
+            pos=(0.6 + 0.085, 0.0, 0.3), rot=(0.9238795325, 0.0, -0.3826834324, 0.0)
+        ),
+    )
 
-class KinovaReachEnv(DirectRLEnv):
+
+class FrankaTiltedEnv(DirectRLEnv):
     # pre-physics step calls
     #   |-- _pre_physics_step(action)
     #   |-- _apply_action()
@@ -63,9 +77,9 @@ class KinovaReachEnv(DirectRLEnv):
     #   |-- _reset_idx(env_ids)
     #   |-- _get_observations()
 
-    cfg: KinovaReachEnvCfg
+    cfg: FrankaTiltedEnvCfg
 
-    def __init__(self, cfg: KinovaReachEnvCfg, render_mode: str | None = None, **kwargs):
+    def __init__(self, cfg: FrankaTiltedEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
 
         self.dt = self.cfg.sim.dt * self.cfg.decimation
@@ -83,10 +97,10 @@ class KinovaReachEnv(DirectRLEnv):
         self.prev_actions = torch.zeros_like(self.actions, device=self.device)
 
         # Limits and targets
-        self.robot_dof_lower_limits = self._robot.data.joint_pos_limits[0, :, 0].to(device=self.device)[
+        self.robot_dof_lower_limits = self._robot.data.soft_joint_pos_limits[0, :, 0].to(device=self.device)[
             self.cfg.joint_ids
         ]
-        self.robot_dof_upper_limits = self._robot.data.joint_pos_limits[0, :, 1].to(device=self.device)[
+        self.robot_dof_upper_limits = self._robot.data.soft_joint_pos_limits[0, :, 1].to(device=self.device)[
             self.cfg.joint_ids
         ]
         self.robot_effort_limits = self._robot.data.joint_effort_limits[0, :].to(device=self.device)[self.cfg.joint_ids]
@@ -103,15 +117,13 @@ class KinovaReachEnv(DirectRLEnv):
         self.current_marker = VisualizationMarkers(cfg=self.cfg.current_pose_visualizer_cfg)
 
     def _setup_scene(self):
-        spawn_ground_plane(prim_path="/World/ground", cfg=GroundPlaneCfg(), translation=(0.0, 0.0, -1.05))
+        spawn_ground_plane(prim_path="/World/ground", cfg=GroundPlaneCfg(), translation=(0.0, 0.0, 0.0))
 
         # spawn a usd file of a table into the scene
-        cfg = sim_utils.UsdFileCfg(usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Mounts/SeattleLabTable/table_instanceable.usd")
-        cfg.func(
-            "/World/envs/env_.*/Table", cfg, translation=(0.55, 0.0, 0.0), orientation=(0.70711, 0.0, 0.0, 0.70711)
-        )
         self._robot = Articulation(self.cfg.robot)
         self.scene.articulations["robot"] = self._robot
+        self._object = RigidObject(self.cfg.tilted_wall)
+        self.scene.rigid_objects["wall"] = self._object
 
         # clone and replicate
         self.scene.clone_environments(copy_from_source=False)
@@ -165,15 +177,7 @@ class KinovaReachEnv(DirectRLEnv):
     def _reset_idx(self, env_ids: torch.Tensor | None):
         super()._reset_idx(env_ids)
         # robot state
-        joint_pos = (
-            self._robot.data.default_joint_pos[env_ids]
-            + sample_uniform(
-                -0.125,
-                0.125,
-                (len(env_ids), self._robot.num_joints),
-                self.device,
-            )
-        )[:, self.cfg.joint_ids]
+        joint_pos = (self._robot.data.default_joint_pos[env_ids])[:, self.cfg.joint_ids]
         joint_pos = torch.clamp(joint_pos, self.robot_dof_lower_limits, self.robot_dof_upper_limits)
         joint_vel = torch.zeros_like(joint_pos)
         self._robot.set_joint_position_target(joint_pos, env_ids=env_ids, joint_ids=self.cfg.joint_ids)
@@ -216,7 +220,7 @@ class KinovaReachEnv(DirectRLEnv):
     # auxiliary methods
 
     def _compute_intermediate_values(self, env_ids: torch.Tensor | None = None):
-        """Docstring for _compute_intermediate_values
+        """Docstring for _compute_intermediate_values.
 
         :param self: Description
         :param env_ids: Description
@@ -233,7 +237,7 @@ class KinovaReachEnv(DirectRLEnv):
         self.prev_actions[env_ids] = torch.clone(self.actions[env_ids])
 
 
-class KinovaReachIKEnv(KinovaReachEnv):
+class FrankaTiltedIKEnv(FrankaTiltedEnv):
     """Use this environment when computing actions with a Diff IK controller or the skills environments."""
 
     # pre-physics step calls
@@ -245,14 +249,9 @@ class KinovaReachIKEnv(KinovaReachEnv):
     #   |-- _reset_idx(env_ids)
     #   |-- _get_observations()
 
-    cfg: KinovaReachEnvCfg
+    cfg: FrankaTiltedEnvCfg
 
-    def __init__(self, cfg: KinovaReachEnvCfg, render_mode: str | None = None, **kwargs):
-        cfg.decimation = 1
-        cfg.sim.dt = 0.01
-        cfg.episode_length_s = 15.0
-        cfg.robot.spawn.rigid_props.disable_gravity = True
-
+    def __init__(self, cfg: FrankaTiltedEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
 
     # pre-physics step calls
@@ -264,8 +263,8 @@ class KinovaReachIKEnv(KinovaReachEnv):
         self.current_marker.visualize(self.robot_ee_pos_w, self.robot_ee_quat_w)
 
 
-class KinovaReachOSCEnv(KinovaReachEnv):
-    """Use this environment when computing actions with a OSC controlller."""
+class FrankaTiltedOSCEnv(FrankaTiltedEnv):
+    """Use this environment when computing actions with a Diff IK controller or the skills environments."""
 
     # pre-physics step calls
     #   |-- _pre_physics_step(action)
@@ -276,18 +275,24 @@ class KinovaReachOSCEnv(KinovaReachEnv):
     #   |-- _reset_idx(env_ids)
     #   |-- _get_observations()
 
-    cfg: KinovaReachEnvCfg
+    cfg: FrankaTiltedEnvCfg
 
-    def __init__(self, cfg: KinovaReachEnvCfg, render_mode: str | None = None, **kwargs):
-        cfg.robot.actuators["arm"].stiffness = 0.0
-        cfg.robot.actuators["arm"].damping = 0.0
-        cfg.robot.actuators["gripper"].stiffness = 0.0
-        cfg.robot.actuators["gripper"].damping = 0.0
+    def __init__(self, cfg: FrankaTiltedEnvCfg, render_mode: str | None = None, **kwargs):
+        cfg.robot.actuators["panda_shoulder"].stiffness = 0.0
+        cfg.robot.actuators["panda_shoulder"].damping = 0.0
+        cfg.robot.actuators["panda_forearm"].stiffness = 0.0
+        cfg.robot.actuators["panda_forearm"].damping = 0.0
+        cfg.robot.spawn.rigid_props.disable_gravity = False
+        cfg.decimation = 1
+        cfg.sim.dt = 0.01
+        cfg.episode_length_s = 15.0
+        cfg.ee_link_name = "panda_leftfinger"
+
         super().__init__(cfg, render_mode, **kwargs)
 
     # pre-physics step calls
     def _pre_physics_step(self, actions: torch.Tensor):
-        self.robot_dof_targets = torch.min(actions, self.robot_effort_limits)
+        self.robot_dof_targets = torch.clamp(actions, -self.robot_effort_limits, self.robot_effort_limits)
 
         # Update markers (world frame)
         self.goal_marker.visualize(self.goal_ee_pos_w, self.goal_ee_quat_w)

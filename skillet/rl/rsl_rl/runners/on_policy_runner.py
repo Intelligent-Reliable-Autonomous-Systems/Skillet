@@ -49,7 +49,7 @@ class OnPolicyRunner:
         self.alg = self._construct_algorithm(obs)
 
         # Decide whether to disable logging
-        # Note: We only log from the process with rank 0 (main process)
+        # We only log from the process with rank 0 (main process)
         self.disable_logs = self.is_distributed and self.gpu_global_rank != 0
 
         # Logging

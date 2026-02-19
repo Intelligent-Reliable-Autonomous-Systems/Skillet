@@ -153,8 +153,6 @@ class ROS2RLEnv(gym.Env):
             seed: The seed to use for randomization. Defaults to None, in which case the seed is not set.
             options: Additional information to specify how the environment is reset. Defaults to None.
 
-        Note:
-            This argument is used for compatibility with Gymnasium environment definition.
 
         Returns:
             A tuple containing the observations and extras.

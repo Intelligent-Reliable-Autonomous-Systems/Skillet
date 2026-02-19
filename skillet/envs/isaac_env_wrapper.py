@@ -220,7 +220,9 @@ class IsaacEnvWrapper(
     def get_state(self) -> TBatchedObsTorch:  # noqa: D102
         return self.get_observation(self._obs_spec_state)
 
-    def step(self, action: TBatchedActionTorch) -> tuple[
+    def step(
+        self, action: TBatchedActionTorch
+    ) -> tuple[
         TBatchedObsTorch,
         Float[torch.Tensor, "b"],  # noqa: F821
         Bool[torch.Tensor, "b"],  # noqa: F821
@@ -245,7 +247,9 @@ class IsaacEnvWrapper(
     Helper functions
     """
 
-    def _get_joint_positions(self, env_ids: torch.Tensor | None = None, joint_ids: list | None = None) -> torch.Tensor:
+    def _get_joint_positions(  # Passes
+        self, env_ids: torch.Tensor | None = None, joint_ids: list | None = None
+    ) -> torch.Tensor:  # This is good
         """Return the joint positions.
 
         Args:
@@ -259,7 +263,7 @@ class IsaacEnvWrapper(
             env_ids = self.robot._ALL_INDICES
         if joint_ids is None:
             joint_ids = self.joint_ids
-        return self.robot.data.joint_pos[:, joint_ids][env_ids].clone()
+        return self.robot.data.joint_pos[:, joint_ids][env_ids]
 
     def _get_joint_velocities(self, env_ids: torch.Tensor | None = None, joint_ids: list | None = None) -> torch.Tensor:
         """Return the joint velocities.
@@ -275,9 +279,9 @@ class IsaacEnvWrapper(
             env_ids = self.robot._ALL_INDICES
         if joint_ids is None:
             joint_ids = self.joint_ids
-        return self.robot.data.joint_vel[:, joint_ids][env_ids].clone()
+        return self.robot.data.joint_vel[:, joint_ids][env_ids]
 
-    def _get_jacobians(
+    def _get_jacobians(  # Passes
         self,
         env_ids: torch.Tensor | None = None,
         ee_link: str = "end_effector_link",
@@ -300,13 +304,15 @@ class IsaacEnvWrapper(
         if arm_joint_ids is None:
             arm_joint_ids = self.joint_ids[:-1]
         ee_link_idx = self.robot.find_bodies(ee_link)[0][0]
+        ee_jacobi_idx = ee_link_idx - 1
         base_link_idx = self.robot.find_bodies(base_link)[0][0]
         robot_base_pose_w = self.robot.data.body_pose_w[env_ids, base_link_idx]
         base_rot_matrix = matrix_from_quat(quat_inv(robot_base_pose_w[:, 3:7]))
-        jacobian = self.robot.root_physx_view.get_jacobians()[:, ee_link_idx, :, arm_joint_ids][env_ids]
+        jacobian = self.robot.root_physx_view.get_jacobians()[:, ee_jacobi_idx, :, arm_joint_ids][env_ids]
         jacobian[:, :3, :] = torch.bmm(base_rot_matrix, jacobian[:, :3, :])
         jacobian[:, 3:, :] = torch.bmm(base_rot_matrix, jacobian[:, 3:, :])
 
+        # jacobian = self.robot.root_physx_view.get_jacobians()[:, ee_jacobi_idx, :, arm_joint_ids][env_ids]
         return jacobian
 
     def _get_tcp_pose_b(
@@ -356,7 +362,7 @@ class IsaacEnvWrapper(
 
         return self.robot.data.joint_pos[:, gripper_joint_idxs][env_ids]
 
-    def _get_ee_pose_b(
+    def _get_ee_pose_b(  # Passes
         self,
         env_ids: torch.Tensor | None = None,
         ee_link: str = "gripper_base_link",
@@ -507,7 +513,6 @@ class IsaacEnvWrapper(
             self.robot.data.body_quat_w[env_ids, base_link_idx], relative_vel_w[:, 0:3]
         )  # From world to root frame
         ee_ang_vel_b = quat_apply_inverse(self.robot.data.body_quat_w[env_ids, base_link_idx], relative_vel_w[:, 3:6])
-
         return torch.cat([ee_lin_vel_b, ee_ang_vel_b], dim=-1)
 
     def _get_joint_centers(self, env_ids: torch.Tensor = None, arm_joint_ids: torch.Tensor = None) -> torch.Tensor:
@@ -524,5 +529,4 @@ class IsaacEnvWrapper(
             env_ids = self.robot._ALL_INDICES
         if arm_joint_ids is None:
             arm_joint_ids = self.joint_ids[:7]
-
         return torch.mean(self.robot.data.soft_joint_pos_limits[:, arm_joint_ids, :][env_ids], dim=-1)

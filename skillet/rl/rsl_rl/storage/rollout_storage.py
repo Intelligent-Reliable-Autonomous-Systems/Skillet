@@ -147,7 +147,7 @@ class RolloutStorage:
         # Compute the advantages
         self.advantages = self.returns - self.values
         # Normalize the advantages if flag is set
-        # Note: This is to prevent double normalization (i.e. if per minibatch normalization is used)
+        # This is to prevent double normalization (i.e. if per minibatch normalization is used)
         if normalize_advantage:
             self.advantages = (self.advantages - self.advantages.mean()) / (self.advantages.std() + 1e-8)
 

@@ -210,7 +210,6 @@ class RslRlBaseRunnerCfg:
     clip_actions: float | None = None
     """The clipping value for actions. If None, then no clipping is done. Defaults to None.
 
-    .. note::
         This clipping is performed inside the :class:`RslRlVecEnvWrapper` wrapper.
     """
 

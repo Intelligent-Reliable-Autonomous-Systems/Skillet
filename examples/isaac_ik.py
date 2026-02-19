@@ -48,8 +48,8 @@ from skillet.agents.policy_over_options import PolicyOverOptionsAgent
 from skillet.core.spaces import ActionSpec, ObservationSpec
 from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
 from skillet.policy.dummy import FixedSequencePolicy, RandomPolicy
-from skillet.policy.ik_ee import XYZRPYAbsIKEEPolicy
-from skillet.skill import ReachXYZRPYSkill
+from skillet.policy.ik_ee import PoseAbsIKEEPolicy
+from skillet.skill import ReachPoseSkill
 
 BxN_Obs = Float[torch.Tensor, "b n"]
 """Environment observation: torch.Tensor[(b, n), float]"""
@@ -91,10 +91,10 @@ def main() -> None:
         device=env.device,
     )
 
-    ik_ee_pose_policy = XYZRPYAbsIKEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
+    ik_ee_pose_policy = PoseAbsIKEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
     # Skills
-    skill_length = 100
-    reach_xyz_skill = ReachXYZRPYSkill[BxN_Obs, BxM_Action, None](
+    skill_length = 500
+    reach_xyz_skill = ReachPoseSkill[BxN_Obs, BxM_Action, None](
         name="reach_xyz_skill", policy=ik_ee_pose_policy, length=skill_length
     )
     skills = [reach_xyz_skill]
@@ -105,17 +105,9 @@ def main() -> None:
         action_spec,
         torch.as_tensor(
             [
-                # [0.6, 0.0, 0.4, 0.0, 3.14, 0.0],
-                [0.3, 0.2, 0.3, 0.0, 2.7, 0.0],
-                [0.6, -0.2, 0.03, 3.14, 0.0, 0.0],
-                [0.6, 0.0, 0.4, 0.0, 0.0, 0.0],
-                [0.3, 0.3, 0.4, 1.57, 0.0, 0.0],
-                # [0.3, 0.3, 0.4, 3.14, 0.0, 0.0],
-                # [0.3, 0.3, 0.4, -1.57, 0.0, 0.0]
-                # [-0.5, -0.2, 0.4, 0.0, -1.57, 0.0],
-                # [-0.5, -0.2, 0.4, 0.0, 0.0, 1.57],
-                # [-0.5, -0.2, 0.4, 0.0, 0.0, 3.14],
-                # [-0.5, -0.2, 0.4, 0.0, 0.0, -1.57],
+                [0.5, 0.5, 0.7, 0.707, 0, 0.707, 0],
+                [0.5, -0.4, 0.6, 0.707, 0.707, 0.0, 0.0],
+                [0.5, 0, 0.5, 0.0, 1.0, 0.0, 0.0],
             ],
             device=env.device,
         ),

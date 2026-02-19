@@ -248,6 +248,15 @@ class FrankaReachIKEnv(FrankaReachEnv):
     cfg: FrankaReachEnvCfg
 
     def __init__(self, cfg: FrankaReachEnvCfg, render_mode: str | None = None, **kwargs):
+        cfg.decimation = 1
+        cfg.sim.dt = 0.01
+        cfg.episode_length_s = 15.0
+        cfg.robot.spawn.rigid_props.disable_gravity = True
+        cfg.robot.actuators["panda_shoulder"].stiffness = 400.0
+        cfg.robot.actuators["panda_shoulder"].damping = 80.0
+        cfg.robot.actuators["panda_forearm"].stiffness = 400.0
+        cfg.robot.actuators["panda_forearm"].damping = 80.0
+        cfg.ee_link_name = "panda_hand"
         super().__init__(cfg, render_mode, **kwargs)
 
     # pre-physics step calls
@@ -280,6 +289,7 @@ class FrankaReachOSCEnv(FrankaReachEnv):
         cfg.robot.actuators["panda_forearm"].damping = 0.0
         cfg.robot.actuators["panda_hand"].stiffness = 0.0
         cfg.robot.actuators["panda_hand"].damping = 0.0
+        cfg.ee_link_name = ""
         super().__init__(cfg, render_mode, **kwargs)
 
     # pre-physics step calls

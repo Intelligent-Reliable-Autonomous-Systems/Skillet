@@ -300,8 +300,7 @@ class AsGymVectorEnv(gym.vector.VectorEnv):
     def episode_length_buf(self, value):
         """Set the episode length buffer.
 
-        Note:
-            This is needed to perform random initialization of episode lengths in RSL-RL.
+        This is needed to perform random initialization of episode lengths in RSL-RL.
 
         """
         if not hasattr(self.env.unwrapped, "episode_length_buf"):

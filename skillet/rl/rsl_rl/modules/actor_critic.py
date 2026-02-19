@@ -106,7 +106,7 @@ class ActorCritic(nn.Module):
                 raise ValueError(f"Unknown standard deviation type: {self.noise_std_type}. Should be 'scalar' or 'log'")
 
         # Action distribution
-        # Note: Populated in update_distribution
+        # Populated in update_distribution
         self.distribution = None
 
         # Disable args validation for speedup

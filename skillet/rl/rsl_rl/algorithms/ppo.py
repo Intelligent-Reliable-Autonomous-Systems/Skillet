@@ -163,7 +163,7 @@ class PPO:
             self.rnd.update_normalization(obs)
 
         # Record the rewards and dones
-        # Note: We clone here because later on we bootstrap the rewards based on timeouts
+        # We clone here because later on we bootstrap the rewards based on timeouts
         self.transition.rewards = rewards.clone()
         self.transition.dones = dones
 
@@ -247,11 +247,11 @@ class PPO:
                 returns_batch = returns_batch.repeat(num_aug, 1)
 
             # Recompute actions log prob and entropy for current batch of transitions
-            # Note: We need to do this because we updated the policy with the new parameters
+            # We need to do this because we updated the policy with the new parameters
             self.policy.act(obs_batch, masks=masks_batch, hidden_state=hidden_states_batch[0])
             actions_log_prob_batch = self.policy.get_actions_log_prob(actions_batch)
             value_batch = self.policy.evaluate(obs_batch, masks=masks_batch, hidden_state=hidden_states_batch[1])
-            # Note: We only keep the entropy of the first augmentation (the original one)
+            # We only keep the entropy of the first augmentation (the original one)
             mu_batch = self.policy.action_mean[:original_batch_size]
             sigma_batch = self.policy.action_std[:original_batch_size]
             entropy_batch = self.policy.entropy[:original_batch_size]
@@ -274,8 +274,6 @@ class PPO:
                         kl_mean /= self.gpu_world_size
 
                     # Update the learning rate only on the main process
-                    # TODO: Is this needed? If KL-divergence is the "same" across all GPUs,
-                    #       then the learning rate should be the same across all GPUs.
                     if self.gpu_global_rank == 0:
                         if kl_mean > self.desired_kl * 2.0:
                             self.learning_rate = max(1e-5, self.learning_rate / 1.5)
@@ -316,7 +314,7 @@ class PPO:
             # Symmetry loss
             if self.symmetry:
                 # Obtain the symmetric actions
-                # Note: If we did augmentation before then we don't need to augment again
+                # If we did augmentation before then we don't need to augment again
                 if not self.symmetry["use_data_augmentation"]:
                     data_augmentation_func = self.symmetry["data_augmentation_func"]
                     obs_batch, _ = data_augmentation_func(obs=obs_batch, actions=None, env=self.symmetry["_env"])
@@ -327,7 +325,7 @@ class PPO:
                 mean_actions_batch = self.policy.act_inference(obs_batch.detach().clone())
 
                 # Compute the symmetrically augmented actions
-                # Note: We are assuming the first augmentation is the original one. We do not use the action_batch from
+                # We are assuming the first augmentation is the original one. We do not use the action_batch from
                 # earlier since that action was sampled from the distribution. However, the symmetry loss is computed
                 # using the mean of the distribution.
                 action_mean_orig = mean_actions_batch[:original_batch_size]
@@ -347,10 +345,8 @@ class PPO:
                     symmetry_loss = symmetry_loss.detach()
 
             # RND loss
-            # TODO: Move this processing to inside RND module.
             if self.rnd:
                 # Extract the rnd_state
-                # TODO: Check if we still need torch no grad. It is just an affine transformation.
                 with torch.no_grad():
                     rnd_state_batch = self.rnd.get_rnd_state(obs_batch[:original_batch_size])
                     rnd_state_batch = self.rnd.state_normalizer(rnd_state_batch)

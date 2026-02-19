@@ -59,10 +59,9 @@ def _walk_packages(
 ) -> Generator:
     """Yield ModuleInfo for all modules recursively on path, or, if path is None, all accessible modules.
 
-    Note:
-        This function is a modified version of the original ``pkgutil.walk_packages`` function. It adds
-        the ``blacklist_pkgs`` argument to skip blacklisted packages. Please refer to the original
-        ``pkgutil.walk_packages`` function for more details.
+    This function is a modified version of the original ``pkgutil.walk_packages`` function. It adds
+    the ``blacklist_pkgs`` argument to skip blacklisted packages. Please refer to the original
+    ``pkgutil.walk_packages`` function for more details.
 
     """
     if blacklist_pkgs is None:

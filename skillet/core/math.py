@@ -28,8 +28,7 @@ General
 def scale_transform(x: torch.Tensor, lower: torch.Tensor, upper: torch.Tensor) -> torch.Tensor:
     """Normalize a given input tensor to a range of [-1, 1].
 
-    .. note::
-        It uses pytorch broadcasting functionality to deal with batched input.
+    It uses pytorch broadcasting functionality to deal with batched input.
 
     Args:
         x: Input tensor of shape (N, dims).
@@ -50,8 +49,7 @@ def scale_transform(x: torch.Tensor, lower: torch.Tensor, upper: torch.Tensor) -
 def unscale_transform(x: torch.Tensor, lower: torch.Tensor, upper: torch.Tensor) -> torch.Tensor:
     """De-normalizes a given input tensor from range of [-1, 1] to (lower, upper).
 
-    .. note::
-        It uses pytorch broadcasting functionality to deal with batched input.
+    It uses pytorch broadcasting functionality to deal with batched input.
 
     Args:
         x: Input tensor of shape (N, dims).
@@ -131,8 +129,7 @@ def wrap_to_pi(angles: torch.Tensor) -> torch.Tensor:
 def copysign(mag: float, other: torch.Tensor) -> torch.Tensor:
     """Create a new floating-point tensor with the magnitude of input and the sign of other, element-wise.
 
-    Note:
-        The implementation follows from `torch.copysign`. The function allows a scalar magnitude.
+    The implementation follows from `torch.copysign`. The function allows a scalar magnitude.
 
     Args:
         mag: The magnitude scalar.
@@ -282,8 +279,7 @@ def quat_inv(q: torch.Tensor, eps: float = 1e-9) -> torch.Tensor:
 def quat_from_euler_xyz(roll: torch.Tensor, pitch: torch.Tensor, yaw: torch.Tensor) -> torch.Tensor:
     """Convert rotations given as Euler angles in radians to Quaternions.
 
-    Note:
-        The euler angles are assumed in XYZ convention.
+    The euler angles are assumed in XYZ convention.
 
     Args:
         roll: Rotation around x-axis (in radians). Shape is (N,).
@@ -450,8 +446,7 @@ def euler_xyz_from_quat(
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Convert rotations given as quaternions to Euler angles in radians.
 
-    Note:
-        The euler angles are assumed in XYZ extrinsic convention.
+    The euler angles are assumed in XYZ extrinsic convention.
 
     Args:
         quat: The quaternion orientation in (w, x, y, z). Shape is (N, 4).
@@ -1204,9 +1199,8 @@ def unproject_depth(depth: torch.Tensor, intrinsics: torch.Tensor, is_ortho: boo
     The function assumes that the width and height are both greater than 1. This makes the function
     deal with many possible shapes of depth images and intrinsics matrices.
 
-    .. note::
-        If :attr:`is_ortho` is False, the input depth images are transformed to orthogonal depth images
-        by using the :meth:`orthogonalize_perspective_depth` method.
+    If :attr:`is_ortho` is False, the input depth images are transformed to orthogonal depth images
+    by using the :meth:`orthogonalize_perspective_depth` method.
 
     Args:
         depth: The depth measurement. Shape is (H, W) or or (H, W, 1) or (N, H, W) or (N, H, W, 1).
@@ -1736,7 +1730,7 @@ def pose_inv(pose: torch.Tensor) -> torch.Tensor:
     # Take transpose of last 2 dimensions
     inv_pose[..., :3, :3] = pose[..., :3, :3].transpose(-1, -2)
 
-    # note: PyTorch matmul wants shapes [..., 3, 3] x [..., 3, 1] -> [..., 3, 1] so we add a dimension and take it away after
+    # PyTorch matmul wants shapes [..., 3, 3] x [..., 3, 1] -> [..., 3, 1] so we add a dimension and take it away after
     inv_pose[..., :3, 3] = torch.matmul(-inv_pose[..., :3, :3], pose[..., :3, 3:4])[..., 0]
     inv_pose[..., 3, 3] = 1.0
     return inv_pose

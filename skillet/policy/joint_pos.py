@@ -34,7 +34,7 @@ class GripperPolicy(BatchedPPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic
 
     def get_action(self, obs: TBPolicyObs, params: Any = None) -> TBAction:
         """Get the next gripper position."""
-        return torch.cat((obs["joint_pos"][:, :-1], self._goal_gripper_pos), dim=1)
+        return torch.cat((obs["joint_pos"][:, :7], self._goal_gripper_pos), dim=1)
 
     def reset(self, obs: TBPolicyObs, params: Any = None, env_ids: torch.Tensor = None) -> None:
         """Reset the policy. Useful if policy is stateful."""

@@ -48,7 +48,7 @@ def make_joint_obs_spec(device: str = "cuda") -> ObservationSpec:
     """Make an observation spec for IK controllers."""
     return ObservationSpec[Float[torch.Tensor, "b ..."]](
         space=gym.spaces.Dict(),
-        name="joints",
+        name="ik_ee",
         is_torch=True,
         is_batched=True,
         n_envs=-1,

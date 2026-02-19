@@ -25,7 +25,7 @@ class OperationalSpaceController:
 
     1. `A unified approach for motion and force control of robot manipulators: The operational space formulation <http://dx.doi.org/10.1109/JRA.1987.1087068>`_
        by Oussama Khatib (Stanford University)
-    2. `Robot Dynamics Lecture Notes <https://ethz.ch/content/dam/ethz/special-interest/mavt/robotics-n-intelligent-systems/rsl-dam/documents/RobotDynamics2017/RD_HS2017script.pdf>`_
+    2. `Robot Dynamics Lecture <https://ethz.ch/content/dam/ethz/special-interest/mavt/robotics-n-intelligent-systems/rsl-dam/documents/RobotDynamics2017/RD_HS2017script.pdf>`_
        by Marco Hutter (ETH Zurich)
     """
 
@@ -37,7 +37,7 @@ class OperationalSpaceController:
         contact_wrench_control_axes_task: Sequence[int] = [0, 0, 0, 0, 0, 0],
         inertial_dynamics_decoupling: bool = True,
         partial_inertial_dynamics_decoupling: bool = False,
-        gravity_compensation: bool = True,
+        gravity_compensation: bool = False,
         impedance_mode: str = "variable_kp",
         motion_stiffness_task: float | Sequence[float] = [100.0, 100.0, 100.0, 100.0, 100.0, 100.0],
         motion_damping_ratio_task: float | Sequence[float] = 1.0,
@@ -67,15 +67,15 @@ class OperationalSpaceController:
                     The following math operation is performed for computing velocity gains:
                     :math:`d_gains = 2 * sqrt(p_gains) * damping_ratio`.
             motion_stiffness_limits_task: Minimum and maximum values for positional gains.
-                    Note: Used only when :obj:`impedance_mode` is ``"variable"`` or ``"variable_kp"``
+                    Used only when :obj:`impedance_mode` is ``"variable"`` or ``"variable_kp"``
             motion_damping_ratio_limits_task: Minimum and maximum values for damping ratios used to compute velocity gains.
-                    Note: Used only when :obj:`impedance_mode` is ``"variable"``.
+                    Used only when :obj:`impedance_mode` is ``"variable"``.
             contact_wrench_stiffness_task: The proportional gain for determining operational space command forces for closed-loop contact force control.
                     If ``None``, then open-loop control of desired contact wrench is performed.
-                    Note: since only the linear forces could be measured at the moment,
+                    since only the linear forces could be measured at the moment,
                     only the first three elements are used for the feedback loop.
             nullspace_control: The null space control method for redundant manipulators: ``"none"``, ``"position"``.
-                    Note: ``"position"`` is used to drive the redundant manipulator to zero configuration by default. If
+                    ``"position"`` is used to drive the redundant manipulator to zero configuration by default. If
                     ``target_joint_pos`` is provided in the ``compute()`` method, it will be driven to this configuration.
             nullspace_stiffness: The stiffness for null space control.
             nullspace_damping_ratio: The damping ratio for null space control.
@@ -155,8 +155,7 @@ class OperationalSpaceController:
             env_ids: The environment ids to reset
 
         """
-        self.num_envs = n_envs  # TODO
-        if not hasattr(self, "_task_space_target_task") or env_ids is None:  # TODO fix _command
+        if not hasattr(self, "_task_space_target_task") or env_ids is None:
             assert n_envs is not None, "n_envs cannot be none when `self._task_space_target_task` is not set."
             # -- selection matrices, which might be defined in the task reference frame different from the root frame
             self._selection_matrix_motion_task = torch.diag_embed(
@@ -550,8 +549,9 @@ class OperationalSpaceController:
         """
         # deduce number of DoF
         num_dof = jacobian_b.shape[2]
+        b_size = jacobian_b.shape[0]
         # create joint effort vector
-        joint_efforts = torch.zeros(self.num_envs, num_dof, device=self._device)
+        joint_efforts = torch.zeros(b_size, num_dof, device=self._device)
 
         # compute joint efforts for motion-control
         if self.desired_ee_pose_b is not None:
@@ -559,7 +559,7 @@ class OperationalSpaceController:
             if current_ee_pose_b is None or current_ee_vel_b is None:
                 raise ValueError("Current end-effector pose and velocity are required for motion control.")
             # -- end-effector tracking error
-            pose_error_b = torch.cat(
+            pose_error_b = torch.cat(  # SAME HERE
                 compute_pose_error(
                     current_ee_pose_b[:, :3],
                     current_ee_pose_b[:, 3:],
@@ -597,7 +597,7 @@ class OperationalSpaceController:
                 os_command_forces_b = self._os_mass_matrix_b @ des_ee_acc_b
             else:
                 # Task-space impedance control: command forces = \ddot(x_des).
-                # Please note that the definition of task-space impedance control varies in literature.
+                # The definition of task-space impedance control varies in literature.
                 # This implementation ignores the inertial term. For inertial decoupling,
                 # use inertial_dynamics_decoupling=True.
                 os_command_forces_b = des_ee_acc_b

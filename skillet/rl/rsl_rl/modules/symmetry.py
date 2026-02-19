@@ -20,7 +20,7 @@ def resolve_symmetry_config(alg_cfg: dict, env: VecEnv) -> dict:
 
     """
     # If using symmetry then pass the environment config object
-    # Note: This is used by the symmetry function for handling different observation terms
+    # This is used by the symmetry function for handling different observation terms
     if "symmetry_cfg" in alg_cfg and alg_cfg["symmetry_cfg"] is not None:
         alg_cfg["symmetry_cfg"]["_env"] = env
     return alg_cfg

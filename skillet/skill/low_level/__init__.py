@@ -7,5 +7,6 @@ from .gripper import GripperOpenSkill as GripperOpenSkill
 from .joint_pos import JointPosSkill as JointPosSkill
 from .orient_rpy import OrientRPYSkill as OrientRPYSkill
 from .orient_y import OrientYSkill as OrientYSkill
+from .reach_pose import ReachPoseSkill as ReachPoseSkill
 from .reach_xyz import ReachXYZSkill as ReachXYZSkill
 from .reach_xyz_rpy import ReachXYZRPYSkill as ReachXYZRPYSkill

@@ -12,6 +12,7 @@ from collections import deque
 import torch
 from tensordict import TensorDict
 
+import skillet.rl.rsl_rl
 from skillet.rl.rsl_rl.algorithms import Distillation
 from skillet.rl.rsl_rl.env import VecEnv
 from skillet.rl.rsl_rl.modules import StudentTeacher, StudentTeacherRecurrent
@@ -44,7 +45,7 @@ class DistillationRunner(OnPolicyRunner):
         self.alg = self._construct_algorithm(obs)
 
         # Decide whether to disable logging
-        # Note: We only log from the process with rank 0 (main process)
+        # We only log from the process with rank 0 (main process)
         self.disable_logs = self.is_distributed and self.gpu_global_rank != 0
 
         # Logging
@@ -53,7 +54,7 @@ class DistillationRunner(OnPolicyRunner):
         self.tot_timesteps = 0
         self.tot_time = 0
         self.current_learning_iteration = 0
-        self.git_status_repos = [rsl_rl.__file__]
+        self.git_status_repos = [skillet.rl.rsl_rl.__file__]
 
     def learn(self, num_learning_iterations: int, init_at_random_ep_len: bool = False) -> None:
         # Initialize writer

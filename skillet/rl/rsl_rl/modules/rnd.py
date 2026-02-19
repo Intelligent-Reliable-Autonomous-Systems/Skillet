@@ -118,7 +118,7 @@ class RandomNetworkDistillation(nn.Module):
         self.target.eval()
 
     def get_intrinsic_reward(self, obs: TensorDict) -> torch.Tensor:
-        # Note: The counter is updated number of env steps per learning iteration
+        # The counter is updated number of env steps per learning iteration
         self.update_counter += 1
         # Extract the rnd state from the observation
         rnd_state = self.get_rnd_state(obs)

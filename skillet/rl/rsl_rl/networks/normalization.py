@@ -17,12 +17,13 @@ class EmpiricalNormalization(nn.Module):
     def __init__(self, shape: int | tuple[int] | list[int], eps: float = 1e-2, until: int | None = None) -> None:
         """Initialize EmpiricalNormalization module.
 
-        .. note:: The normalization parameters are computed over the whole batch, not for each environment separately.
+        The normalization parameters are computed over the whole batch, not for each environment separately.
 
         Args:
             shape: Shape of input values except batch axis.
             eps: Small value for stability.
             until: If this arg is specified, the module learns input values until the sum of batch sizes exceeds it.
+
         """
         super().__init__()
         self.eps = eps
@@ -94,8 +95,7 @@ class EmpiricalDiscountedVariationNormalization(nn.Module):
         # Normalize rewards with the empirical std
         if self.emp_norm._std > 0:
             return rew / self.emp_norm._std
-        else:
-            return rew
+        return rew
 
 
 class _DiscountedAverage:

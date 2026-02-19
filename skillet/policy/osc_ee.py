@@ -5,7 +5,7 @@ from typing import Any, Generic
 import torch
 
 from skillet.controllers import OperationalSpaceController
-from skillet.core.math import quat_apply, quat_from_euler_xyz, quat_inv, quat_mul, subtract_frame_transforms
+from skillet.core.math import quat_apply, quat_inv, quat_mul, subtract_frame_transforms
 from skillet.core.policy import BatchedPPolicy, TBAction, TBPolicyObs
 from skillet.core.spaces import ActionSpec, ObservationSpec
 
@@ -41,10 +41,9 @@ class OSCEEPolicy(BatchedPPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[T
         jacobians = obs["jacobians"]
         joint_pos = obs["joint_pos"][:, :7]  # Ignore gripper
         joint_vel = obs["joint_vel"][:, :7]  # Ignore gripper
-        joint_centers = obs["joint_centers"][:, :7]  # Ignore gripper
-        mass_matrix = obs["mass_matrix"]
+        mass_matrix = obs["mass_matrix"][:, :7]  # Ignore gripper
         ee_vel_b = obs["ee_vel_b"]
-        joint_gravity = obs["joint_gravity"]
+        joint_gravity = obs["joint_gravity"][:, :7]  # Ignore gripper
         arm_joint_pos = self.osc.compute(
             jacobian_b=jacobians,
             current_ee_pose_b=ee_pose_b,
@@ -53,7 +52,7 @@ class OSCEEPolicy(BatchedPPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[T
             gravity=joint_gravity,
             current_joint_pos=joint_pos,
             current_joint_vel=joint_vel,
-            nullspace_joint_pos_target=joint_centers,
+            nullspace_joint_pos_target=self.joint_centers,
         )
         return torch.cat(
             (arm_joint_pos, self.start_gripper_pos),
@@ -68,6 +67,7 @@ class OSCEEPolicy(BatchedPPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[T
         self.tcp_offset = obs["tcp_offset"]
         gripper_lim = obs["gripper_lim"]
         gripper_dim = obs["gripper"].shape[-1]
+        self.joint_centers = obs["joint_centers"][:, :7]  # Ignore gripper
         self.start_gripper_pos = (obs["gripper"] - gripper_lim[:, 0:gripper_dim]) / (
             gripper_lim[:, gripper_dim:] - gripper_lim[:, 0:gripper_dim]
         )
@@ -149,7 +149,9 @@ class PoseAbsOSCEEPolicy(OSCEEPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs
 
         """
         super().__init__(obs_spec, action_spec)
-        self.osc = OperationalSpaceController(device=self._obs_spec.device)
+        self.osc = OperationalSpaceController(
+            device=self._obs_spec.device, impedance_mode="variable_kp", gravity_compensation=True
+        )
 
     def reset(self, obs: TBPolicyObs, params: Any = None, env_ids: torch.Tensor = None) -> None:
         """Reset the PoseAbsolute IK EE Policy by setting the command of the DiffIK Controlller.
@@ -160,43 +162,16 @@ class PoseAbsOSCEEPolicy(OSCEEPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs
             env_ids: environment ids to reset
 
         """
-        super().reset(obs, params)
-        goal_pose = self._compute_goal_ee_pose_b_from_goal_tcp_b(params, obs["tcp_offset"])
-        wrench = torch.as_tensor([0.0, 0.0, 10.0, 0.0, 0.0, 0.0], device=self._obs_spec.device).unsqueeze(0)
+        super().reset(obs, params, env_ids=env_ids)
+        # goal_pose = self._compute_goal_ee_pose_b_from_goal_tcp_b(params, obs["tcp_offset"])
+        goal_pose = params[:, :7]
+        wrench = torch.as_tensor([0.0, 0.0, 0.0, 0.0, 0.0, 0.0], device=self._obs_spec.device).unsqueeze(0)
         kp = torch.as_tensor([360.0, 360.0, 360.0, 360.0, 360.0, 360.0], device=self._obs_spec.device).unsqueeze(0)
         goal_task_command = torch.cat(
-            (goal_pose, wrench.repeat(goal_pose.shape[0], 1), kp.repeat(goal_pose.shape[0], 1)), dim=1
+            (goal_pose, wrench.repeat(goal_pose.shape[0], 1), kp.repeat(goal_pose.shape[0], 1)), dim=-1
         )
-        ee_pose_b = obs["ee_pose_b"][env_ids]
-        # command, task_frame_pose_b = self.convert_to_task_frame(command=goal_task_command, ee_target_pose_b=goal_pose)
-        self.osc.set_command(goal_task_command, current_ee_pose_b=ee_pose_b, env_ids=env_ids)
-
-
-class XYZRPYAbsIKEEPolicy(OSCEEPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, TBAction]):
-    """A policy that produces pose ."""
-
-    def __init__(self, obs_spec: ObservationSpec[TBPolicyObs], action_spec: ActionSpec[TBAction]) -> None:
-        """Initialize the policy.
-
-        Args:
-            obs_spec: The observation specification.
-            action_spec: The action specification.
-
-        """
-        super().__init__(obs_spec, action_spec)
-        self.osc = OperationalSpaceController(device=self._obs_spec.device)
-
-    def reset(self, obs: TBPolicyObs, params: Any = None, env_ids: torch.Tensor = None) -> None:
-        """Reset the PoseAbsolute IK EE Policy by setting the command of the DiffIK Controlller.
-
-        Args:
-            obs: dict of bound functions
-            params: target pose XYZ + RPY (num_envs, 6)
-            env_ids: environment ids to reset
-
-        """
-        super().reset(obs, params)
-        target_quat_b = quat_from_euler_xyz(params[:, 3], params[:, 4], params[:, 5])
-        goal_tcp_b = torch.cat((params[:, 0:3], target_quat_b), dim=1)
-        goal_pose = self._compute_goal_ee_pose_b_from_goal_tcp_b(goal_tcp_b, obs["tcp_offset"])
-        self.osc.set_command(goal_pose, env_ids=env_ids)
+        ee_pose_b = obs["ee_pose_b"]
+        command, task_frame_pose_b = self.convert_to_task_frame(command=goal_task_command, ee_target_pose_b=goal_pose)
+        self.osc.set_command(
+            command=command, current_ee_pose_b=ee_pose_b, env_ids=env_ids, current_task_frame_pose_b=task_frame_pose_b
+        )

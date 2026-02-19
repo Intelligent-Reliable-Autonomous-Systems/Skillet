@@ -8,10 +8,11 @@
 # needed to import for allowing type-hinting: torch.device | str | None
 from __future__ import annotations
 
+from typing import Union
+
 import numpy as np
 import torch
 import warp as wp
-from typing import Union
 
 TensorData = Union[np.ndarray, torch.Tensor, wp.array]
 """Type definition for a tensor data.
@@ -56,9 +57,8 @@ def convert_to_torch(
     If ``device`` is None, then the function deduces the current device of the data. For numpy arrays,
     this defaults to "cpu", for torch tensors it is "cpu" or "cuda", and for warp arrays it is "cuda".
 
-    Note:
-        Since PyTorch does not support unsigned integer types, unsigned integer arrays are converted to
-        signed integer arrays. This is done by casting the array to the corresponding signed integer type.
+    Since PyTorch does not support unsigned integer types, unsigned integer arrays are converted to
+    signed integer arrays. This is done by casting the array to the corresponding signed integer type.
 
     Args:
         array: The input array. It can be a numpy array, warp array, python list/tuple, or torch tensor.
@@ -67,6 +67,7 @@ def convert_to_torch(
 
     Returns:
         The converted array as torch tensor.
+
     """
     # Convert array to tensor
     # if the datatype is not currently supported by torch we need to improvise

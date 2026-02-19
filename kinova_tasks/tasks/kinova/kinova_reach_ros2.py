@@ -42,8 +42,7 @@ class KinovaROS2ReachEnvCfg(ROS2RLEnvCfg):
     vision = False
 
     # Default joint position of robot
-    # NOTE: Must be in double format to be compatible with ROS2
-    default_joint_positions = [0.0, 0.523599, 0.0, 1.5708, 1.0, 0.785398, 1.0, 0.0]
+    default_joint_positions = [0.0, 0.523599, 0.0, 1.5708, 1.0, 0.785398, 1.0, 0.0]  # Double format
 
     """RL environment configuration"""
     num_envs = 1
