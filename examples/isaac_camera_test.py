@@ -70,7 +70,9 @@ def main():
     # --- Reset ---
     obs, _ = env.reset()
     print(f"\n[TEST] Reset done. Observation keys: {list(obs.keys())}")
-    print(f"       policy obs shape: {obs['policy'].shape}")
+    policy = obs["policy"]
+    for k, v in policy.items():
+        print(f"       policy['{k}'] shape: {tuple(v.shape)}")
 
     # --- Check camera sensor is registered ---
     assert "camera" in env.scene.sensors, "[FAIL] Camera not found in scene.sensors"
@@ -82,17 +84,13 @@ def main():
     for step in range(args_cli.num_steps):
         obs, _, _, _, _ = env.step(zero_action)
 
-        cam_data = env.scene.sensors["camera"].data.output
-
-        rgb   = cam_data.get("rgb")
-        depth = cam_data.get("distance_to_image_plane")
-
-        rgb_shape   = tuple(rgb.shape)   if rgb   is not None else None
-        depth_shape = tuple(depth.shape) if depth is not None else None
-
+        policy = obs["policy"]
         print(
             f"[TEST] step {step + 1:02d} | "
-            f"rgb: {rgb_shape}  depth: {depth_shape}"
+            f"rgb: {tuple(policy['rgb'].shape)}  "
+            f"depth: {tuple(policy['depth'].shape)}  "
+            f"joint_pos: {tuple(policy['joint_pos'].shape)}  | {policy['joint_pos']}  "
+            f"joint_vel: {tuple(policy['joint_vel'].shape)}  | {policy['joint_vel']}"
         )
 
     print("\n[TEST] Smoke-test passed — RGBD camera is live.")
