@@ -294,7 +294,7 @@ class FrankaReachOSCEnv(FrankaReachEnv):
 
     # pre-physics step calls
     def _pre_physics_step(self, actions: torch.Tensor):
-        self.robot_dof_targets = torch.clamp(actions, self.robot_dof_lower_limits, self.robot_dof_upper_limits)
+        self.robot_dof_targets = torch.clamp(actions, -self.robot_effort_limits, self.robot_effort_limits)
 
         # Update markers (world frame)
         self.goal_marker.visualize(self.goal_ee_pos_w, self.goal_ee_quat_w)
