@@ -74,9 +74,10 @@ def main():
     for k, v in policy.items():
         print(f"       policy['{k}'] shape: {tuple(v.shape)}")
 
-    # --- Check camera sensor is registered ---
-    assert "camera" in env.scene.sensors, "[FAIL] Camera not found in scene.sensors"
-    print("[TEST] Camera sensor found in scene.")
+    # --- Check camera sensors are registered ---
+    assert "camera" in env.scene.sensors, "[FAIL] Wrist camera not found in scene.sensors"
+    assert "workspace_camera" in env.scene.sensors, "[FAIL] Workspace camera not found in scene.sensors"
+    print("[TEST] Wrist camera and workspace camera found in scene.")
 
     # --- Step and inspect camera data ---
     zero_action = torch.zeros((cfg.scene.num_envs, cfg.action_space), device=env.device)
@@ -89,11 +90,13 @@ def main():
             f"[TEST] step {step + 1:02d} | "
             f"rgb: {tuple(policy['rgb'].shape)}  "
             f"depth: {tuple(policy['depth'].shape)}  "
+            f"workspace_rgb: {tuple(policy['workspace_rgb'].shape)}  "
+            f"workspace_depth: {tuple(policy['workspace_depth'].shape)}  "
             f"joint_pos: {tuple(policy['joint_pos'].shape)}  | {policy['joint_pos']}  "
             f"joint_vel: {tuple(policy['joint_vel'].shape)}  | {policy['joint_vel']}"
         )
 
-    print("\n[TEST] Smoke-test passed — RGBD camera is live.")
+    print("\n[TEST] Smoke-test passed — wrist + workspace RGBD cameras are live.")
     env.close()
 
 
