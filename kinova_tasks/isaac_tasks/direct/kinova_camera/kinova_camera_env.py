@@ -16,6 +16,7 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sensors import Camera
 from isaaclab.sim import SimulationCfg
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
+from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 
 from kinova_tasks.assets.kinova_gen3_2f85_arm import KINOVA_GEN3_2F85_ARM_CFG
 from skillet.envs.isaac import RGBDCameraCfg, SkillsDirectRLEnvCfg
@@ -44,7 +45,7 @@ class KinovaGenCameraEnvCfg(SkillsDirectRLEnvCfg):
     tcp_offset = [0.120, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0]
     ee_link_name = "end_effector_link"
     base_link_name = "base_link"
-    gripper_joint_name = "robotiq_85_left_knuckle_joint"
+    gripper_joint_names = "robotiq_85_left_knuckle_joint"
 
     # --- simulation ---
     sim: SimulationCfg = SimulationCfg(
@@ -75,7 +76,20 @@ class KinovaGenCameraEnvCfg(SkillsDirectRLEnvCfg):
     camera_cfg: RGBDCameraCfg = RGBDCameraCfg(
         prim_path="/World/envs/env_.*/Robot/Arm/bracelet_link/wrist_mounted_camera",
         pos=(0.0, 0.05, 0.05),
-        rot=(0.0, 1.0, 0.0, 0.0),       
+        rot=(0.0, 1.0, 0.0, 0.0),
+        width=640,
+        height=480,
+        convention="ros",
+    )
+
+    # --- static side-view camera ---
+    # Fixed world-frame camera positioned to the side of the table.
+    # pos/rot are in the world frame (convention="world").
+    # Adjust pos/rot to reframe the view.
+    workspace_camera_cfg: RGBDCameraCfg = RGBDCameraCfg(
+        prim_path="/World/envs/env_.*/workspace_camera",
+        pos=(0.5611907542841481, 1.14435, 0.72975),          # 1.5 m to the side, 1.0 m high
+        rot=(0.0, 0.0, 0.95, -0.51),   # (w, x, z, -y)
         width=640,
         height=480,
         convention="ros",
@@ -83,17 +97,19 @@ class KinovaGenCameraEnvCfg(SkillsDirectRLEnvCfg):
 
 
 class KinovaGenCameraEnv(DirectRLEnv):
-    """Kinova Gen3 + RGBD camera environment.
+    """Kinova Gen3 + RGBD camera environment with a table and two cameras.
 
     Observations returned from ``_get_observations()`` are a nested dict
     under the ``"policy"`` key::
 
         {
             "policy": {
-                "rgb":       (N, H, W, 3)  float32  [0, 1]  - RGB
-                "depth":     (N, H, W, 1)  float32  metres  - distance to image plane
-                "joint_pos": (N, num_joints) float32
-                "joint_vel": (N, num_joints) float32
+                "rgb":          (N, H, W, 3)  float32  [0, 1]  - wrist RGB
+                "depth":        (N, H, W, 1)  float32  metres  - wrist depth
+                "static_rgb":   (N, H, W, 3)  float32  [0, 1]  - static side-view RGB
+                "static_depth": (N, H, W, 1)  float32  metres  - static side-view depth
+                "joint_pos":    (N, num_joints) float32
+                "joint_vel":    (N, num_joints) float32
             }
         }
     """
@@ -123,16 +139,30 @@ class KinovaGenCameraEnv(DirectRLEnv):
 
     def _setup_scene(self):
         # Ground plane
-        spawn_ground_plane(prim_path="/World/ground", cfg=GroundPlaneCfg())
+        spawn_ground_plane(prim_path="/World/ground", cfg=GroundPlaneCfg(), translation=(0.0, 0.0, -1.05))
+
+        # Table
+        table_cfg = sim_utils.UsdFileCfg(
+            usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Mounts/SeattleLabTable/table_instanceable.usd"
+        )
+        table_cfg.func(
+            "/World/envs/env_.*/Table", table_cfg,
+            translation=(0.55, 0.0, 0.0), orientation=(0.70711, 0.0, 0.0, 0.70711)
+        )
 
         # Robot
         self._robot = Articulation(self.cfg.robot)
         self.scene.articulations["robot"] = self._robot
 
-        # Camera
+        # Wrist camera
         isaac_cam_cfg = self.cfg.camera_cfg.to_isaac_cfg()
         self._camera = Camera(isaac_cam_cfg)
         self.scene.sensors["camera"] = self._camera
+
+        # Static side-view camera
+        workspace_isaac_cam_cfg = self.cfg.workspace_camera_cfg.to_isaac_cfg()
+        self._workspace_camera = Camera(workspace_isaac_cam_cfg)
+        self.scene.sensors["workspace_camera"] = self._workspace_camera
 
         # Lighting
         light_cfg = sim_utils.DomeLightCfg(intensity=2000.0, color=(0.75, 0.75, 0.75))
@@ -159,22 +189,27 @@ class KinovaGenCameraEnv(DirectRLEnv):
 
     def _get_observations(self) -> dict:
         cam_out = self._camera.data.output
+        workspace_cam_out = self._workspace_camera.data.output
 
         # RGB: uint8 (N, H, W, 3) → float32 [0, 1]
         rgb = cam_out["rgb"].float() / 255.0
+        static_rgb = workspace_cam_out["rgb"].float() / 255.0
 
         # Depth: float32 (N, H, W, 1) in metres
         depth = cam_out["distance_to_image_plane"]
+        static_depth = workspace_cam_out["distance_to_image_plane"]
 
         joint_pos = self._robot.data.joint_pos[:, self.cfg.joint_ids]
         joint_vel = self._robot.data.joint_vel[:, self.cfg.joint_ids]
 
         return {
             "policy": {
-                "rgb":       rgb,
-                "depth":     depth,
-                "joint_pos": joint_pos,
-                "joint_vel": joint_vel,
+                "rgb":          rgb,
+                "depth":        depth,
+                "workspace_rgb":   static_rgb,
+                "workspace_depth": static_depth,
+                "joint_pos":    joint_pos,
+                "joint_vel":    joint_vel,
             }
         }
 
