@@ -12,6 +12,7 @@ from skillet.core.skill import Skill
 from skillet.core.spaces import ObservationSpec
 from skillet.policy.ik_ee import IKEEPolicy, PosAbsIKEEPolicy, PoseAbsIKEEPolicy, XYZRPYAbsIKEEPolicy
 from skillet.policy.joint_pos import GripperPolicy, JointPosPolicy
+from skillet.policy.osc_ee import PoseAbsOSCEEPolicy
 from skillet.skill.high_level import GraspXYZSkill, PickSkill, PlaceSkill, PushSkill
 from skillet.skill.low_level import (
     GripperGraspSkill,
@@ -44,6 +45,18 @@ def make_ik_obs_spec(device: str = "cuda") -> ObservationSpec:
     )
 
 
+def make_osc_obs_spec(device: str = "cuda") -> ObservationSpec:
+    """Make an observation spec for OSC controllers."""
+    return ObservationSpec[Float[torch.Tensor, "b ..."]](
+        space=gym.spaces.Dict(),
+        name="osc",
+        is_torch=True,
+        is_batched=True,
+        n_envs=-1,
+        device=device,
+    )
+
+
 def make_joint_obs_spec(device: str = "cuda") -> ObservationSpec:
     """Make an observation spec for IK controllers."""
     return ObservationSpec[Float[torch.Tensor, "b ..."]](
@@ -54,6 +67,10 @@ def make_joint_obs_spec(device: str = "cuda") -> ObservationSpec:
         n_envs=-1,
         device=device,
     )
+
+
+def make_osc_ee_pose_policy(env: AsGymVectorEnv) -> IKEEPolicy:
+    return PoseAbsOSCEEPolicy[BxN_Obs, BxM_Action](make_osc_obs_spec(env.device), env.action_spec)
 
 
 def make_ik_ee_xyzrpy_policy(env: AsGymVectorEnv) -> IKEEPolicy:
@@ -148,6 +165,18 @@ def make_grasp_xyz_skill(env: AsGymVectorEnv, skill_length: int = 5) -> Skill:
     )
 
 
+def make_osc_reach_xyz_skill(env: AsGymVectorEnv, skill_length: int = 5) -> Skill:
+    return ReachXYZSkill[BxN_Obs, BxM_Action, None](
+        name="reach_xyz_skill_osc", policy=make_osc_ee_pose_policy(env), length=skill_length
+    )
+
+
+def make_osc_orient_rpy_skill(env: AsGymVectorEnv, skill_length: int = 5) -> Skill:
+    return OrientRPYSkill[BxN_Obs, BxM_Action, None](
+        name="orient_rpy_skill_osc", policy=make_osc_ee_pose_policy(env), length=skill_length
+    )
+
+
 SKILL_LIB = {
     "push": make_push_skill,
     "place": make_place_skill,
@@ -155,7 +184,9 @@ SKILL_LIB = {
     "grasp_xyz": make_grasp_xyz_skill,
     "orient_y": make_orient_y_skill,
     "orient_rpy": make_orient_rpy_skill,
+    "orient_rpy_osc": make_osc_orient_rpy_skill,
     "reach_xyz": make_reach_xyz_skill,
+    "reach_xyz_osc": make_osc_reach_xyz_skill,
     "reach_xyzrpy": make_reach_xyzrpy_skill,
     "gripper_oc": make_gripper_oc_skill,
     "gripper_c": make_gripper_c_skill,

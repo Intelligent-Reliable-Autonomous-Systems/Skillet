@@ -289,7 +289,8 @@ class FrankaReachOSCEnv(FrankaReachEnv):
         cfg.robot.actuators["panda_forearm"].damping = 0.0
         cfg.robot.actuators["panda_hand"].stiffness = 0.0
         cfg.robot.actuators["panda_hand"].damping = 0.0
-        cfg.ee_link_name = ""
+        cfg.ee_link_name = "panda_leftfinger"
+        cfg.skills = ["reach_xyz_osc", "orient_rpy_osc"]
         super().__init__(cfg, render_mode, **kwargs)
 
     # pre-physics step calls
@@ -302,6 +303,18 @@ class FrankaReachOSCEnv(FrankaReachEnv):
 
     def _apply_action(self):
         self._robot.set_joint_effort_target(self.robot_dof_targets, joint_ids=self.cfg.joint_ids)
+
+    def _get_observations(self) -> dict:
+        obs = torch.cat(
+            (
+                self._robot.data.joint_pos[:, self.cfg.joint_ids],
+                self._robot.data.joint_vel[:, self.cfg.joint_ids].clamp(-50, 50),
+                self.goal_ee_pose_b,
+                self.prev_actions,
+            ),
+            dim=-1,
+        )
+        return {"policy": torch.clamp(obs, -5.0, 5.0)}
 
 
 @torch.jit.script
@@ -329,9 +342,7 @@ def compute_rewards(
 
     orientation_reward = ee_orientation_reward_scale * quat_error_magnitude(ee_quat, goal_ee_quat)
 
-    action_rate_reward = action_rate_reward_scale * torch.sum(torch.square(actions - prev_actions), dim=1)
+    # action_rate_reward = action_rate_reward_scale * torch.sum(torch.square(actions - prev_actions), dim=1)
     joint_vel_reward = (joint_vel_reward_scale * torch.sum(torch.square(joint_vel), dim=1)).clamp(-1, 1)
 
-    return (dist_reward + dist_fine_grained_rew + orientation_reward + joint_vel_reward + action_rate_reward).clamp(
-        -1, 1
-    )
+    return (dist_reward + dist_fine_grained_rew + orientation_reward + joint_vel_reward).clamp(-1, 1)

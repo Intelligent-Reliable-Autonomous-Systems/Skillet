@@ -76,7 +76,7 @@ class ReachPoseSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[
 
     def get_action(self, obs: TBSkillObs) -> TBAction:  # noqa: D102
         np.set_printoptions(precision=3, suppress=True)
-        if True:
+        if False:
             print(
                 f"[INFO][REACH POSE]: {self._status.cpu().numpy()[0]} | target pose: {self._target_poses.cpu().numpy()[0]} | obs ee pose: {obs['ee_pose_b'].cpu().numpy()[0]}"
             )
