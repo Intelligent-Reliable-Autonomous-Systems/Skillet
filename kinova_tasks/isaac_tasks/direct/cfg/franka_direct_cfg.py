@@ -16,7 +16,7 @@ class FrankaBaseCfg(SkillsDirectRLEnvCfg):
     state_space = 0
 
     joint_ids = [0, 1, 2, 3, 4, 5, 6, 7, 8]
-    tcp_offset = [0.0, 0.0, 0.1034, 0.0, 0.0, 0.0, 0.0]
+    tcp_offset = [0.0, 0.0, 0.1034, 1.0, 0.0, 0.0, 0.0]
     ee_link_name = "panda_hand"
     base_link_name = "panda_link0"
     gripper_joint_names = ["panda_finger_joint1", "panda_finger_joint2"]
