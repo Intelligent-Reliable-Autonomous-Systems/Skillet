@@ -4,7 +4,7 @@ from enum import IntEnum
 from typing import Generic, TypeAlias, TypeVar
 
 import numpy as np
-from jaxtyping import Bool, Int
+from jaxtyping import Bool, Float, Int
 
 from skillet.core.policy import BatchedPolicy, Policy
 from skillet.core.spaces import (
@@ -135,6 +135,19 @@ class Skill(abc.ABC, Generic[TSkillObs, TAction, TSkillParams]):
     def is_terminated(self, obs: TSkillObs) -> bool | Bool[ArrayLike, "b"]:  # noqa: F821
         """Check if the skill is terminated with the given observation."""
         return (self.status == SkillStatusCodes.SUCCESS) | (self.status == SkillStatusCodes.FAILED)
+
+    def is_success(self, obs: TSkillObs) -> bool | Bool[ArrayLike, "b"]:  # noqa: F821
+        """Check if the skill is successful."""
+        return self.status == SkillStatusCodes.SUCCESS
+
+    def is_fail(self, obs: TSkillObs) -> bool | Bool[ArrayLike, "b"]:  # noqa: F821
+        """Check if the skill failed."""
+        return self.status == SkillStatusCodes.FAILED
+
+    @abc.abstractmethod
+    def reward(self, obs: TSkillObs) -> float | Float[ArrayLike, "b"]:  # noqa: F821
+        """Compute the dense reward of the skill for reward shaping."""
+        raise NotImplementedError
 
 
 class SingleSkill(

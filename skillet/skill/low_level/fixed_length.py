@@ -2,7 +2,7 @@
 
 from typing import Generic
 
-from jaxtyping import Int
+from jaxtyping import Float, Int
 
 from skillet.core.policy import BatchedPolicy
 from skillet.core.skill import (
@@ -67,3 +67,7 @@ class FixedLengthSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generi
         if self._n_steps >= self._length:
             self._status[:] = SkillStatusCodes.SUCCESS
         return action
+
+    def reward(self, obs: TBSkillObs) -> Float[ArrayLike, "b"]:  # noqa: F821
+        """Compute the reward of the skill."""
+        pass

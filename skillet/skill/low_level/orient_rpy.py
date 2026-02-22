@@ -4,7 +4,7 @@ from typing import Generic
 
 import numpy as np
 import torch
-from jaxtyping import Int
+from jaxtyping import Float, Int
 
 from skillet.core.math import quat_error_magnitude, quat_from_euler_xyz
 from skillet.core.policy import BatchedPPolicy
@@ -97,3 +97,11 @@ class OrientRPYSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[
         if self._n_steps >= self._length:
             self._status[:] = SkillStatusCodes.FAILED
         return action
+
+    def reward(self, obs: TBSkillObs) -> Float[ArrayLike, "b"]:  # noqa: F821
+        """Compute the reward of the skill."""
+        ee_pose_b = obs["tcp_pose_b"]
+        dist = torch.clip(
+            quat_error_magnitude(ee_pose_b[:, 3:7], self._target_poses[:, 3:7]) - self._quat_threshold, 0, None
+        )
+        return 1.0 - torch.tanh(10.0 * dist)

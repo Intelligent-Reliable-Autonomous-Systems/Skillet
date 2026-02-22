@@ -13,7 +13,16 @@ from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 from isaaclab.markers.config import FRAME_MARKER_CFG
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
-from isaaclab.utils.math import quat_error_magnitude, quat_from_euler_xyz, sample_uniform
+from isaaclab.utils.math import (
+    quat_apply,
+    quat_apply_inverse,
+    quat_error_magnitude,
+    quat_from_euler_xyz,
+    quat_inv,
+    quat_mul,
+    sample_uniform,
+    subtract_frame_transforms,
+)
 from isaacsim.core.utils.torch.transformations import tf_combine
 
 from kinova_tasks.isaac_tasks.direct.cfg import FrankaBaseCfg
@@ -72,12 +81,15 @@ class FrankaReachEnv(DirectRLEnv):
 
         # Goal poses and end effector positions
         self.ee_ranges = torch.tensor(self.cfg.ee_ranges, device=self.device)
-        self.goal_ee_pose_b = torch.zeros((self.num_envs, 6), device=self.device)
+        self.goal_ee_xyz_b = torch.zeros((self.num_envs, 6), device=self.device)
         self.goal_ee_pos_w = torch.zeros((self.num_envs, 3), device=self.device)
         self.goal_ee_quat_w = torch.zeros((self.num_envs, 4), device=self.device)
 
         self.robot_ee_quat_w = torch.zeros((self.num_envs, 4), device=self.device)
         self.robot_ee_pos_w = torch.zeros((self.num_envs, 3), device=self.device)
+
+        self.robot_ee_pose_b = torch.zeros((self.num_envs, 7), device=self.device)
+        self.robot_tcp_pose_b = torch.zeros((self.num_envs, 7), device=self.device)
 
         self.actions = torch.zeros((self.num_envs, self.cfg.action_space), device=self.device)
         self.prev_actions = torch.zeros_like(self.actions, device=self.device)
@@ -97,6 +109,8 @@ class FrankaReachEnv(DirectRLEnv):
         self.robot_dof_targets = torch.zeros((self.num_envs, len(self.cfg.joint_ids)), device=self.device)
 
         self.cfg.ee_link_idx = self._robot.find_bodies(self.cfg.ee_link_name)[0][0]
+
+        self.tcp_offset = torch.as_tensor(self.cfg.tcp_offset, device=self.device).unsqueeze(0).repeat(self.num_envs, 1)
 
         # Markers
         self.goal_marker = VisualizationMarkers(cfg=self.cfg.goal_pose_visualizer_cfg)
@@ -182,14 +196,14 @@ class FrankaReachEnv(DirectRLEnv):
         # target state
         base_pos_w = self._robot.data.root_pos_w[env_ids]
         base_quat_w = self._robot.data.root_quat_w[env_ids]
-        self.goal_ee_pose_b[env_ids] = (
+        self.goal_ee_xyz_b[env_ids] = (
             self.ee_ranges[:, 0]
             + (self.ee_ranges[:, 1] - self.ee_ranges[:, 0])
             * torch.rand((self.num_envs, len(self.ee_ranges)), device=self.device)
         )[env_ids]
-        goal_ee_pos_b = self.goal_ee_pose_b[env_ids, :3]
+        goal_ee_pos_b = self.goal_ee_xyz_b[env_ids, :3]
         goal_ee_quat_b = quat_from_euler_xyz(
-            self.goal_ee_pose_b[env_ids, 3], self.goal_ee_pose_b[env_ids, 4], self.goal_ee_pose_b[env_ids, 5]
+            self.goal_ee_xyz_b[env_ids, 3], self.goal_ee_xyz_b[env_ids, 4], self.goal_ee_xyz_b[env_ids, 5]
         )
 
         # World frame
@@ -206,7 +220,7 @@ class FrankaReachEnv(DirectRLEnv):
                 self._robot.data.joint_pos[:, self.cfg.joint_ids]
                 - self._robot.data.default_joint_pos[:, self.cfg.joint_ids],
                 self._robot.data.joint_vel[:, self.cfg.joint_ids],
-                self.goal_ee_pose_b,
+                self.goal_ee_xyz_b,
                 self.prev_actions,
             ),
             dim=-1,
@@ -232,22 +246,40 @@ class FrankaReachEnv(DirectRLEnv):
 
         self.prev_actions[env_ids] = torch.clone(self.actions[env_ids])
 
+        # Compute end effector pose
+        ee_link_idx = self._robot.find_bodies(self.cfg.ee_link_name)[0][0]
+        base_link_idx = self._robot.find_bodies(self.cfg.base_link_name)[0][0]
+
+        ee_pose_w = self._robot.data.body_pose_w[env_ids, ee_link_idx]
+        base_pose_w = self._robot.data.body_pose_w[env_ids, base_link_idx]
+
+        ee_pos_b, ee_quat_b = subtract_frame_transforms(
+            base_pose_w[:, :3],
+            base_pose_w[:, 3:7],
+            ee_pose_w[:, :3],
+            ee_pose_w[:, 3:7],
+        )
+        self.robot_ee_pose_b[env_ids] = torch.cat((ee_pos_b, ee_quat_b), dim=1)
+
+        # Compute TCP pose
+        root_pose_w = self._robot.data.root_pose_w[env_ids]
+        ee_pos_b = quat_apply_inverse(root_pose_w[:, 3:7], ee_pose_w[:, 0:3] - root_pose_w[:, 0:3])
+        ee_quat_b = quat_mul(quat_inv(root_pose_w[:, 3:7]), ee_pose_w[:, 3:7])
+
+        tcp_pos_b = ee_pos_b + quat_apply(ee_quat_b, self.tcp_offset[env_ids, 0:3])
+        tcp_quat_b = quat_mul(ee_quat_b, self.tcp_offset[env_ids, 3:7])
+        self.robot_ee_pose_b[env_ids] = torch.concatenate(
+            (tcp_pos_b, tcp_quat_b),
+            dim=1,
+        )
+
 
 class FrankaReachIKEnv(FrankaReachEnv):
     """Use this environment when computing actions with a Diff IK controller or the skills environments."""
 
-    # pre-physics step calls
-    #   |-- _pre_physics_step(action)
-    #   |-- _apply_action()
-    # post-physics step calls
-    #   |-- _get_dones()
-    #   |-- _get_rewards()
-    #   |-- _reset_idx(env_ids)
-    #   |-- _get_observations()
-
     cfg: FrankaReachEnvCfg
 
-    def __init__(self, cfg: FrankaReachEnvCfg, render_mode: str | None = None, **kwargs):
+    def __init__(self, cfg: FrankaReachEnvCfg, render_mode: str | None = None, **kwargs) -> None:
         cfg.decimation = 1
         cfg.sim.dt = 0.01
         cfg.episode_length_s = 15.0
@@ -260,7 +292,7 @@ class FrankaReachIKEnv(FrankaReachEnv):
         super().__init__(cfg, render_mode, **kwargs)
 
     # pre-physics step calls
-    def _pre_physics_step(self, actions: torch.Tensor):
+    def _pre_physics_step(self, actions: torch.Tensor) -> None:
         self.robot_dof_targets = torch.clamp(actions, self.robot_dof_lower_limits, self.robot_dof_upper_limits)
 
         # Update markers (world frame)
@@ -271,18 +303,11 @@ class FrankaReachIKEnv(FrankaReachEnv):
 class FrankaReachOSCEnv(FrankaReachEnv):
     """Use this environment when computing actions with a Diff IK controller or the skills environments."""
 
-    # pre-physics step calls
-    #   |-- _pre_physics_step(action)
-    #   |-- _apply_action()
-    # post-physics step calls
-    #   |-- _get_dones()
-    #   |-- _get_rewards()
-    #   |-- _reset_idx(env_ids)
-    #   |-- _get_observations()
-
     cfg: FrankaReachEnvCfg
 
     def __init__(self, cfg: FrankaReachEnvCfg, render_mode: str | None = None, **kwargs):
+        cfg.decimation = 2
+        cfg.sim.dt = 0.01
         cfg.robot.actuators["panda_shoulder"].stiffness = 0.0
         cfg.robot.actuators["panda_shoulder"].damping = 0.0
         cfg.robot.actuators["panda_forearm"].stiffness = 0.0
@@ -307,14 +332,24 @@ class FrankaReachOSCEnv(FrankaReachEnv):
     def _get_observations(self) -> dict:
         obs = torch.cat(
             (
-                self._robot.data.joint_pos[:, self.cfg.joint_ids],
-                self._robot.data.joint_vel[:, self.cfg.joint_ids].clamp(-50, 50),
-                self.goal_ee_pose_b,
-                self.prev_actions,
+                self.robot_ee_pose_b,
+                self.robot_tcp_pose_b,
+                self.goal_ee_xyz_b,
             ),
             dim=-1,
         )
         return {"policy": torch.clamp(obs, -5.0, 5.0)}
+
+    def _get_rewards(self) -> torch.Tensor:
+        # Refresh the intermediate values after the physics steps
+        self._compute_intermediate_values()
+
+        return compute_rewards_osc(
+            self.robot_tcp_pose_b[:, 0:3],
+            self.robot_tcp_pose_b[:, 3:7],
+            self.goal_ee_pos_w,
+            self.goal_ee_quat_w,
+        )
 
 
 @torch.jit.script
@@ -346,3 +381,17 @@ def compute_rewards(
     joint_vel_reward = (joint_vel_reward_scale * torch.sum(torch.square(joint_vel), dim=1)).clamp(-1, 1)
 
     return (dist_reward + dist_fine_grained_rew + orientation_reward + joint_vel_reward).clamp(-1, 1)
+
+
+@torch.jit.script
+def compute_rewards_osc(
+    ee_pos: torch.Tensor,
+    ee_quat: torch.Tensor,
+    goal_ee_pos: torch.Tensor,
+    goal_ee_quat: torch.Tensor,
+) -> torch.Tensor:
+    reach_rew = 1 - torch.tanh(10 * torch.norm(ee_pos - goal_ee_pos, dim=1))
+
+    orientation_reward = 1 - torch.tanh(5 * quat_error_magnitude(ee_quat, goal_ee_quat))
+
+    return reach_rew + orientation_reward  # TODO potentiall add a success metric

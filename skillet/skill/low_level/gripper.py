@@ -4,7 +4,7 @@ from typing import Generic
 
 import numpy as np
 import torch
-from jaxtyping import Int
+from jaxtyping import Float, Int
 
 from skillet.core.policy import BatchedPPolicy
 from skillet.core.skill import (
@@ -92,6 +92,10 @@ class GripperOCSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[
             self._status[:] = SkillStatusCodes.FAILED
         return action
 
+    def reward(self, obs: TBSkillObs) -> Float[ArrayLike, "b"]:  # noqa: F821
+        """Compute the reward of the skill."""
+        pass
+
 
 class GripperOpenSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSkillObs, TBAction, TBSkillParams]):
     """A skill that opens the gripper."""
@@ -167,6 +171,10 @@ class GripperOpenSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generi
         if self._n_steps >= self._length:
             self._status[:] = SkillStatusCodes.FAILED
         return action
+
+    def reward(self, obs: TBSkillObs) -> Float[ArrayLike, "b"]:  # noqa: F821
+        """Compute the reward of the skill."""
+        pass
 
 
 class GripperGraspSkill(
@@ -245,3 +253,7 @@ class GripperGraspSkill(
             self._status[:] = SkillStatusCodes.FAILED
 
         return action
+
+    def reward(self, obs: TBSkillObs) -> Float[ArrayLike, "b"]:  # noqa: F821
+        """Compute the reward of the skill."""
+        pass

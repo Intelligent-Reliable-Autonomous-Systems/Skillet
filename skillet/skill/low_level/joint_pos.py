@@ -4,7 +4,7 @@ from typing import Generic
 
 import numpy as np
 import torch
-from jaxtyping import Int
+from jaxtyping import Float, Int
 
 from skillet.core.policy import BatchedPPolicy
 from skillet.core.skill import (
@@ -90,3 +90,7 @@ class JointPosSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[T
         if self._n_steps >= self._length:
             self._status[:] = SkillStatusCodes.FAILED
         return action
+
+    def reward(self, obs: TBSkillObs) -> Float[ArrayLike, "b"]:  # noqa: F821
+        """Compute the reward of the skill."""
+        pass
