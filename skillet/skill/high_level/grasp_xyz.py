@@ -5,7 +5,7 @@ from typing import Generic
 
 import numpy as np
 import torch
-from jaxtyping import Int
+from jaxtyping import Float, Int
 
 from skillet.core.math import euler_xyz_from_quat, quat_error_magnitude, quat_from_euler_xyz
 from skillet.core.policy import BatchedPPolicy
@@ -166,3 +166,7 @@ class GraspXYZSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[T
             self._status[self._status == SkillStatusCodes.RUNNING] = SkillStatusCodes.FAILED
 
         return reach_actions
+
+    def reward(self, obs: TBSkillObs) -> Float[ArrayLike, "b"]:  # noqa: F821
+        """Compute the reward of the skill."""
+        pass

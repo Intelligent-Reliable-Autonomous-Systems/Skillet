@@ -53,9 +53,9 @@ class SkillIsaacEnvWrapper(
         """
         super().__init__(env)
         if hasattr(env.unwrapped.cfg, "skills"):
-            assert (
-                env.unwrapped.cfg.skills is not None
-            ), "`env.cfg.skills` must not be None. Configure to list of skills."
+            assert env.unwrapped.cfg.skills is not None, (
+                "`env.cfg.skills` must not be None. Configure to list of skills."
+            )
         else:
             raise ValueError(
                 f"Cannot use `SkillIsaacWrapper` when `{type(env.unwrapped.cfg)}` does not contain the `skills` attribute."
@@ -78,7 +78,9 @@ class SkillIsaacEnvWrapper(
             ),
         )
 
-    def step(self, action: TBatchedActionTorch) -> tuple[
+    def step(
+        self, action: TBatchedActionTorch
+    ) -> tuple[
         TBatchedObsTorch,
         Float[torch.Tensor, "b"],  # noqa: F821
         Bool[torch.Tensor, "b"],  # noqa: F821
@@ -104,11 +106,11 @@ class SkillIsaacEnvWrapper(
 
             obs_dict, reward, term, trunc, info = super().step(ll_action)
 
-            _rewards[~_dones] += reward[~_dones]
+            _rewards[~_dones] += reward[~_dones]  # TODO should this line be here to cap rewards?
             _skill_length += _dones
             _dones = self.sc.dones
             i += 1
-        # TODO Process reward according to skill shaping in reward
+        reward = self.sc.post_process_reward(reward)
         self.last_obs = obs_dict
 
         return obs_dict, reward, term, trunc, info
