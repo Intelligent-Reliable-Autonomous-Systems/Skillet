@@ -22,6 +22,7 @@ from kinova_tasks.assets.kinova_gen3_2f85_arm import KINOVA_GEN3_2F85_ARM_CFG
 from skillet.envs.isaac import RGBDCameraCfg, SkillsDirectRLEnvCfg
 from skillet.envs.util import configclass
 
+
 @configclass
 class KinovaGenCameraEnvCfg(SkillsDirectRLEnvCfg):
     """
@@ -61,14 +62,10 @@ class KinovaGenCameraEnvCfg(SkillsDirectRLEnvCfg):
     )
 
     # --- scene ---
-    scene: InteractiveSceneCfg = InteractiveSceneCfg(
-        num_envs=1, env_spacing=2.5, replicate_physics=True
-    )
+    scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=1, env_spacing=2.5, replicate_physics=True)
 
     # --- robot: Kinova Gen3 arm (Kinova_Gen3.usd) ---
-    robot = KINOVA_GEN3_2F85_ARM_CFG.replace(
-        prim_path="/World/envs/env_.*/Robot"
-    )
+    robot = KINOVA_GEN3_2F85_ARM_CFG.replace(prim_path="/World/envs/env_.*/Robot")
 
     # --- camera: mounted on bracelet_link (wrist camera) ---
     # prim_path attaches the camera to the wrist link; it moves with the robot.
@@ -88,8 +85,8 @@ class KinovaGenCameraEnvCfg(SkillsDirectRLEnvCfg):
     # Adjust pos/rot to reframe the view.
     workspace_camera_cfg: RGBDCameraCfg = RGBDCameraCfg(
         prim_path="/World/envs/env_.*/workspace_camera",
-        pos=(0.5611907542841481, 1.14435, 0.72975),          # 1.5 m to the side, 1.0 m high
-        rot=(0.0, 0.0, 0.95, -0.51),   # (w, x, z, -y)
+        pos=(0.5611907542841481, 1.14435, 0.72975),  # 1.5 m to the side, 1.0 m high
+        rot=(0.0, 0.0, 0.95, -0.51),  # (w, x, z, -y)
         width=640,
         height=480,
         convention="ros",
@@ -122,15 +119,13 @@ class KinovaGenCameraEnv(DirectRLEnv):
         self.actions = torch.zeros((self.num_envs, self.cfg.action_space), device=self.device)
 
         # joint limit tensors (arm joints only)
-        self.robot_dof_lower_limits = self._robot.data.soft_joint_pos_limits[0, :, 0].to(
-            device=self.device
-        )[self.cfg.joint_ids]
-        self.robot_dof_upper_limits = self._robot.data.soft_joint_pos_limits[0, :, 1].to(
-            device=self.device
-        )[self.cfg.joint_ids]
-        self.robot_dof_targets = torch.zeros(
-            (self.num_envs, len(self.cfg.joint_ids)), device=self.device
-        )
+        self.robot_dof_lower_limits = self._robot.data.soft_joint_pos_limits[0, :, 0].to(device=self.device)[
+            self.cfg.joint_ids
+        ]
+        self.robot_dof_upper_limits = self._robot.data.soft_joint_pos_limits[0, :, 1].to(device=self.device)[
+            self.cfg.joint_ids
+        ]
+        self.robot_dof_targets = torch.zeros((self.num_envs, len(self.cfg.joint_ids)), device=self.device)
         self.default_joint_pos = self._robot.data.default_joint_pos[:, self.cfg.joint_ids]
 
     # ------------------------------------------------------------------
@@ -146,8 +141,10 @@ class KinovaGenCameraEnv(DirectRLEnv):
             usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Mounts/SeattleLabTable/table_instanceable.usd"
         )
         table_cfg.func(
-            "/World/envs/env_.*/Table", table_cfg,
-            translation=(0.55, 0.0, 0.0), orientation=(0.70711, 0.0, 0.0, 0.70711)
+            "/World/envs/env_.*/Table",
+            table_cfg,
+            translation=(0.55, 0.0, 0.0),
+            orientation=(0.70711, 0.0, 0.0, 0.70711),
         )
 
         # Robot
@@ -180,9 +177,7 @@ class KinovaGenCameraEnv(DirectRLEnv):
     def _pre_physics_step(self, actions: torch.Tensor):
         self.actions = actions.clone()
         targets = self.default_joint_pos + self.actions
-        self.robot_dof_targets = torch.clamp(
-            targets, self.robot_dof_lower_limits, self.robot_dof_upper_limits
-        )
+        self.robot_dof_targets = torch.clamp(targets, self.robot_dof_lower_limits, self.robot_dof_upper_limits)
 
     def _apply_action(self):
         self._robot.set_joint_position_target(self.robot_dof_targets, joint_ids=self.cfg.joint_ids)
@@ -204,12 +199,12 @@ class KinovaGenCameraEnv(DirectRLEnv):
 
         return {
             "policy": {
-                "rgb":          rgb,
-                "depth":        depth,
-                "workspace_rgb":   static_rgb,
+                "rgb": rgb,
+                "depth": depth,
+                "workspace_rgb": static_rgb,
                 "workspace_depth": static_depth,
-                "joint_pos":    joint_pos,
-                "joint_vel":    joint_vel,
+                "joint_pos": joint_pos,
+                "joint_vel": joint_vel,
             }
         }
 

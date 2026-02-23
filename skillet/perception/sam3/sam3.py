@@ -169,11 +169,7 @@ class SAM3:
 
         for i in range(num_masks):
             # Get class ID for this mask
-            cls_id = (
-                int(boxes.cls[i].item())
-                if boxes.cls is not None and i < len(boxes.cls)
-                else i
-            )
+            cls_id = int(boxes.cls[i].item()) if boxes.cls is not None and i < len(boxes.cls) else i
 
             # Map class ID to prompt
             if isinstance(names, dict):
@@ -211,9 +207,7 @@ class SAM3:
         )
         return x.squeeze(1)  # (N, target_height, target_width)
 
-    def _resize_masks(
-        self, masks: np.ndarray, target_height: int, target_width: int
-    ) -> np.ndarray:
+    def _resize_masks(self, masks: np.ndarray, target_height: int, target_width: int) -> np.ndarray:
         """Resize masks (numpy, CPU). Masks (N, H, W) -> (N, target_height, target_width)."""
         import cv2
 

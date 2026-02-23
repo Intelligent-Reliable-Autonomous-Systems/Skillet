@@ -303,8 +303,7 @@ class SpaceSpecification(Generic[TSpace]):
             if self.is_torch:
                 arr = torch.as_tensor(v, dtype=as_torch_dtype(dtype), device=self.device)
                 if arr.shape != expected_shape:
-                    if self.n_envs != -1 and \
-                        arr.shape == expected_shape[1:]:
+                    if self.n_envs != -1 and arr.shape == expected_shape[1:]:
                         arr = arr.unsqueeze(0)
                         arr = arr.expand((self.n_envs, *expected_shape[1:]))
                     else:
@@ -312,18 +311,20 @@ class SpaceSpecification(Generic[TSpace]):
                 return arr
             arr = np.asarray(v, dtype=dtype)
             if arr.shape != expected_shape:
-                if self.n_envs != -1 and \
-                    arr.shape == expected_shape[1:]:
+                if self.n_envs != -1 and arr.shape == expected_shape[1:]:
                     arr = arr[np.newaxis, ...]
                     arr = np.broadcast_to(arr, (self.n_envs, *expected_shape[1:]))
                 else:
                     raise ValueError(f"Expected shape {expected_shape} but got {arr.shape} for value {key}.")
             return arr
+
         if isinstance(self.space, gym.spaces.Dict):
             if not isinstance(value, Mapping):
                 raise TypeError(f"Expected a mapping for a Dict space but got {type(value).__name__}.")
-            return {key: cast_array(v, self.space.spaces[key].shape, self.space.spaces[key].dtype, key=key)
-                    for key, v in value.items()}  # type: ignore[return-value]
+            return {
+                key: cast_array(v, self.space.spaces[key].shape, self.space.spaces[key].dtype, key=key)
+                for key, v in value.items()
+            }  # type: ignore[return-value]
         return cast_array(value, self.space.shape, self.space.dtype)
 
     def with_n_envs(self, n_envs: int) -> SpaceSpecification[TSpace]:

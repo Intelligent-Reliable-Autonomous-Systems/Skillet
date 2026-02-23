@@ -82,6 +82,7 @@ class FrankaReachEnv(DirectRLEnv):
         # Goal poses and end effector positions
         self.ee_ranges = torch.tensor(self.cfg.ee_ranges, device=self.device)
         self.goal_ee_xyz_b = torch.zeros((self.num_envs, 6), device=self.device)
+        self.goal_ee_pose_b = torch.zeros((self.num_envs, 7), device=self.device)
         self.goal_ee_pos_w = torch.zeros((self.num_envs, 3), device=self.device)
         self.goal_ee_quat_w = torch.zeros((self.num_envs, 4), device=self.device)
 
@@ -205,7 +206,7 @@ class FrankaReachEnv(DirectRLEnv):
         goal_ee_quat_b = quat_from_euler_xyz(
             self.goal_ee_xyz_b[env_ids, 3], self.goal_ee_xyz_b[env_ids, 4], self.goal_ee_xyz_b[env_ids, 5]
         )
-
+        self.goal_ee_pose_b[env_ids] = torch.cat((goal_ee_pos_b, goal_ee_quat_b), dim=-1)
         # World frame
         self.goal_ee_quat_w[env_ids], self.goal_ee_pos_w[env_ids] = tf_combine(
             base_quat_w, base_pos_w, goal_ee_quat_b, goal_ee_pos_b
@@ -268,7 +269,7 @@ class FrankaReachEnv(DirectRLEnv):
 
         tcp_pos_b = ee_pos_b + quat_apply(ee_quat_b, self.tcp_offset[env_ids, 0:3])
         tcp_quat_b = quat_mul(ee_quat_b, self.tcp_offset[env_ids, 3:7])
-        self.robot_ee_pose_b[env_ids] = torch.concatenate(
+        self.robot_tcp_pose_b[env_ids] = torch.concatenate(
             (tcp_pos_b, tcp_quat_b),
             dim=1,
         )
@@ -315,7 +316,7 @@ class FrankaReachOSCEnv(FrankaReachEnv):
         cfg.robot.actuators["panda_hand"].stiffness = 0.0
         cfg.robot.actuators["panda_hand"].damping = 0.0
         cfg.ee_link_name = "panda_hand"
-        cfg.skills = ["reach_xyz_osc", "orient_rpy_osc"]
+        cfg.skills = ["reach_xyz_osc", "orient_rpy_osc"]  #
         super().__init__(cfg, render_mode, **kwargs)
 
     # pre-physics step calls
@@ -332,7 +333,6 @@ class FrankaReachOSCEnv(FrankaReachEnv):
     def _get_observations(self) -> dict:
         obs = torch.cat(
             (
-                self.robot_ee_pose_b,
                 self.robot_tcp_pose_b,
                 self.goal_ee_xyz_b,
             ),
@@ -347,8 +347,8 @@ class FrankaReachOSCEnv(FrankaReachEnv):
         return compute_rewards_osc(
             self.robot_tcp_pose_b[:, 0:3],
             self.robot_tcp_pose_b[:, 3:7],
-            self.goal_ee_pos_w,
-            self.goal_ee_quat_w,
+            self.goal_ee_pose_b[:, 0:3],
+            self.goal_ee_pose_b[:, 3:7],
         )
 
 
@@ -394,4 +394,4 @@ def compute_rewards_osc(
 
     orientation_reward = 1 - torch.tanh(5 * quat_error_magnitude(ee_quat, goal_ee_quat))
 
-    return reach_rew + orientation_reward  # TODO potentiall add a success metric
+    return reach_rew + orientation_reward

@@ -77,9 +77,9 @@ class SkillController:
             action: A torch Tensor of shape (num_envs, num_skills+max_param_dim).
 
         """
-        assert action.shape[-1] == self.action_dim, (
-            f"Action dimension {action.shape[-1]} does not match expected skill dimension {self.action_dim}"
-        )
+        assert (
+            action.shape[-1] == self.action_dim
+        ), f"Action dimension {action.shape[-1]} does not match expected skill dimension {self.action_dim}"
         self._skills_idx = self.get_skill_from_action(action)
         self._skills_params = self.get_params_from_action(action)
 
@@ -134,7 +134,7 @@ class SkillController:
 
         """
         success_pen_fac = 1.0  # TODO scale as needed
-        sk_penalty_fac = 15.0
+        sk_penalty_fac = 0.5
         sk_success = self.successes
         reward = torch.where(sk_success, reward, reward / success_pen_fac)
 

@@ -27,8 +27,12 @@ from isaaclab.app import AppLauncher
 parser = argparse.ArgumentParser(description="Smoke-test for Kinova Gen3 + RGBD camera env.")
 parser.add_argument("--num_steps", type=int, default=5, help="Number of sim steps to run after reset.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of parallel environments.")
-parser.add_argument("--ros2_bridge", action="store_true", default=False,
-                    help="Enable the isaacsim.ros2.bridge extension. ROS2 must be sourced first.")
+parser.add_argument(
+    "--ros2_bridge",
+    action="store_true",
+    default=False,
+    help="Enable the isaacsim.ros2.bridge extension. ROS2 must be sourced first.",
+)
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
 
@@ -37,6 +41,7 @@ simulation_app = app_launcher.app
 
 if args_cli.ros2_bridge:
     from isaacsim.core.utils.extensions import enable_extension
+
     enable_extension("isaacsim.ros2.bridge")
 
 import torch

@@ -101,7 +101,7 @@ def make_reach_xyzrpy_skill(env: AsGymVectorEnv, skill_length: int = 15) -> Skil
 
 def make_reach_xyz_skill(env: AsGymVectorEnv, skill_length: int = 15) -> Skill:
     return ReachXYZSkill[BxN_Obs, BxM_Action, None](
-        name="reach_xyz_skill", policy=make_ik_ee_pos_policy(env), length=skill_length
+        name="reach_xyz_skill", policy=make_ik_ee_pos_policy(env), length=skill_length, clip=True
     )
 
 
@@ -167,11 +167,11 @@ def make_grasp_xyz_skill(env: AsGymVectorEnv, skill_length: int = 15) -> Skill:
 
 def make_osc_reach_xyz_skill(env: AsGymVectorEnv, skill_length: int = 15) -> Skill:
     return ReachXYZSkill[BxN_Obs, BxM_Action, None](
-        name="reach_xyz_skill_osc", policy=make_osc_ee_pose_policy(env), length=skill_length
+        name="reach_xyz_skill_osc", policy=make_osc_ee_pose_policy(env), length=skill_length, clip=True
     )
 
 
-def make_osc_orient_rpy_skill(env: AsGymVectorEnv, skill_length: int = 15) -> Skill:
+def make_osc_orient_rpy_skill(env: AsGymVectorEnv, skill_length: int = 15) -> Skill:  # TODO Change
     return OrientRPYSkill[BxN_Obs, BxM_Action, None](
         name="orient_rpy_skill_osc", policy=make_osc_ee_pose_policy(env), length=skill_length
     )

@@ -20,13 +20,16 @@ from skillet.core.spaces import ArrayLike
 class ReachXYZSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSkillObs, TBAction, TBSkillParams]):
     """A skill that moves the end effector to a specified location."""
 
-    def __init__(self, name: str, policy: BatchedPPolicy[TBSkillObs, TBAction, TBSkillParams], length: int) -> None:
+    def __init__(
+        self, name: str, policy: BatchedPPolicy[TBSkillObs, TBAction, TBSkillParams], length: int, clip: bool = False
+    ) -> None:
         """Initialize the fixed length skill.
 
         Args:
             name: The name of the skill.
             policy: The policy for the skill.
             length: The number of steps to execute the skill for.
+            clip: if to clip params to (-1, 1), for RL
 
         """
         self._name = name
@@ -34,6 +37,7 @@ class ReachXYZSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[T
         self._length = length
         self._status = None
         self._params = None
+        self._clip = clip
 
     @property
     def param_dim(self) -> int:
@@ -67,8 +71,12 @@ class ReachXYZSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[T
         ee_pose_b = obs["tcp_pose_b"]
         target_poses = spec.zeros(shape=(self.n_envs, 7), dtype=float)
         target_poses[:, 3:7] = ee_pose_b[:, 3:7]
-        target_poses[:, 0:3] = params[:, 0:3]
-
+        if self._clip:
+            min_xyz = torch.as_tensor([0.0, -1.0, 0.02], device=ee_pose_b.device)
+            max_xyz = torch.as_tensor([1.0, 1.0, 1.0], device=ee_pose_b.device)
+            target_poses[:, 0:3] = min_xyz + ((params[:, 0:3].clip(-1, 1) + 1) / 2) * (max_xyz - min_xyz)
+        else:
+            target_poses[:, 0:3] = params[:, 0:3]
         self._target_poses = target_poses
 
         self.policy.reset(obs, self._target_poses)
@@ -103,5 +111,4 @@ class ReachXYZSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[T
         """Compute the reward of the skill."""
         ee_pose_b = obs["tcp_pose_b"]
         dist = torch.clip(torch.abs(ee_pose_b[:, 0:3] - self._target_poses[:, 0:3]) - self._pos_threshold, 0, None)
-        min_dist = torch.min(torch.sum(dist, axis=1))
-        return 1.0 - torch.tanh(10.0 * min_dist)
+        return 1.0 - torch.tanh(10.0 * torch.sum(dist, dim=-1))

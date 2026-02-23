@@ -21,13 +21,16 @@ from skillet.core.spaces import ArrayLike
 class OrientRPYSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSkillObs, TBAction, TBSkillParams]):
     """A skill that orients the end effector."""
 
-    def __init__(self, name: str, policy: BatchedPPolicy[TBSkillObs, TBAction, TBSkillParams], length: int) -> None:
+    def __init__(
+        self, name: str, policy: BatchedPPolicy[TBSkillObs, TBAction, TBSkillParams], length: int, clip: bool = False
+    ) -> None:
         """Initialize the fixed length skill.
 
         Args:
             name: The name of the skill.
             policy: The policy for the skill.
             length: The number of steps to execute the skill for.
+            clip: If to clip skill parameters for RL
 
         """
         self._name = name
@@ -35,6 +38,7 @@ class OrientRPYSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[
         self._length = length
         self._status = None
         self._params = None
+        self._clip = clip
 
     @property
     def param_dim(self) -> int:
@@ -68,7 +72,13 @@ class OrientRPYSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[
 
         ee_pose_b = obs["tcp_pose_b"]
         target_poses = spec.zeros(shape=(self.n_envs, 7), dtype=float)
-        target_poses[:, 3:7] = quat_from_euler_xyz(self._params[:, 0], self._params[:, 1], self._params[:, 2])
+        if self._clip:
+            min_rpy = torch.as_tensor([-torch.pi, -torch.pi / 2, -torch.pi], device=ee_pose_b.device)
+            max_rpy = torch.as_tensor([torch.pi, torch.pi / 2, torch.pi], device=ee_pose_b.device)
+            clipped_params = min_rpy + ((params[:, 0:3].clip(-1, 1) + 1) / 2) * (max_rpy - min_rpy)
+            target_poses[:, 3:7] = quat_from_euler_xyz(clipped_params[:, 0], clipped_params[:, 1], clipped_params[:, 2])
+        else:
+            target_poses[:, 3:7] = quat_from_euler_xyz(self._params[:, 0], self._params[:, 1], self._params[:, 2])
         target_poses[:, 0:3] = ee_pose_b[:, 0:3]
 
         self._target_poses = target_poses
