@@ -163,8 +163,7 @@ class PoseAbsOSCEEPolicy(OSCEEPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs
 
         """
         super().reset(obs, params, env_ids=env_ids)
-        # goal_pose = self._compute_goal_ee_pose_b_from_goal_tcp_b(params, obs["tcp_offset"])
-        goal_pose = params[:, :7]
+        goal_pose = self._compute_goal_ee_pose_b_from_goal_tcp_b(params, obs["tcp_offset"])
         wrench = torch.as_tensor([0.0, 0.0, 0.0, 0.0, 0.0, 0.0], device=self._obs_spec.device).unsqueeze(0)
         kp = torch.as_tensor([360.0, 360.0, 360.0, 360.0, 360.0, 360.0], device=self._obs_spec.device).unsqueeze(0)
         goal_task_command = torch.cat(

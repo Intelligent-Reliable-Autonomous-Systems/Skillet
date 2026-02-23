@@ -53,9 +53,9 @@ class SkillIsaacEnvWrapper(
         """
         super().__init__(env)
         if hasattr(env.unwrapped.cfg, "skills"):
-            assert env.unwrapped.cfg.skills is not None, (
-                "`env.cfg.skills` must not be None. Configure to list of skills."
-            )
+            assert (
+                env.unwrapped.cfg.skills is not None
+            ), "`env.cfg.skills` must not be None. Configure to list of skills."
         else:
             raise ValueError(
                 f"Cannot use `SkillIsaacWrapper` when `{type(env.unwrapped.cfg)}` does not contain the `skills` attribute."
@@ -78,9 +78,7 @@ class SkillIsaacEnvWrapper(
             ),
         )
 
-    def step(
-        self, action: TBatchedActionTorch
-    ) -> tuple[
+    def step(self, action: TBatchedActionTorch) -> tuple[
         TBatchedObsTorch,
         Float[torch.Tensor, "b"],  # noqa: F821
         Bool[torch.Tensor, "b"],  # noqa: F821
@@ -98,19 +96,18 @@ class SkillIsaacEnvWrapper(
         """
         self.sc.reset(action)  # Reset skills and parse
         _rewards = torch.zeros((self.num_envs,), device=self.device)
-        _skill_length = torch.ones((self.num_envs,), device=self.device)
-        _dones = self.sc.dones
-        i = 0
+        _skill_length = torch.zeros((self.num_envs,), device=self.device)
+        _dones = self.sc.dones  # Will always start as false
         while not _dones.all():
             ll_action = self.sc.get_action(self.get_observation())
 
             obs_dict, reward, term, trunc, info = super().step(ll_action)
 
-            _rewards[~_dones] += reward[~_dones]  # TODO should this line be here to cap rewards?
-            _skill_length += _dones
+            _rewards[~_dones] += reward[~_dones]
+            _skill_length += ~_dones
             _dones = self.sc.dones
-            i += 1
-        reward = self.sc.post_process_reward(reward)
+        _rewards = _rewards / _skill_length  # Normalize rewards based on skills length
+        rewards = self.sc.post_process_reward(_rewards)
         self.last_obs = obs_dict
 
-        return obs_dict, reward, term, trunc, info
+        return obs_dict, rewards, term, trunc, info
