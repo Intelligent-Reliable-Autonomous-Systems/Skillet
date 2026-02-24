@@ -134,7 +134,7 @@ class SkillController:
 
         """
         success_pen_fac = 1.0  # TODO scale as needed
-        sk_penalty_fac = 0.5
+        sk_penalty_fac = 0.2
         sk_success = self.successes
         reward = torch.where(sk_success, reward, reward / success_pen_fac)
 

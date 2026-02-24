@@ -110,7 +110,7 @@ class DifferentialIKController:
 
         """
         # create buffers
-        if not hasattr(self, "_command") or env_ids is None:
+        if self._command is None or env_ids is None:
             assert n_envs is not None, "n_envs cannot be none when `self._command` is not set."
             self.ee_pos_des = torch.zeros(n_envs, 3, device=self._device)
             self.ee_quat_des = torch.zeros(n_envs, 4, device=self._device)

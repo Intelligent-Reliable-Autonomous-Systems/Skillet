@@ -340,3 +340,7 @@ class CompositeSkill(
                 continue
             actions[env_ids] = skill.get_action(self.obs_spec.index(obs, env_ids))
         return actions
+
+    def reward(self, obs: TBSkillObs) -> Float[ArrayLike, "b"]:  # noqa: F821
+        """Compute the reward of the skill."""
+        pass
