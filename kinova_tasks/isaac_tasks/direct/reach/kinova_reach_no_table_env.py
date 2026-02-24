@@ -9,17 +9,11 @@ import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 
-from skillet.envs.util import configclass
-
-from .kinova_reach_env import KinovaReachEnv, KinovaReachEnvCfg
-
-
-@configclass
-class KinovaReachNoTableEnvCfg(KinovaReachEnvCfg):
-    pass
+from .kinova_reach_env import KinovaReachEnvCfg
+from .reach_env import ReachEnv
 
 
-class KinovaReachNoTableEnv(KinovaReachEnv):
+class KinovaReachNoTableEnv(ReachEnv):
     # pre-physics step calls
     #   |-- _pre_physics_step(action)
     #   |-- _apply_action()
@@ -29,9 +23,9 @@ class KinovaReachNoTableEnv(KinovaReachEnv):
     #   |-- _reset_idx(env_ids)
     #   |-- _get_observations()
 
-    cfg: KinovaReachNoTableEnvCfg
+    cfg: KinovaReachEnvCfg
 
-    def __init__(self, cfg: KinovaReachNoTableEnvCfg, render_mode: str | None = None, **kwargs):
+    def __init__(self, cfg: KinovaReachEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
 
     def _setup_scene(self):

@@ -57,9 +57,9 @@ class KinovaReachEnvCfg(ReachEnvCfg):
         self.events.reset_robot_joints.params["position_range"] = (0.75, 1.25)
 
         # override rewards
-        self.rewards.end_effector_position_tracking.params["asset_cfg"].body_names = ["gripper_base_link"]
-        self.rewards.end_effector_position_tracking_fine_grained.params["asset_cfg"].body_names = ["gripper_base_link"]
-        self.rewards.end_effector_orientation_tracking.params["asset_cfg"].body_names = ["gripper_base_link"]
+        self.rewards.end_effector_position_tracking.params["asset_cfg"].body_names = ["end_effector_link"]
+        self.rewards.end_effector_position_tracking_fine_grained.params["asset_cfg"].body_names = ["end_effector_link"]
+        self.rewards.end_effector_orientation_tracking.params["asset_cfg"].body_names = ["end_effector_link"]
 
         # override actions
         self.actions.arm_action = mdp.JointPositionActionCfg(
@@ -79,7 +79,7 @@ class KinovaReachEnvCfg(ReachEnvCfg):
 
         # override command generator body
         # end-effector is along z-direction
-        self.commands.ee_pose.body_name = "gripper_base_link"
+        self.commands.ee_pose.body_name = "end_effector_link"
         self.commands.ee_pose.ranges.pitch = (math.pi / 2, math.pi / 2)
 
         # Listens to the required transforms
@@ -92,8 +92,8 @@ class KinovaReachEnvCfg(ReachEnvCfg):
             visualizer_cfg=marker_cfg,
             target_frames=[
                 FrameTransformerCfg.FrameCfg(
-                    prim_path="{ENV_REGEX_NS}/Robot/gripper_base_link",
-                    name="gripper_base_link",
+                    prim_path="{ENV_REGEX_NS}/Robot/end_effector_link",
+                    name="end_effector_link",
                     offset=OffsetCfg(
                         pos=[0.120, 0.0, 0.0],
                     ),
@@ -119,7 +119,7 @@ class TeleOpKinovaReachEnvCfg(KinovaReachEnvCfg):
         self.actions.arm_action = DifferentialInverseKinematicsActionCfg(
             asset_name="robot",
             joint_names=["joint_1", "joint_2", "joint_3", "joint_4", "joint_5", "joint_6", "joint_7"],
-            body_name="gripper_base_link",
+            body_name="end_effector_link",
             controller=DifferentialIKControllerCfg(command_type="pose", use_relative_mode=True, ik_method="dls"),
             scale=0.5,
             # body_offset=DifferentialInverseKinematicsActionCfg.OffsetCfg(pos=[0.120, 0.0, 0.0], rot=[0.0,1.0,0.0,0.0]),

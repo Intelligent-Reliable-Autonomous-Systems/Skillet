@@ -148,7 +148,7 @@ class KinovaLiftCubeEnv(DirectRLEnv):
 
         self.robot_dof_targets = torch.zeros((self.num_envs, len(self.cfg.joint_ids)), device=self.device)
 
-        self.cfg.ee_link_idx = self._robot.find_bodies("gripper_base_link")[0][0]
+        self.cfg.ee_link_idx = self._robot.find_bodies("end_effector_link")[0][0]
 
         self.robot_ee_quat_w = torch.zeros((self.num_envs, 4), device=self.device)
         self.robot_ee_pos_w = torch.zeros((self.num_envs, 3), device=self.device)

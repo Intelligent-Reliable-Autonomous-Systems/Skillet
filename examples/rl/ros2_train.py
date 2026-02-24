@@ -65,7 +65,7 @@ import gymnasium as gym
 import torch
 from jaxtyping import Float, Int
 
-import kinova_tasks  # noqa: F401
+import kinova_tasks.ros2_tasks  # noqa: F401
 from skillet.envs.ros2_env_wrapper import ROS2EnvWrapper
 from skillet.envs.skill_ros2_env_wrapper import SkillROS2EnvWrapper
 from skillet.envs.util import get_checkpoint_path, setup_ros

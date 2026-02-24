@@ -63,7 +63,7 @@ import numpy as np
 import torch
 from jaxtyping import Float, Int
 
-import kinova_tasks  # noqa: F401
+import kinova_tasks.isaac_tasks  # noqa: F401
 from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
 from skillet.envs.skill_isaac_env_wrapper import SkillIsaacEnvWrapper
 from skillet.envs.util import get_checkpoint_path

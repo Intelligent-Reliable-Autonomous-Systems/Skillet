@@ -1,59 +1,26 @@
-# Copyright (c) 2022-2025, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
-# All rights reserved.
-#
-# SPDX-License-Identifier: BSD-3-Clause
-
 from __future__ import annotations
 
 import isaaclab.sim as sim_utils
 import torch
 from isaaclab.assets import Articulation
 from isaaclab.envs import DirectRLEnv
-from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
-from isaaclab.markers.config import FRAME_MARKER_CFG
+from isaaclab.markers import VisualizationMarkers
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
-from isaaclab.utils.math import quat_error_magnitude, quat_from_euler_xyz, sample_uniform
+from isaaclab.utils.math import (
+    quat_apply,
+    quat_apply_inverse,
+    quat_error_magnitude,
+    quat_from_euler_xyz,
+    quat_inv,
+    quat_mul,
+    sample_uniform,
+    subtract_frame_transforms,
+)
 from isaacsim.core.utils.torch.transformations import tf_combine
 
-from kinova_tasks.isaac_tasks.direct.cfg import KinovaBaseCfg
-from skillet.envs.util import configclass
 
-
-@configclass
-class KinovaReachEnvCfg(KinovaBaseCfg):
-    action_scale = 0.5
-    dof_velocity_scale = 0.1
-
-    # reward scales
-    ee_dist_reward_scale = -0.2
-    ee_dist_reward_fine_grained_scale = 0.1
-    ee_dist_reward_fine_grained_std = 0.1
-    ee_orientation_reward_scale = -0.02
-    action_rate_reward_scale = -0.0001
-    joint_vel_reward_scale = -0.0001
-
-    # EE Pose target ranges
-    pos_x = [0.35, 0.65]
-    pos_y = [-0.2, 0.2]
-    pos_z = [0.15, 0.5]
-    roll = [0.0, 0.0]
-    pitch = [1.57, 1.57]
-    yaw = [-3.14, 3.14]
-    ee_ranges = [pos_x, pos_y, pos_z, roll, pitch, yaw]
-
-    goal_pose_visualizer_cfg: VisualizationMarkersCfg = FRAME_MARKER_CFG.replace(prim_path="/Visuals/Command/goal_pose")
-
-    current_pose_visualizer_cfg: VisualizationMarkersCfg = FRAME_MARKER_CFG.replace(
-        prim_path="/Visuals/Command/body_pose"
-    )
-
-    # Set the scale of the visualization markers to (0.1, 0.1, 0.1)
-    goal_pose_visualizer_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)
-    current_pose_visualizer_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)
-
-
-class KinovaReachEnv(DirectRLEnv):
+class ReachEnv(DirectRLEnv):
     # pre-physics step calls
     #   |-- _pre_physics_step(action)
     #   |-- _apply_action()
@@ -63,30 +30,32 @@ class KinovaReachEnv(DirectRLEnv):
     #   |-- _reset_idx(env_ids)
     #   |-- _get_observations()
 
-    cfg: KinovaReachEnvCfg
-
-    def __init__(self, cfg: KinovaReachEnvCfg, render_mode: str | None = None, **kwargs):
+    def __init__(self, cfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
 
         self.dt = self.cfg.sim.dt * self.cfg.decimation
 
         # Goal poses and end effector positions
         self.ee_ranges = torch.tensor(self.cfg.ee_ranges, device=self.device)
-        self.goal_ee_pose_b = torch.zeros((self.num_envs, 6), device=self.device)
+        self.goal_ee_xyz_b = torch.zeros((self.num_envs, 6), device=self.device)
+        self.goal_ee_pose_b = torch.zeros((self.num_envs, 7), device=self.device)
         self.goal_ee_pos_w = torch.zeros((self.num_envs, 3), device=self.device)
         self.goal_ee_quat_w = torch.zeros((self.num_envs, 4), device=self.device)
 
         self.robot_ee_quat_w = torch.zeros((self.num_envs, 4), device=self.device)
         self.robot_ee_pos_w = torch.zeros((self.num_envs, 3), device=self.device)
 
+        self.robot_ee_pose_b = torch.zeros((self.num_envs, 7), device=self.device)
+        self.robot_tcp_pose_b = torch.zeros((self.num_envs, 7), device=self.device)
+
         self.actions = torch.zeros((self.num_envs, self.cfg.action_space), device=self.device)
         self.prev_actions = torch.zeros_like(self.actions, device=self.device)
 
         # Limits and targets
-        self.robot_dof_lower_limits = self._robot.data.joint_pos_limits[0, :, 0].to(device=self.device)[
+        self.robot_dof_lower_limits = self._robot.data.soft_joint_pos_limits[0, :, 0].to(device=self.device)[
             self.cfg.joint_ids
         ]
-        self.robot_dof_upper_limits = self._robot.data.joint_pos_limits[0, :, 1].to(device=self.device)[
+        self.robot_dof_upper_limits = self._robot.data.soft_joint_pos_limits[0, :, 1].to(device=self.device)[
             self.cfg.joint_ids
         ]
         self.robot_effort_limits = self._robot.data.joint_effort_limits[0, :].to(device=self.device)[self.cfg.joint_ids]
@@ -97,6 +66,8 @@ class KinovaReachEnv(DirectRLEnv):
         self.robot_dof_targets = torch.zeros((self.num_envs, len(self.cfg.joint_ids)), device=self.device)
 
         self.cfg.ee_link_idx = self._robot.find_bodies(self.cfg.ee_link_name)[0][0]
+
+        self.tcp_offset = torch.as_tensor(self.cfg.tcp_offset, device=self.device).unsqueeze(0).repeat(self.num_envs, 1)
 
         # Markers
         self.goal_marker = VisualizationMarkers(cfg=self.cfg.goal_pose_visualizer_cfg)
@@ -182,16 +153,16 @@ class KinovaReachEnv(DirectRLEnv):
         # target state
         base_pos_w = self._robot.data.root_pos_w[env_ids]
         base_quat_w = self._robot.data.root_quat_w[env_ids]
-        self.goal_ee_pose_b[env_ids] = (
+        self.goal_ee_xyz_b[env_ids] = (
             self.ee_ranges[:, 0]
             + (self.ee_ranges[:, 1] - self.ee_ranges[:, 0])
             * torch.rand((self.num_envs, len(self.ee_ranges)), device=self.device)
         )[env_ids]
-        goal_ee_pos_b = self.goal_ee_pose_b[env_ids, :3]
+        goal_ee_pos_b = self.goal_ee_xyz_b[env_ids, :3]
         goal_ee_quat_b = quat_from_euler_xyz(
-            self.goal_ee_pose_b[env_ids, 3], self.goal_ee_pose_b[env_ids, 4], self.goal_ee_pose_b[env_ids, 5]
+            self.goal_ee_xyz_b[env_ids, 3], self.goal_ee_xyz_b[env_ids, 4], self.goal_ee_xyz_b[env_ids, 5]
         )
-
+        self.goal_ee_pose_b[env_ids] = torch.cat((goal_ee_pos_b, goal_ee_quat_b), dim=-1)
         # World frame
         self.goal_ee_quat_w[env_ids], self.goal_ee_pos_w[env_ids] = tf_combine(
             base_quat_w, base_pos_w, goal_ee_quat_b, goal_ee_pos_b
@@ -206,7 +177,7 @@ class KinovaReachEnv(DirectRLEnv):
                 self._robot.data.joint_pos[:, self.cfg.joint_ids]
                 - self._robot.data.default_joint_pos[:, self.cfg.joint_ids],
                 self._robot.data.joint_vel[:, self.cfg.joint_ids],
-                self.goal_ee_pose_b,
+                self.goal_ee_xyz_b,
                 self.prev_actions,
             ),
             dim=-1,
@@ -216,7 +187,7 @@ class KinovaReachEnv(DirectRLEnv):
     # auxiliary methods
 
     def _compute_intermediate_values(self, env_ids: torch.Tensor | None = None):
-        """Docstring for _compute_intermediate_values
+        """Docstring for _compute_intermediate_values.
 
         :param self: Description
         :param env_ids: Description
@@ -232,69 +203,32 @@ class KinovaReachEnv(DirectRLEnv):
 
         self.prev_actions[env_ids] = torch.clone(self.actions[env_ids])
 
+        # Compute end effector pose
+        ee_link_idx = self._robot.find_bodies(self.cfg.ee_link_name)[0][0]
+        base_link_idx = self._robot.find_bodies(self.cfg.base_link_name)[0][0]
 
-class KinovaReachIKEnv(KinovaReachEnv):
-    """Use this environment when computing actions with a Diff IK controller or the skills environments."""
+        ee_pose_w = self._robot.data.body_pose_w[env_ids, ee_link_idx]
+        base_pose_w = self._robot.data.body_pose_w[env_ids, base_link_idx]
 
-    # pre-physics step calls
-    #   |-- _pre_physics_step(action)
-    #   |-- _apply_action()
-    # post-physics step calls
-    #   |-- _get_dones()
-    #   |-- _get_rewards()
-    #   |-- _reset_idx(env_ids)
-    #   |-- _get_observations()
+        ee_pos_b, ee_quat_b = subtract_frame_transforms(
+            base_pose_w[:, :3],
+            base_pose_w[:, 3:7],
+            ee_pose_w[:, :3],
+            ee_pose_w[:, 3:7],
+        )
+        self.robot_ee_pose_b[env_ids] = torch.cat((ee_pos_b, ee_quat_b), dim=1)
 
-    cfg: KinovaReachEnvCfg
+        # Compute TCP pose
+        root_pose_w = self._robot.data.root_pose_w[env_ids]
+        ee_pos_b = quat_apply_inverse(root_pose_w[:, 3:7], ee_pose_w[:, 0:3] - root_pose_w[:, 0:3])
+        ee_quat_b = quat_mul(quat_inv(root_pose_w[:, 3:7]), ee_pose_w[:, 3:7])
 
-    def __init__(self, cfg: KinovaReachEnvCfg, render_mode: str | None = None, **kwargs):
-        cfg.decimation = 1
-        cfg.sim.dt = 0.01
-        cfg.episode_length_s = 15.0
-        cfg.robot.spawn.rigid_props.disable_gravity = True
-
-        super().__init__(cfg, render_mode, **kwargs)
-
-    # pre-physics step calls
-    def _pre_physics_step(self, actions: torch.Tensor):
-        self.robot_dof_targets = torch.clamp(actions, self.robot_dof_lower_limits, self.robot_dof_upper_limits)
-
-        # Update markers (world frame)
-        self.goal_marker.visualize(self.goal_ee_pos_w, self.goal_ee_quat_w)
-        self.current_marker.visualize(self.robot_ee_pos_w, self.robot_ee_quat_w)
-
-
-class KinovaReachOSCEnv(KinovaReachEnv):
-    """Use this environment when computing actions with a OSC controlller."""
-
-    # pre-physics step calls
-    #   |-- _pre_physics_step(action)
-    #   |-- _apply_action()
-    # post-physics step calls
-    #   |-- _get_dones()
-    #   |-- _get_rewards()
-    #   |-- _reset_idx(env_ids)
-    #   |-- _get_observations()
-
-    cfg: KinovaReachEnvCfg
-
-    def __init__(self, cfg: KinovaReachEnvCfg, render_mode: str | None = None, **kwargs):
-        cfg.robot.actuators["arm"].stiffness = 0.0
-        cfg.robot.actuators["arm"].damping = 0.0
-        cfg.robot.actuators["gripper"].stiffness = 0.0
-        cfg.robot.actuators["gripper"].damping = 0.0
-        super().__init__(cfg, render_mode, **kwargs)
-
-    # pre-physics step calls
-    def _pre_physics_step(self, actions: torch.Tensor):
-        self.robot_dof_targets = torch.min(actions, self.robot_effort_limits)
-
-        # Update markers (world frame)
-        self.goal_marker.visualize(self.goal_ee_pos_w, self.goal_ee_quat_w)
-        self.current_marker.visualize(self.robot_ee_pos_w, self.robot_ee_quat_w)
-
-    def _apply_action(self):
-        self._robot.set_joint_effort_target(self.robot_dof_targets, joint_ids=self.cfg.joint_ids)
+        tcp_pos_b = ee_pos_b + quat_apply(ee_quat_b, self.tcp_offset[env_ids, 0:3])
+        tcp_quat_b = quat_mul(ee_quat_b, self.tcp_offset[env_ids, 3:7])
+        self.robot_tcp_pose_b[env_ids] = torch.concatenate(
+            (tcp_pos_b, tcp_quat_b),
+            dim=1,
+        )
 
 
 @torch.jit.script
