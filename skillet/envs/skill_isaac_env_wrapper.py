@@ -53,9 +53,9 @@ class SkillIsaacEnvWrapper(
         """
         super().__init__(env)
         if hasattr(env.unwrapped.cfg, "skills"):
-            assert (
-                env.unwrapped.cfg.skills is not None
-            ), "`env.cfg.skills` must not be None. Configure to list of skills."
+            assert env.unwrapped.cfg.skills is not None, (
+                "`env.cfg.skills` must not be None. Configure to list of skills."
+            )
         else:
             raise ValueError(
                 f"Cannot use `SkillIsaacWrapper` when `{type(env.unwrapped.cfg)}` does not contain the `skills` attribute."
@@ -78,7 +78,9 @@ class SkillIsaacEnvWrapper(
             ),
         )
 
-    def step(self, action: TBatchedActionTorch) -> tuple[
+    def step(
+        self, action: TBatchedActionTorch
+    ) -> tuple[
         TBatchedObsTorch,
         Float[torch.Tensor, "b"],  # noqa: F821
         Bool[torch.Tensor, "b"],  # noqa: F821
@@ -107,7 +109,7 @@ class SkillIsaacEnvWrapper(
             _skill_length += ~_dones
             _dones = self.sc.dones
         _rewards = _rewards / _skill_length  # Normalize rewards based on skills length
-        rewards = self.sc.post_process_reward(reward)  # If we don't sum, should we still normalize by skill length?
+        rewards = self.sc.post_process_reward(_rewards)  # If we don't sum, should we still normalize by skill length?
         self.last_obs = obs_dict
 
         return obs_dict, rewards, term, trunc, info

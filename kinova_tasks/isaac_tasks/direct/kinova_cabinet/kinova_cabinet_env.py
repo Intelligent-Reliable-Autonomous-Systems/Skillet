@@ -133,7 +133,7 @@ class KinovaCabinetEnv(DirectRLEnv):
         stage = get_current_stage()
         hand_pose = get_env_local_pose(
             self.scene.env_origins[0],
-            UsdGeom.Xformable(stage.GetPrimAtPath("/World/envs/env_0/Robot/gripper_base_link")),
+            UsdGeom.Xformable(stage.GetPrimAtPath("/World/envs/env_0/Robot/end_effector_link")),
             self.device,
         )
         lfinger_pose = get_env_local_pose(
@@ -176,7 +176,7 @@ class KinovaCabinetEnv(DirectRLEnv):
             (self.num_envs, 1)
         )
 
-        self.hand_link_idx = self._robot.find_bodies("gripper_base_link")[0][0]
+        self.hand_link_idx = self._robot.find_bodies("end_effector_link")[0][0]
         self.left_finger_link_idx = self._robot.find_bodies("left_inner_finger")[0][0]
         self.right_finger_link_idx = self._robot.find_bodies("right_inner_finger")[0][0]
         self.drawer_link_idx = self._cabinet.find_bodies("drawer_top")[0][0]

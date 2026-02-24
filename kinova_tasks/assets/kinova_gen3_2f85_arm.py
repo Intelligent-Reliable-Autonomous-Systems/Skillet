@@ -25,6 +25,7 @@ from kinova_tasks.assets.utils import KINOVA_ASSET_DIR
 ##
 
 KINOVA_GEN3_2F85_ARM_CFG = ArticulationCfg(
+    prim_path="/World/envs/env_.*/Robot",
     spawn=sim_utils.UsdFileCfg(
         usd_path=f"{KINOVA_ASSET_DIR}/robots/kinova/Kinova_Gen3.usd",
         rigid_props=sim_utils.RigidBodyPropertiesCfg(

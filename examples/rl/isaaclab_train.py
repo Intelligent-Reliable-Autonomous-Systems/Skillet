@@ -107,7 +107,7 @@ torch.backends.cudnn.allow_tf32 = True
 torch.backends.cudnn.deterministic = False
 torch.backends.cudnn.benchmark = False
 
-import kinova_tasks  # noqa: F401
+import kinova_tasks.isaac_tasks  # noqa: F401
 
 
 @hydra_task_config(args_cli.task, args_cli.agent)

@@ -49,7 +49,7 @@ simulation_app = app_launcher.app
 import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import parse_env_cfg
 
-import kinova_tasks.isaac_tasks as tasks  # noqa: F401
+import kinova_tasks.isaac_tasks  # noqa: F401
 
 BxN_Obs = Float[torch.Tensor, "b n"]
 """Environment observation: torch.Tensor[(b, n), float]"""
