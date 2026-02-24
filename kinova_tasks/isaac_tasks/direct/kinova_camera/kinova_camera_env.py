@@ -8,9 +8,10 @@ Env config + scene setup.
 
 from __future__ import annotations
 
+import carb
 import torch
 import isaaclab.sim as sim_utils
-from isaaclab.assets import Articulation
+from isaaclab.assets import Articulation, RigidObject, RigidObjectCfg
 from isaaclab.envs import DirectRLEnv
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sensors import Camera
@@ -78,6 +79,30 @@ class KinovaGenCameraEnvCfg(SkillsDirectRLEnvCfg):
         height=480,
         convention="ros",
     )
+
+    # --- red cube: spawned on the table, randomised on every reset ---
+    red_cube_cfg: RigidObjectCfg = RigidObjectCfg(
+        prim_path="/World/envs/env_.*/RedCube",
+        spawn=sim_utils.CuboidCfg(
+            size=(0.04, 0.04, 0.04),
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(
+                solver_position_iteration_count=16,
+                solver_velocity_iteration_count=1,
+                max_angular_velocity=1000.0,
+                max_linear_velocity=1000.0,
+                max_depenetration_velocity=5.0,
+                disable_gravity=False,
+            ),
+            mass_props=sim_utils.MassPropertiesCfg(mass=0.1),
+            collision_props=sim_utils.CollisionPropertiesCfg(),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0)),
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.5, 0.0, 0.02), rot=(1.0, 0.0, 0.0, 0.0)),
+    )
+
+    # Workspace randomisation bounds (robot-base frame, table surface z≈0.02)
+    cube_pos_x_range: tuple = (0.35, 0.65)
+    cube_pos_y_range: tuple = (-0.25, 0.25)
 
     # --- static side-view camera ---
     # Fixed world-frame camera positioned to the side of the table.
@@ -151,6 +176,10 @@ class KinovaGenCameraEnv(DirectRLEnv):
         self._robot = Articulation(self.cfg.robot)
         self.scene.articulations["robot"] = self._robot
 
+        # Red cube
+        self._red_cube = RigidObject(self.cfg.red_cube_cfg)
+        self.scene.rigid_objects["red_cube"] = self._red_cube
+
         # Wrist camera
         isaac_cam_cfg = self.cfg.camera_cfg.to_isaac_cfg()
         self._camera = Camera(isaac_cam_cfg)
@@ -223,3 +252,21 @@ class KinovaGenCameraEnv(DirectRLEnv):
         self._robot.set_joint_position_target(joint_pos, env_ids=env_ids, joint_ids=self.cfg.joint_ids)
         self._robot.write_joint_position_to_sim(joint_pos, env_ids=env_ids, joint_ids=self.cfg.joint_ids)
         self._robot.write_joint_velocity_to_sim(joint_vel, env_ids=env_ids)
+
+        # Randomize red cube position on the table workspace.
+        # Offsets are in the robot-base frame; add root_pos_w to get world coords
+        num = len(env_ids)
+        base_pos_w = self._robot.data.root_pos_w[env_ids]  # (num, 3)
+        cube_pos = base_pos_w.clone()
+        cube_pos[:, 0] += self.cfg.cube_pos_x_range[0] + (
+            self.cfg.cube_pos_x_range[1] - self.cfg.cube_pos_x_range[0]
+        ) * torch.rand(num, device=self.device)
+        cube_pos[:, 1] += self.cfg.cube_pos_y_range[0] + (
+            self.cfg.cube_pos_y_range[1] - self.cfg.cube_pos_y_range[0]
+        ) * torch.rand(num, device=self.device)
+        cube_pos[:, 2] = base_pos_w[:, 2] + 0.02
+        cube_quat = torch.zeros((num, 4), device=self.device)
+        cube_quat[:, 0] = 1.0
+        self._red_cube.write_root_pose_to_sim(torch.cat([cube_pos, cube_quat], dim=-1), env_ids)
+        self._red_cube.write_root_velocity_to_sim(torch.zeros((num, 6), device=self.device), env_ids)
+

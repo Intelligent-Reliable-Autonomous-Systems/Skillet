@@ -64,44 +64,27 @@ def main():
     cfg.camera_cfg.width = 640
     cfg.camera_cfg.height = 480
 
-    print("[TEST] Config:")
-    print(f"       camera pos = {cfg.camera_cfg.pos}")
-    print(f"       camera rot = {cfg.camera_cfg.rot}")
-    print(f"       resolution = {cfg.camera_cfg.width} x {cfg.camera_cfg.height}")
-
     # --- Instantiate env ---
     env = KinovaGenCameraEnv(cfg, render_mode="rgb_array")
 
     # --- Reset ---
     obs, _ = env.reset()
-    print(f"\n[TEST] Reset done. Observation keys: {list(obs.keys())}")
     policy = obs["policy"]
-    for k, v in policy.items():
-        print(f"       policy['{k}'] shape: {tuple(v.shape)}")
+    print(f"[RESET] obs shapes: { {k: tuple(v.shape) for k, v in policy.items()} }")
 
     # --- Check camera sensors are registered ---
     assert "camera" in env.scene.sensors, "[FAIL] Wrist camera not found in scene.sensors"
     assert "workspace_camera" in env.scene.sensors, "[FAIL] Workspace camera not found in scene.sensors"
-    print("[TEST] Wrist camera and workspace camera found in scene.")
 
-    # --- Step and inspect camera data ---
+    # --- Step ---
     zero_action = torch.zeros((cfg.scene.num_envs, cfg.action_space), device=env.device)
 
     for step in range(args_cli.num_steps):
-        obs, _, _, _, _ = env.step(zero_action)
+        obs, _, terminated, truncated, _ = env.step(zero_action)
+        if terminated.any() or truncated.any():
+            print(f"[RESET] step {step + 1:02d} | terminated={terminated.tolist()}  truncated={truncated.tolist()}")
 
-        policy = obs["policy"]
-        print(
-            f"[TEST] step {step + 1:02d} | "
-            f"rgb: {tuple(policy['rgb'].shape)}  "
-            f"depth: {tuple(policy['depth'].shape)}  "
-            f"workspace_rgb: {tuple(policy['workspace_rgb'].shape)}  "
-            f"workspace_depth: {tuple(policy['workspace_depth'].shape)}  "
-            f"joint_pos: {tuple(policy['joint_pos'].shape)}  | {policy['joint_pos']}  "
-            f"joint_vel: {tuple(policy['joint_vel'].shape)}  | {policy['joint_vel']}"
-        )
-
-    print("\n[TEST] Smoke-test passed — wrist + workspace RGBD cameras are live.")
+    print("[TEST] Smoke-test passed.")
     env.close()
 
 
