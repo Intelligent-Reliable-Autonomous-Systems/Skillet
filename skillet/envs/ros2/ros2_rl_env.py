@@ -31,13 +31,18 @@ class ROS2RLEnv(gym.Env):
 
     _current_joint_positions: np.ndarray
     _current_joint_velocities: np.ndarray
+    _current_joint_efforts: np.ndarray
     _robot_links: list[str]
     _robot_joints: list[str]
     _current_robot_body_pose_w: np.ndarray
-    _current_robot_root_pose_w = np.ndarray
+    _current_robot_root_pose_w: np.ndarray
     _current_jacobians: np.ndarray
-    _current_upper_joint_limits = np.ndarray
-    _current_lower_joint_limits = np.ndarray
+    _current_upper_joint_limits: np.ndarray
+    _current_lower_joint_limits: np.ndarray
+    _current_gravity_vector: np.ndarray
+    _current_mass_matrices: np.ndarray
+    _current_robot_body_vel_w: np.ndarray
+    _current_joint_centers: np.ndarray
 
     def __init__(self, cfg: ROS2RLEnvCfg, ros: Ros, render_mode: str | None = None, **kwargs: dict[str, Any]) -> None:
         """Initialize the environment.
@@ -86,8 +91,13 @@ class ROS2RLEnv(gym.Env):
 
     @property
     def _joint_velocities(self) -> np.ndarray:
-        """Return current joint_velocities."""
+        """Return current joint velocities."""
         return self._current_joint_positions
+
+    @property
+    def _joint_efforts(self) -> np.ndarray:
+        """Return current joint efforts (torques)."""
+        return self._current_joint_efforts
 
     @property
     def _robot_body_pose_w(self) -> np.ndarray:
@@ -113,6 +123,26 @@ class ROS2RLEnv(gym.Env):
     def _robot_upper_joint_limits(self) -> np.ndarray:
         """Return the upper limits of the robot joints."""
         return self._current_upper_joint_limits
+
+    @property
+    def _gravity_vector(self) -> np.ndarray:
+        """Return the gravity compenstation vector."""
+        return self._current_gravity_vector
+
+    @property
+    def _mass_matrices(self) -> np.ndarray:
+        """Return the mass matrices."""
+        return self._current_mass_matrices
+
+    @property
+    def _robot_body_vel_w(self) -> np.ndarray:
+        """Return body velocity in XYZ + Quaternion."""
+        return self._current_robot_body_vel_w
+
+    @property
+    def _joint_centers(self) -> np.ndarray:
+        """Return joint centers."""
+        return self._current_joint_centers
 
     @property
     def physics_dt(self) -> float:
@@ -198,7 +228,7 @@ class ROS2RLEnv(gym.Env):
 
         # Send the robot action to hardware
         self._publish_action_to_robot(joint_pos, duration=self.step_dt)
-        time.sleep(self.step_dt)
+        time.sleep(self.step_dt)  # TODO this is crude
 
         self.episode_length_buf += 1
         self.common_step_counter += 1

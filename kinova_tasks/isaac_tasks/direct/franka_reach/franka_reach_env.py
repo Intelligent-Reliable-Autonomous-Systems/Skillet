@@ -392,6 +392,6 @@ def compute_rewards_osc(
 ) -> torch.Tensor:
     reach_rew = 1 - torch.tanh(10 * torch.norm(ee_pos - goal_ee_pos, dim=1))
 
-    orientation_reward = 1 - torch.tanh(5 * quat_error_magnitude(ee_quat, goal_ee_quat))
+    orientation_reward = -torch.tanh(quat_error_magnitude(ee_quat, goal_ee_quat))
 
     return reach_rew + orientation_reward

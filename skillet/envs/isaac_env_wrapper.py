@@ -245,9 +245,7 @@ class IsaacEnvWrapper(
     Helper functions
     """
 
-    def _get_joint_positions(  # Passes
-        self, env_ids: torch.Tensor | None = None, joint_ids: list | None = None
-    ) -> torch.Tensor:  # This is good
+    def _get_joint_positions(self, env_ids: torch.Tensor | None = None, joint_ids: list | None = None) -> torch.Tensor:
         """Return the joint positions.
 
         Args:
@@ -279,10 +277,10 @@ class IsaacEnvWrapper(
             joint_ids = self.joint_ids
         return self.robot.data.joint_vel[:, joint_ids][env_ids]
 
-    def _get_jacobians(  # Passes
+    def _get_jacobians(
         self,
         env_ids: torch.Tensor | None = None,
-        ee_link: str = "end_effector_link",
+        ee_link: str = "robotiq_85_base_link",
         base_link: str = "base_link",
         arm_joint_ids: list | None = None,
     ) -> torch.Tensor:
@@ -310,13 +308,12 @@ class IsaacEnvWrapper(
         jacobian[:, :3, :] = torch.bmm(base_rot_matrix, jacobian[:, :3, :])
         jacobian[:, 3:, :] = torch.bmm(base_rot_matrix, jacobian[:, 3:, :])
 
-        # jacobian = self.robot.root_physx_view.get_jacobians()[:, ee_jacobi_idx, :, arm_joint_ids][env_ids]
         return jacobian
 
     def _get_tcp_pose_b(
         self,
         env_ids: torch.Tensor | None = None,
-        ee_link: str = "gripper_base_link",
+        ee_link: str = "robotiq_85_base_link",
     ) -> torch.Tensor:
         """Get the TCP pose of the robot in the robot base frame.
 
@@ -351,7 +348,7 @@ class IsaacEnvWrapper(
         )
 
     def _get_gripper_state(
-        self, env_ids: torch.Tensor | None = None, gripper_joints: list[str] = ["finger_joint"]
+        self, env_ids: torch.Tensor | None = None, gripper_joints: list[str] = ["robotiq_85_left_knuckle_joint"]
     ) -> torch.Tensor:
         """Get the gripper state of the robot."""
         if env_ids is None:
@@ -363,7 +360,7 @@ class IsaacEnvWrapper(
     def _get_ee_pose_b(  # Passes
         self,
         env_ids: torch.Tensor | None = None,
-        ee_link: str = "gripper_base_link",
+        ee_link: str = "robotiq_85_base_link",
         base_link: str = "base_link",
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Compute and return the end effector pose of the robot in the robot's base frame.
@@ -397,7 +394,7 @@ class IsaacEnvWrapper(
         return torch.cat((robot_ee_pos_b, robot_ee_quat_b), dim=1)
 
     def _get_gripper_lims(
-        self, env_ids: torch.Tensor | None = None, gripper_joints: str = ["finger_joint"]
+        self, env_ids: torch.Tensor | None = None, gripper_joints: str = ["robotiq_85_left_knuckle_joint"]
     ) -> torch.Tensor:
         """Get the gripper limits (low and high).
 

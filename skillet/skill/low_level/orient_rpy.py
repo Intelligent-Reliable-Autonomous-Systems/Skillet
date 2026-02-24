@@ -114,4 +114,4 @@ class OrientRPYSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[
         dist = torch.clip(
             quat_error_magnitude(ee_pose_b[:, 3:7], self._target_poses[:, 3:7]) - self._quat_threshold, 0, None
         )
-        return 1.0 - torch.tanh(10.0 * dist)
+        return 1.0 - torch.tanh(dist)

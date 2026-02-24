@@ -110,5 +110,7 @@ class ReachXYZSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[T
     def reward(self, obs: TBSkillObs) -> Float[ArrayLike, "b"]:  # noqa: F821
         """Compute the reward of the skill."""
         ee_pose_b = obs["tcp_pose_b"]
-        dist = torch.clip(torch.abs(ee_pose_b[:, 0:3] - self._target_poses[:, 0:3]) - self._pos_threshold, 0, None)
-        return 1.0 - torch.tanh(10.0 * torch.sum(dist, dim=-1))
+        dist = torch.clip(
+            torch.norm(ee_pose_b[:, 0:3] - self._target_poses[:, 0:3], dim=1) - self._pos_threshold, 0, None
+        )
+        return 1.0 - torch.tanh(dist)

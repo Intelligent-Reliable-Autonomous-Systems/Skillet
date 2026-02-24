@@ -166,6 +166,7 @@ def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
     obs = env.get_observation()
     timestep = 0
     # simulate environment
+    i = 0
     while simulation_app.is_running():
         start_time = time.time()
         # run everything in inference mode
@@ -173,7 +174,21 @@ def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
             # agent stepping
             actions = policy(obs)
             prev_obs = obs["policy"].cpu().numpy().flatten()
-            obs, rewards, _, _ = env.step(actions)
+            if i < 5:
+                obs, rewards, _, _ = env.step(actions)
+            else:
+                obs, rewards, _, _ = env.step(
+                    torch.tensor(
+                        [
+                            [0.0],
+                            [1.0],
+                            env.unwrapped.env.unwrapped.goal_ee_xyz_b[:, 3],
+                            env.unwrapped.env.unwrapped.goal_ee_xyz_b[:, 4],
+                            env.unwrapped.env.unwrapped.goal_ee_xyz_b[:, 5],
+                        ],
+                        device="cuda",
+                    ).T
+                )
             # obs, rewards, _, _ = env.step(torch.tensor([[1.0, 0.5, 0.1, 0.4]], device="cuda"))
             print(rewards)
         if args_cli.video:

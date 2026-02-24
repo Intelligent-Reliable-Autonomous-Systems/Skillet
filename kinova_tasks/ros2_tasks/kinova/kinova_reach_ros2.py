@@ -63,7 +63,7 @@ class KinovaROS2ReachEnvCfg(ROS2RLEnvCfg):
     tcp_offset = [0.0, 0.0, 0.12, 1.0, 0.0, 0.0, 0.0]
     ee_link_name = "robotiq_85_base_link"
     base_link_name = "base_link"
-    gripper_joint_name = "robotiq_85_left_knuckle_joint"
+    gripper_joint_names = ["robotiq_85_left_knuckle_joint"]
 
 
 class KinovaROS2ReachEnv(ROS2RLEnv):
@@ -89,8 +89,11 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
         self.joint_cmd_topic = "/joint_trajectory_controller/joint_trajectory"
         self.gripper_cmd_topic = "/robotiq_gripper_controller/gripper_cmd"
         self.jacobian_topic = "/jacobian"
+        self.mass_matrix_topic = "/mass_matrix"
+        self.gravity_vector_topic = "/gravity_vector"
         self.robot_description_topic = "/robot_info"
         self.body_pose_topic = "/robot_body_pose_w"
+        self.body_vel_topic = "/robot_body_vel_w"
         self.gripper_topic_type = (
             "control_msgs/action/GripperCommand"
             if cfg.use_fake_hardware == "true"
@@ -102,8 +105,11 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
         self._ready = {
             "joint_states": False,
             "jacobians": False,
-            "robot_info": False,
+            "robot_info": False,  # includes joint centers
             "body_pose": False,
+            "body_vel": False,
+            "gravity_vector": False,
+            "mass_matrices": False,
         }
 
         self.default_joint_positions = np.asarray(self.cfg.default_joint_positions)
@@ -117,6 +123,7 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
 
         self._current_joint_positions = np.zeros(shape=len(self.joint_names))
         self._current_joint_velocities = np.zeros(shape=len(self.joint_names))
+        self._current_joint_efforts = np.zeros(shape=len(self.joint_names))
 
         # Launch robot hardware in ROS2
         if self.cfg.launch_ros:
@@ -134,9 +141,12 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
         wait_for_topic_subscribe(self.ros, self.joint_state_topic, "sensor_msgs/JointState")
         wait_for_rviz(self.ros)
 
-        wait_for_topic_subscribe(self.ros, self.jacobian_topic, "gen3_cpp/msg/Jacobian")
+        wait_for_topic_subscribe(self.ros, self.jacobian_topic, "gen3_cpp/msg/LinkMatrix")
+        wait_for_topic_subscribe(self.ros, self.mass_matrix_topic, "gen3_cpp/msg/LinkMatrix")
         wait_for_topic_subscribe(self.ros, self.robot_description_topic, "gen3_cpp/msg/RobotInfo")
-        wait_for_topic_subscribe(self.ros, self.body_pose_topic, "gen3_cpp/msg/BodyPose")
+        wait_for_topic_subscribe(self.ros, self.body_pose_topic, "gen3_cpp/msg/BodyInfo")
+        wait_for_topic_subscribe(self.ros, self.body_vel_topic, "gen3_cpp/msg/BodyInfo")
+        wait_for_topic_subscribe(self.ros, self.gravity_vector_topic, "gen3_cpp/msg/LinkMatrix")
 
         # Subscribe to joint states
         self.joint_states_sub = Topic(self.ros, self.joint_state_topic, "sensor_msgs/JointState")
@@ -148,6 +158,9 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
             ).astype(np.float32)
             self._current_joint_velocities = np.asarray(
                 [msg["velocity"][msg["name"].index(j)] for j in self.joint_names]
+            ).astype(np.float32)
+            self._current_joint_efforts = np.asarray(
+                [msg["effort"][msg["name"].index(j)] for j in self.joint_names]
             ).astype(np.float32)
             self._ready["joint_states"] = True
 
@@ -164,16 +177,36 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
         )
 
         # Subscribe to jacobian topic
-        self.jacobian_sub = Topic(self.ros, self.jacobian_topic, "gen3_cpp/msg/Jacobian")
+        self.jacobian_sub = Topic(self.ros, self.jacobian_topic, "gen3_cpp/msg/LinkMatrix")
 
         def _update_jacobians(msg: dict[str, Any]) -> None:
             """Update jacobians the robot by subscribing to jacobian topic."""
-            self._current_jacobians = np.asarray(msg["jac_matrix"], dtype=float).reshape(
+            self._current_jacobians = np.asarray(msg["matrix"], dtype=float).reshape(
                 msg["num_links"], msg["rows"], msg["cols"]
             )
             self._ready["jacobians"] = True
 
         self.jacobian_sub.subscribe(_update_jacobians)
+
+        # Subscribe to mass matrix topic
+        self.mass_matrix_sub = Topic(self.ros, self.mass_matrix_topic, "gen3_cpp/msg/LinkMatrix")
+
+        def _update_mass_matrix(msg: dict[str, Any]) -> None:
+            """Update mass matrices by subscribing to mass matrix topic."""
+            self._current_mass_matrices = np.asarray(msg["matrix"], dtype=float).reshape(msg["rows"], msg["cols"])
+            self._ready["mass_matrices"] = True
+
+        self.mass_matrix_sub.subscribe(_update_mass_matrix)
+
+        # Subscribe gravity vector topic
+        self.gravity_vector_sub = Topic(self.ros, self.gravity_vector_topic, "gen3_cpp/msg/LinkMatrix")
+
+        def _update_gravity_vector(msg: dict[str, Any]) -> None:
+            """Update gravity vector by subscribing to the gravity vector topic."""
+            self._current_gravity_vector = np.asarray(msg["matrix"], dtype=float).reshape(msg["rows"])
+            self._ready["gravity_vector"] = True
+
+        self.gravity_vector_sub.subscribe(_update_gravity_vector)
 
         # Subscribe to robot_description
         self.robot_description_sub = Topic(self.ros, self.robot_description_topic, "gen3_cpp/msg/RobotInfo")
@@ -184,21 +217,31 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
             self._robot_joints = list(msg["joints"])
             self._current_upper_joint_limits = np.asarray(msg["upper_limits"], dtype=float)
             self._current_lower_joint_limits = np.asarray(msg["lower_limits"], dtype=float)
+            self._current_joint_centers = (self._current_upper_joint_limits + self._current_lower_joint_limits) / 2
             self._ready["robot_info"] = True
 
         self.robot_description_sub.subscribe(_update_robot_links_and_joints)
 
         # Subscribe to robot_description
-        self.body_pose_sub = Topic(self.ros, self.body_pose_topic, "gen3_cpp/msg/BodyPose")
+        self.body_pose_sub = Topic(self.ros, self.body_pose_topic, "gen3_cpp/msg/BodyInfo")
 
         def _update_body_pose(msg: dict[str, Any]) -> None:
             """Update the state of the robot by subscribing to robot topics."""
-            self._current_robot_body_pose_w = np.asarray(msg["body_pose_w"], dtype=float).reshape(msg["num_links"], -1)
-            self._current_robot_root_pose_w = np.asarray(msg["root_pose_w"], dtype=float)
+            self._current_robot_body_pose_w = np.asarray(msg["body_w"], dtype=float).reshape(msg["num_links"], -1)
+            self._current_robot_root_pose_w = np.asarray(msg["root_w"], dtype=float)
             self._ready["body_pose"] = True
 
         self.body_pose_sub.subscribe(_update_body_pose)
 
+        # Subscribe to body vel topic
+        self.body_vel_sub = Topic(self.ros, self.body_vel_topic, "gen3_cpp/msg/BodyInfo")
+
+        def _update_body_vel(msg: dict[str, Any]) -> None:
+            """Update the velocity of the robot by subscribing to robot topics."""
+            self._current_robot_body_vel_w = np.asarray(msg["body_w"], dtype=float).reshape(msg["num_links"], -1)
+            self._ready["body_vel"] = True
+
+        self.body_vel_sub.subscribe(_update_body_vel)
         wait_until_ready(self._ready)
 
     def _pre_process_action(self, actions: np.ndarray) -> np.ndarray:
@@ -254,8 +297,6 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
     def _reset_idx(self) -> None:
         """Reset environment based on specified indices to default position."""
         super()._reset_idx()
-
-        # self._publish_action_to_robot(self.default_joint_positions, duration=5.0)
 
     def _get_dones(self) -> tuple[bool, bool]:
         """Return dones if longer than max episode length."""

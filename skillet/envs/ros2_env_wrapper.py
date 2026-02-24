@@ -113,7 +113,7 @@ class ROS2EnvWrapper(
         self.tcp_offset = env.unwrapped.cfg.tcp_offset
         self.ee_link_name = env.unwrapped.cfg.ee_link_name
         self.base_link_name = env.unwrapped.cfg.base_link_name
-        self.gripper_joint_name = env.unwrapped.cfg.gripper_joint_name
+        self.gripper_joint_names = env.unwrapped.cfg.gripper_joint_names
 
         self.tcp_offset = torch.as_tensor(self.tcp_offset, device=self.device).unsqueeze(0).repeat(self.num_envs, 1)
 
@@ -211,9 +211,30 @@ class ROS2EnvWrapper(
                     "jacobians": self._get_jacobians(ee_link=self.ee_link_name, base_link=self.base_link_name),
                     "ee_pose_b": self._get_ee_pose_b(ee_link=self.ee_link_name, base_link=self.base_link_name),
                     "tcp_pose_b": self._get_tcp_pose_b(ee_link=self.ee_link_name),
-                    "gripper_lim": self._get_gripper_lims(gripper_joint=self.gripper_joint_name),
-                    "gripper": self._get_gripper_state(gripper_joint=self.gripper_joint_name),
+                    "gripper_lim": self._get_gripper_lims(gripper_joints=self.gripper_joint_names),
+                    "gripper": self._get_gripper_state(gripper_joints=self.gripper_joint_names),
                     "joint_lims": self._get_joint_lims(),
+                },
+                batch_size=self.num_envs,
+            )
+        if obs_spec.name == "osc":
+            return TensorDict(
+                {
+                    "joint_pos": self._get_joint_positions(joint_ids=self.joint_ids),
+                    "joint_vel": self._get_joint_velocities(joint_ids=self.joint_ids),
+                    "tcp_offset": self.tcp_offset,
+                    "jacobians": self._get_jacobians(
+                        ee_link=self.ee_link_name, base_link=self.base_link_name, arm_joint_ids=self.joint_ids[:7]
+                    ),
+                    "ee_pose_b": self._get_ee_pose_b(ee_link=self.ee_link_name, base_link=self.base_link_name),
+                    "tcp_pose_b": self._get_tcp_pose_b(ee_link=self.ee_link_name),
+                    "gripper_lim": self._get_gripper_lims(gripper_joints=self.gripper_joint_names),
+                    "gripper": self._get_gripper_state(gripper_joints=self.gripper_joint_names),
+                    "joint_lims": self._get_joint_lims(),
+                    "mass_matrix": self._get_mass_matrices(arm_joint_ids=self.joint_ids[:7]),
+                    "joint_gravity": self._get_joint_gravity(arm_joint_ids=self.joint_ids[:7]),
+                    "ee_vel_b": self._get_ee_vel_b(ee_link=self.ee_link_name, base_link=self.base_link_name),
+                    "joint_centers": self._get_joint_centers(arm_joint_ids=self.joint_ids[:7]),
                 },
                 batch_size=self.num_envs,
             )
@@ -328,10 +349,7 @@ class ROS2EnvWrapper(
         robot_base_pose_w[:, 3:7] = convert_quat(robot_base_pose_w[:, 3:7], to="wxyz")
         base_rot_matrix = matrix_from_quat(quat_inv(robot_base_pose_w[:, 3:7]))
 
-        jacobian = torch.as_tensor(self._env._jacobians, device=self.device, dtype=torch.float32)  # (N, 6, n_joints)
-        # .unsqueeze(0)[
-        #     :, ee_link_idx, :, arm_joint_ids
-        # ][env_ids]
+        jacobian = torch.as_tensor(self._env._jacobians, device=self.device, dtype=torch.float32)
         jacobian = jacobian.unsqueeze(0)[env_ids, ee_link_idx][:, :, arm_joint_ids]
 
         jacobian[:, :3, :] = torch.bmm(base_rot_matrix, jacobian[:, :3, :])
@@ -379,17 +397,17 @@ class ROS2EnvWrapper(
         return torch.concatenate((tcp_pos_b, tcp_quat_b), dim=1).to(torch.float32)
 
     def _get_gripper_state(
-        self, env_ids: torch.Tensor | None = None, gripper_joint: str = "robotiq_85_left_knuckle_joint"
+        self, env_ids: torch.Tensor | None = None, gripper_joints: str = ["robotiq_85_left_knuckle_joint"]
     ) -> torch.Tensor:
         """Get the gripper state of the robot."""
         if env_ids is None:
             env_ids = torch.arange(self.n_envs, device=self.device)
 
-        gripper_joint_idx = self._env._find_joint_idx(gripper_joint)
-        gripper_pos = torch.as_tensor(self._env._joint_positions[gripper_joint_idx], device=self.device).unsqueeze(0)[
+        gripper_joint_idxs = [self._env._find_joint_idx(j) for j in gripper_joints]
+        gripper_pos = torch.as_tensor(self._env._joint_positions[gripper_joint_idxs], device=self.device).unsqueeze(0)[
             env_ids
         ]
-        return gripper_pos.unsqueeze(1).to(torch.float32)
+        return gripper_pos.to(torch.float32)
 
     def _get_ee_pose_b(
         self,
@@ -439,13 +457,13 @@ class ROS2EnvWrapper(
         return torch.cat((robot_ee_pos_b, robot_ee_quat_b), dim=1).to(torch.float32)
 
     def _get_gripper_lims(
-        self, env_ids: torch.Tensor | None = None, gripper_joint: str = "robotiq_85_left_knuckle_joint"
+        self, env_ids: torch.Tensor | None = None, gripper_joints: str = ["robotiq_85_left_knuckle_joint"]
     ) -> torch.Tensor:
         """Get the gripper limits (low and high).
 
         Args:
             env_ids: environment ids to tcp pose in XYZ
-            gripper_joint: string for the name of the gripper joint
+            gripper_joints: list of strings for the name of the gripper joint
 
         Returns:
             A tensor of shape (N, 2) for the gripper lower/upper limits.
@@ -454,11 +472,11 @@ class ROS2EnvWrapper(
         if env_ids is None:
             env_ids = torch.arange(self.n_envs, device=self.device)
 
-        gripper_joint_idx = self._env._find_joint_idx(gripper_joint)
+        gripper_joint_idxs = [self._env._find_joint_idx(j) for j in gripper_joints]
 
-        # gripper_low = self.robot_dof_lower_limits[gripper_joint_idx]
-        gripper_low = torch.tensor([0], device=self.device)
-        gripper_high = self.robot_dof_upper_limits[gripper_joint_idx]
+        gripper_low = self.robot_dof_lower_limits[gripper_joint_idxs]
+        # gripper_low = torch.tensor([0], device=self.device)
+        gripper_high = self.robot_dof_upper_limits[gripper_joint_idxs]
         return torch.cat(
             (
                 gripper_low.unsqueeze(0).expand(env_ids.shape[0], 1),
@@ -484,5 +502,100 @@ class ROS2EnvWrapper(
             torch.cat((self.robot_dof_lower_limits.unsqueeze(0), self.robot_dof_upper_limits.unsqueeze(0)), dim=0)
             .unsqueeze(0)
             .repeat(env_ids.shape[0], 1, 1)
-            .to(torch.float32)
         )
+
+    def _get_mass_matrices(
+        self,
+        env_ids: torch.Tensor | None = None,
+        arm_joint_ids: list | None = None,
+    ) -> torch.Tensor:
+        """Return the mass matrices.
+
+        Args:
+            env_ids: environment ids to compute jacobian
+            arm_joint_ids: the list of joint ids that correspond to the arm
+        Returns:
+            torch tensor of mass matrices
+
+        """
+        if env_ids is None:
+            env_ids = torch.arange(self.n_envs, device=self.device)
+        if arm_joint_ids is None:
+            arm_joint_ids = self.joint_ids[:7]
+
+        return torch.as_tensor(
+            self._env._mass_matrices[:, arm_joint_ids, :][:, :, arm_joint_ids][env_ids],
+            device=self.device,
+            dtype=torch.float32,
+        )
+
+    def _get_joint_gravity(
+        self,
+        env_ids: torch.Tensor | None = None,
+        arm_joint_ids: list | None = None,
+    ) -> torch.Tensor:
+        """Return the joint gravity of the arm joints.
+
+        Args:
+            env_ids: environment ids to compute jacobian
+            arm_joint_ids: the list of joint ids that correspond to the arm
+        Returns:
+            torch tensor of mass matrices
+
+        """
+        if env_ids is None:
+            env_ids = torch.arange(self.n_envs, device=self.device)
+        if arm_joint_ids is None:
+            arm_joint_ids = self.joint_ids[:7]
+        return torch.as_tensor(
+            self._env._gravity_compensation[:, arm_joint_ids][env_ids],
+            device=self.device,
+            dtype=torch.float32,
+        )
+
+    def _get_ee_vel_b(
+        self, env_ids: torch.Tensor = None, ee_link: str = "end_effector_link", base_link: str = "base_link"
+    ) -> torch.Tensor:
+        """Compute the velocity of the end effector relative to the robot base.
+
+        Args:
+            env_ids: environment ids to compute jacobian
+            ee_link: string for the name of the end effector link
+            base_link: string for the name of the base link of the robot
+
+        """
+        # Compute the current velocity of the end-effector
+        if env_ids is None:
+            env_ids = torch.arange(self.n_envs, device=self.device)
+
+        ee_link_idx = self._env._find_link_idx(ee_link)
+        base_link_idx = self._env._find_link_idx(base_link)
+
+        ee_vel_w = self._env._robot_body_vel_w[
+            env_ids, ee_link_idx, :
+        ]  # Extract end-effector velocity in the world frame
+        root_vel_w = self._env._robot_body_vel_w[env_ids, base_link_idx, :]  # Extract root velocity in the world frame
+        relative_vel_w = ee_vel_w - root_vel_w  # Compute the relative velocity in the world frame
+        ee_lin_vel_b = quat_apply_inverse(
+            self._env._robot_body_pose_w[env_ids, base_link_idx][:, 3:7], relative_vel_w[:, 0:3]
+        )  # From world to root frame
+        ee_ang_vel_b = quat_apply_inverse(
+            self._env._robot_body_pose_w[env_ids, base_link_idx][:, 3:7], relative_vel_w[:, 3:6]
+        )
+        return torch.cat([ee_lin_vel_b, ee_ang_vel_b], dim=-1)
+
+    def _get_joint_centers(self, env_ids: torch.Tensor = None, arm_joint_ids: torch.Tensor = None) -> torch.Tensor:
+        """Return the joint centers of the arm.
+
+        Args:
+            env_ids: environment ids to compute jacobian
+            arm_joint_ids: the list of joint ids that correspond to the arm
+        Returns:
+            torch tensor of joint centers
+
+        """
+        if env_ids is None:
+            env_ids = torch.arange(self.n_envs, device=self.device)
+        if arm_joint_ids is None:
+            arm_joint_ids = self.joint_ids[:7]
+        return self._env._joint_centers[:, arm_joint_ids][env_ids]

@@ -107,7 +107,7 @@ class SkillIsaacEnvWrapper(
             _skill_length += ~_dones
             _dones = self.sc.dones
         _rewards = _rewards / _skill_length  # Normalize rewards based on skills length
-        rewards = self.sc.post_process_reward(_rewards)
+        rewards = self.sc.post_process_reward(reward)  # If we don't sum, should we still normalize by skill length?
         self.last_obs = obs_dict
 
         return obs_dict, rewards, term, trunc, info
