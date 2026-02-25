@@ -63,8 +63,9 @@ class KinovaReachIKEnv(ReachEnv):
     cfg: KinovaReachEnvCfg
 
     def __init__(self, cfg: KinovaReachEnvCfg, render_mode: str | None = None, **kwargs):
-        cfg.decimation = 1
+        cfg.decimation = 2
         cfg.sim.dt = 0.01
+        cfg.robot.spawn.rigid_props.disable_gravity = True
         cfg.skills = ["reach_xyz", "orient_rpy"]
         super().__init__(cfg, render_mode, **kwargs)
 

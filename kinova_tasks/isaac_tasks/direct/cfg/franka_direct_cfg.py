@@ -7,6 +7,7 @@ import isaaclab.sim as sim_utils
 from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR
 from isaaclab_assets.robots.franka import FRANKA_PANDA_CFG
 
+
 class FrankaBaseCfg(SkillsDirectRLEnvCfg):
     # env
     episode_length_s = 6.0  # 500 timesteps
@@ -44,4 +45,3 @@ class FrankaBaseCfg(SkillsDirectRLEnvCfg):
     # robot
     robot = FRANKA_PANDA_CFG
     robot.prim_path = "/World/envs/env_.*/Robot"
-    

@@ -42,10 +42,10 @@ class ROS2RLEnvCfg:
     device: str = "cuda"
     """GPU device"""
 
-    dt: float = 2
+    dt: float = MISSING
     """Delta time per step"""
 
-    decimation: float = 1.0
+    decimation: float = MISSING
     """Decimation (steps through physics)"""
 
     episode_length_s: float = 5.0

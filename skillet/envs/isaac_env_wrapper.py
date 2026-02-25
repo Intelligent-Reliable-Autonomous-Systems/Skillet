@@ -524,4 +524,9 @@ class IsaacEnvWrapper(
             env_ids = self.robot._ALL_INDICES
         if arm_joint_ids is None:
             arm_joint_ids = self.joint_ids[:7]
-        return torch.mean(self.robot.data.soft_joint_pos_limits[:, arm_joint_ids, :][env_ids], dim=-1)
+        return torch.nan_to_num(
+            torch.mean(self.robot.data.soft_joint_pos_limits[:, arm_joint_ids, :][env_ids], dim=-1),
+            nan=0.0,
+            posinf=0.0,
+            neginf=0.0,
+        )

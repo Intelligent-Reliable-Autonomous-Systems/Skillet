@@ -25,6 +25,6 @@ def setup_ros() -> Ros:
                 raise TimeoutError(
                     "RosBridge failed to start. Is the rosbridge node running? ros2 launch rosbridge_server rosbridge_websocket_launch.xml"
                 )
-            time.sleep(0.2)
+            time.sleep(0.1)
 
     return ros
