@@ -5,11 +5,7 @@
 
 
 from skillet.envs.util import configclass
-from skillet.rl.cfg import (
-    RslRlOnPolicyRunnerCfg,
-    RslRlPpoAlgorithmCfg,
-    RslRlPpoPolicyCfg,
-)
+from skillet.rl.cfg import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg, RslRlPpoPolicyCfg
 
 
 @configclass
@@ -30,6 +26,12 @@ class KinovaReachPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     critic = RslRlPpoPolicyCfg(
         init_noise_std=1.0,
         hidden_dims=[64, 64],
+        activation="elu",
+    )
+    policy = RslRlPpoActorCriticCfg(
+        init_noise_std=1.0,
+        actor_hidden_dims=[64, 64],
+        critic_hidden_dims=[64, 64],
         activation="elu",
     )
     algorithm = RslRlPpoAlgorithmCfg(

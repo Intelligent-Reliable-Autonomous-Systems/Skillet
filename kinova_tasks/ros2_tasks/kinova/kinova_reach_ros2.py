@@ -53,7 +53,7 @@ class KinovaROS2ReachEnvCfg(ROS2RLEnvCfg):
 
     dt = 1 / 60
 
-    decimation = 1.0
+    decimation = 6.0
 
     episode_length_s = 5.0
 
@@ -113,6 +113,7 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
         }
 
         self.default_joint_positions = np.asarray(self.cfg.default_joint_positions)
+        self.prev_action = np.zeros(shape=(8,))
 
         self.single_observation_space = gym.spaces.Dict()
         self.single_observation_space["policy"] = gym.spaces.Box(float("-inf"), float("inf"), shape=(16,))
@@ -305,7 +306,11 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
 
     def _get_observations(self) -> dict[str, np.ndarray]:
         """Return the observations from the robot."""
-        return {"policy": np.concatenate((self._current_joint_positions, self._current_joint_velocities), axis=0)}
+        return {
+            "policy": np.concatenate(
+                (self._current_joint_positions, self._current_joint_velocities), axis=0, dtype=np.float32
+            )
+        }
 
     def _get_rewards(self) -> np.ndarray:
         """Compute the rewards."""

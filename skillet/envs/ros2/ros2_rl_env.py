@@ -73,6 +73,7 @@ class ROS2RLEnv(gym.Env):
         self.extras: dict[str, Any] = {}
 
         # setup the action and observation spaces for Gym
+        self._next_step_time = None
 
         print("[INFO][ROS2RLEnv] Completed Environment Setup")
 
@@ -158,8 +159,7 @@ class ROS2RLEnv(gym.Env):
 
         This is the time-step at which the environment steps forward.
         """
-        # return float(self.cfg.dt * self.cfg.decimation)
-        return 4.0
+        return float(self.cfg.dt * self.cfg.decimation)
 
     @property
     def max_episode_length_s(self) -> float:
@@ -223,12 +223,21 @@ class ROS2RLEnv(gym.Env):
             A tuple containing the observations, rewards, resets (terminated and truncated) and extras.
 
         """
+        if self._next_step_time is None:
+            self._next_step_time = time.monotonic()
+
         # Pre process the robot action
         joint_pos = self._pre_process_action(action)
 
         # Send the robot action to hardware
         self._publish_action_to_robot(joint_pos, duration=self.step_dt)
-        time.sleep(self.step_dt)  # TODO this is crude
+        self._next_step_time += self.step_dt
+        sleep_time = self._next_step_time - time.monotonic()
+        if sleep_time > 0:
+            time.sleep(sleep_time)
+        else:
+            print(f"[WARN] full loop overran by {-sleep_time * 1000:.1f}ms")
+        # time.sleep(self.step_dt)  # TODO this is crude
 
         self.episode_length_buf += 1
         self.common_step_counter += 1
