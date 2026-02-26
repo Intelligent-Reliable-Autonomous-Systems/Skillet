@@ -381,6 +381,7 @@ def update_states(
     # Get joint positions and velocities
     joint_pos = robot.data.joint_pos[:, arm_joint_ids]
     joint_vel = robot.data.joint_vel[:, arm_joint_ids]
+    print(torch.argwhere(robot.data.joint_vel[:] > 10))
 
     return (
         jacobian_b,

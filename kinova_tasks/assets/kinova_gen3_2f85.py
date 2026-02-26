@@ -28,6 +28,7 @@ KINOVA_GEN3_2F85_CFG = ArticulationCfg(
     prim_path="/World/envs/env_.*/Robot",
     spawn=sim_utils.UsdFileCfg(
         usd_path=f"{KINOVA_ASSET_DIR}/robots/kinova/kinova_gen3_2f85.usd",
+        # usd_path=f"{KINOVA_ASSET_DIR}/robots/gen3_2f85/gen3_2f85.usd",
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=True,
             max_depenetration_velocity=5.0,

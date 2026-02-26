@@ -107,6 +107,7 @@ class KinovaLiftCubeEnv(LiftCubeEnv):
     cfg: KinovaLiftCubeEnvCfg
 
     def __init__(self, cfg: KinovaLiftCubeEnvCfg, render_mode: str | None = None, **kwargs):
+        cfg.skills = []
         super().__init__(cfg, render_mode, **kwargs)
 
 

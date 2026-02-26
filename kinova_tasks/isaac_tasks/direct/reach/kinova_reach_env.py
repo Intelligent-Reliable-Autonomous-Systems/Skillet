@@ -79,7 +79,7 @@ class KinovaReachIKEnv(ReachEnv):
         }
         cfg.robot.actuators["gripper"].stiffness = 2000.0
         cfg.robot.actuators["gripper"].damping = 200.0
-        cfg.skills = ["reach_xyz"]
+        cfg.skills = ["reach_xyz", "orient_rpy"]
         super().__init__(cfg, render_mode, **kwargs)
 
     # pre-physics step calls
