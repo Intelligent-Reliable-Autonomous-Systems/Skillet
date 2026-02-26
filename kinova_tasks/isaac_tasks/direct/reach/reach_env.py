@@ -65,7 +65,7 @@ class ReachEnv(DirectRLEnv):
         self.default_joint_pos = self._robot.data.default_joint_pos[:, self.cfg.joint_ids]
         self.robot_dof_targets = torch.zeros((self.num_envs, len(self.cfg.joint_ids)), device=self.device)
 
-        self.cfg.ee_link_idx = self._robot.find_bodies(self.cfg.ee_link_name)[0][0]
+        self.ee_link_idx = self._robot.find_bodies(self.cfg.ee_link_name)[0][0]
 
         self.tcp_offset = torch.as_tensor(self.cfg.tcp_offset, device=self.device).unsqueeze(0).repeat(self.num_envs, 1)
 
@@ -198,8 +198,8 @@ class ReachEnv(DirectRLEnv):
         if env_ids is None:
             env_ids = self._robot._ALL_INDICES
 
-        self.robot_ee_quat_w[env_ids] = self._robot.data.body_quat_w[env_ids, self.cfg.ee_link_idx]
-        self.robot_ee_pos_w[env_ids] = self._robot.data.body_pos_w[env_ids, self.cfg.ee_link_idx]
+        self.robot_ee_quat_w[env_ids] = self._robot.data.body_quat_w[env_ids, self.ee_link_idx]
+        self.robot_ee_pos_w[env_ids] = self._robot.data.body_pos_w[env_ids, self.ee_link_idx]
 
         self.prev_actions[env_ids] = torch.clone(self.actions[env_ids])
 

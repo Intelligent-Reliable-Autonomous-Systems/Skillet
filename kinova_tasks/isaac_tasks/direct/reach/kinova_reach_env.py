@@ -21,6 +21,7 @@ from skillet.envs.util import configclass
 class KinovaReachEnvCfg(KinovaBaseCfg):
     action_scale = 0.5
     dof_velocity_scale = 0.1
+    skills = []
 
     # reward scales
     ee_dist_reward_scale = -0.2
@@ -51,6 +52,8 @@ class KinovaReachEnvCfg(KinovaBaseCfg):
 
 
 class KinovaReachEnv(ReachEnv):
+    """Use this environment for computing actions with RL."""
+
     cfg: KinovaReachEnvCfg
 
     def __init__(self, cfg: KinovaReachEnvCfg, render_mode: str | None = None, **kwargs):
@@ -66,7 +69,17 @@ class KinovaReachIKEnv(ReachEnv):
         cfg.decimation = 2
         cfg.sim.dt = 0.01
         cfg.robot.spawn.rigid_props.disable_gravity = True
-        cfg.skills = ["reach_xyz", "orient_rpy"]
+        cfg.robot.actuators["arm"].stiffness = {
+            "joint_[1-3]": 4000.0,
+            "joint_[5-7]": 1500.0,
+        }
+        cfg.robot.actuators["arm"].damping = {
+            "joint_[1-3]": 1000.0,
+            "joint_[4-7]": 500.0,
+        }
+        cfg.robot.actuators["gripper"].stiffness = 2000.0
+        cfg.robot.actuators["gripper"].damping = 200.0
+        cfg.skills = ["reach_xyz"]
         super().__init__(cfg, render_mode, **kwargs)
 
     # pre-physics step calls
@@ -99,7 +112,7 @@ class KinovaReachIKEnv(ReachEnv):
         )
 
 
-class KinovaReachOSCEnv(KinovaReachEnv):
+class KinovaReachOSCEnv(ReachEnv):
     """Use this environment when computing actions with a OSC controlller."""
 
     cfg: KinovaReachEnvCfg
@@ -157,6 +170,6 @@ def compute_rewards_osc(
 ) -> torch.Tensor:
     reach_rew = 1 - torch.tanh(10 * torch.norm(ee_pos - goal_ee_pos, dim=1))
 
-    orientation_reward = 1 - torch.tanh(quat_error_magnitude(ee_quat, goal_ee_quat))
+    orientation_reward = 1 - torch.tanh(10 * quat_error_magnitude(ee_quat, goal_ee_quat))
 
     return reach_rew + orientation_reward

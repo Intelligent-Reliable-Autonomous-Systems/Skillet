@@ -1,10 +1,8 @@
-from kinova_tasks.assets.utils import KINOVA_ASSET_DIR
 from skillet.envs.isaac import SkillsDirectRLEnvCfg
-from isaaclab.actuators.actuator_cfg import ImplicitActuatorCfg
-from isaaclab.assets import ArticulationCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
 import isaaclab.sim as sim_utils
+from dataclasses import MISSING
 
 from kinova_tasks.assets.kinova_gen3_2f85 import KINOVA_GEN3_2F85_CFG
 
@@ -18,12 +16,12 @@ class KinovaBaseCfg(SkillsDirectRLEnvCfg):
     state_space = 0
 
     joint_ids = [0, 1, 2, 3, 4, 5, 6, 7]
-    tcp_offset = [0.120, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0]
+    tcp_offset = [0.0, 0.0, 0.120, 1.0, 0.0, 0.0, 0.0]
     ee_link_name = "end_effector_link"
     base_link_name = "base_link"
-    gripper_joint_names = ["finger_joint"]
+    gripper_joint_names = ["robotiq_85_left_knuckle_joint"]
 
-    skills = ["reach_xyz", "orient_rpy", "gripper_oc"]
+    skills = MISSING
 
     # simulation
     sim: SimulationCfg = SimulationCfg(

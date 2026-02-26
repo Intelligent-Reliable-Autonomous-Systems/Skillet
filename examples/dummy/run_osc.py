@@ -56,7 +56,7 @@ from isaaclab.utils.math import (
 ##
 # Pre-defined configs
 ##
-from isaaclab_assets import FRANKA_PANDA_HIGH_PD_CFG, KINOVA_GEN3_N7_CFG  # isort:skip
+from isaaclab_assets import FRANKA_PANDA_HIGH_PD_CFG  # isort:skip
 from kinova_tasks.assets.kinova_gen3_2f85 import KINOVA_GEN3_2F85_CFG
 
 
@@ -105,11 +105,6 @@ class SceneCfg(InteractiveSceneCfg):
         robot.actuators["panda_forearm"].damping = 0.0
         robot.spawn.rigid_props.disable_gravity = True
     elif args_cli.robot == "kinova":
-        robot = KINOVA_GEN3_N7_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
-        robot.spawn.rigid_props.disable_gravity = True
-        robot.actuators["arm"].stiffness = 0
-        robot.actuators["arm"].damping = 0
-    elif args_cli.robot == "kinova_g":
         robot = KINOVA_GEN3_2F85_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
         robot.spawn.rigid_props.disable_gravity = True
         robot.actuators["arm"].stiffness = 0
@@ -144,6 +139,11 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
         arm_joint_names = ["joint_.*"]
         ee_frame_idx = robot.find_bodies(ee_frame_name)[0][0]
         arm_joint_ids = robot.find_joints(arm_joint_names)[0]
+    elif args_cli.robot == "kinova_dg":  # TEST
+        ee_frame_name = "left_inner_finger"  # NO
+        arm_joint_names = ["joint_.*"]  # NO
+        ee_frame_idx = robot.find_bodies(ee_frame_name)[0][0]
+        arm_joint_ids = robot.find_joints(arm_joint_names)[0]
 
     # Create the OSC
     osc_cfg = OperationalSpaceControllerCfg(
@@ -153,9 +153,9 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
         partial_inertial_dynamics_decoupling=False,
         gravity_compensation=False,
         motion_damping_ratio_task=1.0,
-        contact_wrench_stiffness_task=[0.0, 0.0, 0.1, 0.0, 0.0, 0.0],
-        motion_control_axes_task=[1, 1, 0, 1, 1, 1],
-        contact_wrench_control_axes_task=[0, 0, 1, 0, 0, 0],
+        contact_wrench_stiffness_task=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        motion_control_axes_task=[1, 1, 1, 1, 1, 1],
+        contact_wrench_control_axes_task=[0, 0, 0, 0, 0, 0],
         nullspace_control="position",
     )
     osc = OperationalSpaceController(osc_cfg, num_envs=scene.num_envs, device=sim.device)

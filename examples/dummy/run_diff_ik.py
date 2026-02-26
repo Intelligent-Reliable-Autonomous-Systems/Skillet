@@ -86,7 +86,7 @@ class TableTopSceneCfg(InteractiveSceneCfg):
         robot = UR10_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
     elif args_cli.robot == "kinova":
         robot = KINOVA_GEN3_2F85_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
-        robot.spawn.rigid_props.disable_gravity = False
+        robot.spawn.rigid_props.disable_gravity = True
         robot.actuators["arm"].stiffness = {
             "joint_[1-4]": 4000.0,
             "joint_[5-7]": 1500.0,
@@ -98,7 +98,7 @@ class TableTopSceneCfg(InteractiveSceneCfg):
         }
 
     else:
-        raise ValueError(f"Robot {args_cli.robot} is not supported. Valid: franka_panda, ur10")
+        raise ValueError(f"Robot {args_cli.robot} is not supported. Valid: franka_panda, ur10, kinova, kinova_dg")
 
 
 def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
@@ -135,10 +135,10 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
         robot_entity_cfg = SceneEntityCfg("robot", joint_names=["panda_joint.*"], body_names=["panda_hand"])
     elif args_cli.robot == "ur10":
         robot_entity_cfg = SceneEntityCfg("robot", joint_names=[".*"], body_names=["ee_link"])
-    elif args_cli.robot == "kinova":
-        robot_entity_cfg = SceneEntityCfg("robot", joint_names=[".*"], body_names=["end_effector_link"])
+    elif args_cli.robot == "kinova" or args_cli.robot == "kinova_dg":
+        robot_entity_cfg = SceneEntityCfg("robot", joint_names=["joint_.*"], body_names=["end_effector_link"])
     else:
-        raise ValueError(f"Robot {args_cli.robot} is not supported. Valid: franka_panda, ur10, kinova_gen3")
+        raise ValueError(f"Robot {args_cli.robot} is not supported. Valid: franka_panda, ur10, kinova, kinova_dg")
     # Resolving the scene entities
     robot_entity_cfg.resolve(scene)
     # Obtain the frame index of the end-effector

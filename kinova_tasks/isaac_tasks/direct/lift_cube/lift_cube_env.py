@@ -7,96 +7,18 @@ from __future__ import annotations
 
 import isaaclab.sim as sim_utils
 import torch
-from isaaclab.assets import Articulation, RigidObject, RigidObjectCfg
+from isaaclab.assets import Articulation, RigidObject
 from isaaclab.envs import DirectRLEnv
-from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
-from isaaclab.markers.config import FRAME_MARKER_CFG
+from isaaclab.markers import VisualizationMarkers
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 from isaaclab.utils.math import quat_from_euler_xyz, sample_uniform, subtract_frame_transforms
 from isaacsim.core.utils.torch.transformations import tf_combine
 
-from kinova_tasks.isaac_tasks.direct.cfg import KinovaBaseCfg
-from skillet.envs.util import configclass
 
+class LiftCubeEnv(DirectRLEnv):
+    """Base clase for lift cube environments."""
 
-@configclass
-class KinovaLiftCubeEnvCfg(KinovaBaseCfg):
-    object_cfg = RigidObjectCfg(
-        prim_path="/World/envs/env_.*/Object",
-        spawn=sim_utils.UsdFileCfg(
-            usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Blocks/DexCube/dex_cube_instanceable.usd",
-            scale=(0.7, 0.7, 0.7),
-            rigid_props=sim_utils.RigidBodyPropertiesCfg(
-                solver_position_iteration_count=16,
-                solver_velocity_iteration_count=1,
-                max_angular_velocity=1000.0,
-                max_linear_velocity=1000.0,
-                max_depenetration_velocity=5.0,
-                disable_gravity=False,
-            ),
-        ),
-        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.5, 0.0, 0.0), rot=(1.0, 0.0, 0.0, 0.0)),
-    )
-
-    action_scale = 0.5
-
-    # reward scales
-    min_height = 0.04
-    cube_reach_reward_scale = 1.0
-    cube_reach_reward_std = 0.1
-    cube_lift_reward_scale = 15.0
-    cube_goal_reward_scale = 16.0
-    cube_goal_reward_std = 0.3
-    cube_goal_fine_grained_scale = 5.0
-    cube_goal_fine_grained_std = 0.05
-    action_rate_reward_scale = -0.0001
-    joint_vel_reward_scale = -0.0001
-
-    # Cube pose initial ranges
-    # init_pos_x = [0.2, 0.6]
-    init_pos_x = [0.5, 0.5]
-    # init_pos_y = [-0.3, 0.3]
-    init_pos_y = [0.1, 0.1]
-    init_pos_z = [0.0, 0.0]
-    init_roll = [0.0, 0.0]
-    init_pitch = [0.0, 0.0]
-    init_yaw = [0.0, 0.0]
-    cube_init_ranges = [init_pos_x, init_pos_y, init_pos_z, init_roll, init_pitch, init_yaw]
-
-    # Cube pose initial ranges
-    goal_pos_x = [0.4, 0.6]
-    goal_pos_y = [-0.25, 0.25]
-    goal_pos_z = [0.25, 0.5]
-    goal_roll = [0.0, 0.0]
-    goal_pitch = [0.0, 0.0]
-    goal_yaw = [0.0, 0.0]
-    cube_goal_ranges = [goal_pos_x, goal_pos_y, goal_pos_z, goal_roll, goal_pitch, goal_yaw]
-
-    cube_goal_pose_visualizer_cfg: VisualizationMarkersCfg = VisualizationMarkersCfg(
-        prim_path="/Visuals/Command/cube_goal_pose",
-        markers={
-            "goal": sim_utils.UsdFileCfg(
-                usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Blocks/DexCube/dex_cube_instanceable.usd",
-                scale=(0.7, 0.7, 0.7),
-            )
-        },
-    )
-
-    cube_current_pose_visualizer_cfg: VisualizationMarkersCfg = FRAME_MARKER_CFG.replace(
-        prim_path="/Visuals/Command/cube_current_pose"
-    )
-
-    current_pose_visualizer_cfg: VisualizationMarkersCfg = FRAME_MARKER_CFG.replace(
-        prim_path="/Visuals/Command/body_pose"
-    )
-
-    # Set the scale of the visualization markers to (0.1, 0.1, 0.1)
-    cube_current_pose_visualizer_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)
-    current_pose_visualizer_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)
-
-
-class KinovaLiftCubeEnv(DirectRLEnv):
     # pre-physics step calls
     #   |-- _pre_physics_step(action)
     #   |-- _apply_action()
@@ -106,9 +28,7 @@ class KinovaLiftCubeEnv(DirectRLEnv):
     #   |-- _reset_idx(env_ids)
     #   |-- _get_observations()
 
-    cfg: KinovaLiftCubeEnvCfg
-
-    def __init__(self, cfg: KinovaLiftCubeEnvCfg, render_mode: str | None = None, **kwargs):
+    def __init__(self, cfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
 
         self.dt = self.cfg.sim.dt * self.cfg.decimation
@@ -118,21 +38,14 @@ class KinovaLiftCubeEnv(DirectRLEnv):
 
         self.cube_init_ranges = torch.tensor(self.cfg.cube_init_ranges, device=self.device)
         self.cube_goal_ranges = torch.tensor(self.cfg.cube_goal_ranges, device=self.device)
-        self.tcp_offset_pos = (
-            torch.tensor(self.cfg.tcp_offset[0:3], device=self.device).unsqueeze(0).repeat(self.num_envs, 1)
-        )
-        self.tcp_offset_quat = (
-            torch.tensor(self.cfg.tcp_offset[3:7], device=self.device).unsqueeze(0).repeat(self.num_envs, 1)
-        )
 
         # Cube position
-        self.cube_pose_b = torch.zeros((self.num_envs, 6), device=self.device)
-        self.cube_pos_b = torch.zeros((self.num_envs, 3), device=self.device)
-        self.cube_pos_w = torch.zeros((self.num_envs, 3), device=self.device)
-        self.cube_quat_w = torch.zeros((self.num_envs, 4), device=self.device)
-        self.cube_goal_pose_b = torch.zeros((self.num_envs, 6), device=self.device)
-        self.cube_goal_pos_w = torch.zeros((self.num_envs, 3), device=self.device)
-        self.cube_goal_quat_w = torch.zeros((self.num_envs, 4), device=self.device)
+        self.cube_xyz_b = torch.zeros((self.num_envs, 6), device=self.device)
+        self.cube_pose_b = torch.zeros((self.num_envs, 7), device=self.device)
+        self.cube_pose_w = torch.zeros((self.num_envs, 7), device=self.device)
+
+        self.cube_goal_xyz_b = torch.zeros((self.num_envs, 6), device=self.device)
+        self.cube_goal_pose_w = torch.zeros((self.num_envs, 7), device=self.device)
 
         # create auxiliary variables for joint limits
         self.robot_dof_lower_limits = self._robot.data.soft_joint_pos_limits[0, :, 0].to(device=self.device)[
@@ -141,6 +54,7 @@ class KinovaLiftCubeEnv(DirectRLEnv):
         self.robot_dof_upper_limits = self._robot.data.soft_joint_pos_limits[0, :, 1].to(device=self.device)[
             self.cfg.joint_ids
         ]
+        self.robot_effort_limits = self._robot.data.joint_effort_limits[0, :].to(device=self.device)[self.cfg.joint_ids]
         self.robot_dof_lower_limits[self.robot_dof_lower_limits == -float("inf")] = -torch.pi
         self.robot_dof_upper_limits[self.robot_dof_upper_limits == float("inf")] = torch.pi
 
@@ -148,10 +62,12 @@ class KinovaLiftCubeEnv(DirectRLEnv):
 
         self.robot_dof_targets = torch.zeros((self.num_envs, len(self.cfg.joint_ids)), device=self.device)
 
-        self.cfg.ee_link_idx = self._robot.find_bodies("end_effector_link")[0][0]
+        self.ee_link_idx = self._robot.find_bodies(self.cfg.ee_link_name)[0][0]
 
-        self.robot_ee_quat_w = torch.zeros((self.num_envs, 4), device=self.device)
-        self.robot_ee_pos_w = torch.zeros((self.num_envs, 3), device=self.device)
+        # Robot position
+        self.tcp_offset = torch.as_tensor(self.cfg.tcp_offset, device=self.device).unsqueeze(0).repeat(self.num_envs, 1)
+        self.robot_tcp_pose_w = torch.zeros((self.num_envs, 7), device=self.device)
+        self.robot_ee_pose_w = torch.zeros((self.num_envs, 7), device=self.device)
 
         self.cube_goal_marker = VisualizationMarkers(cfg=self.cfg.cube_goal_pose_visualizer_cfg)
         self.cube_current_marker = VisualizationMarkers(cfg=self.cfg.cube_current_pose_visualizer_cfg)
@@ -188,24 +104,19 @@ class KinovaLiftCubeEnv(DirectRLEnv):
         self.robot_dof_targets = torch.clamp(targets, self.robot_dof_lower_limits, self.robot_dof_upper_limits)
 
         # Update markers
-        robot_tcp_rot, robot_tcp_pos = tf_combine(
-            self.robot_ee_quat_w, self.robot_ee_pos_w, self.tcp_offset_quat, self.tcp_offset_pos
-        )
 
-        self.cube_current_marker.visualize(self.cube_pos_w, self.cube_quat_w)
-        self.current_marker.visualize(robot_tcp_pos, robot_tcp_rot)
+        self.cube_current_marker.visualize(self.cube_pose_w[:, 0:3], self.cube_pose_w[:, 3:7])
+        self.current_marker.visualize(self.robot_tcp_pose_w[:, 0:3], self.robot_tcp_pose_w[:, 3:7])
 
     def _apply_action(self):
         self._robot.set_joint_position_target(self.robot_dof_targets, joint_ids=self.cfg.joint_ids)
 
-    # post-physics step calls
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
         """Terminate if max length is reached or cube goes below minimum height"""
         truncated = self.episode_length_buf >= self.max_episode_length - 1
-        terminated_pos = self.cube_pos_w[:, 2] < -0.05
-        terminated_vel = torch.sum(torch.square(self._robot.data.joint_vel), dim=1) > 1000.0
+        terminated_pos = self.cube_pose_w[:, 2] < -0.05
 
-        return torch.logical_or(terminated_vel, terminated_pos), truncated
+        return terminated_pos, truncated
 
     def _get_rewards(self) -> torch.Tensor:
         # Refresh the intermediate values after the physics steps
@@ -216,12 +127,9 @@ class KinovaLiftCubeEnv(DirectRLEnv):
             self.prev_actions,
             self._robot.data.joint_pos[:, self.cfg.joint_ids],
             self._robot.data.joint_vel[:, self.cfg.joint_ids],
-            self.robot_ee_pos_w,
-            self.robot_ee_quat_w,
-            self.tcp_offset_pos,
-            self.tcp_offset_quat,
-            self.cube_pos_w,
-            self.cube_goal_pos_w,
+            self.robot_tcp_pose_w[:, 0:3],
+            self.cube_pose_w[:, 0:3],
+            self.cube_goal_pose_w[:, 0:3],
             self.cfg.min_height,
             self.cfg.cube_reach_reward_scale,
             self.cfg.cube_reach_reward_std,
@@ -256,7 +164,7 @@ class KinovaLiftCubeEnv(DirectRLEnv):
         # Reset the cube position
         self._reset_cube_pose(env_ids=env_ids)
 
-        self._object.write_root_pose_to_sim(torch.cat((self.cube_pos_w, self.cube_quat_w), dim=1)[env_ids], env_ids)
+        self._object.write_root_pose_to_sim(self.cube_pose_w[env_ids], env_ids)
         self._object.write_root_velocity_to_sim(torch.zeros((len(env_ids), 6), device=self.device), env_ids)
 
         # Need to refresh the intermediate values so that _get_observations() can use the latest values
@@ -268,8 +176,8 @@ class KinovaLiftCubeEnv(DirectRLEnv):
                 self._robot.data.joint_pos[:, self.cfg.joint_ids]
                 - self._robot.data.default_joint_pos[:, self.cfg.joint_ids],
                 self._robot.data.joint_vel[:, self.cfg.joint_ids],
-                self.cube_pos_b,
-                self.cube_goal_pose_b[:, :3],
+                self.cube_pose_b[:, 0:3],
+                self.cube_goal_xyz_b[:, 0:3],
                 self.prev_actions,
             ),
             dim=-1,
@@ -289,18 +197,28 @@ class KinovaLiftCubeEnv(DirectRLEnv):
         if env_ids is None:
             env_ids = self._robot._ALL_INDICES
 
-        self.cube_pos_w[env_ids] = self._object.data.root_pos_w[env_ids]
-        self.cube_quat_w[env_ids] = self._object.data.root_quat_w[env_ids]
+        self.cube_pose_w[env_ids] = self._object.data.root_pose_w[env_ids]
 
-        self.robot_ee_quat_w[env_ids] = self._robot.data.body_quat_w[env_ids, self.cfg.ee_link_idx]
-        self.robot_ee_pos_w[env_ids] = self._robot.data.body_pos_w[env_ids, self.cfg.ee_link_idx]
+        self.robot_ee_pose_w[env_ids] = self._robot.data.body_pose_w[env_ids, self.ee_link_idx]
 
         self.prev_actions[env_ids] = torch.clone(self.actions[env_ids])
 
         # Object position in robot frame
-        self.cube_pos_b[env_ids], _ = subtract_frame_transforms(
-            self._robot.data.root_pos_w[env_ids], self._robot.data.root_quat_w[env_ids], self.cube_pos_w[env_ids]
+        cube_pos_b, cube_quat_b = subtract_frame_transforms(
+            self._robot.data.root_pos_w[env_ids],
+            self._robot.data.root_quat_w[env_ids],
+            self.cube_pose_w[:, 0:3][env_ids],
         )
+        self.cube_pose_b[env_ids] = torch.cat((cube_pos_b, cube_quat_b), dim=-1)
+
+        robot_tcp_quat_w, robot_tcp_pos_w = tf_combine(
+            self.robot_ee_pose_w[env_ids][:, 3:7],
+            self.robot_ee_pose_w[env_ids][:, 0:3],
+            self.tcp_offset[env_ids][:, 3:7],
+            self.tcp_offset[env_ids][:, 0:3],
+        )
+
+        self.robot_tcp_pose_w[env_ids] = torch.cat((robot_tcp_pos_w, robot_tcp_quat_w), dim=-1)
 
     def _reset_cube_pose(self, env_ids: torch.Tensor | None):
         """Reset the position of the cube"""
@@ -311,61 +229,33 @@ class KinovaLiftCubeEnv(DirectRLEnv):
         base_pos_w = self._robot.data.root_pos_w[env_ids]
         base_quat_w = self._robot.data.root_quat_w[env_ids]
 
-        self.cube_pose_b[env_ids] = self.cube_init_ranges[:, 0] + (
+        self.cube_xyz_b[env_ids] = self.cube_init_ranges[:, 0] + (
             self.cube_init_ranges[:, 1] - self.cube_init_ranges[:, 0]
-        )  # * torch.rand((len(env_ids), len(self.cube_init_ranges)), device=self.device)
+        ) * torch.rand((len(env_ids), len(self.cube_init_ranges)), device=self.device)
 
-        cube_pos_b = self.cube_pose_b[env_ids, :3]
+        # Cube in base frame
         cube_quat_b = quat_from_euler_xyz(
             self.cube_pose_b[env_ids, 3], self.cube_pose_b[env_ids, 4], self.cube_pose_b[env_ids, 5]
         )
-        # In world frame
-        self.cube_quat_w[env_ids], self.cube_pos_w[env_ids] = tf_combine(
-            base_quat_w, base_pos_w, cube_quat_b, cube_pos_b
-        )
+        self.cube_pose_b[env_ids] = torch.cat((self.cube_xyz_b[env_ids][:, 0:3], cube_quat_b), dim=-1)
 
-        # Set cube goal position and rotation
-        self.cube_goal_pose_b[env_ids] = self.cube_goal_ranges[:, 0] + (
+        # Cube in world frame
+        cube_quat_w, cube_pos_w = tf_combine(base_quat_w, base_pos_w, cube_quat_b, self.cube_xyz_b[env_ids][:, 0:3])
+        self.cube_pose_w[env_ids] = torch.cat((cube_pos_w, cube_quat_w), dim=-1)
+
+        # Set cube goal position and rotation in base frame
+        self.cube_goal_xyz_b[env_ids] = self.cube_goal_ranges[:, 0] + (
             self.cube_goal_ranges[:, 1] - self.cube_goal_ranges[:, 0]
         ) * torch.rand((len(env_ids), len(self.cube_goal_ranges)), device=self.device)
-        cube_goal_pos_b = self.cube_goal_pose_b[env_ids, :3]
+
         cube_goal_quat_b = quat_from_euler_xyz(
-            self.cube_goal_pose_b[env_ids, 3], self.cube_goal_pose_b[env_ids, 4], self.cube_goal_pose_b[env_ids, 5]
+            self.cube_goal_xyz_b[env_ids, 3], self.cube_goal_xyz_b[env_ids, 4], self.cube_goal_xyz_b[env_ids, 5]
         )
-        # In world frame
-        self.cube_goal_quat_w[env_ids], self.cube_goal_pos_w[env_ids] = tf_combine(
-            base_quat_w, base_pos_w, cube_goal_quat_b, cube_goal_pos_b
+        # Cube goal position in world frame
+        cube_goal_quat_w, cube_goal_pos_w = tf_combine(
+            base_quat_w, base_pos_w, cube_goal_quat_b, self.cube_goal_xyz_b[env_ids][:, 0:3]
         )
-
-
-class KinovaLiftCubeSkillEnv(KinovaLiftCubeEnv):
-    """Lift cube environment for skillet."""
-
-    # pre-physics step calls
-    #   |-- _pre_physics_step(action)
-    #   |-- _apply_action()
-    # post-physics step calls
-    #   |-- _get_dones()
-    #   |-- _get_rewards()
-    #   |-- _reset_idx(env_ids)
-    #   |-- _get_observations()
-
-    cfg: KinovaLiftCubeEnvCfg
-
-    def __init__(self, cfg: KinovaLiftCubeEnvCfg, render_mode: str | None = None, **kwargs):
-        super().__init__(cfg, render_mode, **kwargs)
-
-    # pre-physics step calls
-    def _pre_physics_step(self, actions: torch.Tensor):
-        self.robot_dof_targets = torch.clamp(actions, self.robot_dof_lower_limits, self.robot_dof_upper_limits)
-
-        # Update markers
-        robot_tcp_rot, robot_tcp_pos = tf_combine(
-            self.robot_ee_quat_w, self.robot_ee_pos_w, self.tcp_offset_quat, self.tcp_offset_pos
-        )
-
-        self.cube_current_marker.visualize(self.cube_pos_w, self.cube_quat_w)
-        self.current_marker.visualize(robot_tcp_pos, robot_tcp_rot)
+        self.cube_goal_pose_w[env_ids] = torch.cat((cube_goal_pos_w, cube_goal_quat_w), dim=-1)
 
 
 @torch.jit.script
@@ -374,10 +264,7 @@ def compute_rewards(
     prev_actions: torch.Tensor,
     joint_pos: torch.Tensor,
     joint_vel: torch.Tensor,
-    ee_pos: torch.Tensor,
-    ee_quat: torch.Tensor,
-    tcp_offset_pos: torch.Tensor,
-    tcp_offset_quat: torch.Tensor,
+    tcp_pos_w: torch.Tensor,
     cube_pos_w: torch.Tensor,
     cube_goal_pos_w: torch.Tensor,
     min_height: float,
@@ -391,13 +278,9 @@ def compute_rewards(
     action_rate_reward_scale: float,
     joint_vel_reward_scale: float,
 ):
-    _, robot_tcp_pos = tf_combine(ee_quat, ee_pos, tcp_offset_quat, tcp_offset_pos)
-
     # Distance of the end-effector to the object
-    cube_tcp_distance = torch.norm(cube_pos_w - robot_tcp_pos, dim=1)
+    cube_tcp_distance = torch.norm(cube_pos_w - tcp_pos_w, dim=1)
     cube_tcp_distance_reward = cube_reach_reward_scale * (1 - torch.tanh(cube_tcp_distance / cube_reach_reward_std))
-
-    gripper_reward = 5.0 * (cube_tcp_distance < 0.05) * torch.clamp(actions[:, -1], 0.0, 1.0)
 
     cube_lifted_reward = cube_lift_reward_scale * torch.where(cube_pos_w[:, 2] > min_height, 1.0, 0.0)
 
@@ -419,8 +302,8 @@ def compute_rewards(
     joint_vel_reward = (joint_vel_reward_scale * torch.sum(torch.square(joint_vel), dim=1)).clamp(-1, 1)
 
     return (
-        gripper_reward
-        + cube_tcp_distance_reward
+        # gripper_reward
+        cube_tcp_distance_reward
         + cube_lifted_reward
         + cube_dist_reward
         + cube_dist_reward_fine_grained

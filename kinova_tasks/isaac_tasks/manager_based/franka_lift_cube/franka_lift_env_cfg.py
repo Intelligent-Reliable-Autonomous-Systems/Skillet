@@ -27,7 +27,7 @@ class FrankaCubeLiftEnvCfg(LiftEnvCfg):
         super().__post_init__()
 
         self.joint_ids = [0, 1, 2, 3, 4, 5, 6, 7]
-        self.tcp_offset = [0.0, 0.0, 0.1034, 0.0, 0.0, 0.0, 0.0]
+        self.tcp_offset = [0.0, 0.0, 0.1034, 1.0, 0.0, 0.0, 0.0]
         self.ee_link_name = "panda_hand"
         self.base_link_name = "panda_link0"
         self.gripper_joint_names = ["panda_finger_joint1"]

@@ -21,6 +21,7 @@ from skillet.envs.util import configclass
 class FrankaReachEnvCfg(FrankaBaseCfg):
     action_scale = 0.5
     dof_velocity_scale = 0.1
+    skills = []
 
     # reward scales
     ee_dist_reward_scale = -0.2
@@ -72,7 +73,7 @@ class FrankaReachIKEnv(FrankaReachEnv):
         cfg.robot.actuators["panda_forearm"].stiffness = 400.0
         cfg.robot.actuators["panda_forearm"].damping = 80.0
         cfg.ee_link_name = "panda_hand"
-        cfg.skills = ["reach_xyz", "orient_rpy"]
+        cfg.skills = ["reach_xyz"]
 
         super().__init__(cfg, render_mode, **kwargs)
 
@@ -109,6 +110,8 @@ class FrankaReachIKEnv(FrankaReachEnv):
 class FrankaReachOSCEnv(FrankaReachEnv):
     """Use this environment when computing actions with a OSC controlller."""
 
+    cfg: FrankaReachEnvCfg
+
     def __init__(self, cfg: FrankaReachEnvCfg, render_mode: str | None = None, **kwargs):
         cfg.decimation = 2
         cfg.sim.dt = 0.01
@@ -119,7 +122,7 @@ class FrankaReachOSCEnv(FrankaReachEnv):
         cfg.robot.actuators["panda_hand"].stiffness = 0.0
         cfg.robot.actuators["panda_hand"].damping = 0.0
         cfg.ee_link_name = "panda_hand"
-        cfg.skills = ["reach_xyz_osc", "orient_rpy_osc"]
+        cfg.skills = ["reach_xyz_osc"]
         super().__init__(cfg, render_mode, **kwargs)
 
     # pre-physics step calls
@@ -164,6 +167,6 @@ def compute_rewards_osc(
 ) -> torch.Tensor:
     reach_rew = 1 - torch.tanh(10 * torch.norm(ee_pos - goal_ee_pos, dim=1))
 
-    orientation_reward = 1 - torch.tanh(quat_error_magnitude(ee_quat, goal_ee_quat))
+    orientation_reward = 1 - torch.tanh(10 * quat_error_magnitude(ee_quat, goal_ee_quat))
 
     return reach_rew + orientation_reward

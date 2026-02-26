@@ -4,25 +4,23 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from skillet.envs.util import configclass
-from skillet.rl.cfg import RslRlOnPolicyRunnerCfg, RslRlPpoAlgorithmCfg, RslRlPpoPolicyCfg
+from skillet.rl.cfg import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg
 
 
 @configclass
-class Gen3LiftCubePPORunnerCfg(RslRlOnPolicyRunnerCfg):
+class KinovaLiftCubePPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
     max_iterations = 1500
     save_interval = 50
-    experiment_name = "lift_cube_gen3"
-    obs_groups = {"policy": ["policy"], "critic": ["policy"]}
-    actor = RslRlPpoPolicyCfg(
+    experiment_name = "kinova_lift_cube"
+    policy = RslRlPpoActorCriticCfg(
         init_noise_std=1.0,
-        hidden_dims=[256, 128, 64],
+        actor_obs_normalization=False,
+        critic_obs_normalization=False,
+        actor_hidden_dims=[256, 128, 64],
+        critic_hidden_dims=[256, 128, 64],
         activation="elu",
-    )
-    critic = RslRlPpoPolicyCfg(
-        init_noise_std=1.0,
-        hidden_dims=[256, 128, 64],
-        activation="elu",
+        hierarchical_policy=False,
     )
     algorithm = RslRlPpoAlgorithmCfg(
         value_loss_coef=1.0,

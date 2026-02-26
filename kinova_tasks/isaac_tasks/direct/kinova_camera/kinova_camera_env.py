@@ -1,16 +1,14 @@
-"""
-Kinova Gen3 environment with a configurable RGBD camera.
+"""Kinova Gen3 environment with a configurable RGBD camera.
 
 Env config + scene setup.
-  - Robot:  KINOVA_GEN3_2F85_ARM_CFG
+  - Robot:  KINOVA_GEN3_2F85_CFG
   - Camera: RGBDCameraCfg  (spawnable at any world-frame position)
 """
 
 from __future__ import annotations
 
-import carb
-import torch
 import isaaclab.sim as sim_utils
+import torch
 from isaaclab.assets import Articulation, RigidObject, RigidObjectCfg
 from isaaclab.envs import DirectRLEnv
 from isaaclab.scene import InteractiveSceneCfg
@@ -19,15 +17,14 @@ from isaaclab.sim import SimulationCfg
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 
-from kinova_tasks.assets.kinova_gen3_2f85_arm import KINOVA_GEN3_2F85_ARM_CFG
+from kinova_tasks.assets.kinova_gen3_2f85 import KINOVA_GEN3_2F85_CFG
 from skillet.envs.isaac import RGBDCameraCfg, SkillsDirectRLEnvCfg
 from skillet.envs.util import configclass
 
 
 @configclass
 class KinovaGenCameraEnvCfg(SkillsDirectRLEnvCfg):
-    """
-    Env config for the Kinova Gen3 arm with an RGBD camera.
+    """Env config for the Kinova Gen3 arm with an RGBD camera.
 
     Customize the camera spawn pose by overriding ``camera_cfg``::
 
@@ -44,7 +41,7 @@ class KinovaGenCameraEnvCfg(SkillsDirectRLEnvCfg):
     state_space = 0
 
     joint_ids = [0, 1, 2, 3, 4, 5, 6, 7]
-    tcp_offset = [0.120, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0]
+    tcp_offset = [0.0, 0.0, 0.120, 1.0, 0.0, 0.0, 0.0]
     ee_link_name = "end_effector_link"
     base_link_name = "base_link"
     gripper_joint_names = "robotiq_85_left_knuckle_joint"
@@ -66,7 +63,7 @@ class KinovaGenCameraEnvCfg(SkillsDirectRLEnvCfg):
     scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=1, env_spacing=2.5, replicate_physics=True)
 
     # --- robot: Kinova Gen3 arm (Kinova_Gen3.usd) ---
-    robot = KINOVA_GEN3_2F85_ARM_CFG.replace(prim_path="/World/envs/env_.*/Robot")
+    robot = KINOVA_GEN3_2F85_CFG.replace(prim_path="/World/envs/env_.*/Robot")
 
     # --- camera: mounted on bracelet_link (wrist camera) ---
     # prim_path attaches the camera to the wrist link; it moves with the robot.
@@ -269,4 +266,3 @@ class KinovaGenCameraEnv(DirectRLEnv):
         cube_quat[:, 0] = 1.0
         self._red_cube.write_root_pose_to_sim(torch.cat([cube_pos, cube_quat], dim=-1), env_ids)
         self._red_cube.write_root_velocity_to_sim(torch.zeros((num, 6), device=self.device), env_ids)
-

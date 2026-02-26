@@ -23,8 +23,9 @@ from isaaclab.markers.config import FRAME_MARKER_CFG  # isort: skip
 ##
 # Pre-defined configs
 ##
-from isaac_kinova.assets.kinova_gen3_2f85 import KINOVA_GEN3_2F85_CFG
 from isaaclab.managers import SceneEntityCfg
+
+from kinova_tasks.assets.kinova_gen3_2f85 import KINOVA_GEN3_2F85_CFG
 
 ##
 # Environment configuration
@@ -35,9 +36,16 @@ class KinovaLiftCubeEnvCfg(LiftEnvCfg):
     def __post_init__(self):
         # post init of parent
         super().__post_init__()
-
+        self.joint_ids = [0, 1, 2, 3, 4, 5, 6, 7]
+        self.tcp_offset = [0.0, 0.0, 0.120, 1.0, 0.0, 0.0, 0.0]
         # Set Franka as robot
         self.scene.robot = KINOVA_GEN3_2F85_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+
+        self.ee_link_name = "end_effector_link"
+        self.base_link_name = "base_link"
+        self.gripper_joint_names = ["robotiq_85_left_knuckle_joint"]
+
+        self.skills = []
 
         # Set actions for the specific robot type (franka)
         self.actions.arm_action = mdp.JointPositionActionCfg(
@@ -48,9 +56,9 @@ class KinovaLiftCubeEnvCfg(LiftEnvCfg):
         )
         self.actions.gripper_action = mdp.BinaryJointPositionActionCfg(
             asset_name="robot",
-            joint_names=["finger_joint"],
-            open_command_expr={"finger_joint": -0.5},
-            close_command_expr={"finger_joint": 1.0},
+            joint_names=["robotiq_85_left_knuckle_joint"],
+            open_command_expr={"robotiq_85_left_knuckle_joint": 0.0},
+            close_command_expr={"robotiq_85_left_knuckle_joint": 0.8},
         )
         # Set the body name for the end effector
         self.commands.object_pose.body_name = "end_effector_link"
@@ -83,15 +91,15 @@ class KinovaLiftCubeEnvCfg(LiftEnvCfg):
         marker_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)
         marker_cfg.prim_path = "/Visuals/FrameTransformer"
         self.scene.ee_frame = FrameTransformerCfg(
-            prim_path="{ENV_REGEX_NS}/Robot/base_link",
+            prim_path="{ENV_REGEX_NS}/Robot/Arm/base_link",
             debug_vis=False,
             visualizer_cfg=marker_cfg,
             target_frames=[
                 FrameTransformerCfg.FrameCfg(
-                    prim_path="{ENV_REGEX_NS}/Robot/end_effector_link",
+                    prim_path="{ENV_REGEX_NS}/Robot/Arm/end_effector_link",
                     name="end_effector",
                     offset=OffsetCfg(
-                        pos=[0.120, 0.0, 0.0],
+                        pos=[0.0, 0.0, 0.120],
                     ),
                 ),
             ],

@@ -3,35 +3,33 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-
 from skillet.envs.util import configclass
 from skillet.rl.cfg import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg, RslRlPpoPolicyCfg
 
 
 @configclass
-class KinovaReachPPORunnerCfg(RslRlOnPolicyRunnerCfg):
+class KinovaLiftCubePPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
-    max_iterations = 1000
+    max_iterations = 2500
     save_interval = 50
-    experiment_name = "kinova_reach_direct"
-    run_name = ""
+    experiment_name = "kinova_lift_cube_direct"
     obs_groups = {"policy": ["policy"], "critic": ["policy"]}
-    resume = False
-    empirical_normalization = False
     actor = RslRlPpoPolicyCfg(
         init_noise_std=1.0,
-        hidden_dims=[64, 64],
+        hidden_dims=[256, 128, 64],
         activation="elu",
     )
     critic = RslRlPpoPolicyCfg(
         init_noise_std=1.0,
-        hidden_dims=[64, 64],
+        hidden_dims=[256, 128, 64],
         activation="elu",
     )
     policy = RslRlPpoActorCriticCfg(
         init_noise_std=1.0,
-        actor_hidden_dims=[64, 64],
-        critic_hidden_dims=[64, 64],
+        actor_obs_normalization=False,
+        critic_obs_normalization=False,
+        actor_hidden_dims=[256, 128, 64],
+        critic_hidden_dims=[256, 128, 64],
         activation="elu",
         hierarchical_policy=False,
     )
@@ -39,12 +37,12 @@ class KinovaReachPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         value_loss_coef=1.0,
         use_clipped_value_loss=True,
         clip_param=0.2,
-        entropy_coef=0.001,
-        num_learning_epochs=8,
+        entropy_coef=0.006,
+        num_learning_epochs=5,
         num_mini_batches=4,
-        learning_rate=1.0e-3,
+        learning_rate=1.0e-4,
         schedule="adaptive",
-        gamma=0.99,
+        gamma=0.98,
         lam=0.95,
         desired_kl=0.01,
         max_grad_norm=1.0,
@@ -52,29 +50,27 @@ class KinovaReachPPORunnerCfg(RslRlOnPolicyRunnerCfg):
 
 
 @configclass
-class FrankaReachPPORunnerCfg(RslRlOnPolicyRunnerCfg):
+class FrankaLiftCubePPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
-    max_iterations = 1000
+    max_iterations = 1500
     save_interval = 50
-    experiment_name = "franka_reach_direct"
-    run_name = ""
-    obs_groups = {"policy": ["policy"], "critic": ["policy"]}
-    resume = False
-    empirical_normalization = False
+    experiment_name = "franka_lift_cube_direct"
     actor = RslRlPpoPolicyCfg(
         init_noise_std=1.0,
-        hidden_dims=[64, 64],
+        hidden_dims=[256, 128, 64],
         activation="elu",
     )
     critic = RslRlPpoPolicyCfg(
         init_noise_std=1.0,
-        hidden_dims=[64, 64],
+        hidden_dims=[256, 128, 64],
         activation="elu",
     )
     policy = RslRlPpoActorCriticCfg(
         init_noise_std=1.0,
-        actor_hidden_dims=[64, 64],
-        critic_hidden_dims=[64, 64],
+        actor_obs_normalization=False,
+        critic_obs_normalization=False,
+        actor_hidden_dims=[256, 128, 64],
+        critic_hidden_dims=[256, 128, 64],
         activation="elu",
         hierarchical_policy=False,
     )
@@ -82,12 +78,12 @@ class FrankaReachPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         value_loss_coef=1.0,
         use_clipped_value_loss=True,
         clip_param=0.2,
-        entropy_coef=0.001,
-        num_learning_epochs=8,
+        entropy_coef=0.006,
+        num_learning_epochs=5,
         num_mini_batches=4,
-        learning_rate=1.0e-3,
+        learning_rate=1.0e-4,
         schedule="adaptive",
-        gamma=0.99,
+        gamma=0.98,
         lam=0.95,
         desired_kl=0.01,
         max_grad_norm=1.0,

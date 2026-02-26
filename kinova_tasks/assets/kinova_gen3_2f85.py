@@ -27,13 +27,13 @@ from kinova_tasks.assets.utils import KINOVA_ASSET_DIR
 KINOVA_GEN3_2F85_CFG = ArticulationCfg(
     prim_path="/World/envs/env_.*/Robot",
     spawn=sim_utils.UsdFileCfg(
-        usd_path=f"{KINOVA_ASSET_DIR}/robots/kinova/kinova_gen3_robotiq_2f_85_action_graph.usd",
+        usd_path=f"{KINOVA_ASSET_DIR}/robots/kinova/kinova_gen3_2f85.usd",
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
-            disable_gravity=False,
+            disable_gravity=True,
             max_depenetration_velocity=5.0,
         ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-            enabled_self_collisions=True, solver_position_iteration_count=12, solver_velocity_iteration_count=0
+            enabled_self_collisions=True, solver_position_iteration_count=8, solver_velocity_iteration_count=0
         ),
     ),
     init_state=ArticulationCfg.InitialStateCfg(
@@ -45,14 +45,12 @@ KINOVA_GEN3_2F85_CFG = ArticulationCfg(
             "joint_5": 0.0,
             "joint_6": 0.785398,
             "joint_7": 0.0,
-            "finger_joint": 0.0,  # left outer knuckle joint for manipulation
-            "right_outer_knuckle_joint": 0.0,
-            "left_outer_finger_joint": 0.0,
-            "right_outer_finger_joint": 0.0,
-            "left_inner_finger_joint": 0.0,
-            "right_inner_finger_joint": 0.0,
-            "right_inner_finger_knuckle_joint": 0.0,
-            "left_inner_finger_knuckle_joint": 0.0,
+            "robotiq_85_left_knuckle_joint": 0.0,  # left outer knuckle joint for manipulation
+            "robotiq_85_right_knuckle_joint": 0.0,
+            "robotiq_85_left_finger_tip_joint": 0.0,
+            "robotiq_85_right_finger_tip_joint": 0.0,
+            "robotiq_85_left_inner_knuckle_joint": 0.0,
+            "robotiq_85_right_inner_knuckle_joint": 0.0,
         },
     ),
     actuators={
@@ -60,29 +58,26 @@ KINOVA_GEN3_2F85_CFG = ArticulationCfg(
             joint_names_expr=["joint_[1-7]"],
             velocity_limit_sim=100.0,
             effort_limit_sim={
-                "joint_[1-2]": 80.0,
-                "joint_[3]": 40.0,
-                "joint_[4-7]": 20.0,
+                "joint_[1-4]": 80.0,
+                "joint_[5-7]": 20.0,
             },
             stiffness={
-                "joint_[1-3]": 4000.0,
+                "joint_[1-4]": 4000.0,
                 "joint_[5-7]": 1500.0,
             },
             damping={
-                "joint_[1-3]": 1000.0,
-                "joint_[4-7]": 500.0,
+                "joint_[1-4]": 1000.0,
+                "joint_[5-7]": 500.0,
             },
         ),
         "gripper": ImplicitActuatorCfg(
             joint_names_expr=[
-                "finger_joint",
-                "right_outer_knuckle_joint",
-                "left_outer_finger_joint",
-                "right_outer_finger_joint",
-                "left_inner_finger_joint",
-                "right_inner_finger_joint",
-                "right_inner_finger_knuckle_joint",
-                "left_inner_finger_knuckle_joint",
+                "robotiq_85_left_knuckle_joint",
+                "robotiq_85_right_knuckle_joint",
+                "robotiq_85_left_finger_tip_joint",
+                "robotiq_85_right_finger_tip_joint",
+                "robotiq_85_left_inner_knuckle_joint",
+                "robotiq_85_right_inner_knuckle_joint",
             ],
             effort_limit_sim=10,
             stiffness=2000.0,

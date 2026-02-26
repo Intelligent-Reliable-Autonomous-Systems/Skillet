@@ -26,7 +26,7 @@ from isaaclab.devices.openxr.retargeters.manipulator.gripper_retargeter import G
 from isaaclab.devices.openxr.retargeters.manipulator.se3_rel_retargeter import Se3RelRetargeterCfg
 from isaaclab.managers import SceneEntityCfg
 
-from kinova_tasks.assets.kinova_gen3_2f85 import KINOVA_GEN3_2F85_CFG, KINOVA_GEN3_2F85_HIGH_CFG
+from kinova_tasks.assets.kinova_gen3_2f85 import KINOVA_GEN3_2F85_CFG
 
 ##
 # Environment configuration
