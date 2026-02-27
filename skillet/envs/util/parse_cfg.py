@@ -187,7 +187,7 @@ def parse_mj_env_cfg(
     # we assume users always use a class for the configuration
     if isinstance(cfg, dict):
         raise RuntimeError(f"Configuration for the task: '{task_name}' is not a class. Please provide a class.")
-    cfg.device = device
+    cfg.sim.device = device
     cfg.scene.num_envs = num_envs
     return cfg
 

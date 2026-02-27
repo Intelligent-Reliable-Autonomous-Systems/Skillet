@@ -32,7 +32,7 @@ from skillet.skill.low_level import FixedLengthSkill
 parser = argparse.ArgumentParser(description="Main Mujoco Executor file through Mujoco Warp.")
 
 parser.add_argument("--num_envs", type=int, default=4, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="Isaac-Reach-Franka-v0", help="Name of the task.")
+parser.add_argument("--task", type=str, default="MJ-Lift-Cube-Kinova-v0", help="Name of the task.")
 parser.add_argument("--device", type=str, default="cuda", help="GPU device")
 
 # parse the arguments

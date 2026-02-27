@@ -1,5 +1,5 @@
 import math
-from dataclasses import field
+from dataclasses import MISSING, field
 from typing import Any
 
 import gymnasium as gym
@@ -59,11 +59,11 @@ class ManagerBasedRLEnvCfg:
 
     # Base environment configuration.
 
-    decimation: int
+    decimation: int = MISSING
     """Number of physics simulation steps per environment step. Higher values mean
   coarser control frequency. Environment step duration = physics_dt * decimation."""
 
-    scene: SceneCfg
+    scene: SceneCfg = MISSING
     """Scene configuration defining terrain, entities, and sensors. The scene
   specifies ``num_envs``, the number of parallel environments."""
 
@@ -101,7 +101,7 @@ class ManagerBasedRLEnvCfg:
 
     # RL-specific configuration.
 
-    episode_length_s: float = 0.0
+    episode_length_s: float = MISSING
     """Duration of an episode (in seconds).
 
   Episode length in steps is computed as:
@@ -124,7 +124,7 @@ class ManagerBasedRLEnvCfg:
     metrics: dict[str, MetricsTermCfg] = field(default_factory=dict)
     """Custom metric terms for logging per-step values as episode averages."""
 
-    is_finite_horizon: bool = False
+    is_finite_horizon: bool = MISSING
     """Whether the task has a finite or infinite horizon. Defaults to False (infinite).
 
   - **Finite horizon (True)**: The time limit defines the task boundary. When reached,
@@ -134,7 +134,7 @@ class ManagerBasedRLEnvCfg:
     limit.
   """
 
-    scale_rewards_by_dt: bool = True
+    scale_rewards_by_dt: bool = MISSING
     """Whether to multiply rewards by the environment step duration (dt).
 
   When True (default), reward values are scaled by step_dt to normalize cumulative
@@ -169,12 +169,12 @@ class ManagerBasedRLEnv(gym.Env):
         self.obs_buf = {}
 
         # Initialize scene and simulation.
-        self.scene = Scene(self.cfg.scene, device=cfg.device)
+        self.scene = Scene(self.cfg.scene, device=cfg.sim.device)
         self.sim = Simulation(
             num_envs=self.scene.num_envs,
             cfg=self.cfg.sim,
             model=self.scene.compile(),
-            device=cfg.device,
+            device=cfg.sim.device,
         )
 
         self.scene.initialize(
@@ -204,7 +204,7 @@ class ManagerBasedRLEnv(gym.Env):
 
         # Initialize RL-specific state.
         self.common_step_counter = 0
-        self.episode_length_buf = torch.zeros(cfg.scene.num_envs, device=cfg.device, dtype=torch.long)
+        self.episode_length_buf = torch.zeros(cfg.scene.num_envs, device=cfg.sim.device, dtype=torch.long)
         self.render_mode = render_mode
         self._offline_renderer: OffscreenRenderer | None = None
         if self.render_mode == "rgb_array":

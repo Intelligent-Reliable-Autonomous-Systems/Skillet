@@ -20,6 +20,7 @@ parser.add_argument("--video_length", type=int, default=200, help="Length of the
 parser.add_argument("--video_interval", type=int, default=2000, help="Interval between video recordings (in steps).")
 parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
+parser.add_argument("--device", type=str, default="cuda", help="Name of GPU device")
 parser.add_argument(
     "--agent", type=str, default="rsl_rl_cfg_entry_point", help="Name of the RL agent configuration entry point."
 )
@@ -106,7 +107,7 @@ def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
     env_cfg.log_dir = log_dir
 
     # create environment
-    env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
+    env = gym.make(args_cli.task, cfg=env_cfg)
 
     # save resume path before creating a new log_dir
     if agent_cfg.resume:
