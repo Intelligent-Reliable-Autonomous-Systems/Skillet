@@ -1,4 +1,4 @@
-"""kinova_reach_ros2.py.
+"""kinova_reach_ros2_rl.py.
 
 Kinova Arm class for ROS2 RL
 
@@ -15,10 +15,10 @@ from skillet.envs.ros2 import (
     ROS2RLEnvCfg,
 )
 
-from .kinova_reach_ros2 import KinovaROS2ReachEnv
+from .kinova_ros2 import KinovaROS2Env
 
 
-class KinovaROS2ReachRLEnv(KinovaROS2ReachEnv):
+class KinovaROS2ReachRLEnv(KinovaROS2Env):
     def __init__(self, cfg: ROS2RLEnvCfg, ros: Ros, render_mode: str | None = None, **kwargs: dict[str, Any]) -> None:
         super().__init__(cfg, ros, render_mode=render_mode, **kwargs)
 

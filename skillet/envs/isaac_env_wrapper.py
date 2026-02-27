@@ -236,6 +236,7 @@ class IsaacEnvWrapper(
             A tuple containing the observation of observations tensor (N, obs_dim) and info dictionary
 
         """
+        action = action.to(self.device)
         obs_dict, reward, term, trunc, info = self.env.step(action)
         self.last_obs = obs_dict
 
