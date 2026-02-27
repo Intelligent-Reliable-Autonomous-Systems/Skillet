@@ -26,13 +26,57 @@ from skillet.core.math import (
 from skillet.envs.ros2 import (
     ROS2RLEnvCfg,
 )
+from skillet.envs.util import configclass
 
-from .kinova_ros2 import KinovaROS2Env
+from ..kinova.kinova_ros2 import KinovaROS2Env
+
+
+@configclass
+class TeleOpKinovaROS2EnvCfg(ROS2RLEnvCfg):
+    """The configuration class for Kinova Gen3 Arm."""
+
+    """Robot configuration"""
+
+    # Whether to spin up real robot or not
+    use_fake_hardware = "true"
+
+    # IP of the robot
+    robot_ip = "www.xxx.yyy.zzz"
+
+    # Visualize
+    vision = False
+
+    # Default joint position of robot
+    default_joint_positions = [0.0, 0.523599, 0.0, 1.5708, 0.0, 0.785398, 0.0, 0.0]  # Double format for ROS 2
+
+    """RL environment configuration"""
+    num_envs = 1
+
+    device = "cuda"
+
+    dt = 1 / 60
+
+    decimation = 6.0
+
+    episode_length_s = 5.0
+
+    skills = ["reach_xyz"]
+
+    joint_ids = [0, 1, 2, 3, 4, 5, 6, 7]
+    tcp_offset = [0.0, 0.0, 0.12, 1.0, 0.0, 0.0, 0.0]
+    ee_link_name = "robotiq_85_base_link"
+    base_link_name = "base_link"
+    gripper_joint_names = ["robotiq_85_left_knuckle_joint"]
 
 
 class KinovaROS2IKRelEnv(KinovaROS2Env):
+    """Relative inverse kinematics control assuming a 7 DoF action space (delta xyz, delta rpy + gripper)."""
+
     def __init__(self, cfg: ROS2RLEnvCfg, ros: Ros, render_mode: str | None = None, **kwargs: dict[str, Any]) -> None:
-        cfg.episode_length_s = 10e10
+        cfg.episode_length_s = 10e12  # Basically make it so no resets
+        cfg.decimation = 6.0
+        cfg.dt = 1 / 60
+
         super().__init__(cfg, ros, render_mode=render_mode, **kwargs)
         self.single_action_space = gym.spaces.Box(float("-inf"), float("inf"), shape=(7,))
         self.action_space = gym.vector.utils.batch_space(self.single_action_space, self.num_envs)
@@ -41,8 +85,8 @@ class KinovaROS2IKRelEnv(KinovaROS2Env):
     def _reset_idx(self) -> None:
         """Reset environment based on specified indices to default position."""
         super()._reset_idx()
-        self._publish_action_to_robot(self.default_joint_positions, duration=5)
-        time.sleep(5)
+        self._publish_action_to_robot(self.default_joint_positions, duration=8)
+        time.sleep(8)
         self.ik_controller.reset(n_envs=self.num_envs)
 
     def _pre_process_action(self, actions: torch.Tensor) -> np.ndarray:

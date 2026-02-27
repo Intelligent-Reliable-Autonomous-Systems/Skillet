@@ -345,12 +345,8 @@ class KinovaROS2Env(ROS2RLEnv):
         effort = feedback.get("effort")
         stalled = feedback.get("stalled", False)
 
-        print(f"[INFO] Gripper feedback: pos={pos}, effort={effort}, stalled={stalled}")
-
         if stalled:
-            print("[INFO] Gripper stalled before reaching goal")
-
-        pass
+            print(f"[INFO] Gripper feedback: pos={pos}, effort={effort}, stalled={stalled}")
 
     def _gripper_error_cb(self, err: dict[str, Any]) -> None:
         """Gripper action error callback."""
@@ -363,7 +359,6 @@ class KinovaROS2Env(ROS2RLEnv):
         # Set internal state so higher-level logic can react
         self.gripper_ok = False
         self.last_gripper_error = err
-        pass
 
     def _get_latest_rgbd(self) -> dict[str, Any]:
         """Request and decode the latest RGB-D snapshot synchronously.

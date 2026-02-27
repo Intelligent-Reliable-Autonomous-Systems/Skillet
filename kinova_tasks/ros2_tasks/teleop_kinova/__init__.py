@@ -14,22 +14,24 @@ from . import agents
 ##
 # Joint Position Control
 ##
+
+
 gym.register(
-    id="ROS2-Kinova-v0",
-    entry_point=f"{__name__}.kinova_ros2:KinovaROS2Env",
+    id="ROS2-Kinova-IK-Rel-v0",
+    entry_point=f"{__name__}.kinova_ik_rel_ros2:KinovaROS2IKRelEnv",
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": f"{__name__}.kinova_ros2:KinovaROS2EnvCfg",
+        "env_cfg_entry_point": f"{__name__}.kinova_ik_rel_ros2:TeleOpKinovaROS2EnvCfg",
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:KinovaReachPPORunnerCfg",
     },
 )
 
 gym.register(
-    id="ROS2-Kinova-Reach-RL-v0",
-    entry_point=f"{__name__}.kinova_ros2:KinovaROS2ReachRLEnv",
+    id="ROS2-Kinova-IK-Rel-MoveIt-v0",
+    entry_point=f"{__name__}.kinova_ik_rel_moveit_ros2:KinovaROS2IKRelMoveItEnv",
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": f"{__name__}.kinova_ros2:KinovaROS2EnvCfg",
+        "env_cfg_entry_point": f"{__name__}.kinova_ik_rel_ros2:TeleOpKinovaROS2EnvCfg",
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:KinovaReachPPORunnerCfg",
     },
 )
