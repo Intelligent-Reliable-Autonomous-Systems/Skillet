@@ -64,7 +64,7 @@ class TeleOpKinovaROS2EnvCfg(ROS2RLEnvCfg):
 
     joint_ids = [0, 1, 2, 3, 4, 5, 6, 7]
     tcp_offset = [0.0, 0.0, 0.12, 1.0, 0.0, 0.0, 0.0]
-    ee_link_name = "robotiq_85_base_link"
+    ee_link_name = "end_effector_link"
     base_link_name = "base_link"
     gripper_joint_names = ["robotiq_85_left_knuckle_joint"]
 
@@ -85,8 +85,8 @@ class KinovaROS2IKRelEnv(KinovaROS2Env):
     def _reset_idx(self) -> None:
         """Reset environment based on specified indices to default position."""
         super()._reset_idx()
-        self._publish_action_to_robot(self.default_joint_positions, duration=8)
-        time.sleep(8)
+        #self._publish_action_to_robot(self.default_joint_positions, duration=8)
+        #time.sleep(8)
         self.ik_controller.reset(n_envs=self.num_envs)
 
     def _pre_process_action(self, actions: torch.Tensor) -> np.ndarray:
