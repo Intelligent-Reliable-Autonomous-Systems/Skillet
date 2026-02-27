@@ -84,15 +84,14 @@ class ROS2EnvWrapper(
             device=self.device,
         )
         self._obs_spec_rgbd = ObservationSpec[Mapping[str, Float[torch.Tensor, "b ..."]]](
-            space=gym.spaces.Dict(
-                {
-                    "rgb": gym.spaces.Box(low=0, high=255, shape=(3, 480, 640), dtype=np.uint8),
-                    "depth": gym.spaces.Box(low=0, high=1000, shape=(1, 480, 640), dtype=np.uint16),
-                    "intrinsic_k": gym.spaces.Box(low=0.0, high=2000.0, shape=(3, 3), dtype=np.float32),
-                    "camera_pose": gym.spaces.Box(low=-10.0, high=10.0, shape=(7,), dtype=np.float32),
-                    "timestamp": gym.spaces.Box(low=0.0, high=1e10, shape=(), dtype=np.float64),
-                }
-            ),
+            space=gym.spaces.Dict({
+                "rgb": gym.spaces.Box(low=0, high=255, shape=(3, 480, 640), dtype=np.uint8),
+                # Depth is normalized to float32 meters for downstream perception.
+                "depth": gym.spaces.Box(low=0.0, high=10.0, shape=(1, 480, 640), dtype=np.float32),
+                "intrinsic_k": gym.spaces.Box(low=0.0, high=2000.0, shape=(3, 3), dtype=np.float32),
+                "camera_pose": gym.spaces.Box(low=-10.0, high=10.0, shape=(7,), dtype=np.float32),
+                "timestamp": gym.spaces.Box(low=0.0, high=1e10, shape=(), dtype=np.float64),
+            }),
             name="rgb-d",
             is_torch=True,
             is_batched=True,
@@ -197,8 +196,13 @@ class ROS2EnvWrapper(
             latest["camera_pose"][3:7] = q[[3, 0, 1, 2]]
             # RGB is (H, W, 3) -> (3, H, W)
             latest["rgb"] = latest["rgb"].transpose((2, 0, 1))
-            # Depth is (H, W) -> (1, H, W)
-            latest["depth"] = np.expand_dims(latest["depth"], axis=0)
+            # Depth is (H, W) -> (1, H, W), always float32 meters.
+            depth = np.expand_dims(latest["depth"], axis=0)
+            if depth.dtype == np.uint16:
+                depth = depth.astype(np.float32) / 1000.0
+            else:
+                depth = depth.astype(np.float32, copy=False)
+            latest["depth"] = depth
             return obs_spec.cast(latest)
         if obs_spec.name == "state":
             return self.last_obs

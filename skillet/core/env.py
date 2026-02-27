@@ -74,6 +74,16 @@ class _EnvironmentBase(abc.ABC, Generic[TObs, TAction]):
         """Get the latest state from the environment."""
         raise NotImplementedError
 
+    @abc.abstractmethod
+    def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None) -> tuple[TObs, dict]:
+        """Reset the environment."""
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def step(self, action: TAction) -> tuple[TObs, float, bool, bool, dict]:
+        """Step the environment."""
+        raise NotImplementedError
+
 
 class Environment(_EnvironmentBase[TObs, TAction], gym.Wrapper[TObs, TAction, TObs, TAction], Generic[TObs, TAction]):
     """An environment interface for the Robot Skills framework.
