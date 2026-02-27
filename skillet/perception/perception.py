@@ -32,6 +32,24 @@ try:
 except ImportError:
     o3d = None  # type: ignore[assignment]
 
+_PALETTE_BGR: list[tuple[int, int, int]] = [
+    (44, 44, 220),
+    (44, 190, 44),
+    (220, 110, 44),
+    (0, 190, 240),
+    (200, 44, 200),
+    (210, 210, 44),
+    (0, 130, 255),
+    (170, 44, 240),
+    (44, 240, 160),
+    (240, 160, 44),
+]
+_OVERLAY_ALPHA = 0.35
+_BBOX_THICKNESS = 2
+_FONT = cv2.FONT_HERSHEY_SIMPLEX
+_FONT_SCALE = 0.55
+_FONT_THICKNESS = 1
+
 
 class Perception:
     """Perception class for the Robot Skills framework.
@@ -46,7 +64,7 @@ class Perception:
         poll_rate: float,
         device: str = "cuda",
         max_depth_m: float | None = None,
-        prompts: list[str] | None = None,
+        prompts: dict[str, str] | None = None,
         sam3_model_path: str | None = None,
         segmentation_fn: Callable[[Mapping[str, Any]], torch.Tensor] | None = None,
     ) -> None:
@@ -58,10 +76,12 @@ class Perception:
         self.obs_spec = replace(obs_spec, device=device, is_torch=True)
         self.poll_rate = poll_rate
         self.max_depth_m = max_depth_m
-        self.prompts = prompts or []
+        self.prompts = prompts or {}
+        self._prompt_names = list(self.prompts.keys())
+        self._sam_prompts = list(self.prompts.values())
         self.segmentation_fn = segmentation_fn
         self.sam3: SAM3 | None = None
-        if self.prompts:
+        if self._sam_prompts:
             self.sam3 = SAM3(model_path=sam3_model_path, device=str(self.device))
 
         self._thread: threading.Thread | None = None
@@ -85,6 +105,7 @@ class Perception:
         self._vis_needs_reset = False
         self._vis_max_range_m = 0.0
         self._last_depth_debug_t = 0.0
+        self._vis_owner_thread_id: int | None = None
 
     @staticmethod
     def _maybe_unbatch(obs: Mapping[str, Any]) -> dict[str, torch.Tensor]:
@@ -143,8 +164,8 @@ class Perception:
             masks = self.segmentation_fn(obs_unbatched).to(torch.bool)
             segment_ids = torch.arange(masks.shape[0], dtype=torch.int64, device=masks.device)
             return masks, segment_ids
-        if self.sam3 is not None and self.prompts:
-            masks, instance_ids = self.sam3.predict(obs_unbatched["rgb"], self.prompts)
+        if self.sam3 is not None and self._sam_prompts:
+            masks, instance_ids = self.sam3.predict(obs_unbatched["rgb"], self._sam_prompts)
             return masks > 0, instance_ids.to(torch.int64)
         return self._default_segmentation(obs_unbatched)
 
@@ -208,19 +229,6 @@ class Perception:
         if self._vis_active or self._display_rgb or self._display_depth:
             return
 
-        if display_point_cloud:
-            vis = o3d.visualization.Visualizer()
-            vis.create_window(window_name="Perception Point Cloud", width=1024, height=768)
-            pcd = o3d.geometry.PointCloud()
-            vis.add_geometry(pcd)
-
-            coord = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.2, origin=[0, 0, 0])
-            vis.add_geometry(coord)
-
-            self._vis = vis
-            self._vis_pcd = pcd
-            self._vis_active = True
-
         self._display_point_cloud = display_point_cloud
         self._display_rgb = display_rgb
         self._display_depth = display_depth
@@ -230,41 +238,86 @@ class Perception:
         self._cv2_window_name = cv2_window_name
         self._vis_needs_reset = True
         self._vis_max_range_m = 0.0
+        # Visualization resources are created lazily on the run-loop thread so
+        # run_thread() and start_visualization() can be called from any order.
+        self._vis_active = False
+        self._vis_owner_thread_id = None
+
+    def _ensure_visualization_resources(self) -> None:
+        """Create visualization resources on the current thread if needed."""
+        if self._vis_active:
+            return
+        if not (self._display_point_cloud or self._display_rgb or self._display_depth):
+            return
+
+        if self._display_point_cloud:
+            vis = o3d.visualization.Visualizer()
+            vis.create_window(window_name="Perception Point Cloud", width=1024, height=768)
+            pcd = o3d.geometry.PointCloud()
+            vis.add_geometry(pcd)
+            coord = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.2, origin=[0, 0, 0])
+            vis.add_geometry(coord)
+            self._vis = vis
+            self._vis_pcd = pcd
 
         if self._display_rgb or self._display_depth:
             cv2.namedWindow(self._cv2_window_name, cv2.WINDOW_NORMAL)
 
-    @staticmethod
-    def _segment_palette(mask_idx: int) -> tuple[int, int, int]:
-        """Return deterministic BGR color for a segment id."""
-        r = int((mask_idx * 37) % 255)
-        g = int((mask_idx * 57) % 255)
-        b = int((mask_idx * 97) % 255)
-        return b, g, r
+        self._vis_active = True
+        self._vis_owner_thread_id = threading.get_ident()
+
+    def _draw_instance_annotations(
+        self, image: np.ndarray, masks: torch.Tensor, segment_ids: torch.Tensor
+    ) -> np.ndarray:
+        """Draw semi-transparent overlays, bounding boxes, and prompt labels."""
+        out = image.copy()
+        overlay = image.copy()
+        masks_np = masks.detach().cpu().numpy()
+        ids_np = segment_ids.detach().cpu().numpy()
+        n = masks_np.shape[0]
+
+        for i in range(n):
+            color = _PALETTE_BGR[i % len(_PALETTE_BGR)]
+            overlay[masks_np[i] > 0] = color
+
+        cv2.addWeighted(overlay, _OVERLAY_ALPHA, out, 1.0 - _OVERLAY_ALPHA, 0, out)
+
+        for i in range(n):
+            seg_mask = masks_np[i] > 0
+            prompt_idx = int(ids_np[i])
+            color = _PALETTE_BGR[i % len(_PALETTE_BGR)]
+
+            ys, xs = np.where(seg_mask)
+            if len(ys) == 0:
+                continue
+            x1, y1, x2, y2 = int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())
+            cv2.rectangle(out, (x1, y1), (x2, y2), color, _BBOX_THICKNESS)
+
+            name = self._prompt_names[prompt_idx] if prompt_idx < len(self._prompt_names) else f"obj_{prompt_idx}"
+            label = f"#{i} {name}"
+            (tw, th), _ = cv2.getTextSize(label, _FONT, _FONT_SCALE, _FONT_THICKNESS)
+            tx, ty = x1, y1 - 6
+            if ty - th < 0:
+                ty = y1 + th + 6
+            cv2.rectangle(out, (tx - 1, ty - th - 4), (tx + tw + 5, ty + 4), color, cv2.FILLED)
+            cv2.putText(
+                out, label, (tx + 2, ty), _FONT, _FONT_SCALE,
+                (255, 255, 255), _FONT_THICKNESS, cv2.LINE_AA,
+            )
+
+        return out
 
     def _colorize_segmented_rgb(
         self, rgb_bgr: np.ndarray, masks: torch.Tensor, segment_ids: torch.Tensor
     ) -> np.ndarray:
-        """Color RGB image by segment ids."""
-        out = rgb_bgr.copy()
-        masks_np = masks.detach().to("cpu").numpy()
-        segment_ids_np = segment_ids.detach().to("cpu").numpy()
-        for mask_idx in range(masks_np.shape[0]):
-            seg_mask = masks_np[mask_idx] > 0
-            out[seg_mask] = self._segment_palette(int(segment_ids_np[mask_idx]))
-        return out
+        """Annotate RGB image with per-type overlays, bounding boxes, and labels."""
+        return self._draw_instance_annotations(rgb_bgr, masks, segment_ids)
 
     def _colorize_segmented_depth(
         self, depth_bgr: np.ndarray, masks: torch.Tensor, segment_ids: torch.Tensor
     ) -> np.ndarray:
-        """Color depth image by segment ids."""
-        out = np.zeros_like(depth_bgr)
-        masks_np = masks.detach().to("cpu").numpy()
-        segment_ids_np = segment_ids.detach().to("cpu").numpy()
-        for mask_idx in range(masks_np.shape[0]):
-            seg_mask = masks_np[mask_idx] > 0
-            out[seg_mask] = self._segment_palette(int(segment_ids_np[mask_idx]))
-        return out
+        """Annotate depth colormap with per-type overlays, bounding boxes, and labels."""
+        return self._draw_instance_annotations(depth_bgr, masks, segment_ids)
 
     def _update_rgbd_window(
         self, obs_unbatched: Mapping[str, Any], masks: torch.Tensor, segment_ids: torch.Tensor
@@ -298,6 +351,17 @@ class Perception:
 
     def stop_visualization(self) -> None:
         """Stop the Open3D visualization."""
+        if self._vis_owner_thread_id is not None and self._vis_owner_thread_id != threading.get_ident():
+            # Defer actual teardown to the owning run-loop thread.
+            self._display_point_cloud = False
+            self._display_rgb = False
+            self._display_depth = False
+            self._segment_point_cloud = False
+            self._segment_rgb = False
+            self._segment_depth = False
+            self._vis_active = False
+            return
+
         if self._vis is not None:
             self._vis.destroy_window()
         if self._display_rgb or self._display_depth:
@@ -312,6 +376,7 @@ class Perception:
         self._segment_point_cloud = False
         self._segment_rgb = False
         self._segment_depth = False
+        self._vis_owner_thread_id = None
 
     def stop(self) -> None:
         """Signal the polling loop to stop and wait for the worker thread."""
@@ -322,6 +387,7 @@ class Perception:
 
     def run(self) -> None:
         """Run the perception pipeline."""
+        print("Running perception pipeline")
         poll_period_s = 1.0 / self.poll_rate
         next_poll_t = time.perf_counter()
 
@@ -330,6 +396,7 @@ class Perception:
             obs_unbatched = self._apply_far_plane(self._maybe_unbatch(obs))
             masks, segment_ids = self._get_masks(obs_unbatched)
             point_cloud, segment_indices = self._observation_to_point_cloud(obs_unbatched, masks, segment_ids)
+            self._ensure_visualization_resources()
 
             with self._lock:
                 self.latest_observation = obs
@@ -368,10 +435,18 @@ class Perception:
 
 if __name__ == "__main__":
     env = RealsenseEnv()
-    perception = Perception(env, env.obs_spec, 8, prompts=["wooden block", "plastic block"])
+    perception = Perception(env, env.obs_spec, 8, prompts={
+        "wooden_block": "a light brown wooden block",
+        "purple_block": "a solid purple block without any writing or markings",
+        "yellow_block": "a solid yellow block without any writing or markings",
+        "green_block": "a solid green block without any writing or markings",
+        # "plastic_block": "a bright, solid colored plastic block, not brown wood"
+        })
     perception.start_visualization(
         display_rgb=True, display_depth=True,
         segment_rgb=True, segment_depth=True,
         segment_point_cloud=True
     )
-    perception.run()
+    perception.run_thread()
+    while True:
+        time.sleep(0.1)

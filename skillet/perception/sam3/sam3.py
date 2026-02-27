@@ -14,6 +14,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+import cv2
 import numpy as np
 import torch
 import torch.nn.functional as F  # noqa: N812
@@ -103,6 +104,7 @@ class SAM3:
         self._image_hw = (h, w)
         # self.predictor.set_image(image_tensor.unsqueeze(0))
         image_np = image_tensor.permute(1, 2, 0).cpu().numpy() * 255.0
+        image_np = cv2.cvtColor(image_np.astype(np.uint8), cv2.COLOR_RGB2BGR)
         self.predictor.set_image(image_np)
 
     def segment(self, prompts: list[str]) -> tuple[torch.Tensor, torch.Tensor]:
