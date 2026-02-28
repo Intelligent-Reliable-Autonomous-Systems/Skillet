@@ -63,6 +63,7 @@ from jaxtyping import Float, Int
 
 import kinova_tasks.ros2_tasks  # noqa: F401
 from skillet.envs.ros2_env_wrapper import ROS2EnvWrapper
+from skillet.envs.rsl_rl import RslRlVecEnvWrapper
 from skillet.envs.skill_ros2_env_wrapper import SkillROS2EnvWrapper
 from skillet.envs.util import get_checkpoint_path, setup_ros
 from skillet.envs.util.dict import print_dict
@@ -70,7 +71,6 @@ from skillet.envs.util.hydra import hydra_task_config
 from skillet.envs.util.parse_cfg import dump_yaml
 from skillet.rl.cfg import RslRlBaseRunnerCfg
 from skillet.rl.rsl_rl.runners import OnPolicyRunner
-from skillet.rl.rsl_rl.wrappers import RslRlVecEnvWrapper
 
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True

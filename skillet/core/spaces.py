@@ -32,6 +32,7 @@ from typing import (
 import gymnasium as gym
 import numpy as np
 from numpy.typing import NDArray
+from tensordict import TensorDict
 import torch
 from jaxtyping import Bool, Float, Int, Shaped
 from typing_extensions import TypedDict
@@ -83,14 +84,11 @@ class ArrayLike(Protocol):
     def __repr__(self) -> str: ...  # noqa: D105
     def __str__(self) -> str: ...  # noqa: D105
 
-ArrayT = TypeVar("ArrayT", bound=ArrayLike)
-"""A generic type for array-like objects."""
-
-SpaceItem: TypeAlias = Scalar | Shaped[ArrayT, "..."]
+SpaceItem: TypeAlias = Scalar | Shaped[ArrayLike, "..."]
 """A scalar or list-like value that can be stored in a space."""
 SpaceValue: TypeAlias = SpaceItem | Mapping[str, SpaceItem]
 """A scalar or list-like value or dictionary of scalar or list-like values."""
-BatchedSpaceItem: TypeAlias = Shaped[ArrayT, "b ..."]
+BatchedSpaceItem: TypeAlias = Shaped[ArrayLike, "b ..."]
 """A batched list-like sequence of scalar or list-like values that can be stored in a space."""
 BatchedSpaceValue: TypeAlias = BatchedSpaceItem | Mapping[str, BatchedSpaceItem]
 """A batched scalar or list-like value or dictionary of batched scalar or list-like values."""
@@ -112,7 +110,7 @@ class SpaceSpecification(Generic[TSpace]):
     is_batched: bool
     """Whether the space is batched."""
     n_envs: int | None = None
-    """The number of environments in the batched space. 
+    """The number of environments in the batched space.
 
     By default (None), the batch size is inferred from the first dimension of the space.
         Be careful to pass a pre-batched space.
@@ -335,10 +333,14 @@ class SpaceSpecification(Generic[TSpace]):
         if isinstance(self.space, gym.spaces.Dict):
             if not isinstance(value, Mapping):
                 raise TypeError(f"Expected a mapping for a Dict space but got {type(value).__name__}.")
-            return {
+            value_dict = {
                 key: cast_array(v, self.space.spaces[key].shape, self.space.spaces[key].dtype, key=key)
                 for key, v in value.items()
-            }  # type: ignore[return-value]
+            }
+            if self.is_batched and self.is_torch:
+                n_envs = next(iter(value_dict.values())).shape[0] # interpret n_envs from the first value
+                return TensorDict(value_dict, batch_size=n_envs)
+            return value_dict
         return cast_array(value, self.space.shape, self.space.dtype)
 
     def replace(self, **kwargs: Any) -> SpaceSpecification[TSpace]:

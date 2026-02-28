@@ -8,15 +8,13 @@ Written by Will Solow and Jeff Jewett, 2026
 from collections.abc import Mapping
 from typing import Any, Generic, TypeVar, overload
 
-import gymnasium as gym
-from gymnasium.vector import vector_env
 import numpy as np
 import torch
 from jaxtyping import Bool, Float
-from tensordict import TensorDict
+from typing_extensions import override
 
 from skillet.core import ObservationSpec
-from skillet.core.env import AsGymVectorEnv, BatchedEnvironment, TSpecObs
+from skillet.core.env import BatchedEnvironment, TSpecObs
 from skillet.core.math import (
     convert_quat,
     matrix_from_quat,
@@ -27,7 +25,9 @@ from skillet.core.math import (
     subtract_frame_transforms,
 )
 from skillet.core.spaces import ActionSpec
-from skillet.envs.specs import RGBD_SPEC_BATCHED
+from skillet.envs.direct_rl import DirectRlInterface
+from skillet.envs.ros2 import ROS2RLEnv
+from skillet.envs.specs import IK_EE_SPEC_BATCHED, OSC_SPEC_BATCHED, RGBD_SPEC_BATCHED
 
 TBatchedObsTorch = TypeVar(
     "TBatchedObsTorch", bound=Float[torch.Tensor, "b ..."] | Mapping[str, Float[torch.Tensor, "b ..."]]
@@ -44,31 +44,41 @@ torch.Tensor[(b, n), float]
 """
 
 
-class ROS2EnvWrapper(
-    BatchedEnvironment[TBatchedObsTorch, TBatchedActionTorch], Generic[TBatchedObsTorch, TBatchedActionTorch]
+class ROS2SkilletEnv(
+    BatchedEnvironment[TBatchedObsTorch, TBatchedActionTorch],
+    DirectRlInterface,
+    Generic[TBatchedObsTorch, TBatchedActionTorch],
 ):
-    """Wrapper for ROS2 Environments.
+    """An environment that interfaces with ROS2 and is compatible with skillet and IsaacLab DirectRLEnv.
 
-    This assumes that the environment is a gym.Env and interfaces directly with ROS2.
+    The environment is batched.
     """
 
-    def __init__(self, env: gym.Env) -> None:
+    def __init__(self, env: ROS2RLEnv) -> None:
         """Initialize the environment.
 
         Args:
-            env: Gymnasium environment that interfaces with ROS2
+            env: ROS2RLEnv environment or a wrapped ROS2RLEnv environment
 
         Returns:
             None
 
         """
-        self._ros_env = env
-        self._env = env.unwrapped
-        self.device = env.unwrapped.device
-        self.max_episode_length = env.unwrapped.max_episode_length
+        self._env = env
 
-        # vector_env = AsGymVectorEnv(env, num_envs=self.num_envs)
-        _ros_env = env
+        # Robot specific information
+        self._joint_ids = self.cfg.joint_ids
+        self._tcp_offset = self.cfg.tcp_offset
+        self._ee_link_name = self.cfg.ee_link_name
+        self._base_link_name = self.cfg.base_link_name
+        self._gripper_joint_names = self.cfg.gripper_joint_names
+
+        self._tcp_offset = torch.as_tensor(self._tcp_offset, device=self.device).unsqueeze(0).repeat(self.num_envs, 1)
+
+        self._last_obs = None
+        self._common_step_counter = 0
+
+        # Define the obseravation and action specifications
         spec_args = {
             "is_torch": True,
             "is_batched": True,
@@ -76,84 +86,135 @@ class ROS2EnvWrapper(
             "device": self.device,
         }
         self.obs_spec_policy = ObservationSpec[Float[torch.Tensor, "b ..."]](
-            name="policy", space=_ros_env.single_observation_space["policy"],
+            name="policy",
+            space=env.observation_space["policy"],
         ).replace(**spec_args)
         """Specification of the vector observation passed to a low level policy"""
         self.obs_spec_state = ObservationSpec[Mapping[str, Float[torch.Tensor, "b ..."]]](
-            name="state", space=_ros_env.single_observation_space,
+            name="state",
+            space=env.observation_space,
         ).replace(**spec_args)
         """Specification of the raw dictionary environment state"""
         self.obs_spec_rgbd = RGBD_SPEC_BATCHED.bind(height=480, width=640).replace(device=self.device)
         """Specification of RGB-D observations and metadata. Bound to the height and width of the RGB-D camera."""
+        self.obs_spec_ikee = IK_EE_SPEC_BATCHED.bind(n_joints=len(self._joint_ids)).replace(device=self.device)
+        """Specification of IK-EE observations."""
+        self.obs_spec_osc = OSC_SPEC_BATCHED.bind(n_joints=len(self._joint_ids)).replace(device=self.device)
+        """Specification of OSC observations."""
         self._action_spec = ActionSpec[TBatchedActionTorch](
-            name="action", space=_ros_env.single_action_space,
+            name="action",
+            space=env.single_action_space,
         ).replace(**spec_args)
 
-        # Robot specific information
-        self.joint_ids = env.unwrapped.cfg.joint_ids
-        self.tcp_offset = env.unwrapped.cfg.tcp_offset
-        self.ee_link_name = env.unwrapped.cfg.ee_link_name
-        self.base_link_name = env.unwrapped.cfg.base_link_name
-        self.gripper_joint_names = env.unwrapped.cfg.gripper_joint_names
+    # ==================== DirectRlInterface ====================
+    @override
+    @property
+    def cfg(self) -> dict | object:
+        return self._env.cfg
 
-        self.tcp_offset = torch.as_tensor(self.tcp_offset, device=self.device).unsqueeze(0).repeat(self.num_envs, 1)
+    @override
+    @property
+    def num_envs(self) -> int:
+        return self._env.num_envs
 
-        self.last_obs = None
+    @override
+    @property
+    def device(self) -> torch.device | str:
+        return self._env.get_wrapper_attr("device")
 
+    @override
+    @property
+    def max_episode_length(self) -> int:
+        return self._env.get_wrapper_attr("max_episode_length")
+
+    @override
+    @property
+    def common_step_counter(self) -> int:
+        return self._common_step_counter
+
+    @common_step_counter.setter
+    def common_step_counter(self, value: int) -> None:
+        self._common_step_counter = value
+
+    @override
     @property
     def episode_length_buf(self) -> torch.Tensor:
-        return torch.tensor([self.env.unwrapped.episode_length_buf], device=self.device)
+        return torch.tensor([self.env.get_wrapper.episode_length_buf], device=self.device)
 
     @episode_length_buf.setter
-    def episode_length_buf(self, value):
+    def episode_length_buf(self, value: torch.Tensor) -> None:
         self.env.unwrapped.episode_length_buf = value.squeeze().item()
 
+    @override
+    def _get_observations(self) -> TBatchedObsTorch:
+        # Get the latest observations cached in self._env
+        return self._env.get_wrapper_attr("obs_buf")
+
+    @override
     @property
-    def obs_spec(self):
+    def unwrapped(self) -> DirectRlInterface:
+        # self satisfies the DirectRlInterface
+        return self
+
+    # ==================== Skillet Environment ====================
+    @override
+    @property
+    def obs_spec(self) -> ObservationSpec[TBatchedObsTorch]:
         return self.obs_spec_policy
 
+    @override
     @property
-    def action_spec(self):
+    def action_spec(self) -> ActionSpec[TBatchedActionTorch]:
         return self._action_spec
 
-    @property
-    def n_envs(self) -> int:  # noqa: D102
-        return self._env.unwrapped.num_envs
-
-    @property
-    def num_envs(self) -> int:  # noqa: D102
-        return self._env.unwrapped.num_envs
-
-    @property
-    def robot_dof_lower_limits(self) -> torch.Tensor:
-        """Process and return lower joint limits."""
-        lower_limits = torch.as_tensor(self._env._robot_lower_joint_limits, device=self.device)[self.joint_ids]
-        lower_limits[lower_limits == 0] = -2 * torch.pi
-        return lower_limits
-
-    @property
-    def robot_dof_upper_limits(self) -> torch.Tensor:
-        """Process and return upper joint limits"""
-        upper_limits = torch.as_tensor(self._env._robot_upper_joint_limits, device=self.device)[self.joint_ids]
-        upper_limits[upper_limits == 0] = -2 * torch.pi
-        return upper_limits
-
+    @override
     def supports_observation_spec(self, obs_spec: ObservationSpec) -> bool:
         return obs_spec.name in [
-            self.obs_spec_policy.name, self.obs_spec_state.name, self.obs_spec_rgbd.name,
+            self.obs_spec_policy.name,
+            self.obs_spec_state.name,
+            self.obs_spec_rgbd.name,
+            self.obs_spec_ikee.name,
+            self.obs_spec_osc.name,
         ]
 
+    @override
     def supports_action_spec(self, action_spec: ActionSpec) -> bool:
         return action_spec.name == self.action_spec.name
 
+    @override
     def coerce_obs_spec(self, obs_spec: str | ObservationSpec[Any]) -> ObservationSpec[Any]:
-        for spec in [self.obs_spec_policy, self.obs_spec_state, self.obs_spec_rgbd]:
+        for spec in [
+            self.obs_spec_policy,
+            self.obs_spec_state,
+            self.obs_spec_rgbd,
+            self.obs_spec_ikee,
+            self.obs_spec_osc,
+        ]:
             if spec.name == obs_spec:
                 return spec
             if isinstance(obs_spec, str) and obs_spec == spec.name:
                 return spec
         raise ValueError(f"Observation spec {obs_spec} not supported by environment.")
 
+    # ==================== Private properties ====================
+
+    @property
+    def _robot_dof_lower_limits(self) -> torch.Tensor:
+        """Process and return lower joint limits."""
+        lower_limits = torch.as_tensor(self._env._robot_lower_joint_limits, device=self.device)[self._joint_ids]
+        lower_limits[lower_limits == 0] = -2 * torch.pi
+        return lower_limits
+
+    @property
+    def _robot_dof_upper_limits(self) -> torch.Tensor:
+        """Process and return upper joint limits."""
+        upper_limits = torch.as_tensor(self._env._robot_upper_joint_limits, device=self.device)[self._joint_ids]
+        upper_limits[upper_limits == 0] = -2 * torch.pi
+        return upper_limits
+
+    # ==================== Public methods ====================
+
+    @override
     def reset(self) -> tuple[TBatchedObsTorch, dict]:
         """Reset the environment.
 
@@ -165,7 +226,7 @@ class ROS2EnvWrapper(
 
         """
         obs_dict, info = self.env.reset()
-        self.last_obs = obs_dict
+        self._last_obs = obs_dict
         for k, v in obs_dict.items():
             obs_dict[k] = torch.as_tensor(v, device=self.device).unsqueeze(0)
 
@@ -175,15 +236,17 @@ class ROS2EnvWrapper(
     def get_observation(self) -> TBatchedObsTorch: ...
     @overload
     def get_observation(self, obs_spec: ObservationSpec[TSpecObs]) -> TSpecObs: ...
-    def get_observation(self, obs_spec: ObservationSpec[TSpecObs] | None = None) -> Any:  # noqa: D102
-        if self.last_obs is None:
+    @override
+    def get_observation(self, obs_spec: ObservationSpec[TSpecObs] | None = None) -> Any:
+        if self._last_obs is None:
             raise ValueError("No observation has been received yet. Call reset() first.")
         if obs_spec is None:
-            return self.last_obs  # TODO convert to TensorDict
+            obs_spec = self.obs_spec
         if obs_spec.is_batched:
-            obs_spec = obs_spec.with_n_envs(self.n_envs)
+            obs_spec = obs_spec.with_n_envs(self.num_envs)
+
         if obs_spec.name == "policy":
-            return torch.as_tensor(self.last_obs["policy"], device=self.device).unsqueeze(0)
+            return obs_spec.cast(self._last_obs["policy"])
         if obs_spec.name == "rgb-d":
             latest = self._env._get_latest_rgbd()
             # ROS xyzw format -> IsaacLab wxyz format
@@ -195,54 +258,54 @@ class ROS2EnvWrapper(
             depth = np.expand_dims(latest["depth"], axis=0)
             if depth.dtype == np.uint16:
                 depth = depth.astype(np.float32) / 1000.0
-            else:
-                depth = depth.astype(np.float32, copy=False)
             latest["depth"] = depth
             return obs_spec.cast(latest)
         if obs_spec.name == "state":
-            return self.last_obs
+            return obs_spec.cast(self._last_obs)
         if obs_spec.name == "ik_ee":
-            return TensorDict(
+            return obs_spec.cast(
                 {
-                    "joint_pos": self._get_joint_positions(joint_ids=self.joint_ids),
-                    "joint_vel": self._get_joint_velocities(joint_ids=self.joint_ids),
-                    "tcp_offset": self.tcp_offset,
-                    "jacobians": self._get_jacobians(ee_link=self.ee_link_name, base_link=self.base_link_name),
-                    "ee_pose_b": self._get_ee_pose_b(ee_link=self.ee_link_name, base_link=self.base_link_name),
-                    "tcp_pose_b": self._get_tcp_pose_b(ee_link=self.ee_link_name),
-                    "gripper_lim": self._get_gripper_lims(gripper_joints=self.gripper_joint_names),
-                    "gripper": self._get_gripper_state(gripper_joints=self.gripper_joint_names),
+                    "joint_pos": self._get_joint_positions(joint_ids=self._joint_ids),
+                    "joint_vel": self._get_joint_velocities(joint_ids=self._joint_ids),
+                    "tcp_offset": self._tcp_offset,
+                    "jacobians": self._get_jacobians(ee_link=self._ee_link_name, base_link=self._base_link_name),
+                    "ee_pose_b": self._get_ee_pose_b(ee_link=self._ee_link_name, base_link=self._base_link_name),
+                    "tcp_pose_b": self._get_tcp_pose_b(ee_link=self._ee_link_name),
+                    "gripper_lim": self._get_gripper_lims(gripper_joints=self._gripper_joint_names),
+                    "gripper": self._get_gripper_state(gripper_joints=self._gripper_joint_names),
                     "joint_lims": self._get_joint_lims(),
-                },
-                batch_size=self.num_envs,
+                }
             )
         if obs_spec.name == "osc":
-            return TensorDict(
+            return obs_spec.cast(
                 {
-                    "joint_pos": self._get_joint_positions(joint_ids=self.joint_ids),
-                    "joint_vel": self._get_joint_velocities(joint_ids=self.joint_ids),
-                    "tcp_offset": self.tcp_offset,
+                    "joint_pos": self._get_joint_positions(joint_ids=self._joint_ids),
+                    "joint_vel": self._get_joint_velocities(joint_ids=self._joint_ids),
+                    "tcp_offset": self._tcp_offset,
                     "jacobians": self._get_jacobians(
-                        ee_link=self.ee_link_name, base_link=self.base_link_name, arm_joint_ids=self.joint_ids[:7]
+                        ee_link=self._ee_link_name, base_link=self._base_link_name, arm_joint_ids=self._joint_ids[:7]
                     ),
-                    "ee_pose_b": self._get_ee_pose_b(ee_link=self.ee_link_name, base_link=self.base_link_name),
-                    "tcp_pose_b": self._get_tcp_pose_b(ee_link=self.ee_link_name),
-                    "gripper_lim": self._get_gripper_lims(gripper_joints=self.gripper_joint_names),
-                    "gripper": self._get_gripper_state(gripper_joints=self.gripper_joint_names),
+                    "ee_pose_b": self._get_ee_pose_b(ee_link=self._ee_link_name, base_link=self._base_link_name),
+                    "tcp_pose_b": self._get_tcp_pose_b(ee_link=self._ee_link_name),
+                    "gripper_lim": self._get_gripper_lims(gripper_joints=self._gripper_joint_names),
+                    "gripper": self._get_gripper_state(gripper_joints=self._gripper_joint_names),
                     "joint_lims": self._get_joint_lims(),
-                    "mass_matrix": self._get_mass_matrices(arm_joint_ids=self.joint_ids[:7]),
-                    "joint_gravity": self._get_joint_gravity(arm_joint_ids=self.joint_ids[:7]),
-                    "ee_vel_b": self._get_ee_vel_b(ee_link=self.ee_link_name, base_link=self.base_link_name),
-                    "joint_centers": self._get_joint_centers(arm_joint_ids=self.joint_ids[:7]),
-                },
-                batch_size=self.num_envs,
+                    "mass_matrix": self._get_mass_matrices(arm_joint_ids=self._joint_ids[:7]),
+                    "joint_gravity": self._get_joint_gravity(arm_joint_ids=self._joint_ids[:7]),
+                    "ee_vel_b": self._get_ee_vel_b(ee_link=self._ee_link_name, base_link=self._base_link_name),
+                    "joint_centers": self._get_joint_centers(arm_joint_ids=self._joint_ids[:7]),
+                }
             )
         raise ValueError(f"Observation spec {obs_spec} not supported by environment.")
 
-    def get_state(self) -> TBatchedObsTorch:  # noqa: D102
+    @override
+    def get_state(self) -> TBatchedObsTorch:
         return self.get_observation(self.obs_spec_state)
 
-    def step(self, action: TBatchedActionTorch) -> tuple[
+    @override
+    def step(
+        self, action: TBatchedActionTorch
+    ) -> tuple[
         TBatchedObsTorch,
         Float[torch.Tensor, "b"],  # noqa: F821
         Bool[torch.Tensor, "b"],  # noqa: F821
@@ -252,14 +315,14 @@ class ROS2EnvWrapper(
         """Step through the environment.
 
         Args:
-            action: The action tensor of shape (N, num_actions)
+            action: The action tensor of shape (num_envs, num_actions)
 
         Returns:
-            A tuple containing the observation of observations tensor (N, obs_dim) and info dictionary
+            A tuple containing the observation of observations tensor (num_envs, obs_dim) and info dictionary
 
         """
         obs_dict, reward, term, trunc, info = self.env.step(action)
-        self.last_obs = obs_dict
+        self._last_obs = obs_dict
         for k, v in obs_dict.items():
             obs_dict[k] = torch.as_tensor(v, device=self.device).unsqueeze(0)
 
@@ -269,9 +332,7 @@ class ROS2EnvWrapper(
 
         return obs_dict, reward, term, trunc, info
 
-    """
-    Helper functions
-    """
+    # ==================== Helper functions ====================
 
     def _get_joint_positions(self, env_ids: torch.Tensor | None = None, joint_ids: list | None = None) -> torch.Tensor:
         """Return the joint positions.
@@ -280,13 +341,13 @@ class ROS2EnvWrapper(
             env_ids: environment ids from which to get the joint ids
             joint_ids: the list of joint ids to retrieve
         Returns:
-            torch tensor of jacobians of shape (n_envs, num_joints, 3)
+            torch tensor of jacobians of shape (num_envs, num_joints, 3)
 
         """
         if env_ids is None:
-            env_ids = torch.arange(self.n_envs, device=self.device)
+            env_ids = torch.arange(self.num_envs, device=self.device)
         if joint_ids is None:
-            joint_ids = self.joint_ids
+            joint_ids = self._joint_ids
         return (
             torch.as_tensor(self._env._current_joint_positions, device=self.device)
             .unsqueeze(0)[:, joint_ids][env_ids]
@@ -300,13 +361,13 @@ class ROS2EnvWrapper(
             env_ids: environment ids from which to get the joint ids
             joint_ids: the list of joint ids to retrieve
         Returns:
-            torch tensor of jacobians of shape (n_envs, num_joints, 3)
+            torch tensor of jacobians of shape (num_envs, num_joints, 3)
 
         """
         if env_ids is None:
-            env_ids = torch.arange(self.n_envs, device=self.device)
+            env_ids = torch.arange(self.num_envs, device=self.device)
         if joint_ids is None:
-            joint_ids = self.joint_ids
+            joint_ids = self._joint_ids
 
         return (
             torch.as_tensor(self._env._current_joint_velocities, device=self.device)
@@ -329,13 +390,13 @@ class ROS2EnvWrapper(
             base_link: string for the name of the base link of the robot
             arm_joint_ids: the list of joint ids that correspond to the arm
         Returns:
-            torch tensor of jacobians of shape (n_envs, num_joints, 3)
+            torch tensor of jacobians of shape (num_envs, num_joints, 3)
 
         """
         if env_ids is None:
-            env_ids = torch.arange(self.n_envs, device=self.device)
+            env_ids = torch.arange(self.num_envs, device=self.device)
         if arm_joint_ids is None:
-            arm_joint_ids = self.joint_ids[:-1]
+            arm_joint_ids = self._joint_ids[:-1]
 
         ee_link_idx = self._env._find_link_idx(ee_link)
         base_link_idx = self._env._find_link_idx(base_link)
@@ -372,7 +433,7 @@ class ROS2EnvWrapper(
 
         """
         if env_ids is None:
-            env_ids = torch.arange(self.n_envs, device=self.device)
+            env_ids = torch.arange(self.num_envs, device=self.device)
 
         ee_link_idx = self._env._find_link_idx(ee_link)
 
@@ -390,8 +451,8 @@ class ROS2EnvWrapper(
         ee_pos_b = quat_apply_inverse(root_pose_w[:, 3:7], ee_pose_w[:, 0:3] - root_pose_w[:, 0:3])
         ee_quat_b = quat_mul(quat_inv(root_pose_w[:, 3:7]), ee_pose_w[:, 3:7])
 
-        tcp_pos_b = ee_pos_b + quat_apply(ee_quat_b, self.tcp_offset[env_ids, 0:3])
-        tcp_quat_b = quat_mul(ee_quat_b, self.tcp_offset[env_ids, 3:7])
+        tcp_pos_b = ee_pos_b + quat_apply(ee_quat_b, self._tcp_offset[env_ids, 0:3])
+        tcp_quat_b = quat_mul(ee_quat_b, self._tcp_offset[env_ids, 3:7])
 
         return torch.concatenate((tcp_pos_b, tcp_quat_b), dim=1).to(torch.float32)
 
@@ -400,7 +461,7 @@ class ROS2EnvWrapper(
     ) -> torch.Tensor:
         """Get the gripper state of the robot."""
         if env_ids is None:
-            env_ids = torch.arange(self.n_envs, device=self.device)
+            env_ids = torch.arange(self.num_envs, device=self.device)
 
         gripper_joint_idxs = [self._env._find_joint_idx(j) for j in gripper_joints]
         gripper_pos = torch.as_tensor(self._env._joint_positions[gripper_joint_idxs], device=self.device).unsqueeze(0)[
@@ -428,7 +489,7 @@ class ROS2EnvWrapper(
 
         """
         if env_ids is None:
-            env_ids = torch.arange(self.n_envs, device=self.device)
+            env_ids = torch.arange(self.num_envs, device=self.device)
         ee_link_idx = self._env._find_link_idx(ee_link)
         base_link_idx = self._env._find_link_idx(base_link)
 
@@ -469,13 +530,13 @@ class ROS2EnvWrapper(
 
         """
         if env_ids is None:
-            env_ids = torch.arange(self.n_envs, device=self.device)
+            env_ids = torch.arange(self.num_envs, device=self.device)
 
         gripper_joint_idxs = [self._env._find_joint_idx(j) for j in gripper_joints]
 
-        gripper_low = self.robot_dof_lower_limits[gripper_joint_idxs]
+        gripper_low = self._robot_dof_lower_limits[gripper_joint_idxs]
         # gripper_low = torch.tensor([0], device=self.device)
-        gripper_high = self.robot_dof_upper_limits[gripper_joint_idxs]
+        gripper_high = self._robot_dof_upper_limits[gripper_joint_idxs]
         return torch.cat(
             (
                 gripper_low.unsqueeze(0).expand(env_ids.shape[0], 1),
@@ -495,10 +556,10 @@ class ROS2EnvWrapper(
 
         """
         if env_ids is None:
-            env_ids = torch.arange(self.n_envs, device=self.device)
+            env_ids = torch.arange(self.num_envs, device=self.device)
 
         return (
-            torch.cat((self.robot_dof_lower_limits.unsqueeze(0), self.robot_dof_upper_limits.unsqueeze(0)), dim=0)
+            torch.cat((self._robot_dof_lower_limits.unsqueeze(0), self._robot_dof_upper_limits.unsqueeze(0)), dim=0)
             .unsqueeze(0)
             .repeat(env_ids.shape[0], 1, 1)
         )
@@ -518,9 +579,9 @@ class ROS2EnvWrapper(
 
         """
         if env_ids is None:
-            env_ids = torch.arange(self.n_envs, device=self.device)
+            env_ids = torch.arange(self.num_envs, device=self.device)
         if arm_joint_ids is None:
-            arm_joint_ids = self.joint_ids[:7]
+            arm_joint_ids = self._joint_ids[:7]
 
         return torch.as_tensor(
             self._env._mass_matrices[:, arm_joint_ids, :][:, :, arm_joint_ids][env_ids],
@@ -543,9 +604,9 @@ class ROS2EnvWrapper(
 
         """
         if env_ids is None:
-            env_ids = torch.arange(self.n_envs, device=self.device)
+            env_ids = torch.arange(self.num_envs, device=self.device)
         if arm_joint_ids is None:
-            arm_joint_ids = self.joint_ids[:7]
+            arm_joint_ids = self._joint_ids[:7]
         return torch.as_tensor(
             self._env._gravity_compensation[:, arm_joint_ids][env_ids],
             device=self.device,
@@ -565,7 +626,7 @@ class ROS2EnvWrapper(
         """
         # Compute the current velocity of the end-effector
         if env_ids is None:
-            env_ids = torch.arange(self.n_envs, device=self.device)
+            env_ids = torch.arange(self.num_envs, device=self.device)
 
         ee_link_idx = self._env._find_link_idx(ee_link)
         base_link_idx = self._env._find_link_idx(base_link)
@@ -594,7 +655,7 @@ class ROS2EnvWrapper(
 
         """
         if env_ids is None:
-            env_ids = torch.arange(self.n_envs, device=self.device)
+            env_ids = torch.arange(self.num_envs, device=self.device)
         if arm_joint_ids is None:
-            arm_joint_ids = self.joint_ids[:7]
+            arm_joint_ids = self._joint_ids[:7]
         return self._env._joint_centers[:, arm_joint_ids][env_ids]

@@ -62,9 +62,10 @@ import gymnasium as gym
 import numpy as np
 import torch
 from jaxtyping import Float, Int
+from skillet.envs.ros2_env_wrapper import ROS2EnvWrapper
 
 import kinova_tasks.ros2_tasks  # noqa: F401
-from skillet.envs.ros2_env_wrapper import ROS2EnvWrapper
+from skillet.envs.rsl_rl import RslRlVecEnvWrapper
 from skillet.envs.skill_ros2_env_wrapper import SkillROS2EnvWrapper
 from skillet.envs.util import get_checkpoint_path, setup_ros
 from skillet.envs.util.dict import print_dict
@@ -72,7 +73,6 @@ from skillet.envs.util.hydra import hydra_task_config
 from skillet.rl.cfg import RslRlBaseRunnerCfg
 from skillet.rl.exporter import export_policy_as_jit, export_policy_as_onnx
 from skillet.rl.rsl_rl.runners import OnPolicyRunner
-from skillet.rl.rsl_rl.wrappers import RslRlVecEnvWrapper
 
 BxN_Obs = Float[torch.Tensor, "b n"]
 """Environment observation: torch.Tensor[(b, n), float]"""
@@ -161,7 +161,7 @@ def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
     export_policy_as_onnx(policy_nn, normalizer=normalizer, path=export_model_dir, filename="policy.onnx")
 
     # reset environment
-    obs = env.get_observation()
+    obs = env.get_observations()
     # simulate environment
     while True:
         # run everything in inference mode

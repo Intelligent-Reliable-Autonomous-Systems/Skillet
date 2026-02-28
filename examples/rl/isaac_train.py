@@ -64,6 +64,7 @@ from jaxtyping import Float, Int
 
 import kinova_tasks.isaac_tasks  # noqa: F401
 from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
+from skillet.envs.rsl_rl import RslRlVecEnvWrapper
 from skillet.envs.skill_isaac_env_wrapper import SkillIsaacEnvWrapper
 from skillet.envs.util import get_checkpoint_path
 from skillet.envs.util.dict import print_dict
@@ -71,7 +72,6 @@ from skillet.envs.util.hydra import hydra_task_config
 from skillet.envs.util.parse_cfg import dump_yaml
 from skillet.rl.cfg import RslRlBaseRunnerCfg
 from skillet.rl.rsl_rl.runners import OnPolicyRunner
-from skillet.rl.rsl_rl.wrappers import RslRlVecEnvWrapper
 
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True

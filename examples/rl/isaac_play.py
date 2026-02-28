@@ -65,6 +65,7 @@ from jaxtyping import Float, Int
 
 import kinova_tasks.isaac_tasks  # noqa: F401
 from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
+from skillet.envs.rsl_rl import RslRlVecEnvWrapper
 from skillet.envs.skill_isaac_env_wrapper import SkillIsaacEnvWrapper
 from skillet.envs.util import get_checkpoint_path
 from skillet.envs.util.dict import print_dict
@@ -72,7 +73,6 @@ from skillet.envs.util.hydra import hydra_task_config
 from skillet.rl.cfg import RslRlBaseRunnerCfg
 from skillet.rl.exporter import export_policy_as_jit, export_policy_as_onnx
 from skillet.rl.rsl_rl.runners import OnPolicyRunner
-from skillet.rl.rsl_rl.wrappers import RslRlVecEnvWrapper
 
 BxN_Obs = Float[torch.Tensor, "b n"]
 """Environment observation: torch.Tensor[(b, n), float]"""
@@ -163,7 +163,7 @@ def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
     export_policy_as_onnx(policy_nn, normalizer=normalizer, path=export_model_dir, filename="policy.onnx")
 
     # reset environment
-    obs = env.get_observation()
+    obs = env.get_observations()
     timestep = 0
     # simulate environment
     i = 0
