@@ -6,7 +6,7 @@ Written by Will Solow and Jeff Jewett, 2026
 """
 
 from collections.abc import Mapping
-from typing import Any, Generic, TypeVar, overload
+from typing import Any, Generic, TypeVar, cast, overload
 
 import numpy as np
 import torch
@@ -76,7 +76,6 @@ class ROS2SkilletEnv(
         self._tcp_offset = torch.as_tensor(self._tcp_offset, device=self.device).unsqueeze(0).repeat(self.num_envs, 1)
 
         self._last_obs = None
-        self._common_step_counter = 0
 
         # Define the obseravation and action specifications
         spec_args = {
@@ -120,26 +119,17 @@ class ROS2SkilletEnv(
     @override
     @property
     def device(self) -> torch.device | str:
-        return self._env.get_wrapper_attr("device")
+        return cast("torch.device | str", self._env.get_wrapper_attr("device"))
 
     @override
     @property
     def max_episode_length(self) -> int:
-        return self._env.get_wrapper_attr("max_episode_length")
-
-    @override
-    @property
-    def common_step_counter(self) -> int:
-        return self._common_step_counter
-
-    @common_step_counter.setter
-    def common_step_counter(self, value: int) -> None:
-        self._common_step_counter = value
+        return cast("int", self._env.get_wrapper_attr("max_episode_length"))
 
     @override
     @property
     def episode_length_buf(self) -> torch.Tensor:
-        return torch.tensor([self.env.get_wrapper.episode_length_buf], device=self.device)
+        return torch.tensor([self.env.get_wrapper_attr("episode_length_buf")], device=self.device)
 
     @episode_length_buf.setter
     def episode_length_buf(self, value: torch.Tensor) -> None:

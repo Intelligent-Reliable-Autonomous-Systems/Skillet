@@ -22,6 +22,7 @@ from skillet.core.math import (
     subtract_frame_transforms,
 )
 from skillet.core.spaces import ActionSpec
+from skillet.envs.isaac_lab import DirectRlInterface, ManagerBasedRlInterface
 
 if TYPE_CHECKING:
     from isaaclab.envs import DirectRLEnv, ManagerBasedRLEnv
@@ -51,7 +52,7 @@ class IsaacEnvWrapper(
     This assumes that the environment is either a DirectRLEnv or ManagerBasedRLEnv.
     """
 
-    def __init__(self, env: "ManagerBasedRLEnv | DirectRLEnv") -> None:
+    def __init__(self, env: DirectRlInterface | ManagerBasedRlInterface) -> None:
         """Initialize the environment.
 
         Args:
@@ -149,6 +150,9 @@ class IsaacEnvWrapper(
     @property
     def num_envs(self) -> int:  # noqa: D102
         return self._env.unwrapped.num_envs
+
+    @property
+    def
 
     def supports_observation_spec(self, obs_spec: ObservationSpec) -> bool:  # noqa: D102
         return obs_spec.name in ["policy", "state"]

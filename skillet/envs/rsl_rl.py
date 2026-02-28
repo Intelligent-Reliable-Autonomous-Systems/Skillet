@@ -220,7 +220,7 @@ class RslRlVecEnvWrapper(RslRlVecEnv, gym.vector.VectorWrapper):
     @property
     def unwrapped(self) -> DirectRlInterface:
         """Return the base environment, which is a DirectRlInterface."""
-        return self.env.unwrapped
+        x = self.env.unwrapped
 
     """
     Operations - MDP
