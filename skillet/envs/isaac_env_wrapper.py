@@ -6,12 +6,14 @@ Written by Will Solow and Jeff Jewett, 2026
 """
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Generic, TypeVar
+from typing import Any, Generic, TypeVar, cast
 
+import gymnasium as gym
 import torch
 from jaxtyping import Bool, Float
-from tensordict import TensorDict
+from typing_extensions import override
 
+from skillet.core import ObservationSpec
 from skillet.core.env import AsGymVectorEnv, BatchedEnvironment
 from skillet.core.math import (
     matrix_from_quat,
@@ -23,11 +25,7 @@ from skillet.core.math import (
 )
 from skillet.core.spaces import ActionSpec
 from skillet.envs.isaac_lab import DirectRlInterface, ManagerBasedRlInterface
-
-if TYPE_CHECKING:
-    from isaaclab.envs import DirectRLEnv, ManagerBasedRLEnv
-
-from skillet.core import ObservationSpec
+from skillet.envs.specs import IK_EE_SPEC_BATCHED, OSC_SPEC_BATCHED, RGBD_SPEC_BATCHED
 
 TBatchedObsTorch = TypeVar(
     "TBatchedObsTorch", bound=Float[torch.Tensor, "b ..."] | Mapping[str, Float[torch.Tensor, "b ..."]]
@@ -45,7 +43,9 @@ torch.Tensor[(b, n), float]
 
 
 class IsaacEnvWrapper(
-    BatchedEnvironment[TBatchedObsTorch, TBatchedActionTorch], Generic[TBatchedObsTorch, TBatchedActionTorch]
+    BatchedEnvironment[TBatchedObsTorch, TBatchedActionTorch],
+    gym.vector.VectorWrapper,
+    Generic[TBatchedObsTorch, TBatchedActionTorch],
 ):
     """Wrapper for IsaacLab Environments.
 
@@ -62,22 +62,25 @@ class IsaacEnvWrapper(
             None
 
         """
-        self._isaac_env = env
-        self._env = env.unwrapped
-        self.device = env.unwrapped.device
-        self.max_episode_length = env.unwrapped.max_episode_length
+        if hasattr(env, "unwrapped"):
+            env = env.unwrapped
+        vector_env = AsGymVectorEnv(env, num_envs=self.num_envs)
+        super().__init__(vector_env)
+        self._env = cast("DirectRlInterface | ManagerBasedRlInterface", env)
+        self._device = self._env.device
 
         if hasattr(self._env, "robot"):
             self.robot = self._env.robot
         elif hasattr(self._env, "_robot"):
             self.robot = self._env._robot
         elif hasattr(self._env, "scene"):
-            if hasattr(self._env.scene, "_robot"):
-                self.robot = self._env.scene._robot
-            elif hasattr(self._env.scene, "robot"):
-                self.robot = self._env.scene.robot
-            elif hasattr(self._env.scene, "_articulations"):
-                self.robot = self._env.scene._articulations["robot"]
+            scene = self._env.scene
+            if hasattr(scene, "_robot"):
+                self.robot = scene._robot
+            elif hasattr(scene, "robot"):
+                self.robot = scene.robot
+            elif hasattr(scene, "_articulations"):
+                self.robot = scene._articulations["robot"]
             else:
                 raise ValueError(
                     f"Environment `{self._env} `scene.robot` or `scene._robot`. Unable to parse robot Articulation."
@@ -86,15 +89,13 @@ class IsaacEnvWrapper(
             raise ValueError(
                 f"Environment `{self._env}` has no attribute `_robot` or `robot` or `scene.robot` or `scene._robot`. Unable to parse robot Articulation."
             )
-        vector_env = AsGymVectorEnv(env, num_envs=self.num_envs)
-        super().__init__(vector_env)
         self._obs_spec_policy = ObservationSpec[Float[torch.Tensor, "b ..."]](
             space=vector_env.single_observation_space["policy"],
             name="policy",
             is_torch=True,
             is_batched=True,
             n_envs=-1,
-            device=self.device,
+            device=self._device,
         )
         self._obs_spec_state = ObservationSpec[Mapping[str, Float[torch.Tensor, "b ..."]]](
             space=vector_env.single_observation_space,
@@ -102,7 +103,7 @@ class IsaacEnvWrapper(
             is_torch=True,
             is_batched=True,
             n_envs=-1,
-            device=self.device,
+            device=self._device,
         )
         self._action_spec = ActionSpec[TBatchedActionTorch](
             space=vector_env.single_action_space,
@@ -110,53 +111,170 @@ class IsaacEnvWrapper(
             is_torch=True,
             is_batched=True,
             n_envs=-1,
-            device=self.device,
+            device=self._device,
         )
 
         # Robot specific information
-        self.joint_ids = env.unwrapped.cfg.joint_ids
-        self.tcp_offset = env.unwrapped.cfg.tcp_offset
-        self.ee_link_name = env.unwrapped.cfg.ee_link_name
-        self.base_link_name = env.unwrapped.cfg.base_link_name
-        self.gripper_joint_names = env.unwrapped.cfg.gripper_joint_names
+        self._joint_ids = env.unwrapped.cfg.joint_ids
+        self._tcp_offset = env.unwrapped.cfg.tcp_offset
+        self._ee_link_name = env.unwrapped.cfg.ee_link_name
+        self._base_link_name = env.unwrapped.cfg.base_link_name
+        self._gripper_joint_names = env.unwrapped.cfg.gripper_joint_names
 
-        self.robot_dof_lower_limits = self.robot.data.soft_joint_pos_limits[0, :, 0].to(device=self.device)[
-            self.joint_ids
+        self._robot_dof_lower_limits = self.robot.data.soft_joint_pos_limits[0, :, 0].to(device=self._device)[
+            self._joint_ids
         ]
-        self.robot_dof_upper_limits = self.robot.data.soft_joint_pos_limits[0, :, 1].to(device=self.device)[
-            self.joint_ids
+        self._robot_dof_upper_limits = self.robot.data.soft_joint_pos_limits[0, :, 1].to(device=self._device)[
+            self._joint_ids
         ]
-        self.robot_dof_lower_limits[self.robot_dof_lower_limits == -float("inf")] = -torch.pi
-        self.robot_dof_upper_limits[self.robot_dof_upper_limits == float("inf")] = torch.pi
+        self._robot_dof_lower_limits[self._robot_dof_lower_limits == -float("inf")] = -torch.pi
+        self._robot_dof_upper_limits[self._robot_dof_upper_limits == float("inf")] = torch.pi
 
-        self.tcp_offset = torch.as_tensor(self.tcp_offset, device=self.device).unsqueeze(0).repeat(self.num_envs, 1)
+        self._tcp_offset = torch.as_tensor(self._tcp_offset, device=self._device).unsqueeze(0).repeat(self.num_envs, 1)
 
+        # Define the obseravation and action specifications
+        spec_args = {
+            "is_torch": True,
+            "is_batched": True,
+            "n_envs": -1,
+            "device": self.device,
+        }
+        self.obs_spec_policy = ObservationSpec[Float[torch.Tensor, "b ..."]](
+            name="policy",
+            space=env.observation_space["policy"],
+        ).replace(**spec_args)
+        """Specification of the vector observation passed to a low level policy"""
+        self.obs_spec_state = ObservationSpec[Mapping[str, Float[torch.Tensor, "b ..."]]](
+            name="state",
+            space=env.observation_space,
+        ).replace(**spec_args)
+        """Specification of the raw dictionary environment state"""
+        self.obs_spec_rgbd = RGBD_SPEC_BATCHED.bind(height=480, width=640).replace(device=self.device)
+        """Specification of RGB-D observations and metadata. Bound to the height and width of the RGB-D camera."""
+        self.obs_spec_ikee = IK_EE_SPEC_BATCHED.bind(n_joints=len(self._joint_ids)).replace(device=self.device)
+        """Specification of IK-EE observations."""
+        self.obs_spec_osc = OSC_SPEC_BATCHED.bind(n_joints=len(self._joint_ids)).replace(device=self.device)
+        """Specification of OSC observations."""
+        self._action_spec = ActionSpec[TBatchedActionTorch](
+            name="action",
+            space=env.single_action_space,
+        ).replace(**spec_args)
+
+    # ==================== IsaacLab Interface ====================
+    @override
     @property
-    def episode_length_buf(self) -> torch.Tensor:
-        return self.env.unwrapped.episode_length_buf
+    def num_envs(self) -> int:
+        return self._env.unwrapped.num_envs
 
+    @override
     @property
-    def obs_spec(self):  # noqa: ANN201, D102
+    def device(self) -> torch.device | str:
+        return self._device
+
+    @override
+    @property
+    def unwrapped(self) -> DirectRlInterface | ManagerBasedRlInterface:
+        return self._env
+
+    # ==================== Skillet Environment ====================
+
+    @override
+    @property
+    def obs_spec(self):  # noqa: ANN201
         return self._obs_spec_policy
 
+    @override
     @property
-    def action_spec(self):  # noqa: ANN201, D102
+    def action_spec(self):  # noqa: ANN201
         return self._action_spec
 
-    @property
-    def n_envs(self) -> int:  # noqa: D102
-        return self._env.unwrapped.num_envs
+    @override
+    def supports_observation_spec(self, obs_spec: ObservationSpec) -> bool:
+        return obs_spec.name in [
+            self.obs_spec_policy.name,
+            self.obs_spec_state.name,
+            # self.obs_spec_rgbd.name,
+            self.obs_spec_ikee.name,
+            self.obs_spec_osc.name,
+        ]
 
-    @property
-    def num_envs(self) -> int:  # noqa: D102
-        return self._env.unwrapped.num_envs
+    @override
+    def supports_action_spec(self, action_spec: ActionSpec) -> bool:
+        return action_spec.name == self.action_spec.name
 
-    @property
-    def
+    @override
+    def coerce_obs_spec(self, obs_spec: str | ObservationSpec[Any]) -> ObservationSpec[Any]:
+        for spec in [
+            self.obs_spec_policy,
+            self.obs_spec_state,
+            # self.obs_spec_rgbd,
+            self.obs_spec_ikee,
+            self.obs_spec_osc,
+        ]:
+            if spec.name == obs_spec:
+                return spec
+            if isinstance(obs_spec, str) and obs_spec == spec.name:
+                return spec
+        raise ValueError(f"Observation spec {obs_spec} not supported by environment.")
 
-    def supports_observation_spec(self, obs_spec: ObservationSpec) -> bool:  # noqa: D102
-        return obs_spec.name in ["policy", "state"]
+    @override
+    def get_observation(self, obs_spec=None):  # noqa: ANN001, ANN201
+        if self._last_obs is None:
+            raise ValueError("No observation has been received yet. Call reset() first.")
+        if obs_spec is None:
+            obs_spec = self.obs_spec
+        if obs_spec.is_batched:
+            obs_spec = obs_spec.with_n_envs(self.num_envs)
 
+        if obs_spec.name == self.obs_spec_policy.name:
+            return self._last_obs["policy"]
+        if obs_spec.name == self.obs_spec_state.name:
+            return self._last_obs
+        if obs_spec.name == self.obs_spec_ikee.name:
+            return self.obs_spec_ikee.cast(
+                {
+                    "joint_pos": self._get_joint_positions(joint_ids=self._joint_ids),
+                    "joint_vel": self._get_joint_velocities(joint_ids=self._joint_ids),
+                    "tcp_offset": self._tcp_offset,
+                    "jacobians": self._get_jacobians(
+                        ee_link=self._ee_link_name, base_link=self._base_link_name, arm_joint_ids=self._joint_ids[:7]
+                    ),
+                    "ee_pose_b": self._get_ee_pose_b(ee_link=self._ee_link_name, base_link=self._base_link_name),
+                    "tcp_pose_b": self._get_tcp_pose_b(ee_link=self._ee_link_name),
+                    "gripper_lim": self._get_gripper_lims(gripper_joints=self._gripper_joint_names),
+                    "gripper": self._get_gripper_state(gripper_joints=self._gripper_joint_names),
+                    "joint_lims": self._get_joint_lims(),
+                }
+            )
+        if obs_spec.name == self.obs_spec_osc.name:
+            return self.obs_spec_osc.cast(
+                {
+                    "joint_pos": self._get_joint_positions(joint_ids=self._joint_ids),
+                    "joint_vel": self._get_joint_velocities(joint_ids=self._joint_ids),
+                    "tcp_offset": self._tcp_offset,
+                    "jacobians": self._get_jacobians(
+                        ee_link=self._ee_link_name, base_link=self._base_link_name, arm_joint_ids=self._joint_ids[:7]
+                    ),
+                    "ee_pose_b": self._get_ee_pose_b(ee_link=self._ee_link_name, base_link=self._base_link_name),
+                    "tcp_pose_b": self._get_tcp_pose_b(ee_link=self._ee_link_name),
+                    "gripper_lim": self._get_gripper_lims(gripper_joints=self._gripper_joint_names),
+                    "gripper": self._get_gripper_state(gripper_joints=self._gripper_joint_names),
+                    "joint_lims": self._get_joint_lims(),
+                    "mass_matrix": self._get_mass_matrices(arm_joint_ids=self._joint_ids[:7]),
+                    "joint_gravity": self._get_joint_gravity(arm_joint_ids=self._joint_ids[:7]),
+                    "ee_vel_b": self._get_ee_vel_b(ee_link=self._ee_link_name, base_link=self._base_link_name),
+                    "joint_centers": self._get_joint_centers(arm_joint_ids=self._joint_ids[:7]),
+                }
+            )
+        raise ValueError(f"Observation spec {obs_spec} not supported by environment.")
+
+    @override
+    def get_state(self) -> TBatchedObsTorch:
+        return self.get_observation(self._obs_spec_state)
+
+    # ==================== Public methods ====================
+
+    @override
     def reset(self) -> tuple[TBatchedObsTorch, dict]:
         """Reset the environment.
 
@@ -168,63 +286,14 @@ class IsaacEnvWrapper(
 
         """
         obs_dict, info = self.env.reset()
-        self.last_obs = obs_dict
+        self._last_obs = obs_dict
 
         return obs_dict, info
 
-    def get_observation(self, obs_spec=None):  # noqa: ANN001, ANN201, D102
-        if self.last_obs is None:
-            raise ValueError("No observation has been received yet. Call reset() first.")
-        if obs_spec is None:
-            return self.last_obs
-        if obs_spec.name == "policy":
-            return self.last_obs["policy"]
-        if obs_spec.name == "state":
-            return self.last_obs
-        if obs_spec.name == "ik_ee":
-            return TensorDict(
-                {
-                    "joint_pos": self._get_joint_positions(joint_ids=self.joint_ids),
-                    "joint_vel": self._get_joint_velocities(joint_ids=self.joint_ids),
-                    "tcp_offset": self.tcp_offset,
-                    "jacobians": self._get_jacobians(
-                        ee_link=self.ee_link_name, base_link=self.base_link_name, arm_joint_ids=self.joint_ids[:7]
-                    ),
-                    "ee_pose_b": self._get_ee_pose_b(ee_link=self.ee_link_name, base_link=self.base_link_name),
-                    "tcp_pose_b": self._get_tcp_pose_b(ee_link=self.ee_link_name),
-                    "gripper_lim": self._get_gripper_lims(gripper_joints=self.gripper_joint_names),
-                    "gripper": self._get_gripper_state(gripper_joints=self.gripper_joint_names),
-                    "joint_lims": self._get_joint_lims(),
-                },
-                batch_size=self.num_envs,
-            )
-        if obs_spec.name == "osc":
-            return TensorDict(
-                {
-                    "joint_pos": self._get_joint_positions(joint_ids=self.joint_ids),
-                    "joint_vel": self._get_joint_velocities(joint_ids=self.joint_ids),
-                    "tcp_offset": self.tcp_offset,
-                    "jacobians": self._get_jacobians(
-                        ee_link=self.ee_link_name, base_link=self.base_link_name, arm_joint_ids=self.joint_ids[:7]
-                    ),
-                    "ee_pose_b": self._get_ee_pose_b(ee_link=self.ee_link_name, base_link=self.base_link_name),
-                    "tcp_pose_b": self._get_tcp_pose_b(ee_link=self.ee_link_name),
-                    "gripper_lim": self._get_gripper_lims(gripper_joints=self.gripper_joint_names),
-                    "gripper": self._get_gripper_state(gripper_joints=self.gripper_joint_names),
-                    "joint_lims": self._get_joint_lims(),
-                    "mass_matrix": self._get_mass_matrices(arm_joint_ids=self.joint_ids[:7]),
-                    "joint_gravity": self._get_joint_gravity(arm_joint_ids=self.joint_ids[:7]),
-                    "ee_vel_b": self._get_ee_vel_b(ee_link=self.ee_link_name, base_link=self.base_link_name),
-                    "joint_centers": self._get_joint_centers(arm_joint_ids=self.joint_ids[:7]),
-                },
-                batch_size=self.num_envs,
-            )
-        raise ValueError(f"Observation spec {obs_spec} not supported by environment.")
-
-    def get_state(self) -> TBatchedObsTorch:  # noqa: D102
-        return self.get_observation(self._obs_spec_state)
-
-    def step(self, action: TBatchedActionTorch) -> tuple[
+    @override
+    def step(
+        self, action: TBatchedActionTorch
+    ) -> tuple[
         TBatchedObsTorch,
         Float[torch.Tensor, "b"],  # noqa: F821
         Bool[torch.Tensor, "b"],  # noqa: F821
@@ -241,7 +310,7 @@ class IsaacEnvWrapper(
 
         """
         obs_dict, reward, term, trunc, info = self.env.step(action)
-        self.last_obs = obs_dict
+        self._last_obs = obs_dict
 
         return obs_dict, reward, term, trunc, info
 
@@ -262,7 +331,7 @@ class IsaacEnvWrapper(
         if env_ids is None:
             env_ids = self.robot._ALL_INDICES
         if joint_ids is None:
-            joint_ids = self.joint_ids
+            joint_ids = self._joint_ids
         return self.robot.data.joint_pos[:, joint_ids][env_ids]
 
     def _get_joint_velocities(self, env_ids: torch.Tensor | None = None, joint_ids: list | None = None) -> torch.Tensor:
@@ -278,7 +347,7 @@ class IsaacEnvWrapper(
         if env_ids is None:
             env_ids = self.robot._ALL_INDICES
         if joint_ids is None:
-            joint_ids = self.joint_ids
+            joint_ids = self._joint_ids
         return self.robot.data.joint_vel[:, joint_ids][env_ids]
 
     def _get_jacobians(
@@ -302,7 +371,7 @@ class IsaacEnvWrapper(
         if env_ids is None:
             env_ids = self.robot._ALL_INDICES
         if arm_joint_ids is None:
-            arm_joint_ids = self.joint_ids[:-1]
+            arm_joint_ids = self._joint_ids[:-1]
         ee_link_idx = self.robot.find_bodies(ee_link)[0][0]
         ee_jacobi_idx = ee_link_idx - 1
         base_link_idx = self.robot.find_bodies(base_link)[0][0]
@@ -343,8 +412,8 @@ class IsaacEnvWrapper(
         ee_pos_b = quat_apply_inverse(root_quat_w, ee_pos_w - root_pos_w)
         ee_quat_b = quat_mul(quat_inv(root_quat_w), ee_quat_w)
 
-        tcp_pos_b = ee_pos_b + quat_apply(ee_quat_b, self.tcp_offset[env_ids, 0:3])
-        tcp_quat_b = quat_mul(ee_quat_b, self.tcp_offset[env_ids, 3:7])
+        tcp_pos_b = ee_pos_b + quat_apply(ee_quat_b, self._tcp_offset[env_ids, 0:3])
+        tcp_quat_b = quat_mul(ee_quat_b, self._tcp_offset[env_ids, 3:7])
 
         return torch.concatenate(
             (tcp_pos_b, tcp_quat_b),
@@ -414,8 +483,8 @@ class IsaacEnvWrapper(
             env_ids = self.robot._ALL_INDICES
 
         gripper_joint_idxs = [self.robot.find_joints(j)[0][0] for j in gripper_joints]
-        gripper_low = self.robot_dof_lower_limits[gripper_joint_idxs]
-        gripper_high = self.robot_dof_upper_limits[gripper_joint_idxs]
+        gripper_low = self._robot_dof_lower_limits[gripper_joint_idxs]
+        gripper_high = self._robot_dof_upper_limits[gripper_joint_idxs]
 
         return torch.cat(
             (gripper_low.unsqueeze(0).repeat(self.num_envs, 1), gripper_high.unsqueeze(0).repeat(self.num_envs, 1)),
@@ -436,7 +505,7 @@ class IsaacEnvWrapper(
             env_ids = self.robot._ALL_INDICES
 
         return (
-            torch.cat((self.robot_dof_lower_limits, self.robot_dof_upper_limits), dim=0)
+            torch.cat((self._robot_dof_lower_limits, self._robot_dof_upper_limits), dim=0)
             .unsqueeze(0)
             .repeat(env_ids.shape[0], 1, 1)
         )
@@ -458,7 +527,7 @@ class IsaacEnvWrapper(
         if env_ids is None:
             env_ids = self.robot._ALL_INDICES
         if arm_joint_ids is None:
-            arm_joint_ids = self.joint_ids[:7]
+            arm_joint_ids = self._joint_ids[:7]
 
         return self.robot.root_physx_view.get_generalized_mass_matrices()[:, arm_joint_ids, :][:, :, arm_joint_ids][
             env_ids
@@ -481,7 +550,7 @@ class IsaacEnvWrapper(
         if env_ids is None:
             env_ids = self.robot._ALL_INDICES
         if arm_joint_ids is None:
-            arm_joint_ids = self.joint_ids[:7]
+            arm_joint_ids = self._joint_ids[:7]
 
         return self.robot.root_physx_view.get_gravity_compensation_forces()[:, arm_joint_ids][env_ids]
 
@@ -527,7 +596,7 @@ class IsaacEnvWrapper(
         if env_ids is None:
             env_ids = self.robot._ALL_INDICES
         if arm_joint_ids is None:
-            arm_joint_ids = self.joint_ids[:7]
+            arm_joint_ids = self._joint_ids[:7]
         return torch.nan_to_num(
             torch.mean(self.robot.data.soft_joint_pos_limits[:, arm_joint_ids, :][env_ids], dim=-1),
             nan=0.0,

@@ -53,9 +53,9 @@ class SkillIsaacEnvWrapper(
         """
         super().__init__(env)
         if hasattr(env.unwrapped.cfg, "skills"):
-            assert (
-                env.unwrapped.cfg.skills is not None
-            ), "`env.cfg.skills` must not be None. Configure to list of skills."
+            assert env.unwrapped.cfg.skills is not None, (
+                "`env.cfg.skills` must not be None. Configure to list of skills."
+            )
         else:
             raise ValueError(
                 f"Cannot use `SkillIsaacWrapper` when `{type(env.unwrapped.cfg)}` does not contain the `skills` attribute."
@@ -78,7 +78,9 @@ class SkillIsaacEnvWrapper(
             ),
         )
 
-    def step(self, action: TBatchedActionTorch) -> tuple[
+    def step(
+        self, action: TBatchedActionTorch
+    ) -> tuple[
         TBatchedObsTorch,
         Float[torch.Tensor, "b"],  # noqa: F821
         Bool[torch.Tensor, "b"],  # noqa: F821
@@ -95,8 +97,8 @@ class SkillIsaacEnvWrapper(
 
         """
         self.sc.reset(action)  # Reset skills and parse
-        _rewards = torch.zeros((self.num_envs,), device=self.device)
-        _skill_length = torch.zeros((self.num_envs,), device=self.device)
+        _rewards = torch.zeros((self.num_envs,), device=self._device)
+        _skill_length = torch.zeros((self.num_envs,), device=self._device)
         _dones = self.sc.dones  # Will always start as false
         while not _dones.all():
             ll_action = self.sc.get_action(self.get_observation())

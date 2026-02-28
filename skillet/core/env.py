@@ -314,13 +314,19 @@ class AsGymVectorEnv(gym.vector.VectorEnv):
 
         """
         self.env = env
-        self.num_envs = num_envs or env.get_wrapper_attr("num_envs")
+        def env_attr(env: gym.Env, attr: str) -> Any:
+            if hasattr(env, attr):
+                return getattr(env, attr)
+            if hasattr(env, "has_wrapper_attr") and env.has_wrapper_attr(attr):
+                return env.get_wrapper_attr(attr)
+            return None
+        self.num_envs = num_envs or env_attr(env, "num_envs")
         if self.num_envs is None:
             raise ValueError("The environment does not have a number of environments .num_envs")
-        if not env.has_wrapper_attr("single_observation_space") or not env.has_wrapper_attr("single_action_space"):
+        if not env_attr(env, "single_observation_space") or not env_attr(env, "single_action_space"):
             raise ValueError("The environment does not have a single observation space or action space.")
-        self.single_observation_space = env.get_wrapper_attr("single_observation_space")
-        self.single_action_space = env.get_wrapper_attr("single_action_space")
+        self.single_observation_space = env_attr(env, "single_observation_space")
+        self.single_action_space = env_attr(env, "single_action_space")
         self.observation_space = env.observation_space
         self.action_space = env.action_space
 

@@ -25,7 +25,7 @@ from skillet.core.math import (
     subtract_frame_transforms,
 )
 from skillet.core.spaces import ActionSpec
-from skillet.envs.direct_rl import DirectRlInterface
+from skillet.envs.isaac_lab import DirectRlInterface
 from skillet.envs.ros2 import ROS2RLEnv
 from skillet.envs.specs import IK_EE_SPEC_BATCHED, OSC_SPEC_BATCHED, RGBD_SPEC_BATCHED
 
@@ -119,12 +119,12 @@ class ROS2SkilletEnv(
     @override
     @property
     def device(self) -> torch.device | str:
-        return cast("torch.device | str", self._env.get_wrapper_attr("device"))
+        return self._env.device
 
     @override
     @property
     def max_episode_length(self) -> int:
-        return cast("int", self._env.get_wrapper_attr("max_episode_length"))
+        return self._env.max_episode_length
 
     @override
     @property
@@ -137,8 +137,7 @@ class ROS2SkilletEnv(
 
     @override
     def _get_observations(self) -> TBatchedObsTorch:
-        # Get the latest observations cached in self._env
-        return self._env.get_wrapper_attr("obs_buf")
+        return self.obs_spec_state.cast(self._last_obs)
 
     @override
     @property
@@ -312,9 +311,9 @@ class ROS2SkilletEnv(
 
         """
         obs_dict, reward, term, trunc, info = self.env.step(action)
-        self._last_obs = obs_dict
         for k, v in obs_dict.items():
             obs_dict[k] = torch.as_tensor(v, device=self.device).unsqueeze(0)
+        self._last_obs: dict[str, torch.Tensor] = obs_dict
 
         reward = torch.as_tensor(reward, device=self.device)
         term = torch.as_tensor([term], device=self.device)

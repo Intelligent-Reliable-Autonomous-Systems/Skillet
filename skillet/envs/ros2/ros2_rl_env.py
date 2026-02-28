@@ -167,9 +167,9 @@ class ROS2RLEnv(gym.Env):
         return self.cfg.episode_length_s
 
     @property
-    def max_episode_length(self) -> float:
+    def max_episode_length(self) -> int:
         """The maximum episode length in steps adjusted from s."""
-        return float(math.ceil(self.max_episode_length_s / (self.cfg.dt * self.cfg.decimation)))
+        return math.ceil(self.max_episode_length_s / (self.cfg.dt * self.cfg.decimation))
 
     def reset(
         self, seed: int | None = None, options: dict[str, Any] | None = None

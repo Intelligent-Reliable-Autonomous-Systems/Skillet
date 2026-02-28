@@ -20,7 +20,7 @@ from skillet.envs.ros2_skillet_env import ROS2SkilletEnv
 from skillet.envs.util import configure_seed
 
 if TYPE_CHECKING:
-    from skillet.envs.direct_rl import DirectRlInterface
+    from skillet.envs.isaac_lab import DirectRlInterface, ManagerBasedRlInterface
 
 
 class RslRlVecEnv(ABC):
@@ -167,9 +167,7 @@ class RslRlVecEnvWrapper(RslRlVecEnv, gym.vector.VectorWrapper):
             self.single_action_space = gym.spaces.Box(
                 low=-self._clip_actions, high=self._clip_actions, shape=(self._num_actions,)
             )
-            self.action_space = gym.vector.utils.batch_space(
-                self.single_action_space, self.num_envs
-            )
+            self.action_space = gym.vector.utils.batch_space(self.single_action_space, self.num_envs)
 
         # reset at the start since the RSL-RL runner does not call reset
         self.env.reset()
@@ -198,7 +196,7 @@ class RslRlVecEnvWrapper(RslRlVecEnv, gym.vector.VectorWrapper):
     @property
     def episode_length_buf(self) -> torch.Tensor:
         """Buffer for current episode lengths."""
-        return self.env.episode_length_buf
+        return self.env.unwrapped.episode_length_buf
 
     @episode_length_buf.setter
     def episode_length_buf(self, value: torch.Tensor) -> None:
@@ -215,12 +213,12 @@ class RslRlVecEnvWrapper(RslRlVecEnv, gym.vector.VectorWrapper):
     @property
     def cfg(self) -> dict | object:
         """Configuration object."""
-        return self.env.cfg
+        return self.env.unwrapped.cfg
 
     @property
-    def unwrapped(self) -> DirectRlInterface:
+    def unwrapped(self) -> DirectRlInterface | ManagerBasedRlInterface:
         """Return the base environment, which is a DirectRlInterface."""
-        x = self.env.unwrapped
+        return self.env.unwrapped
 
     """
     Operations - MDP
