@@ -9,6 +9,7 @@ from collections.abc import Mapping
 from typing import Any, Generic, TypeVar, overload
 
 import gymnasium as gym
+from gymnasium.vector import vector_env
 import numpy as np
 import torch
 from jaxtyping import Bool, Float
@@ -26,6 +27,7 @@ from skillet.core.math import (
     subtract_frame_transforms,
 )
 from skillet.core.spaces import ActionSpec
+from skillet.envs.specs import RGBD_SPEC_BATCHED
 
 TBatchedObsTorch = TypeVar(
     "TBatchedObsTorch", bound=Float[torch.Tensor, "b ..."] | Mapping[str, Float[torch.Tensor, "b ..."]]
@@ -65,47 +67,27 @@ class ROS2EnvWrapper(
         self.device = env.unwrapped.device
         self.max_episode_length = env.unwrapped.max_episode_length
 
-        vector_env = AsGymVectorEnv(env, num_envs=self.num_envs)
-        super().__init__(vector_env)
-        self._obs_spec_policy = ObservationSpec[Float[torch.Tensor, "b ..."]](
-            space=vector_env.single_observation_space["policy"],
-            name="policy",
-            is_torch=True,
-            is_batched=True,
-            n_envs=-1,
-            device=self.device,
-        )
-        self._obs_spec_state = ObservationSpec[Mapping[str, Float[torch.Tensor, "b ..."]]](
-            space=vector_env.single_observation_space,
-            name="state",
-            is_torch=True,
-            is_batched=True,
-            n_envs=-1,
-            device=self.device,
-        )
-        self._obs_spec_rgbd = ObservationSpec[Mapping[str, Float[torch.Tensor, "b ..."]]](
-            space=gym.spaces.Dict({
-                "rgb": gym.spaces.Box(low=0, high=255, shape=(3, 480, 640), dtype=np.uint8),
-                # Depth is normalized to float32 meters for downstream perception.
-                "depth": gym.spaces.Box(low=0.0, high=10.0, shape=(1, 480, 640), dtype=np.float32),
-                "intrinsic_k": gym.spaces.Box(low=0.0, high=2000.0, shape=(3, 3), dtype=np.float32),
-                "camera_pose": gym.spaces.Box(low=-10.0, high=10.0, shape=(7,), dtype=np.float32),
-                "timestamp": gym.spaces.Box(low=0.0, high=1e10, shape=(), dtype=np.float64),
-            }),
-            name="rgb-d",
-            is_torch=True,
-            is_batched=True,
-            n_envs=-1,
-            device=self.device,
-        )
+        # vector_env = AsGymVectorEnv(env, num_envs=self.num_envs)
+        _ros_env = env
+        spec_args = {
+            "is_torch": True,
+            "is_batched": True,
+            "n_envs": -1,
+            "device": self.device,
+        }
+        self.obs_spec_policy = ObservationSpec[Float[torch.Tensor, "b ..."]](
+            name="policy", space=_ros_env.single_observation_space["policy"],
+        ).replace(**spec_args)
+        """Specification of the vector observation passed to a low level policy"""
+        self.obs_spec_state = ObservationSpec[Mapping[str, Float[torch.Tensor, "b ..."]]](
+            name="state", space=_ros_env.single_observation_space,
+        ).replace(**spec_args)
+        """Specification of the raw dictionary environment state"""
+        self.obs_spec_rgbd = RGBD_SPEC_BATCHED.bind(height=480, width=640).replace(device=self.device)
+        """Specification of RGB-D observations and metadata. Bound to the height and width of the RGB-D camera."""
         self._action_spec = ActionSpec[TBatchedActionTorch](
-            space=vector_env.single_action_space,
-            name="action",
-            is_torch=True,
-            is_batched=True,
-            n_envs=-1,
-            device=self.device,
-        )
+            name="action", space=_ros_env.single_action_space,
+        ).replace(**spec_args)
 
         # Robot specific information
         self.joint_ids = env.unwrapped.cfg.joint_ids
@@ -128,7 +110,7 @@ class ROS2EnvWrapper(
 
     @property
     def obs_spec(self):
-        return self._obs_spec_policy
+        return self.obs_spec_policy
 
     @property
     def action_spec(self):
@@ -157,7 +139,20 @@ class ROS2EnvWrapper(
         return upper_limits
 
     def supports_observation_spec(self, obs_spec: ObservationSpec) -> bool:
-        return obs_spec.name in ["policy", "state", "rgb-d"]
+        return obs_spec.name in [
+            self.obs_spec_policy.name, self.obs_spec_state.name, self.obs_spec_rgbd.name,
+        ]
+
+    def supports_action_spec(self, action_spec: ActionSpec) -> bool:
+        return action_spec.name == self.action_spec.name
+
+    def coerce_obs_spec(self, obs_spec: str | ObservationSpec[Any]) -> ObservationSpec[Any]:
+        for spec in [self.obs_spec_policy, self.obs_spec_state, self.obs_spec_rgbd]:
+            if spec.name == obs_spec:
+                return spec
+            if isinstance(obs_spec, str) and obs_spec == spec.name:
+                return spec
+        raise ValueError(f"Observation spec {obs_spec} not supported by environment.")
 
     def reset(self) -> tuple[TBatchedObsTorch, dict]:
         """Reset the environment.
@@ -245,7 +240,7 @@ class ROS2EnvWrapper(
         raise ValueError(f"Observation spec {obs_spec} not supported by environment.")
 
     def get_state(self) -> TBatchedObsTorch:  # noqa: D102
-        return self.get_observation(self._obs_spec_state)
+        return self.get_observation(self.obs_spec_state)
 
     def step(self, action: TBatchedActionTorch) -> tuple[
         TBatchedObsTorch,

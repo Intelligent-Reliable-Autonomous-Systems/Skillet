@@ -75,5 +75,5 @@ class ROS2RLEnvCfg:
     base_link_name: str = MISSING
     """Name of the base link for Diff IK"""
 
-    gripper_joint_name: str = MISSING
+    gripper_joint_names: list[str] = MISSING
     """Name of the gripper joint for gripper pose"""

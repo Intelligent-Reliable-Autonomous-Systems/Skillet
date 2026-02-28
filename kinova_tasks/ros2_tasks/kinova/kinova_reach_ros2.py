@@ -94,11 +94,12 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
         self.robot_description_topic = "/robot_info"
         self.body_pose_topic = "/robot_body_pose_w"
         self.body_vel_topic = "/robot_body_vel_w"
-        self.gripper_topic_type = (
-            "control_msgs/action/GripperCommand"
-            if cfg.use_fake_hardware == "true"
-            else "control_msgs/action/ParallelGripperCommand"
-        )
+        # self.gripper_topic_type = (
+        #     "control_msgs/action/GripperCommand"
+        #     if cfg.use_fake_hardware == "true"
+        #     else "control_msgs/action/ParallelGripperCommand"
+        # )
+        self.gripper_topic_type = "control_msgs/action/ParallelGripperCommand"
         self.realsense_snapshot_service = "/table_camera/realsense/get_latest_frame"
         self.realsense_snapshot_service_type = "iras_realsense_msgs/srv/GetLatestRgbd"
 
@@ -284,10 +285,10 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
 
         gripper_val = float(joint_pos[-1])
         gripper_val = max(0, min(gripper_val, 1)) * 0.8
-        if self.cfg.use_fake_hardware == "true":
-            gripper_goal = {"command": {"position": gripper_val, "max_effort": 100.0}}
-        else:
-            gripper_goal = {"command": {"name": [self.cfg.gripper_joint_name], "position": [gripper_val]}}
+        # if self.cfg.use_fake_hardware == "true":
+        #     gripper_goal = {"command": {"position": gripper_val, "max_effort": 100.0}}
+        # else:
+        gripper_goal = {"command": {"name": self.cfg.gripper_joint_names, "position": [gripper_val]}}
 
         self.joint_states_pub.publish(joint_msg)
 
@@ -319,6 +320,8 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
     def _gripper_result_cb(self, result: dict[str, Any]) -> None:
         """Gripper action result callback."""
         status = result.get("status")
+        if hasattr(status, "name"):
+            status = status.name
         message = result.get("message", "")
 
         if status == "SUCCEEDED":

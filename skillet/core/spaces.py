@@ -22,6 +22,7 @@ from typing import (
     Generic,
     NamedTuple,
     Protocol,
+    SupportsFloat,
     TypeAlias,
     TypeVar,
     overload,
@@ -30,6 +31,7 @@ from typing import (
 
 import gymnasium as gym
 import numpy as np
+from numpy.typing import NDArray
 import torch
 from jaxtyping import Bool, Float, Int, Shaped
 from typing_extensions import TypedDict
@@ -81,31 +83,17 @@ class ArrayLike(Protocol):
     def __repr__(self) -> str: ...  # noqa: D105
     def __str__(self) -> str: ...  # noqa: D105
 
+ArrayT = TypeVar("ArrayT", bound=ArrayLike)
+"""A generic type for array-like objects."""
 
-SpaceItem: TypeAlias = Scalar | ArrayLike
+SpaceItem: TypeAlias = Scalar | Shaped[ArrayT, "..."]
 """A scalar or list-like value that can be stored in a space."""
-SpaceItemNP: TypeAlias = Scalar | np.ndarray[Scalar]
-"""A scalar or numpy array of scalars that can be stored in a space."""
-SpaceItemTorch: TypeAlias = Scalar | Shaped[torch.Tensor, "..."]
-"""A scalar or PyTorch tensor of scalars that can be stored in a space."""
 SpaceValue: TypeAlias = SpaceItem | Mapping[str, SpaceItem]
 """A scalar or list-like value or dictionary of scalar or list-like values."""
-SpaceValueNP: TypeAlias = SpaceItemNP | Mapping[str, SpaceItemNP]
-"""A scalar or numpy array of scalars or dictionary of scalar or numpy array of scalars."""
-SpaceValueTorch: TypeAlias = SpaceItemTorch | Mapping[str, SpaceItemTorch]
-"""A scalar or PyTorch tensor of scalars or dictionary of scalar or PyTorch tensor of scalars."""
-BatchedSpaceItem: TypeAlias = Shaped[ArrayLike, "b ..."]
+BatchedSpaceItem: TypeAlias = Shaped[ArrayT, "b ..."]
 """A batched list-like sequence of scalar or list-like values that can be stored in a space."""
-BatchedSpaceItemNP: TypeAlias = Shaped[np.ndarray, "b ..."]
-"""A batched list-like sequence of numpy arrays of scalars that can be stored in a space."""
-BatchedSpaceItemTorch: TypeAlias = Shaped[torch.Tensor, "b ..."]
-"""A batched list-like sequence of PyTorch tensors of scalars that can be stored in a space."""
 BatchedSpaceValue: TypeAlias = BatchedSpaceItem | Mapping[str, BatchedSpaceItem]
 """A batched scalar or list-like value or dictionary of batched scalar or list-like values."""
-BatchedSpaceValueNP: TypeAlias = BatchedSpaceItemNP | Mapping[str, BatchedSpaceItemNP]
-"""A batched scalar or numpy array of scalars or dictionary of batched scalar or numpy array of scalars."""
-BatchedSpaceValueTorch: TypeAlias = BatchedSpaceItemTorch | Mapping[str, BatchedSpaceItemTorch]
-"""A batched scalar or PyTorch tensor of scalars or dictionary of batched scalar or PyTorch tensor of scalars."""
 
 TSpace = TypeVar("TSpace", bound=SpaceValue)
 """The generic type variable for a space type."""
@@ -148,12 +136,33 @@ class SpaceSpecification(Generic[TSpace]):
             if len(space_shape) == 0:
                 raise ValueError(f"Cannot infer batch size from space {self.space} because the shape is empty. \
                         The space is not batched.")
+            if space_shape[0] == -1 or isinstance(space_shape[0], str):
+                raise ValueError(f"Cannot infer batch size from space {self.space}. shape[0]={space_shape[0]}")
             object.__setattr__(self, "n_envs", space_shape[0])
 
         # Set default device if not specified and is torch
         if self.is_torch and self.device is None:
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             object.__setattr__(self, "device", device)
+
+    def is_parameterized(self) -> bool:
+        """Whether the space is defined with variables.
+
+        Many operations require this to be false.
+        """
+        if isinstance(self.space, ParameterizedBox):
+            return True
+        if isinstance(self.space, gym.spaces.Dict):
+            return any(isinstance(subspace, ParameterizedBox) for subspace in self.space.spaces.values())
+        return False
+
+    def _ensure_not_parameterized(self) -> None:
+        """Ensure the space is not parameterized.
+
+        Many operations require this to be false.
+        """
+        if self.is_parameterized():
+            raise ValueError("Cannot perform operation on a parameterized space.")
 
     def index(self, value: TSpace, env_ids: Sequence[int] | Sequence[bool]) -> TSpace:
         """Index the space value for the given environment ids.
@@ -165,6 +174,7 @@ class SpaceSpecification(Generic[TSpace]):
                 If a sequence of integers, select the elements at the given indices.
 
         """
+        self._ensure_not_parameterized()
         if not self.is_batched:
             raise ValueError("Cannot index a non-batched space.")
         env_ids = torch.as_tensor(env_ids, device=self.device) if self.is_torch else np.asarray(env_ids)
@@ -189,6 +199,7 @@ class SpaceSpecification(Generic[TSpace]):
 
         Optionally specify the shape of the tensor or array.
         """
+        self._ensure_not_parameterized()
         if shape is not None:
             dtype = dtype or self.space.dtype
             if shape[0] == -1:
@@ -245,6 +256,7 @@ class SpaceSpecification(Generic[TSpace]):
 
         Optionally specify the shape of the tensor or array.
         """
+        self._ensure_not_parameterized()
         if shape is not None:
             dtype = dtype or self.space.dtype
             if shape[0] == -1:
@@ -291,6 +303,7 @@ class SpaceSpecification(Generic[TSpace]):
 
     def sample(self) -> TSpace:
         """Sample a random value from the space."""
+        self._ensure_not_parameterized()
         sampled = self.space.sample()
         if self.is_torch:
             return torch.tensor(sampled, device=self.device)
@@ -298,6 +311,7 @@ class SpaceSpecification(Generic[TSpace]):
 
     def cast(self, value: SpaceValue) -> TSpace:
         """Cast a value to the type of the space."""
+        self._ensure_not_parameterized()
 
         def cast_array(v: Any, expected_shape: tuple[int, ...], dtype: Any, key: str = "") -> Any:  # noqa: ANN401
             if self.is_torch:
@@ -327,13 +341,30 @@ class SpaceSpecification(Generic[TSpace]):
             }  # type: ignore[return-value]
         return cast_array(value, self.space.shape, self.space.dtype)
 
+    def replace(self, **kwargs: Any) -> SpaceSpecification[TSpace]:
+        """Return a new space specification with the given parameters replaced."""
+        return replace(self, **kwargs)
+
     def with_n_envs(self, n_envs: int) -> SpaceSpecification[TSpace]:
         """Return a new space specification with the given number of environments."""
         if not self.is_batched:
             raise ValueError("Cannot set n_envs for a non-batched space.")
         if self.n_envs != -1 and self.n_envs != n_envs:
             raise ValueError(f"Cannot set n_envs to a different value {n_envs} than the current value {self.n_envs}.")
-        space = gym.vector.utils.space_utils.batch_space(self.space, n_envs) if self.n_envs == -1 else self.space
+        if self.n_envs >= 0:
+            return self
+        if isinstance(self.space, ParameterizedBox):
+            space = self.space.batch(n_envs)
+        if isinstance(self.space, gym.spaces.Dict):
+            subspaces = {}
+            for key, subspace in self.space.spaces.items():
+                if isinstance(subspace, ParameterizedBox):
+                    subspaces[key] = subspace.batch(n_envs)
+                else:
+                    subspaces[key] = gym.vector.utils.space_utils.batch_space(subspace, n_envs)
+            space = gym.spaces.Dict(subspaces)
+        else:
+            space = gym.vector.utils.space_utils.batch_space(self.space, n_envs) if self.n_envs == -1 else self.space
         return replace(self, space=space, n_envs=n_envs)
 
     def n_envs_from(self, value: TSpace) -> int:
@@ -353,19 +384,28 @@ class SpaceSpecification(Generic[TSpace]):
         # TODO: implement unbatched for pre-batched spaces (n_envs != -1)
         raise NotImplementedError("unbatched() not available for pre-batched spaces")
 
-
+    def bind(self, **params: dict[str, int]) -> SpaceSpecification[TSpace]:
+        """Bind the space specification to the given parameters."""
+        space = self.space
+        if isinstance(self.space, ParameterizedBox):
+            space = self.space.bind(**params)
+        if isinstance(self.space, gym.spaces.Dict):
+            subspaces = {}
+            for key, subspace in self.space.spaces.items():
+                if isinstance(subspace, ParameterizedBox):
+                    subspaces[key] = subspace.bind(**params)
+                else:
+                    subspaces[key] = subspace
+            space = gym.spaces.Dict(subspaces)
+        return replace(self, space=space)
 # =============================================
 # Actions
 # =============================================
 Action: TypeAlias = SpaceItem
 """Represents an action in the environment."""
-ActionTorch: TypeAlias = Float[torch.Tensor, "n"]  # noqa: F821
-"""Represents an action in the environment as a PyTorch tensor."""
 BatchedAction: TypeAlias = BatchedSpaceItem
 """A batched action in the environment."""
-BatchedActionTorch: TypeAlias = Float[torch.Tensor, "b n"]
-"""A batched action in the environment as a PyTorch tensor."""
-TAction = TypeVar("TAction", bound=Action)
+TAction = TypeVar("TAction", bound=Action | BatchedAction)
 
 
 # ActionSpec: TypeAlias = SpaceSpecification[TAction]
@@ -374,76 +414,23 @@ class ActionSpec(SpaceSpecification[TAction], Generic[TAction]):
 
     pass
 
-
-def make_action_spec(
-    obs_type: type[TAction],
-    space: gym.Space[TAction],
-    name: str | None = None,
-    is_torch: bool = False,
-    is_batched: bool = False,
-    n_envs: int | None = None,
-) -> ActionSpec[TAction]:
-    """Take a Gymnasium space and returns an ActionSpec parameterized by the action type."""
-    if name is None and space:
-        name = str(space)
-    return ActionSpec[TAction](space=space, name=name, is_torch=is_torch, is_batched=is_batched, n_envs=n_envs)
-
-
 # =============================================
 # Observations
 # =============================================
 Observation: TypeAlias = SpaceValue
 """A scalar or list-like value or dictionary of scalar or list-like values that can be stored in a space."""
-ObservationTorch: TypeAlias = SpaceValueTorch
 BatchedObservation: TypeAlias = BatchedSpaceValue
 """A batched scalar or list-like value or dictionary of batched scalar or array-like that can be stored in a space."""
-BatchedObservationTorch: TypeAlias = BatchedSpaceValueTorch
-"""A batched scalar or list-like value or dictionary of batched scalar or array-like stored as a PyTorch tensor."""
 State: TypeAlias = Observation
 """The full state of the environment (full observability)."""
 
-TObs = TypeVar("TObs", bound=Observation)
+TObs = TypeVar("TObs", bound=Observation | BatchedObservation)
 
 
 class ObservationSpec(SpaceSpecification[TObs], Generic[TObs]):
     """The specification of an observation space."""
 
     pass
-
-
-@overload
-def make_observation_spec(
-    space: gym.spaces.Box, *, name: str = "obs", is_torch: bool = False
-) -> ObservationSpec[Any]: ...
-@overload
-def make_observation_spec(
-    space: gym.spaces.Dict, *, name: str = "obs", is_torch: bool = False
-) -> ObservationSpec[Mapping[str, Any]]: ...
-@overload
-def make_observation_spec(
-    space: gym.Space[Any], *, name: str = "obs", is_torch: bool = False
-) -> ObservationSpec[Any]: ...
-
-
-def make_observation_spec(space: gym.Space[Any], *, name: str = "obs", is_torch: bool = False) -> ObservationSpec[Any]:
-    """Construct an ObservationSpec from a Gymnasium space.
-
-    Take a Gymnasium space and returns an ObservationSpec parameterized by the
-    observation object type produced by that space.
-
-    Args:
-        space: The Gymnasium space to create an observation spec for.
-        name: The name of the observation spec.
-        is_torch: If True, observation types will be torch.Tensor instead of np.ndarray.
-
-    Supports:
-      - spaces.Box  -> np.ndarray or torch.Tensor (based on is_torch)
-      - spaces.Dict -> Mapping[str, Any] (runtime type: TypedDict class)
-                     (recursively supports Box/Dict subspaces)
-
-    """
-    space_type = _runtime_space_type(space, name=name, is_torch=is_torch)
-    return ObservationSpec[Any](space=space, space_type=space_type, name=name, is_torch=is_torch)
 
 
 # =============================================
@@ -501,16 +488,16 @@ ArrayEmpty: TypeAlias = Float[np.ndarray, "0"]
 """Represents an empty 1D array of floats ndarray[(0,), float]."""
 BatchedArrayEmpty: TypeAlias = Float[np.ndarray, "b 0"]
 """Represents a batched empty 1D array of floats ndarray[(b, 0), float]."""
-ParamDC: TypeAlias = NamedTuple(
-    "ParamDC",
-    [("discrete", Int[np.ndarray, "m"]), ("continuous", Float[np.ndarray, "n"])],  # noqa: F821
-)
-"""Represents a skill parameter set with m discrete parameters and n continuous parameters."""
-BatchedParamDC: TypeAlias = NamedTuple(
-    "BatchedParamDC",
-    [("discrete", Int[np.ndarray, "b m"]), ("continuous", Float[np.ndarray, "b n"])],
-)
-"""Represents a batched skill parameter set with m discrete parameters and n continuous parameters."""
+class ParamDC(NamedTuple):
+    """Represents a skill parameter set with m discrete parameters and n continuous parameters."""
+
+    discrete: Int[np.ndarray, "m"]
+    continuous: Float[np.ndarray, "n"]
+class BatchedParamDC(NamedTuple):
+    """Represents a batched skill parameter set with m discrete parameters and n continuous parameters."""
+
+    discrete: Int[np.ndarray, "b m"]
+    continuous: Float[np.ndarray, "b n"]
 
 
 class CommonSpecs:
@@ -572,78 +559,121 @@ def as_torch_dtype(dtype: type[int] | type[float] | type[bool] | np.dtype | torc
     raise ValueError(f"Unsupported dtype: {dtype}")
 
 
-def _box_space_type(space: gym.spaces.Box, *, is_torch: bool = False) -> type[Float | Int | Bool]:
-    """Return the space type for a Box space.
+class ParameterizedBox(gym.spaces.Box):
+    """A parameterized box space."""
 
-    Args:
-        space: The Box space to get the space type for.
-        is_torch: If True, return torch.Tensor type instead of np.ndarray.
+    def __init__(
+        self,
+        low: SupportsFloat | NDArray[Any],
+        high: SupportsFloat | NDArray[Any],
+        shape: Sequence[int | str],
+        dtype: type[np.floating[Any]] | type[np.integer[Any]] = np.float32,
+        seed: int | np.random.Generator | None = None,
+    ):
+        self._low = low
+        self._high = high
+        self._shape = shape
+        self._dtype = dtype
+        self._seed = seed
 
-    Returns:
-        The space type for the Box space.
+        self.variables = {v: i for i, v in enumerate(shape) if isinstance(v, str)}
+        if len(self.variables) == 0:
+            raise ValueError("No parameters found in shape. Use gym.spaces.Box instead.")
 
-    """
-    if is_torch:
-        if torch is None:
-            raise ValueError("torch is not available")
-        arr_type = torch.Tensor
-    else:
-        if np is None:
-            raise ValueError("numpy is not available")
-        arr_type = np.ndarray
+    def bind_partial(self, **params: dict[str, int]) -> ParameterizedBox | gym.spaces.Box:
+        """Bind the parameterized box space to the given parameters.
 
-    dtype = space.dtype
-    match dtype.kind:
-        case "f":
-            jaxtype_cls = Float
-        case "i":
-            jaxtype_cls = Int
-        case "b":
-            jaxtype_cls = Bool
-        case _:
-            raise ValueError(f"Unsupported dtype kind: {dtype.kind} for {dtype}")
+        If the parameterized box space is not fully bound, return a new parameterized box space with the parameters bound.
+        Otherwise, return a gym.spaces.Box.
+        """
+        shape = [
+            params[v] if v in params else self._shape[i] for i, v in enumerate(self._shape)
+        ]
+        vars_left = [v for v in shape if isinstance(v, str)]
+        if len(vars_left) > 0:
+            return ParameterizedBox(
+                low=self._low,
+                high=self._high,
+                shape=shape,
+                dtype=self._dtype,
+                seed=self._seed,
+            )
+        return gym.spaces.Box(
+            low=self._low,
+            high=self._high,
+            shape=shape,
+            dtype=self._dtype,
+            seed=self._seed,
+        )
 
-    shape = " ".join([str(s) for s in space.shape])
-    return jaxtype_cls[arr_type, shape]
+    def bind(self, **params: dict[str, int]) -> gym.spaces.Box:
+        """Bind the parameterized box space to the given parameters.
 
+        If the parameterized box space is not fully bound, raise a ValueError.
+        """
+        bound = self.bind_partial(**params)
+        if isinstance(bound, ParameterizedBox):
+            vars_left = [v for v in bound._shape if isinstance(v, str)]
+            if len(vars_left) > 0:
+                raise ValueError(f"Unbound variables {vars_left} found in shape: {bound._shape}. All variables must be bound.")
 
-def _typed_dict_for_space_dict(d: gym.spaces.Dict, *, name: str, is_torch: bool = False) -> type[TypedDict]:
-    """Create a runtime TypedDict class for a spaces.Dict.
-
-    Caveat: type checkers generally won't infer key/value types from a runtime
-    factory; you can still use this for runtime validation/docs.
-
-    Args:
-        d: The Dict space to create a TypedDict for.
-        name: The name of the TypedDict class.
-        is_torch: If True, nested Box spaces will use torch.Tensor types.
-
-    """
-    fields: dict[str, type[Any]] = {}
-    for k, subspace in d.spaces.items():
-        fields[k] = _runtime_space_type(subspace, name=f"{name}_{k}", is_torch=is_torch)
-    return TypedDict(name, fields)  # type: ignore[return-value]
-
-
-def _runtime_space_type(space: gym.Space[Any], *, name: str, is_torch: bool = False) -> type[Any]:
-    if isinstance(space, gym.spaces.Box):
-        return _box_space_type(space, is_torch=is_torch)
-    if isinstance(space, gym.spaces.Dict):
-        return _typed_dict_for_space_dict(space, name=f"{name}Dict", is_torch=is_torch)
-    raise NotImplementedError(f"Unsupported space type: {type(space).__name__}")
+            return bound
+        return bound
 
 
-# ---- example ----
-if __name__ == "__main__":
-    box = gym.spaces.Box(low=0.0, high=1.0, shape=(8,), dtype="float32")
-    spec_box = make_observation_spec(box, name="vec8", is_torch=True)
-    print(spec_box.obs_type)  # <class 'numpy.ndarray'> (if numpy available)
+    def batch(self, n_envs: int) -> ParameterizedBox | gym.spaces.Box:
+        """Batch the parameterized box space.
 
-    d = gym.spaces.Dict(
-        {
-            "key1": gym.spaces.Box(low=0, high=10, shape=(), dtype="int32"),
-            "key2": gym.spaces.Box(low=0.0, high=1.0, shape=(8,), dtype="float32"),
-        }
-    )
-    spec_dict = make_observation_spec(d, name="obs")
-    print(spec_dict.obs_type)  # <class '__main__.obsDict'> (a runtime TypedDict class)
+        Checks for special variables B and n_envs in first shape index
+        If found, bind the variable to the batch size.
+        Otherwise, create a new parameterized box space with the batch size added to the first dimension.
+        """
+        if "B" in self._shape and self._shape["B"] == 0: # B is a special variable that represents the batch size
+            return self.bind_partial(B=n_envs)
+        if "n_envs" in self._shape and self._shape["n_envs"] == 0: # n_envs is a special variable that represents the batch size
+            return self.bind_partial(n_envs=n_envs)
+        shape = (n_envs, *self._shape)
+        return ParameterizedBox(
+            low=self._low,
+            high=self._high,
+            shape=shape,
+            dtype=self._dtype,
+            seed=self._seed,
+        )
+
+    @property
+    def shape(self) -> tuple[int, ...]:  # noqa: D102
+        return self._shape
+
+    def sample(self, mask: None = None, probability: None = None) -> NDArray[Any]:  # noqa: D102
+        raise ValueError("Sample is not available for parameterized box spaces.")
+
+    def contains(self, x: Any) -> bool:  # noqa: ANN401, D102
+        if not isinstance(x, np.ndarray):
+            gym.logger.warn("Casting input x to numpy array.")
+            try:
+                x = np.asarray(x, dtype=self.dtype)
+            except (ValueError, TypeError):
+                return False
+
+        if not np.can_cast(x.dtype, self.dtype):
+            return False
+
+        for x_dim, space_dim in zip(x.shape, self.shape, strict=True):
+            if isinstance(space_dim, str):
+                continue
+            if x_dim != space_dim:
+                return False
+        if np.isscalar(self.low) and not np.all(x == self.low):
+            return False
+
+        if np.isscalar(self.high) and not np.all(x == self.high):
+            return False
+
+        raise ValueError(f"Cannot establish containment for parameterized box with shape {self.shape}.")
+
+    def to_jsonable(self, sample_n: Sequence[NDArray[Any]]) -> list[list]:  # noqa: D102
+        raise ValueError("to_jsonable() is not available for parameterized box spaces.")
+
+    def from_jsonable(self, sample_n: Sequence[float | int]) -> list[NDArray[Any]]:  # noqa: D102
+        raise ValueError("from_jsonable() is not available for parameterized box spaces.")

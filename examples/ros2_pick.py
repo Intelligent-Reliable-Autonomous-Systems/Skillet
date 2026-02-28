@@ -11,16 +11,20 @@ Written by Will Solow and Jeff Jewett, 2026
 import argparse
 import os
 
+from kinova_tasks.ros2_tasks.kinova.kinova_reach_ros2 import KinovaROS2ReachEnv, KinovaROS2ReachEnvCfg
 from skillet.skill.high_level.pick import PickSkill
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Main ROS2 executor file.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="ROS2-Reach-Kinova-v0", help="Name of the task.")
+parser.add_argument("--task", type=str, default="ROS2-Kinova-Reach-v0", help="Name of the task.")
 parser.add_argument("--device", type=str, default="cuda", help="Device to use")
 parser.add_argument(
     "--ros2_ws", type=str, default=None, help="Absolute path to ROS2 workspace containing bringup files"
 )
+parser.add_argument("--robot_ip", type=str, default="192.168.1.10", help="Robot IP.")
+parser.add_argument("--use_fake_hardware", type=str, default="true", help="'true' or 'false'.")
+parser.add_argument("--launch_ros", action=argparse.BooleanOptionalAction, default=True, help="Launch ROS from env startup.")
 
 # parse the arguments
 args_cli = parser.parse_args()
@@ -55,18 +59,31 @@ B_Int_HighLevel = Int[torch.Tensor, "b"]
 def main() -> None:
     """Test the executor within the IsaacLab/IsaacSim framework."""
     # create environment configuration
-    env_cfg = parse_ros2_env_cfg(
-        args_cli.task,
+    # env_cfg = parse_ros2_env_cfg(
+    #     args_cli.task,
+    #     device=args_cli.device,
+    #     num_envs=args_cli.num_envs,
+    #     ros2_workspace=args_cli.ros2_ws,
+    # )
+    # env_cfg.robot_ip = args_cli.robot_ip
+    # env_cfg.use_fake_hardware = args_cli.use_fake_hardware
+    # env_cfg.launch_ros = args_cli.launch_ros
+
+    # create environment
+    # env = gym.make(args_cli.task, cfg=env_cfg, ros=setup_ros())
+    env_cfg = KinovaROS2ReachEnvCfg(
+        robot_ip=args_cli.robot_ip,
+        use_fake_hardware=args_cli.use_fake_hardware,
+        launch_ros=args_cli.launch_ros,
         device=args_cli.device,
         num_envs=args_cli.num_envs,
         ros2_workspace=args_cli.ros2_ws,
+        episode_length_s=30.0,
     )
-    env_cfg.robot_ip = "192.168.1.10"
-    env_cfg.use_fake_hardware = "true"
-    env_cfg.launch_ros = False
 
-    # create environment
-    env = gym.make(args_cli.task, cfg=env_cfg, ros=setup_ros())
+    env = KinovaROS2ReachEnv(cfg=env_cfg, ros=setup_ros())
+    env = ROS2EnvWrapper(env)
+    env.reset()
 
     print("[INFO][Main] Testing Executor environment")
     print(f"[INFO][Main] Gym observation space: {env.observation_space}")
@@ -104,6 +121,7 @@ def main() -> None:
             [
                 [0.6, -0.2, 0.03, 0.0],
                 [0.3, 0.2, 0.05, 0.0],
+                [0.2, 0.4, 0.05, 0.0],
             ],
             device=env.device,
         ),

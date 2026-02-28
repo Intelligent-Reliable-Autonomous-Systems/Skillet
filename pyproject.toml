@@ -40,6 +40,7 @@ perception = [
 dev = [
     "ruff",
     "mypy",
+    "pytest",
 ]
 
 [project.scripts]
@@ -138,6 +139,10 @@ allow-star-arg-any = true
 quote-style = "double"
 indent-style = "space"
 line-ending = "auto"
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+pythonpath = ["."]
 
 [tool.mypy]
 python_version = "3.11"

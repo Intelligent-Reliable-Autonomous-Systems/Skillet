@@ -232,7 +232,14 @@ def main() -> None:
                 # Only apply teleop commands when active
                 if teleoperation_active:
                     # process actions
+                    desired_action_dim = env.action_space.shape[1]
                     actions = action.repeat(env.num_envs, 1)
+                    # Pad actions to the required shape with zeros if needed
+                    if actions.shape[1] < desired_action_dim:
+                        pad_width = desired_action_dim - actions.shape[1]
+                        actions = torch.nn.functional.pad(actions, (0, pad_width))
+                    elif actions.shape[1] > desired_action_dim:
+                        actions = actions[:, :desired_action_dim]
                     # apply actions
                     env.step(actions)
                 else:

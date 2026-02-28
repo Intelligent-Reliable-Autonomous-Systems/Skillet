@@ -58,7 +58,7 @@ def main() -> None:
     env = KinovaROS2ReachEnv(cfg=env_cfg, ros=setup_ros())
     env = ROS2EnvWrapper(env)
     env.reset()
-    rgbd_spec = env._obs_spec_rgbd.unbatched()
+    rgbd_spec = env.obs_spec_rgbd.unbatched()
 
     poll_rate_hz = 1.0 / max(args_cli.period_s, 1e-6)
     perception = Perception(

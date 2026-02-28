@@ -60,6 +60,27 @@ class _EnvironmentBase(abc.ABC, Generic[TObs, TAction]):
         """Check if the environment supports a specific observation type."""
         raise NotImplementedError
 
+    @abc.abstractmethod
+    def supports_action_spec(self, action_spec: ActionSpec[Any]) -> bool:
+        """Check if the environment supports a specific action type."""
+        raise NotImplementedError
+
+    def coerce_obs_spec(self, obs_spec: str | ObservationSpec[Any]) -> ObservationSpec[Any]:
+        """Coerce an observation specification or name to a compatible ObservationSpec."""
+        if isinstance(obs_spec, str):
+            if obs_spec == self.obs_spec.name:
+                return self.obs_spec
+            raise ValueError(f"Observation spec {obs_spec} not supported by environment.")
+        return obs_spec
+
+    def coerce_action_spec(self, action_spec: str | ActionSpec[Any]) -> ActionSpec[Any]:
+        """Coerce an action specification or name to a compatible ActionSpec."""
+        if isinstance(action_spec, str):
+            if action_spec == self.action_spec.name:
+                return self.action_spec
+            raise ValueError(f"Action spec {action_spec} not supported by environment.")
+        return action_spec
+
     @overload
     def get_observation(self) -> TObs: ...
     @overload
@@ -80,12 +101,21 @@ class _EnvironmentBase(abc.ABC, Generic[TObs, TAction]):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def step(self, action: TAction) -> tuple[TObs, float, bool, bool, dict]:
-        """Step the environment."""
+    def step(self, action: TAction, action_spec: ActionSpec[Any] | None = None) -> tuple[TObs, float, bool, bool, dict]:
+        """Step the environment.
+
+        Args:
+            action: The action to take
+            action_spec: Optional action specification to use for the action. If not provided, uses self.action_spec.
+
+        Returns:
+            A tuple containing the observation, reward, done, truncated, and info
+
+        """
         raise NotImplementedError
 
 
-class Environment(_EnvironmentBase[TObs, TAction], gym.Wrapper[TObs, TAction, TObs, TAction], Generic[TObs, TAction]):
+class Environment(_EnvironmentBase[TObs, TAction], gym.Env[TObs, TAction], Generic[TObs, TAction]):
     """An environment interface for the Robot Skills framework.
 
     Generic type parameters:
@@ -94,7 +124,7 @@ class Environment(_EnvironmentBase[TObs, TAction], gym.Wrapper[TObs, TAction, TO
     """
 
 
-class BatchedEnvironment(_EnvironmentBase[TBObs, TBAction], gym.vector.VectorWrapper, Generic[TBObs, TBAction]):
+class BatchedEnvironment(_EnvironmentBase[TBObs, TBAction], gym.vector.VectorEnv[TBObs, TBAction, ArrayLike], Generic[TBObs, TBAction]):
     """A batched environment that supports batched observations and actions.
 
     Generic type parameters:
@@ -103,15 +133,16 @@ class BatchedEnvironment(_EnvironmentBase[TBObs, TBAction], gym.vector.VectorWra
     """
 
 
-class BasicEnvironment(Environment[TObs, TAction], Generic[TObs, TAction]):
+class BasicEnvironment(Environment[TObs, TAction], gym.Wrapper[TObs, TAction, TObs, TAction], Generic[TObs, TAction]):
     """A basic environment that supports raw state observations (full observability)."""
 
-    def __init__(self, env: gym.Env, is_torch: bool = False, *args: Any, **kwargs: Any) -> None:
+    def __init__(self, env: gym.Env, is_torch: bool = False, device: torch.device | None = None, *args: Any, **kwargs: Any) -> None:
         """Initialize a basic environment wrapper.
 
         Args:
             env: The gym.Env environment to wrap
             is_torch: Whether the environment uses PyTorch tensors
+            device: The device to use for the environment. If not provided, uses the device of the environment.
             *args: Additional arguments to pass to the gym.Wrapper constructor
             **kwargs: Additional keyword arguments to pass to the gym.Wrapper constructor
 
@@ -126,12 +157,14 @@ class BasicEnvironment(Environment[TObs, TAction], Generic[TObs, TAction]):
             name="obs",
             is_torch=is_torch,
             is_batched=False,
+            device=device,
         )
         self._action_spec = ActionSpec[TAction](
             space=env.action_space,
             name="action",
             is_torch=is_torch,
             is_batched=False,
+            device=device,
         )
 
     @property
@@ -143,15 +176,19 @@ class BasicEnvironment(Environment[TObs, TAction], Generic[TObs, TAction]):
         return self._action_spec
 
     def supports_observation_spec(self, obs_spec: ObservationSpec) -> bool:  # noqa: D102
-        del obs_spec
-        return True  # TODO: compare obs_spec.space with self.env.observation_space
+        return obs_spec.name == self.obs_spec.name
+
+    def supports_action_spec(self, action_spec: ActionSpec) -> bool:  # noqa: D102
+        return action_spec.name == self.action_spec.name
 
     def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None) -> tuple[TObs, dict]:
         obs, info = self.env.reset(seed=seed, options=options)
         self.last_obs = obs
         return obs, info
 
-    def step(self, action: TAction) -> tuple[TObs, float, bool, bool, dict]:  # noqa: D102
+    def step(self, action: TAction, action_spec: ActionSpec[Any] | None = None) -> tuple[TObs, float, bool, bool, dict]:  # noqa: D102
+        if action_spec is not None and not self.supports_action_spec(action_spec):
+            raise ValueError(f"Action spec {action_spec} not supported by environment.")
         obs, reward, term, trunc, info = self.env.step(action)
         self.last_obs = obs
         return obs, reward, term, trunc, info
@@ -172,20 +209,22 @@ class BasicEnvironment(Environment[TObs, TAction], Generic[TObs, TAction]):
         return self.get_observation()
 
 
-class BasicBatchedEnvironment(BatchedEnvironment[TBObs, TBAction], Generic[TBObs, TBAction]):
-    """A batched environment that supports batched observations and actions.
+class BasicBatchedEnvironment(BatchedEnvironment[TBObs, TBAction],
+            gym.vector.VectorWrapper, Generic[TBObs, TBAction]):
+    """A simple BatchedEnvironment implementation that wraps a standard gym.vector.VectorEnv.
 
     Generic type parameters:
         TBObs: The type of the batched environment observation. e.g. torch.Tensor[(batch_size, 8), float]
         TBAction: The type associated with the batched action spec
     """
 
-    def __init__(self, env: gym.vector.VectorEnv, is_torch: bool = False, *args: Any, **kwargs: Any) -> None:
+    def __init__(self, env: gym.vector.VectorEnv, is_torch: bool = False, device: torch.device | None = None, *args: Any, **kwargs: Any) -> None:
         """Initialize a basic batched environment wrapper.
 
         Args:
             env: The gym.vector.VectorEnv environment to wrap
             is_torch: Whether the environment uses PyTorch tensors
+            device: The device to use for the environment. If not provided, uses the device of the environment.
             *args: Additional arguments to pass to the gym.vector.VectorWrapper constructor
             **kwargs: Additional keyword arguments to pass to the gym.vector.VectorWrapper constructor
 
@@ -198,6 +237,7 @@ class BasicBatchedEnvironment(BatchedEnvironment[TBObs, TBAction], Generic[TBObs
             is_torch=is_torch,
             is_batched=True,
             n_envs=-1,  # Variable batch size is more flexible
+            device=device,
         )
         self._action_spec = ActionSpec[TAction](
             space=env.single_action_space,
@@ -205,6 +245,7 @@ class BasicBatchedEnvironment(BatchedEnvironment[TBObs, TBAction], Generic[TBObs
             is_torch=is_torch,
             is_batched=True,
             n_envs=-1,
+            device=device,
         )
 
     @property
@@ -216,7 +257,10 @@ class BasicBatchedEnvironment(BatchedEnvironment[TBObs, TBAction], Generic[TBObs
         return self._action_spec
 
     def supports_observation_spec(self, obs_spec: ObservationSpec) -> bool:  # noqa: D102
-        return True  # TODO: compare obs_spec.space with self.env.observation_space
+        return obs_spec.name == self.obs_spec.name
+
+    def supports_action_spec(self, action_spec: ActionSpec) -> bool:  # noqa: D102
+        return action_spec.name == self.action_spec.name
 
     def reset(  # noqa: D102
         self,
@@ -252,14 +296,21 @@ class BasicBatchedEnvironment(BatchedEnvironment[TBObs, TBAction], Generic[TBObs
 
 
 class AsGymVectorEnv(gym.vector.VectorEnv):
-    """A wrapper for gym.Env environments that already have a vectorized interface to the new gymnasium vector environment."""
+    """A wrapper for gym.Env environments that already have a vectorized interface to the gymnasium 1.0 vector API.
+
+    THIS ASSUMES THAT THE ENVIRONMENT WAS DESIGNED AS A VECTOR ENVIRONMENT BEFORE GYMNASIUM 1.0.
+
+    This assumes that the environment is a gym.Env (not a gym.vector.VectorEnv)
+    and that it has self.single_observation_space and self.single_action_space attributes.
+    """
 
     def __init__(self, env: gym.Env, num_envs: int | None = None) -> None:
         """Initialize the environment.
 
         Args:
             env: The gym.Env to wrap. Must have a single observation space and action space.
-            num_envs: Optionally, the number of environments to wrap
+            num_envs: Optionally, the number of environments to wrap.
+                If not provided, it requires env.get_wrapper_attr("num_envs") to be set.
 
         """
         self.env = env
@@ -272,11 +323,6 @@ class AsGymVectorEnv(gym.vector.VectorEnv):
         self.single_action_space = env.get_wrapper_attr("single_action_space")
         self.observation_space = env.observation_space
         self.action_space = env.action_space
-        self.device = env.unwrapped.device if hasattr(env.unwrapped, "device") else None
-        self.max_episode_length = (
-            env.unwrapped.max_episode_length if hasattr(env.unwrapped, "max_episode_length") else None
-        )
-        self.cfg = env.unwrapped.cfg if hasattr(env.unwrapped, "cfg") else None
 
     def reset(  # noqa: D102
         self,
@@ -297,27 +343,3 @@ class AsGymVectorEnv(gym.vector.VectorEnv):
     def close(self, **kwargs: Any) -> None:  # noqa: D102
         return self.env.close(**kwargs)
 
-    @property
-    def episode_length_buf(self):
-        buf = self.env.unwrapped.episode_length_buf if hasattr(self.env.unwrapped, "episode_length_buf") else None
-        if isinstance(buf, torch.Tensor):
-            return buf
-        if isinstance(buf, int):
-            return torch.as_tensor([buf], device=self.device).unsqueeze(0)
-        raise ValueError(f"Unsupported `episode_length_buf` type {type(buf)}")
-
-    @episode_length_buf.setter
-    def episode_length_buf(self, value):
-        """Set the episode length buffer.
-
-        This is needed to perform random initialization of episode lengths in RSL-RL.
-
-        """
-        if not hasattr(self.env.unwrapped, "episode_length_buf"):
-            raise ValueError(f"`{self.env.unwrapped}` has no attribute `episode length buf`.")
-        if isinstance(self.env.unwrapped.episode_length_buf, torch.Tensor):
-            self.env.unwrapped.episode_length_buf = value
-        elif isinstance(self.env.unwrapped.episode_length_buf, int):
-            self.env.unwrapped.episode_length_buf = value.squeeze().item()
-        else:
-            raise ValueError(f"Unsupported `episode_length_buf` type {type(self.env.unwrapped.episode_length_buf)}")

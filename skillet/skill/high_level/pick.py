@@ -144,10 +144,6 @@ class PickSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSki
             self._reach_policy.reset(obs, self._current_target_poses, env_ids=env_ids)
 
     def get_action(self, obs: TBSkillObs) -> TBAction:  # noqa: D102
-        np.set_printoptions(precision=3, suppress=True)
-        print(
-            f"[INFO][PICK STATUS]: {self._pick_status.cpu().numpy()[0]} | target pose: {self._current_target_poses.cpu().numpy()[0]} | obs tcp pose: {obs['tcp_pose_b'].cpu().numpy()[0]}"
-        )
 
         # prev_pick_status = self._pick_status.clone()
 
@@ -169,7 +165,7 @@ class PickSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSki
             valid_idx = (self._status == SkillStatusCodes.RUNNING) & (reached_pose)
             self._pick_status[valid_idx] += 1
             valid_idx = valid_idx & (self._pick_status < PickStatusCodes.DONE)
-            print(f"[INFO][PICK STATUS UPDATE]: {self._pick_status.cpu().numpy()[0]} | reached_pose: {reached_pose}")
+            print(f"[INFO][PICK STATUS UPDATE]: {PickStatusCodes(self._pick_status.cpu().numpy()[0]).name} | reached_pose: {reached_pose}")
             # Update the target pose based on the new pick status
             self._current_target_poses[valid_idx] = self._target_poses[idx[valid_idx], self._pick_status[valid_idx]]
 
@@ -184,6 +180,10 @@ class PickSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSki
             torch.zeros_like(reach_actions[:, -1]),  # Open gripper
         )
 
+        np.set_printoptions(precision=3, suppress=True)
+        print(
+            f"[INFO][PICK STATUS]: {PickStatusCodes(self._pick_status.cpu().numpy()[0]).name} | target pose: {self._current_target_poses.cpu().numpy()[0, :3]} | obs tcp pose: {obs['tcp_pose_b'].cpu().numpy()[0, :3]}"
+        )
         self._n_steps += 1
         self._status[self._pick_status == PickStatusCodes.DONE] = SkillStatusCodes.SUCCESS
         if self._n_steps >= self._length:
