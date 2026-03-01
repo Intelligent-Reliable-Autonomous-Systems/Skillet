@@ -64,9 +64,9 @@ class IsaacEnvWrapper(
         """
         if hasattr(env, "unwrapped"):
             env = env.unwrapped
+        self._env = cast("DirectRlInterface | ManagerBasedRlInterface", env)
         vector_env = AsGymVectorEnv(env, num_envs=self.num_envs)
         super().__init__(vector_env)
-        self._env = cast("DirectRlInterface | ManagerBasedRlInterface", env)
         self._device = self._env.device
 
         if hasattr(self._env, "robot"):
@@ -89,30 +89,6 @@ class IsaacEnvWrapper(
             raise ValueError(
                 f"Environment `{self._env}` has no attribute `_robot` or `robot` or `scene.robot` or `scene._robot`. Unable to parse robot Articulation."
             )
-        self._obs_spec_policy = ObservationSpec[Float[torch.Tensor, "b ..."]](
-            space=vector_env.single_observation_space["policy"],
-            name="policy",
-            is_torch=True,
-            is_batched=True,
-            n_envs=-1,
-            device=self._device,
-        )
-        self._obs_spec_state = ObservationSpec[Mapping[str, Float[torch.Tensor, "b ..."]]](
-            space=vector_env.single_observation_space,
-            name="state",
-            is_torch=True,
-            is_batched=True,
-            n_envs=-1,
-            device=self._device,
-        )
-        self._action_spec = ActionSpec[TBatchedActionTorch](
-            space=vector_env.single_action_space,
-            name="action",
-            is_torch=True,
-            is_batched=True,
-            n_envs=-1,
-            device=self._device,
-        )
 
         # Robot specific information
         self._joint_ids = env.unwrapped.cfg.joint_ids
@@ -139,21 +115,29 @@ class IsaacEnvWrapper(
             "n_envs": -1,
             "device": self.device,
         }
+        if isinstance(env.observation_space, gym.spaces.Dict) and "policy" in env.observation_space:
+            policy_space = env.single_observation_space["policy"]
+        else:
+            policy_space = env.single_observation_space
         self.obs_spec_policy = ObservationSpec[Float[torch.Tensor, "b ..."]](
             name="policy",
-            space=env.observation_space["policy"],
+            space=policy_space,
         ).replace(**spec_args)
         """Specification of the vector observation passed to a low level policy"""
         self.obs_spec_state = ObservationSpec[Mapping[str, Float[torch.Tensor, "b ..."]]](
             name="state",
-            space=env.observation_space,
+            space=env.single_observation_space,
         ).replace(**spec_args)
         """Specification of the raw dictionary environment state"""
         self.obs_spec_rgbd = RGBD_SPEC_BATCHED.bind(height=480, width=640).replace(device=self.device)
         """Specification of RGB-D observations and metadata. Bound to the height and width of the RGB-D camera."""
-        self.obs_spec_ikee = IK_EE_SPEC_BATCHED.bind(n_joints=len(self._joint_ids)).replace(device=self.device)
+        self.obs_spec_ikee = IK_EE_SPEC_BATCHED.bind(
+            n_joints=len(self._joint_ids), n_arm_joints=len(self._joint_ids[:-1])
+        ).replace(device=self.device)
         """Specification of IK-EE observations."""
-        self.obs_spec_osc = OSC_SPEC_BATCHED.bind(n_joints=len(self._joint_ids)).replace(device=self.device)
+        self.obs_spec_osc = OSC_SPEC_BATCHED.bind(
+            n_joints=len(self._joint_ids), n_arm_joints=len(self._joint_ids[:-1])
+        ).replace(device=self.device)
         """Specification of OSC observations."""
         self._action_spec = ActionSpec[TBatchedActionTorch](
             name="action",
@@ -181,7 +165,7 @@ class IsaacEnvWrapper(
     @override
     @property
     def obs_spec(self):  # noqa: ANN201
-        return self._obs_spec_policy
+        return self.obs_spec_policy
 
     @override
     @property
@@ -319,13 +303,13 @@ class IsaacEnvWrapper(
     """
 
     def _get_joint_positions(self, env_ids: torch.Tensor | None = None, joint_ids: list | None = None) -> torch.Tensor:
-        """Return the joint positions.
+        """Return the joint positions (1 value per dof).
 
         Args:
             env_ids: environment ids from which to get the joint ids
             joint_ids: the list of joint ids to retrieve
         Returns:
-            torch tensor of jacobians of shape (n_envs, num_joints, 3)
+            torch tensor of joint positions of shape (n_envs, num_joints)
 
         """
         if env_ids is None:
@@ -359,13 +343,15 @@ class IsaacEnvWrapper(
     ) -> torch.Tensor:
         """Return the jacobians.
 
+        For each arm joint, return linear and angular velocities in the robot base frame.
+
         Args:
             env_ids: environment ids to compute jacobian
             ee_link: string for the name of the end effector link
             base_link: string for the name of the base link of the robot
             arm_joint_ids: the list of joint ids that correspond to the arm
         Returns:
-            torch tensor of jacobians of shape (n_envs, num_joints, 3)
+            torch tensor of jacobians of shape (n_envs, 6, num_arm_joints)
 
         """
         if env_ids is None:
@@ -498,14 +484,14 @@ class IsaacEnvWrapper(
             env_ids: environment ids to tcp pose in XYZ
 
         Returns:
-            A tensor of shape (N, 2) for the gripper lower/upper limits.
+            A tensor of shape (num_envs, 2, num_joints) for the joint lower/upper limits.
 
         """
         if env_ids is None:
             env_ids = self.robot._ALL_INDICES
 
         return (
-            torch.cat((self._robot_dof_lower_limits, self._robot_dof_upper_limits), dim=0)
+            torch.stack((self._robot_dof_lower_limits, self._robot_dof_upper_limits), dim=0)
             .unsqueeze(0)
             .repeat(env_ids.shape[0], 1, 1)
         )
@@ -521,7 +507,7 @@ class IsaacEnvWrapper(
             env_ids: environment ids to compute jacobian
             arm_joint_ids: the list of joint ids that correspond to the arm
         Returns:
-            torch tensor of mass matrices
+            torch tensor of mass matrices of shape (n_envs, num_arm_joints, num_arm_joints)
 
         """
         if env_ids is None:
@@ -544,7 +530,7 @@ class IsaacEnvWrapper(
             env_ids: environment ids to compute jacobian
             arm_joint_ids: the list of joint ids that correspond to the arm
         Returns:
-            torch tensor of mass matrices
+            torch tensor of joint gravity of shape (n_envs, num_arm_joints)
 
         """
         if env_ids is None:
@@ -590,7 +576,7 @@ class IsaacEnvWrapper(
             env_ids: environment ids to compute jacobian
             arm_joint_ids: the list of joint ids that correspond to the arm
         Returns:
-            torch tensor of joint centers
+            torch tensor of joint centers of shape (n_envs, n_arm_joints)
 
         """
         if env_ids is None:

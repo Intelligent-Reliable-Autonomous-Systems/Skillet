@@ -46,7 +46,7 @@ class PolicyOverOptionsAgent(Generic[THighLevelObs, TLowLevelObs, TBAction, TSki
 
     def __init__(
         self,
-        skills: list[Skill],
+        skills: list[Skill[TLowLevelObs, TBAction, TSkillParams]],
         high_level_policy: BatchedUPolicy[THighLevelObs, SelectedSkills],
         params_policy: BatchedUPolicy[THighLevelObs, TSkillParams] | None = None,
     ) -> None:

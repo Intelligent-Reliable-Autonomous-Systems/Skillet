@@ -25,17 +25,18 @@ RGBD_SPEC_BATCHED = ObservationSpec[dict[str, BatchedSpaceItem]](
     n_envs=-1
 )
 
-IK_EE_SPEC_BATCHED = ObservationSpec[Mapping[str, Float[torch.Tensor, "b ..."]]](
+IKEE_Obs = Mapping[str, Float[torch.Tensor, "b ..."]]
+IK_EE_SPEC_BATCHED = ObservationSpec[IKEE_Obs](
     space=gym.spaces.Dict({
-        "joint_pos": ParameterizedBox(low=-torch.pi, high=torch.pi, shape=("n_joints", 3)),
-        "joint_vel": ParameterizedBox(low=-10.0, high=10.0, shape=("n_joints", 3)),
+        "joint_pos": ParameterizedBox(low=-torch.pi, high=torch.pi, shape=("n_joints",)),
+        "joint_vel": ParameterizedBox(low=-10.0, high=10.0, shape=("n_joints",)),
         "tcp_offset": gym.spaces.Box(low=-1.0, high=1.0, shape=(7,)),
-        "jacobians": ParameterizedBox(low=-1, high=1, shape=("n_joints", 3)),
+        "jacobians": ParameterizedBox(low=-1, high=1, shape=(6, "n_arm_joints")),
         "ee_pose_b": gym.spaces.Box(low=-1.0, high=1.0, shape=(7,)),
         "tcp_pose_b": gym.spaces.Box(low=-1.0, high=1.0, shape=(7,)),
         "gripper_lim": gym.spaces.Box(low=0.0, high=1.0, shape=(2,)),
-        "gripper": gym.spaces.Box(low=0.0, high=1.0, shape=()),
-        "joint_lims": ParameterizedBox(low=-torch.pi, high=torch.pi, shape=("n_joints", 2)),
+        "gripper": gym.spaces.Box(low=0.0, high=1.0, shape=(1,)),
+        "joint_lims": ParameterizedBox(low=-torch.pi, high=torch.pi, shape=(2, "n_joints")),
     }),
     name="ik_ee",
     is_torch=True,
@@ -45,19 +46,19 @@ IK_EE_SPEC_BATCHED = ObservationSpec[Mapping[str, Float[torch.Tensor, "b ..."]]]
 
 OSC_SPEC_BATCHED = ObservationSpec[Mapping[str, Float[torch.Tensor, "b ..."]]](
     space=gym.spaces.Dict({
-        "joint_pos": ParameterizedBox(low=-torch.pi, high=torch.pi, shape=("n_joints", 3)),
-        "joint_vel": ParameterizedBox(low=-10.0, high=10.0, shape=("n_joints", 3)),
+        "joint_pos": ParameterizedBox(low=-torch.pi, high=torch.pi, shape=("n_joints",)),
+        "joint_vel": ParameterizedBox(low=-10.0, high=10.0, shape=("n_joints",)),
         "tcp_offset": gym.spaces.Box(low=-1.0, high=1.0, shape=(7,)),
-        "jacobians": ParameterizedBox(low=-1, high=1, shape=("n_joints", 3)),
+        "jacobians": ParameterizedBox(low=-1, high=1, shape=(6, "n_arm_joints")),
         "ee_pose_b": gym.spaces.Box(low=-1.0, high=1.0, shape=(7,)),
         "tcp_pose_b": gym.spaces.Box(low=-1.0, high=1.0, shape=(7,)),
         "gripper_lim": gym.spaces.Box(low=0.0, high=1.0, shape=(2,)),
-        "gripper": gym.spaces.Box(low=0.0, high=1.0, shape=()),
-        "joint_lims": ParameterizedBox(low=-torch.pi, high=torch.pi, shape=("n_joints", 2)),
-        "mass_matrix": ParameterizedBox(low=-1, high=1, shape=("n_joints", "n_joints")),
-        "joint_gravity": ParameterizedBox(low=-10.0, high=10.0, shape=("n_joints", 3)),
+        "gripper": gym.spaces.Box(low=0.0, high=1.0, shape=(1,)),
+        "joint_lims": ParameterizedBox(low=-torch.pi, high=torch.pi, shape=(2, "n_joints")),
+        "mass_matrix": ParameterizedBox(low=-1, high=1, shape=("n_arm_joints", "n_arm_joints")),
+        "joint_gravity": ParameterizedBox(low=-10.0, high=10.0, shape=("n_arm_joints",)),
         "ee_vel_b": gym.spaces.Box(low=-10.0, high=10.0, shape=(7,)),
-        "joint_centers": ParameterizedBox(low=-torch.pi, high=torch.pi, shape=("n_joints", 3)),
+        "joint_centers": ParameterizedBox(low=-torch.pi, high=torch.pi, shape=("n_arm_joints",)),
     }),
     name="ik_ee",
     is_torch=True,

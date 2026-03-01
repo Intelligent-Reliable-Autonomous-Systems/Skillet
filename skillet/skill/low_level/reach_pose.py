@@ -1,11 +1,13 @@
 """A skill that moves the end effector to a pose."""
 
 from typing import Generic
+from typing_extensions import override
 
 import numpy as np
 import torch
 from jaxtyping import Float, Int
 
+from examples.isaac_ik import IKEE_Obs
 from skillet.core.math import quat_error_magnitude
 from skillet.core.policy import BatchedPPolicy
 from skillet.core.skill import (
@@ -16,12 +18,17 @@ from skillet.core.skill import (
     TBSkillParams,
 )
 from skillet.core.spaces import ArrayLike
+from skillet.policy.ik_ee import XYZ_QUAT_Params
 
 
-class ReachPoseSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSkillObs, TBAction, TBSkillParams]):
-    """A skill that moves the end effector to a specified pose."""
+class ReachPoseSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_QUAT_Params], Generic[TBAction]):
+    """A skill that moves the end effector to a specified pose.
 
-    def __init__(self, name: str, policy: BatchedPPolicy[TBSkillObs, TBAction, TBSkillParams], length: int) -> None:
+    ParamSpace:
+        - (B, 7): batched pose position xyz + orientation quat (wxyz)
+    """
+
+    def __init__(self, name: str, policy: BatchedPPolicy[IKEE_Obs, TBAction, XYZ_QUAT_Params], length: int) -> None:
         """Initialize the fixed length skill.
 
         Args:
@@ -45,7 +52,7 @@ class ReachPoseSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[
         return self._name
 
     @property
-    def policy(self) -> BatchedPPolicy[TBSkillObs, TBAction, TBSkillParams]:
+    def policy(self) -> BatchedPPolicy[IKEE_Obs, TBAction, XYZ_QUAT_Params]:
         """The policy for the skill."""
         return self._policy
 
@@ -56,7 +63,7 @@ class ReachPoseSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[
             raise ValueError("The status is not initialized. Must call initiate() before using this property.")
         return self._status
 
-    def initiate(self, obs: TBSkillObs, params: TBSkillParams) -> None:  # noqa: D102
+    def initiate(self, obs: IKEE_Obs, params: XYZ_QUAT_Params) -> None:  # noqa: D102
         self.n_envs = self.obs_spec.n_envs_from(obs)
         spec = self.policy.obs_spec.with_n_envs(self.n_envs)
         self._status = spec.zeros(shape=(self.n_envs,), dtype=int)
@@ -74,7 +81,7 @@ class ReachPoseSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[
 
         self.policy.reset(obs, self._target_poses)
 
-    def get_action(self, obs: TBSkillObs) -> TBAction:  # noqa: D102
+    def get_action(self, obs: IKEE_Obs) -> TBAction:  # noqa: D102
         np.set_printoptions(precision=3, suppress=True)
         if False:
             print(
@@ -102,6 +109,6 @@ class ReachPoseSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[
 
         return action
 
-    def reward(self, obs: TBSkillObs) -> Float[ArrayLike, "b"]:  # noqa: F821
+    def reward(self, obs: IKEE_Obs) -> Float[ArrayLike, "b"]:  # noqa: F821
         """Compute the reward of the skill."""
         pass

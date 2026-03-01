@@ -126,6 +126,7 @@ exclude = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
+"examples/*" = ["E402"]
 "main_isaac.py" = ["ALL"]
 [tool.ruff.lint.flake8-quotes]
 inline-quotes = "double"  # Enforce double quotes for strings
