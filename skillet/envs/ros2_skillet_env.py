@@ -311,7 +311,9 @@ class ROS2SkilletEnv(
             A tuple containing the observation of observations tensor (num_envs, obs_dim) and info dictionary
 
         """
-        obs_dict, reward, term, trunc, info = self._env.step(action)
+        action = action.to(self.device)
+        obs_dict, reward, term, trunc, info = self.env.step(action)
+        self.last_obs = obs_dict
         for k, v in obs_dict.items():
             obs_dict[k] = torch.as_tensor(v, device=self.device).unsqueeze(0)
         self._last_obs: dict[str, torch.Tensor] = obs_dict

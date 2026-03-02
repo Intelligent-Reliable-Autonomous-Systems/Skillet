@@ -8,8 +8,7 @@ import cv2
 import numpy as np
 from jaxtyping import Int
 
-from kinova_tasks.ros2_tasks.kinova.kinova_reach_ros2 import KinovaROS2ReachEnv
-from kinova_tasks.tasks.kinova.kinova_reach_ros2 import KinovaROS2ReachEnvCfg
+from kinova_tasks.ros2_tasks.kinova.kinova_ros2 import KinovaROS2Env, KinovaROS2EnvCfg
 from skillet.envs.ros2_env_wrapper import ROS2EnvWrapper
 from skillet.envs.util import parse_ros2_env_cfg, setup_ros
 from skillet.perception.perception import Perception
@@ -46,7 +45,7 @@ if args_cli.ros2_ws is None:
 
 def main() -> None:
     """Visualize RGB + depth color map from _get_latest_rgbd()."""
-    env_cfg = KinovaROS2ReachEnvCfg(
+    env_cfg = KinovaROS2EnvCfg(
         robot_ip=args_cli.robot_ip,
         use_fake_hardware=args_cli.use_fake_hardware,
         launch_ros=args_cli.launch_ros,
@@ -55,7 +54,8 @@ def main() -> None:
         ros2_workspace=args_cli.ros2_ws,
     )
 
-    env = KinovaROS2ReachEnv(cfg=env_cfg, ros=setup_ros())
+    sam3 = SAM3(device=args_cli.device)
+    env = KinovaROS2Env(cfg=env_cfg, ros=setup_ros())
     env = ROS2EnvWrapper(env)
     env.reset()
     rgbd_spec = env.obs_spec_rgbd.unbatched()

@@ -1,0 +1,2 @@
+from .mj_manager_based_rl_env import ManagerBasedRLEnv as ManagerBasedRLEnv
+from .mj_manager_based_rl_env import ManagerBasedRLEnvCfg as ManagerBasedRLEnvCfg

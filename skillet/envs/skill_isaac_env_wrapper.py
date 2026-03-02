@@ -34,7 +34,7 @@ torch.Tensor[(b, n), float]
 
 
 class SkillIsaacEnvWrapper(
-    IsaacEnvWrapper[TBatchedObsTorch, TBatchedActionTorch],
+    IsaacEnvWrapper,
 ):
     """Wrapper for IsaacLab Environments.
 
@@ -96,6 +96,7 @@ class SkillIsaacEnvWrapper(
             A tuple containing the observation of observations tensor (N, obs_dim) and info dictionary
 
         """
+        action = action.to(self.device)
         self.sc.reset(action)  # Reset skills and parse
         _rewards = torch.zeros((self.num_envs,), device=self._device)
         _skill_length = torch.zeros((self.num_envs,), device=self._device)

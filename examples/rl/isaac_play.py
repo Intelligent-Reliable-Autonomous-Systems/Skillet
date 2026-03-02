@@ -125,7 +125,7 @@ def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
 
     # wrap around environment for rsl-rl
     env = (
-        SkillIsaacEnvWrapper[BxN_Obs, BxM_Action](env) if args_cli.skill else IsaacEnvWrapper[BxN_Obs, BxM_Action](env)
+        SkillIsaacEnvWrapper(env) if args_cli.skill else IsaacEnvWrapper(env)
     )
     env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
 
@@ -190,7 +190,6 @@ def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
                     ).T
                 )
             # obs, rewards, _, _ = env.step(torch.tensor([[1.0, 0.5, 0.1, 0.4]], device="cuda"))
-            print(rewards)
         if args_cli.video:
             timestep += 1
             if timestep == args_cli.video_length:

@@ -17,6 +17,7 @@ from typing_extensions import override
 
 from skillet.envs.compatibility.isaac_lab import DirectRlInterface
 from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
+from skillet.envs.mj_env_wrapper import MJEnvWrapper
 from skillet.envs.ros2_skillet_env import ROS2SkilletEnv
 from skillet.envs.util import configure_seed
 
@@ -152,7 +153,11 @@ class RslRlVecEnvWrapper(RslRlVecEnv, gym.vector.VectorWrapper):
 
         """
         # check that input is valid
-        if not isinstance(env, ROS2SkilletEnv) and not isinstance(env, IsaacEnvWrapper):
+        if (
+            not isinstance(env, ROS2SkilletEnv)
+            and not isinstance(env, IsaacEnvWrapper)
+            and not isinstance(env, MJEnvWrapper)
+        ):
             raise TypeError(
                 "The environment must be inherited from ROS2SkilletEnv or IsaacEnvWrapper. Environment type:"
                 f" {type(env)}"
@@ -248,7 +253,7 @@ class RslRlVecEnvWrapper(RslRlVecEnv, gym.vector.VectorWrapper):
     @override
     def get_observations(self) -> TensorDict:
         """Return the current observations of the environment."""
-        if isinstance(self.env, (IsaacEnvWrapper, ROS2SkilletEnv)):  # Is a IsaacEnvWrapper
+        if isinstance(self.env, (IsaacEnvWrapper, ROS2SkilletEnv, MJEnvWrapper)):  # Is a IsaacEnvWrapper
             obs_dict = self.env.get_state()
         elif hasattr(self.unwrapped, "observation_manager"):
             obs_dict = self.unwrapped.observation_manager.compute()

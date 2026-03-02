@@ -76,7 +76,7 @@ def main() -> None:
     print(f"[INFO][Main] Gym action space: {env.action_space}")
 
     # Set up Skill executor and environment in framework
-    env = IsaacEnvWrapper[BxN_Obs, BxM_Action](env)
+    env = IsaacEnvWrapper(env)
 
     action_spec: ActionSpec[BxM_Action] = env.action_spec
     observation_spec: ObservationSpec[BxN_Obs] = env.obs_spec

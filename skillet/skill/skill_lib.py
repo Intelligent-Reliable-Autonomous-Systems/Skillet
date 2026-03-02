@@ -10,7 +10,8 @@ from jaxtyping import Float, Int
 from skillet.core.skill import Skill
 from skillet.core.spaces import ObservationSpec
 from skillet.envs.compatibility.gymnasium import GymVectorInterface
-from skillet.policy.ik_ee import IKEEPolicy, PosAbsIKEEPolicy, PoseAbsIKEEPolicy, XYZRPYAbsIKEEPolicy
+from skillet.envs.specs import BxM_Action, BxN_Obs
+from skillet.policy.ik_ee import IKEEPolicy, PosAbsIKEEPolicy, PoseAbsIKEEPolicy, PoseRelIKEEPolicy, XYZRPYAbsIKEEPolicy
 from skillet.policy.joint_pos import GripperPolicy, JointPosPolicy
 from skillet.policy.osc_ee import PoseAbsOSCEEPolicy
 from skillet.skill.high_level import GraspXYZSkill, PickSkill, PlaceSkill, PushSkill
@@ -54,6 +55,14 @@ def make_ik_ee_pos_policy(env: GymVectorInterface) -> IKEEPolicy:
     return PosAbsIKEEPolicy[BxN_Obs, BxM_Action](make_ik_obs_spec(env.device), env.action_spec)
 
 
+def make_rel_ik_ee_pose_policy(env: GymVectorInterface) -> IKEEPolicy:
+    return PoseRelIKEEPolicy[BxN_Obs, BxM_Action](make_ik_obs_spec(env.device), env.action_spec)
+
+
+def make_rel_ik_ee_pose_policy(env: GymVectorInterface) -> IKEEPolicy:
+    return PoseRelIKEEPolicy[BxN_Obs, BxM_Action](make_ik_obs_spec(env.device), env.action_spec)
+
+
 def make_gripper_policy(env: GymVectorInterface) -> GripperPolicy:
     return GripperPolicy[BxN_Obs, BxM_Action](make_joint_obs_spec(env.device), env.action_spec)
 
@@ -65,6 +74,18 @@ def make_joint_pos_policy(env: GymVectorInterface) -> JointPosPolicy:
 def make_reach_xyzrpy_skill(env: GymVectorInterface, skill_length: int = 15) -> Skill:
     return ReachXYZRPYSkill[BxN_Obs, BxM_Action, None](
         name="reach_xyzrpy_skill", policy=make_ik_ee_pose_policy(env), length=skill_length
+    )
+
+
+def make_rel_reach_xyzrpy_skill(env: GymVectorInterface, skill_length: int = 5) -> Skill:
+    return ReachXYZRPYSkill[BxN_Obs, BxM_Action, None](
+        name="rel_reach_xyzrpy_skill", policy=make_rel_ik_ee_pose_policy(env), length=skill_length
+    )
+
+
+def make_rel_reach_xyzrpy_skill(env: GymVectorInterface, skill_length: int = 5) -> Skill:
+    return ReachXYZRPYSkill[BxN_Obs, BxM_Action, None](
+        name="rel_reach_xyzrpy_skill", policy=make_rel_ik_ee_pose_policy(env), length=skill_length
     )
 
 
@@ -157,6 +178,7 @@ SKILL_LIB = {
     "reach_xyz": make_reach_xyz_skill,
     "reach_xyz_osc": make_osc_reach_xyz_skill,
     "reach_xyzrpy": make_reach_xyzrpy_skill,
+    "rel_reach_xyzrpy": make_rel_reach_xyzrpy_skill,
     "gripper_oc": make_gripper_oc_skill,
     "gripper_c": make_gripper_c_skill,
     "gripper_o": make_gripper_o_skill,

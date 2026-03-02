@@ -13,6 +13,7 @@ from typing import Any
 
 import gymnasium as gym
 import numpy as np
+import torch
 from roslibpy import Ros
 
 from skillet.envs.util import configure_seed
@@ -201,7 +202,7 @@ class ROS2RLEnv(gym.Env):
         # return observations
         return self._get_observations(), self.extras
 
-    def step(self, action: np.ndarray) -> tuple[dict[str, np.ndarray], np.ndarray, bool, bool, dict[str, Any]]:  # type: ignore
+    def step(self, action: torch.Tensor) -> tuple[dict[str, np.ndarray], np.ndarray, bool, bool, dict[str, Any]]:  # type: ignore
         """Execute one time-step of the ROS2 robot.
 
         The environment steps forward at a fixed time-step, while the physics simulation is decimated at a
@@ -322,7 +323,7 @@ class ROS2RLEnv(gym.Env):
     """
 
     @abstractmethod
-    def _pre_process_action(self, actions: np.ndarray) -> np.ndarray:
+    def _pre_process_action(self, actions: torch.Tensor) -> np.ndarray:
         """Pre process the robot action.
 
         This function is responsible preprocessing the robot action (ie checking joint limits, etc).

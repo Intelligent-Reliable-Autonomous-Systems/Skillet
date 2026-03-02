@@ -258,3 +258,39 @@ class OrientAbsIKEEPolicy(IKEEPolicy[TBAction, ROLL_PITCH_YAW_Params], Generic[T
         goal_pose_b = torch.cat((tcp_pose_b[:, 0:3], target_quat), dim=1)
         goal_ee_pose = self._compute_goal_ee_pose_b_from_goal_tcp_b(goal_pose_b, obs["tcp_offset"])
         self.diff_ik.set_command(goal_ee_pose, env_ids=env_ids)
+
+
+class PoseRelIKEEPolicy(IKEEPolicy[TBAction, XYZ_QUAT_Params], Generic[TBAction]):
+    """A policy that produces pose ."""
+
+    def __init__(self, obs_spec: ObservationSpec[IKEE_Obs], action_spec: ActionSpec[TBAction]) -> None:
+        """Initialize the policy.
+
+        Args:
+            obs_spec: The observation specification.
+            action_spec: The action specification.
+
+        """
+        super().__init__(obs_spec, action_spec)
+        self.diff_ik = DifferentialIKController(
+            device=self._obs_spec.device, command_type="pose", use_relative_mode=True
+        )
+
+    @property
+    def params_spec(self) -> SkillParamsSpec[XYZ_QUAT_Params]:
+        """The parameter specification for XYZ + Quat target poses."""
+        return XYZ_QUAT_Params_Spec
+
+    def reset(self, obs: IKEE_Obs, params: Any = None, env_ids: torch.Tensor = None) -> None:
+        """Reset the PoseAbsolute IK EE Policy by setting the command of the DiffIK Controlller.
+
+        Args:
+            obs: dict of bound functions
+            params: target pose XYZ + Quat (num_envs, 7)
+            env_ids: environment ids to reset
+
+        """
+        super().reset(obs, params, env_ids=env_ids)
+        # goal_pose = self._compute_goal_ee_pose_b_from_goal_tcp_b(params, obs["tcp_offset"])
+        goal_pose = params
+        self.diff_ik.set_command(goal_pose, env_ids=env_ids)

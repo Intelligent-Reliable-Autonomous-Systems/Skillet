@@ -30,7 +30,8 @@ dependencies = [
     "roslibpy",
     "gymnasium>=1.1",
     "jaxtyping",
-    "typing-extensions"
+    "typing-extensions",
+    "pynput",
 ]
 
 [project.optional-dependencies]

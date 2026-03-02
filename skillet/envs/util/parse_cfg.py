@@ -161,6 +161,35 @@ def parse_ros2_env_cfg(
     return cfg
 
 
+def parse_mj_env_cfg(task_name: str, device: str = "cuda:0", num_envs: int | None = None) -> Any:
+    """Parse configuration for an environment and override based on inputs.
+
+    Args:
+        task_name: The name of the environment.
+        device: The device to run the simulation on. Defaults to "cuda:0".
+        num_envs: Number of environments to create. Defaults to None, in which case it is left unchanged.
+        ros2_workspace: The absolute path to the ros2_workspace
+
+    Returns:
+        The parsed configuration object.
+
+    Raises:
+        RuntimeError: If the configuration for the task is not a class. We assume users always use a class for the
+            environment configuration.
+
+    """
+    # load the default configuration
+    cfg = load_cfg_from_registry(task_name.split(":")[-1], "env_cfg_entry_point")
+
+    # check that it is not a dict
+    # we assume users always use a class for the configuration
+    if isinstance(cfg, dict):
+        raise RuntimeError(f"Configuration for the task: '{task_name}' is not a class. Please provide a class.")
+    cfg.sim.device = device
+    cfg.scene.num_envs = num_envs
+    return cfg
+
+
 def get_checkpoint_path(
     log_path: str, run_dir: str = ".*", checkpoint: str = ".*", other_dirs: list[str] = None, sort_alpha: bool = True
 ) -> str:

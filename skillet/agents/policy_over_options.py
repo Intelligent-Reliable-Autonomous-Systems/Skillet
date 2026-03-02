@@ -95,8 +95,3 @@ class PolicyOverOptionsAgent(Generic[THighLevelObs, TLowLevelObs, TBAction, TSki
                 terminated = terminated | term | trunc
                 # 4c. Check if the composite skill is terminated
                 skill_dones = composite_skill.is_terminated(self.get_low_level_obs(env))
-            print(
-                "finished skill at", self.get_low_level_obs(env)["ee_pose_b"]
-            )  # TODO this will throw an error if obs spec is not IK EE
-            import time
-            time.sleep(1)

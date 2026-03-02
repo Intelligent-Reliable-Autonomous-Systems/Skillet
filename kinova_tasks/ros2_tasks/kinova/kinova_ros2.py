@@ -1,4 +1,4 @@
-"""kinova_reach_ros2.py.
+"""kinova_ros2.py.
 
 Kinova Arm class for ROS2 RL
 
@@ -13,6 +13,7 @@ from typing import Any
 import cv2
 import gymnasium as gym
 import numpy as np
+import torch
 from roslibpy import ActionClient, Ros, Service, Topic
 
 from skillet.envs.ros2 import (
@@ -29,7 +30,7 @@ from skillet.envs.util import configclass
 
 
 @configclass
-class KinovaROS2ReachEnvCfg(ROS2RLEnvCfg):
+class KinovaROS2EnvCfg(ROS2RLEnvCfg):
     """The configuration class for Kinova Gen3 Arm."""
 
     """Robot configuration"""
@@ -44,7 +45,7 @@ class KinovaROS2ReachEnvCfg(ROS2RLEnvCfg):
     vision = False
 
     # Default joint position of robot
-    default_joint_positions = [0.0, 0.523599, 0.0, 1.5708, 1.0, 0.785398, 1.0, 0.0]  # Double format for ROS 2
+    default_joint_positions = [0.0, 0.523599, 0.0, 1.5708, 0.0, 0.785398, 0.0, 0.0]  # Double format for ROS 2
 
     """RL environment configuration"""
     num_envs = 1
@@ -66,10 +67,12 @@ class KinovaROS2ReachEnvCfg(ROS2RLEnvCfg):
     gripper_joint_names = ["robotiq_85_left_knuckle_joint"]
 
 
-class KinovaROS2ReachEnv(ROS2RLEnv):
+class KinovaROS2Env(ROS2RLEnv):
     """Kinova Gen3 7DoF ROS2 implementation."""
 
-    def __init__(self, cfg: ROS2RLEnvCfg, ros: Ros, render_mode: str | None = None, **kwargs: dict[str, Any]) -> None:
+    def __init__(
+        self, cfg: KinovaROS2EnvCfg, ros: Ros, render_mode: str | None = None, **kwargs: dict[str, Any]
+    ) -> None:
         """Initialize Kinova Arm ROS2."""
         super().__init__(cfg, ros, render_mode, **kwargs)
 
@@ -246,7 +249,7 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
         self.body_vel_sub.subscribe(_update_body_vel)
         wait_until_ready(self._ready)
 
-    def _pre_process_action(self, actions: np.ndarray) -> np.ndarray:
+    def _pre_process_action(self, actions: torch.Tensor) -> np.ndarray:
         """Pre process the robot action.
 
         This function is responsible preprocessing the robot action (ie checking joint limits, etc).
@@ -255,7 +258,7 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
             actions: The actions to apply on the environment. Shape is (num_envs, num_joints).
 
         """
-        self.actions = actions.squeeze()  # Actions can only be 1 dimensional
+        self.actions = actions.cpu().numpy().squeeze()  # Actions can only be 1 dimensional
 
         return self.actions
 
@@ -323,19 +326,17 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
         if hasattr(status, "name"):
             status = status.name
         message = result.get("message", "")
-
-        if status == "SUCCEEDED":
-            print(f"[INFO] Gripper succeeded: {message}")
+        if status.name == "SUCCEEDED":
+            # print(f"[INFO] Gripper succeeded: {message}")
             self.gripper_ok = True
 
-        elif status == "ABORTED":
+        elif status.name == "ABORTED":
             print(f"[INFO] Gripper aborted: {message}")
             self.gripper_ok = False
 
-        elif status == "CANCELED":
+        elif status.name == "CANCELED":
             print(f"[INFO] Gripper canceled: {message}")
             self.gripper_ok = False
-
         else:
             print(f"[INFO] Unknown gripper result: {result}")
             self.gripper_ok = False
@@ -347,12 +348,8 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
         effort = feedback.get("effort")
         stalled = feedback.get("stalled", False)
 
-        print(f"[INFO] Gripper feedback: pos={pos}, effort={effort}, stalled={stalled}")
-
         if stalled:
-            print("[INFO] Gripper stalled before reaching goal")
-
-        pass
+            print(f"[INFO] Gripper feedback: pos={pos}, effort={effort}, stalled={stalled}")
 
     def _gripper_error_cb(self, err: dict[str, Any]) -> None:
         """Gripper action error callback."""
@@ -365,7 +362,6 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
         # Set internal state so higher-level logic can react
         self.gripper_ok = False
         self.last_gripper_error = err
-        pass
 
     def _get_latest_rgbd(self) -> dict[str, Any]:
         """Request and decode the latest RGB-D snapshot synchronously.
@@ -436,9 +432,9 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
 
         if isinstance(payload, dict):
             if "bytes" in payload:
-                return KinovaROS2ReachEnv._decode_uint8_payload(payload["bytes"], field_name=field_name)
+                return KinovaROS2Env._decode_uint8_payload(payload["bytes"], field_name=field_name)
             if "data" in payload:
-                return KinovaROS2ReachEnv._decode_uint8_payload(payload["data"], field_name=field_name)
+                return KinovaROS2Env._decode_uint8_payload(payload["data"], field_name=field_name)
 
         if isinstance(payload, str):
             try:
