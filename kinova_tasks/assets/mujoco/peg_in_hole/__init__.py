@@ -3,7 +3,6 @@
 from pathlib import Path
 
 import mujoco
-
 from mjlab.entity import EntityCfg
 
 ##

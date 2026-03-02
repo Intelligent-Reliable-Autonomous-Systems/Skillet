@@ -9,9 +9,10 @@ from .kinova_constants import (
     KINOVA_ACTION_SCALE,
     KINOVA_ACTUATORS,
     KINOVA_GRIPPER_ARTICULATION,
+    KinovaCfg,
+    KinovaClosedCfg,
+    KinovaClosedPegCfg,
     get_kinova_robot_cfg,
-    get_kinova_robot_cfg_closed_gripper,
-    get_kinova_robot_cfg_peginhole,
     get_spec,
 )
 
@@ -24,8 +25,9 @@ __all__ = [
     "KINOVA_ACTION_SCALE",
     "KINOVA_ACTUATORS",
     "KINOVA_GRIPPER_ARTICULATION",
+    "KinovaCfg",
+    "KinovaClosedCfg",
+    "KinovaClosedPegCfg",
     "get_kinova_robot_cfg",
-    "get_kinova_robot_cfg_closed_gripper",
-    "get_kinova_robot_cfg_peginhole",
     "get_spec",
 ]

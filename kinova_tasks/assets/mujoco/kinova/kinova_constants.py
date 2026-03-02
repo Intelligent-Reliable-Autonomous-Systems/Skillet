@@ -1,8 +1,8 @@
 """Kinova Gen3 robot constants and configuration for lift task."""
 
 from pathlib import Path
-import mujoco
 
+import mujoco
 from mjlab.actuator import XmlPositionActuatorCfg
 from mjlab.entity import EntityArticulationInfoCfg, EntityCfg
 from mjlab.utils.os import update_assets
@@ -141,6 +141,18 @@ KINOVA_GRIPPER_ARTICULATION = EntityArticulationInfoCfg(
     soft_joint_pos_limit_factor=0.9,
 )
 
+# Action scale for delta control
+KINOVA_ACTION_SCALE = 0.04
+
+
+class KinovaCfg(EntityCfg):
+    """Base Kinova Gen3 configuration with gripper open."""
+
+    init_state = INIT_STATE
+    collisions = ()
+    spec_fn = get_spec
+    articulation = KINOVA_GRIPPER_ARTICULATION
+
 
 def get_kinova_robot_cfg() -> EntityCfg:
     """Get a fresh Kinova Gen3 robot configuration instance for lift task.
@@ -156,34 +168,28 @@ def get_kinova_robot_cfg() -> EntityCfg:
     )
 
 
-def get_kinova_robot_cfg_closed_gripper() -> EntityCfg:
-    """Get Kinova Gen3 config with gripper closed (for holding objects).
+class KinovaClosedCfg(EntityCfg):
+    """Kinova Gen3 configuration with gripper closed.
 
     The gripper starts closed and the fingers_actuator ctrl defaults to 255
     (closed) via the init state. Used for tasks like peg-in-hole where the
     robot holds an object throughout the episode.
     """
-    return EntityCfg(
-        init_state=INIT_STATE_GRIPPER_CLOSED,
-        collisions=(),
-        spec_fn=get_spec,
-        articulation=KINOVA_GRIPPER_ARTICULATION,
-    )
+
+    init_state = INIT_STATE_GRIPPER_CLOSED
+    collisions = ()
+    spec_fn = get_spec
+    articulation = KINOVA_GRIPPER_ARTICULATION
 
 
-def get_kinova_robot_cfg_peginhole() -> EntityCfg:
+class KinovaClosedPegCfg(EntityCfg):
     """Get Kinova Gen3 config for peg-in-hole task.
 
     Arm is rotated 90° at joint_1 to face the workspace side.
     Gripper is closed (driver joints at 1.0) to hold the peg.
     """
-    return EntityCfg(
-        init_state=INIT_STATE_PEGINHOLE,
-        collisions=(),
-        spec_fn=get_spec,
-        articulation=KINOVA_GRIPPER_ARTICULATION,
-    )
 
-
-# Action scale for delta control
-KINOVA_ACTION_SCALE = 0.04
+    init_state = INIT_STATE_PEGINHOLE
+    collisions = ()
+    spec_fn = get_spec
+    articulation = KINOVA_GRIPPER_ARTICULATION

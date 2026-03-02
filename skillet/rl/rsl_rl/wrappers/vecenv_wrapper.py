@@ -8,6 +8,7 @@ import torch
 from tensordict import TensorDict
 
 from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
+from skillet.envs.mj_env_wrapper import MJEnvWrapper
 from skillet.envs.ros2_env_wrapper import ROS2EnvWrapper
 from skillet.rl.rsl_rl.env import VecEnv
 
@@ -38,7 +39,11 @@ class RslRlVecEnvWrapper(VecEnv):
 
         """
         # check that input is valid
-        if not isinstance(env, ROS2EnvWrapper) and not isinstance(env, IsaacEnvWrapper):
+        if (
+            not isinstance(env, ROS2EnvWrapper)
+            and not isinstance(env, IsaacEnvWrapper)
+            and not isinstance(env, MJEnvWrapper)
+        ):
             raise ValueError(
                 "The environment must be inherited from ManagerBasedRLEnv, DirectRLEnv, or IsaacEnvWrapper. Environment type:"
                 f" {type(env)}"
@@ -144,7 +149,11 @@ class RslRlVecEnvWrapper(VecEnv):
         """Returns the current observations of the environment."""
         if hasattr(self.unwrapped, "observation_manager"):
             obs_dict = self.unwrapped.observation_manager.compute()
-        elif isinstance(self.env, IsaacEnvWrapper) or isinstance(self.env, ROS2EnvWrapper):  # Is a IsaacEnvWrapper
+        elif (
+            isinstance(self.env, IsaacEnvWrapper)
+            or isinstance(self.env, ROS2EnvWrapper)
+            or isinstance(self.env, MJEnvWrapper)
+        ):  # Is a IsaacEnvWrapper
             obs_dict = self.env.get_observation()
         else:  # DirectRLEnv of ManagerBasedRLEnv
             obs_dict = self.unwrapped._get_observations()

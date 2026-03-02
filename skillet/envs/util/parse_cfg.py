@@ -161,9 +161,7 @@ def parse_ros2_env_cfg(
     return cfg
 
 
-def parse_mj_env_cfg(
-    task_name: str, device: str = "cuda:0", num_envs: int | None = None, ros2_workspace: str | None = None
-) -> Any:
+def parse_mj_env_cfg(task_name: str, device: str = "cuda:0", num_envs: int | None = None) -> Any:
     """Parse configuration for an environment and override based on inputs.
 
     Args:

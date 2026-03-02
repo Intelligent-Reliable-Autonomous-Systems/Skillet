@@ -18,7 +18,7 @@ parser = argparse.ArgumentParser(description="Train an RL agent with RSL-RL.")
 parser.add_argument("--video", action="store_true", default=False, help="Record videos during training.")
 parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
 parser.add_argument("--video_interval", type=int, default=2000, help="Interval between video recordings (in steps).")
-parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
+parser.add_argument("--num_envs", type=int, default=4096, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
 parser.add_argument("--device", type=str, default="cuda", help="Name of GPU device")
 parser.add_argument(
@@ -58,7 +58,7 @@ from jaxtyping import Float, Int
 
 import kinova_tasks.mj_tasks  # noqa: F401
 from skillet.envs.mj_env_wrapper import MJEnvWrapper
-from skillet.envs.util import get_checkpoint_path
+from skillet.envs.util import get_checkpoint_path, parse_mj_env_cfg
 from skillet.envs.util.dict import print_dict
 from skillet.envs.util.hydra import hydra_task_config
 from skillet.envs.util.parse_cfg import dump_yaml
@@ -83,14 +83,17 @@ def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
     """Train with RSL-RL agent."""
     # override configurations with non-hydra CLI arguments
     agent_cfg = cli_args.update_rsl_rl_cfg(agent_cfg, args_cli)
-    env_cfg.scene.num_envs = args_cli.num_envs if args_cli.num_envs is not None else env_cfg.scene.num_envs
+    # env_cfg.sim.device = args_cli.device if args_cli.device is not None else env_cfg.sim.device
+    # env_cfg.scene.num_envs = args_cli.num_envs if args_cli.num_envs is not None else env_cfg.scene.num_envs
+    env_cfg = parse_mj_env_cfg(
+        args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs
+    )  # Override hydra task cfg to avoid serialization
+    # set the environment seed
+    env_cfg.seed = agent_cfg.seed
+
     agent_cfg.max_iterations = (
         args_cli.max_iterations if args_cli.max_iterations is not None else agent_cfg.max_iterations
     )
-
-    # set the environment seed
-    env_cfg.seed = agent_cfg.seed
-    env_cfg.sim.device = args_cli.device if args_cli.device is not None else env_cfg.sim.device
 
     # specify directory for logging experiments
     log_root_path = os.path.join("_logs", "rsl_rl", agent_cfg.experiment_name)
@@ -126,7 +129,6 @@ def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
         env = gym.wrappers.RecordVideo(env, **video_kwargs)
 
     # wrap around environment for rsl-rl
-    # env = IsaacEnvWrapper[BxN_Obs, BxM_Action](env)
     env = MJEnvWrapper[BxN_Obs, BxM_Action](env)
 
     env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)

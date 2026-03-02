@@ -90,8 +90,15 @@ class MJEnvWrapper(
             )"""
         vector_env = AsGymVectorEnv(env, num_envs=self.num_envs)
         super().__init__(vector_env)
+
+        # Convert MJ observation spaces to Gym observation spaces
+        vector_env.single_observation_space = self._handle_mj_space(vector_env.single_observation_space)
+        vector_env.observation_space = self._handle_mj_space(vector_env.observation_space)
+        vector_env.action_space = self._handle_mj_space(vector_env.action_space)
+        vector_env.single_action_space = self._handle_mj_space(vector_env.single_action_space)
+
         self._obs_spec_policy = ObservationSpec[Float[torch.Tensor, "b ..."]](
-            space=self._handle_mj_space(vector_env.single_observation_space.spaces["actor"]),
+            space=vector_env.single_observation_space.spaces["policy"],
             name="policy",
             is_torch=True,
             is_batched=True,
@@ -99,7 +106,7 @@ class MJEnvWrapper(
             device=self.device,
         )
         self._obs_spec_state = ObservationSpec[Mapping[str, Float[torch.Tensor, "b ..."]]](
-            space=self._handle_mj_space(vector_env.single_observation_space),
+            space=vector_env.single_observation_space,
             name="state",
             is_torch=True,
             is_batched=True,
@@ -107,7 +114,7 @@ class MJEnvWrapper(
             device=self.device,
         )
         self._action_spec = ActionSpec[TBatchedActionTorch](
-            space=self._handle_mj_space(vector_env.single_action_space),
+            space=vector_env.single_action_space,
             name="action",
             is_torch=True,
             is_batched=True,
@@ -191,7 +198,7 @@ class MJEnvWrapper(
         if obs_spec is None:
             return self.last_obs
         if obs_spec.name == "policy":
-            return self.last_obs["actor"]
+            return self.last_obs["policy"]
         if obs_spec.name == "state":
             return self.last_obs
         """if obs_spec.name == "ik_ee":
@@ -237,7 +244,9 @@ class MJEnvWrapper(
     def get_state(self) -> TBatchedObsTorch:  # noqa: D102
         return self.get_observation(self._obs_spec_state)
 
-    def step(self, action: TBatchedActionTorch) -> tuple[
+    def step(
+        self, action: TBatchedActionTorch
+    ) -> tuple[
         TBatchedObsTorch,
         Float[torch.Tensor, "b"],  # noqa: F821
         Bool[torch.Tensor, "b"],  # noqa: F821

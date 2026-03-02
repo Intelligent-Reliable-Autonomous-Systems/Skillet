@@ -1,10 +1,5 @@
 """Common RL configuration for Kinova Gen3 tasks."""
 
-from mjlab.rl import (
-    RslRlOnPolicyRunnerCfg,
-    RslRlPpoAlgorithmCfg,
-)
-
 from skillet.envs.util import configclass
 from skillet.rl.cfg import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg, RslRlPpoPolicyCfg
 
