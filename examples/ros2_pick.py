@@ -1,18 +1,29 @@
 """ros2_ik.py.
 
-Test file for executor integration ROS2 skills
+A demonstration of the ROS2 pick skill.
 
 Written by Will Solow and Jeff Jewett, 2026
 
 """
 
-"""Script to an environment with random action agent."""
-
 import argparse
 import os
+from typing import TYPE_CHECKING
+
+import torch
 
 from kinova_tasks.ros2_tasks.kinova.kinova_reach_ros2 import KinovaROS2ReachEnv, KinovaROS2ReachEnvCfg
+from skillet.agents.policy_over_options import PolicyOverOptionsAgent
+from skillet.envs.ros2_skillet_env import ROS2SkilletEnv
+from skillet.envs.specs import BxM_Action, BxN_Obs, IKEE_Obs
+from skillet.envs.util import setup_ros
+from skillet.policy.dummy import FixedSequencePolicy, RandomPolicy
+from skillet.policy.ik_ee import PoseAbsIKEEPolicy
 from skillet.skill.high_level.pick import PickSkill
+from skillet.skill.specs import SELECT_OPTIONS_SPEC_BATCHED, XYZ_YAW_Params
+
+if TYPE_CHECKING:
+    from skillet.core import BatchedSkill
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Main ROS2 executor file.")
@@ -34,43 +45,10 @@ if args_cli.ros2_ws is None:
         raise ValueError("ROS2 workspace path must be provided via --ros2_ws argument or ROS2_WS environment variable.")
 
 
-"""Rest everything follows."""
-
-import gymnasium as gym
-import torch
-from jaxtyping import Float, Int
-
-import kinova_tasks.ros2_tasks  # noqa: F401
-from skillet.agents.policy_over_options import PolicyOverOptionsAgent
-from skillet.core.spaces import ActionSpec, ObservationSpec
-from skillet.envs.ros2_env_wrapper import ROS2EnvWrapper
-from skillet.envs.util import parse_ros2_env_cfg, setup_ros
-from skillet.policy.dummy import FixedSequencePolicy, RandomPolicy
-from skillet.policy.ik_ee import PoseAbsIKEEPolicy
-
-BxN_Obs = Float[torch.Tensor, "b n"]
-"""Environment observation: torch.Tensor[(b, n), float]"""
-BxM_Action = Float[torch.Tensor, "b m"]
-"""Environment action: torch.Tensor[(b, m), float]"""
-B_Int_HighLevel = Int[torch.Tensor, "b"]
-"""Selected skills action: torch.Tensor[(b,), int]"""
-
 
 def main() -> None:
-    """Test the executor within the IsaacLab/IsaacSim framework."""
-    # create environment configuration
-    # env_cfg = parse_ros2_env_cfg(
-    #     args_cli.task,
-    #     device=args_cli.device,
-    #     num_envs=args_cli.num_envs,
-    #     ros2_workspace=args_cli.ros2_ws,
-    # )
-    # env_cfg.robot_ip = args_cli.robot_ip
-    # env_cfg.use_fake_hardware = args_cli.use_fake_hardware
-    # env_cfg.launch_ros = args_cli.launch_ros
-
+    """Run the ROS2 pick example."""
     # create environment
-    # env = gym.make(args_cli.task, cfg=env_cfg, ros=setup_ros())
     env_cfg = KinovaROS2ReachEnvCfg(
         robot_ip=args_cli.robot_ip,
         use_fake_hardware=args_cli.use_fake_hardware,
@@ -82,41 +60,26 @@ def main() -> None:
     )
 
     env = KinovaROS2ReachEnv(cfg=env_cfg, ros=setup_ros())
-    env = ROS2EnvWrapper(env)
+    env = ROS2SkilletEnv[BxN_Obs, BxM_Action](env)
     env.reset()
 
     print("[INFO][Main] Testing Executor environment")
     print(f"[INFO][Main] Gym observation space: {env.observation_space}")
     print(f"[INFO][Main] Gym action space: {env.action_space}")
 
-    # Set up Skill executor and environment in framework
-    env = ROS2EnvWrapper[BxN_Obs, BxM_Action](env)
-
-    action_spec: ActionSpec[BxM_Action] = env.action_spec
-    observation_spec: ObservationSpec[BxN_Obs] = env.obs_spec
-
     # Low-level policies
-    _obs_spec_ik = ObservationSpec[Float[torch.Tensor, "b ..."]](
-        space=gym.spaces.Dict(),
-        name="ik_ee",
-        is_torch=True,
-        is_batched=True,
-        n_envs=-1,
-        device=env.device,
-    )
-
-    ik_ee_pose_policy = PoseAbsIKEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
+    ik_ee_pose_policy = PoseAbsIKEEPolicy(env.obs_spec_ikee, env.action_spec)
     # Skills
     skill_length = 200
-    pick_skill = PickSkill[BxN_Obs, BxM_Action, None](
+    pick_skill = PickSkill(
         reach_policy=ik_ee_pose_policy, gripper_policy=None, lift_height=0.23, length=skill_length
     )
-    skills = [pick_skill]
+    skills: list[BatchedSkill[IKEE_Obs, BxM_Action, XYZ_YAW_Params]] = [pick_skill]
 
     # Parameters policy
-    fixed_param_policy = FixedSequencePolicy[BxN_Obs, BxM_Action](
-        observation_spec,
-        action_spec,
+    fixed_param_policy = FixedSequencePolicy(
+        env.obs_spec,
+        env.action_spec,
         torch.as_tensor(
             [
                 [0.6, -0.2, 0.03, 0.0],
@@ -128,16 +91,13 @@ def main() -> None:
     )
 
     # High-level policy
-    options_spec = ActionSpec[B_Int_HighLevel](
-        space=gym.spaces.MultiDiscrete([len(skills)] * args_cli.num_envs),
-        name="options",
-        is_torch=True,
-        is_batched=True,
-        # n_envs=args_cli.num_envs,
-    )
-    policy_over_options = RandomPolicy[BxN_Obs, B_Int_HighLevel](observation_spec, options_spec)
+    options_spec = SELECT_OPTIONS_SPEC_BATCHED \
+        .bind(n_options=len(skills)) \
+        .with_n_envs(args_cli.num_envs) \
+        .replace(device=env.device)
+    policy_over_options = RandomPolicy(env.obs_spec, options_spec)
 
-    policy_over_options_agent = PolicyOverOptionsAgent[BxN_Obs, BxM_Action, B_Int_HighLevel, None](
+    policy_over_options_agent = PolicyOverOptionsAgent(
         skills=skills,
         high_level_policy=policy_over_options,
         params_policy=fixed_param_policy,

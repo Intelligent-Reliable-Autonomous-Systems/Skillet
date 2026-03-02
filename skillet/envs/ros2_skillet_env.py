@@ -6,8 +6,9 @@ Written by Will Solow and Jeff Jewett, 2026
 """
 
 from collections.abc import Mapping
-from typing import Any, Generic, TypeVar, cast, overload
+from typing import Any, Generic, TypeVar, overload
 
+import gymnasium as gym
 import numpy as np
 import torch
 from jaxtyping import Bool, Float
@@ -57,6 +58,10 @@ class ROS2SkilletEnv(
     def __init__(self, env: ROS2RLEnv) -> None:
         """Initialize the environment.
 
+        Generic Args:
+            TBatchedObsTorch: The type of the batched observation tensor
+            TBatchedActionTorch: The type of the batched action tensor
+
         Args:
             env: ROS2RLEnv environment or a wrapped ROS2RLEnv environment
 
@@ -65,6 +70,10 @@ class ROS2SkilletEnv(
 
         """
         self._env = env
+        self.observation_space = env.observation_space
+        self.action_space = env.action_space
+        self.single_observation_space = env.single_observation_space
+        self.single_action_space = env.single_action_space
 
         # Robot specific information
         self._joint_ids = self.cfg.joint_ids
@@ -84,6 +93,8 @@ class ROS2SkilletEnv(
             "n_envs": -1,
             "device": self.device,
         }
+        assert isinstance(env.observation_space, gym.spaces.Dict)
+        assert "policy" in env.observation_space.keys()
         self.obs_spec_policy = ObservationSpec[Float[torch.Tensor, "b ..."]](
             name="policy",
             space=env.observation_space["policy"],
@@ -96,9 +107,11 @@ class ROS2SkilletEnv(
         """Specification of the raw dictionary environment state"""
         self.obs_spec_rgbd = RGBD_SPEC_BATCHED.bind(height=480, width=640).replace(device=self.device)
         """Specification of RGB-D observations and metadata. Bound to the height and width of the RGB-D camera."""
-        self.obs_spec_ikee = IK_EE_SPEC_BATCHED.bind(n_joints=len(self._joint_ids)).replace(device=self.device)
+        self.obs_spec_ikee = IK_EE_SPEC_BATCHED.bind(
+            n_joints=len(self._joint_ids), n_arm_joints=len(self._joint_ids[:-1])).replace(device=self.device)
         """Specification of IK-EE observations."""
-        self.obs_spec_osc = OSC_SPEC_BATCHED.bind(n_joints=len(self._joint_ids)).replace(device=self.device)
+        self.obs_spec_osc = OSC_SPEC_BATCHED.bind(
+            n_joints=len(self._joint_ids), n_arm_joints=len(self._joint_ids[:-1])).replace(device=self.device)
         """Specification of OSC observations."""
         self._action_spec = ActionSpec[TBatchedActionTorch](
             name="action",
@@ -129,15 +142,22 @@ class ROS2SkilletEnv(
     @override
     @property
     def episode_length_buf(self) -> torch.Tensor:
-        return torch.tensor([self.env.get_wrapper_attr("episode_length_buf")], device=self.device)
+        return torch.tensor([self._env.get_wrapper_attr("episode_length_buf")], device=self.device)
 
     @episode_length_buf.setter
     def episode_length_buf(self, value: torch.Tensor) -> None:
-        self.env.unwrapped.episode_length_buf = value.squeeze().item()
+        self._env.unwrapped.episode_length_buf = value.squeeze().item()
 
     @override
     def _get_observations(self) -> TBatchedObsTorch:
         return self.obs_spec_state.cast(self._last_obs)
+
+    @override
+    def _reset_idx(self, env_ids: torch.Tensor | None = None) -> None:
+        # ROS2RLEnv only supports one environment
+        _ = env_ids
+        self._env._reset_idx()
+        self._last_obs = None
 
     @override
     @property
@@ -214,7 +234,7 @@ class ROS2SkilletEnv(
             A tuple containing the observation of observations tensor (N, obs_dim) and info dictionary
 
         """
-        obs_dict, info = self.env.reset()
+        obs_dict, info = self._env.reset()
         self._last_obs = obs_dict
         for k, v in obs_dict.items():
             obs_dict[k] = torch.as_tensor(v, device=self.device).unsqueeze(0)
@@ -310,7 +330,7 @@ class ROS2SkilletEnv(
             A tuple containing the observation of observations tensor (num_envs, obs_dim) and info dictionary
 
         """
-        obs_dict, reward, term, trunc, info = self.env.step(action)
+        obs_dict, reward, term, trunc, info = self._env.step(action)
         for k, v in obs_dict.items():
             obs_dict[k] = torch.as_tensor(v, device=self.device).unsqueeze(0)
         self._last_obs: dict[str, torch.Tensor] = obs_dict

@@ -17,6 +17,8 @@ from skillet.core.skill import (
     TBSkillParams,
 )
 from skillet.core.spaces import ArrayLike
+from skillet.envs.specs import IKEE_Obs
+from skillet.skill.specs import XYZ_YAW_Params
 
 
 class PickStatusCodes(IntEnum):
@@ -38,20 +40,26 @@ class PickStatusCodes(IntEnum):
     """The skill has lifted the ojbect."""
 
 
-class PickSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSkillObs, TBAction, TBSkillParams]):
+class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAction]):
     """A pick skill for picking an object up at a location and lifting to a desired height.
+
+    Generic Args:
+        TBAction: The type of the action for the skill.
 
     Parameterized by [x,y,z, yaw] the x y z location to perform the pick action and orientation
     """
 
     def __init__(
         self,
-        reach_policy: BatchedPPolicy[TBSkillObs, TBAction, TBSkillParams],
-        gripper_policy: BatchedPPolicy[TBSkillObs, TBAction, TBSkillParams],
+        reach_policy: BatchedPPolicy[IKEE_Obs, TBAction, XYZ_YAW_Params],
+        gripper_policy: BatchedPPolicy[IKEE_Obs, TBAction, XYZ_YAW_Params] | None,
         lift_height: float,
         length: int,
     ) -> None:
         """Initialize the pick skill.
+
+        Generic Args:
+            TBAction: The type of the action for the skill.
 
         Args:
             reach_policy: The policy for reaching.

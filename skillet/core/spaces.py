@@ -14,6 +14,7 @@ Skill parameters spaces describe the parameters of a skill.
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import (
@@ -36,6 +37,7 @@ import torch
 from jaxtyping import Bool, Float, Int, Shaped
 from numpy.typing import NDArray
 from tensordict import TensorDict
+from typing_extensions import override
 
 # =============================================
 # Space specifications
@@ -155,10 +157,10 @@ class SpaceSpecification(Generic[TSpace]):
 
         Many operations require this to be false.
         """
-        if isinstance(self.space, ParameterizedBox):
+        if isinstance(self.space, ParameterizedSpace):
             return True
         if isinstance(self.space, gym.spaces.Dict):
-            return any(isinstance(subspace, ParameterizedBox) for subspace in self.space.spaces.values())
+            return any(isinstance(subspace, ParameterizedSpace) for subspace in self.space.spaces.values())
         return False
 
     def _ensure_not_parameterized(self) -> None:
@@ -380,12 +382,12 @@ class SpaceSpecification(Generic[TSpace]):
             raise ValueError(f"Cannot set n_envs to a different value {n_envs} than the current value {self.n_envs}.")
         if self.n_envs >= 0:
             return self
-        if isinstance(self.space, ParameterizedBox):
+        if isinstance(self.space, ParameterizedSpace):
             space = self.space.batch(n_envs)
-        if isinstance(self.space, gym.spaces.Dict):
+        elif isinstance(self.space, gym.spaces.Dict):
             subspaces = {}
             for key, subspace in self.space.spaces.items():
-                if isinstance(subspace, ParameterizedBox):
+                if isinstance(subspace, ParameterizedSpace):
                     subspaces[key] = subspace.batch(n_envs)
                 else:
                     subspaces[key] = gym.vector.utils.space_utils.batch_space(subspace, n_envs)
@@ -414,12 +416,12 @@ class SpaceSpecification(Generic[TSpace]):
     def bind(self, **params: dict[str, int]) -> SpaceSpecification[TSpace]:
         """Bind the space specification to the given parameters."""
         space = self.space
-        if isinstance(self.space, ParameterizedBox):
+        if isinstance(self.space, ParameterizedSpace):
             space = self.space.bind(**params)
         if isinstance(self.space, gym.spaces.Dict):
             subspaces = {}
             for key, subspace in self.space.spaces.items():
-                if isinstance(subspace, ParameterizedBox):
+                if isinstance(subspace, ParameterizedSpace):
                     subspaces[key] = subspace.bind(**params)
                 else:
                     subspaces[key] = subspace
@@ -605,13 +607,63 @@ def as_torch_dtype(dtype: type[int] | type[float] | type[bool] | np.dtype | torc
     raise ValueError(f"Unsupported dtype: {dtype}")
 
 
-class ParameterizedBox(gym.spaces.Box):
+class ParameterizedSpace(gym.spaces.Space, ABC):
+    """A gymnasium space that is parameterized by variables."""
+
+    @abstractmethod
+    def bind_partial(self, **params: dict[str, int]) -> gym.spaces.Space:
+        """Bind the parameterized space to the given parameters.
+
+        If the parameterized space is not fully bound, return a new parameterized space with the parameters bound.
+        Otherwise, return a non-parameterized space.
+        """
+        raise NotImplementedError(f"bind_partial() is not available for this parameterized space {self.__class__.__name__}.")
+
+    def bind(self, **params: dict[str, int]) -> gym.spaces.Space:
+        """Bind the parameterized space to the given parameters.
+
+        If the parameterized box space is not fully bound, raise a ValueError.
+        """
+        bound = self.bind_partial(**params)
+        if isinstance(bound, ParameterizedSpace):
+            if len(bound.variables) > 0:
+                raise ValueError(
+                    f"Unbound variables {bound.variables} found in space {bound}. All variables must be bound."
+                )
+
+            return bound
+        return bound
+
+    def batch(self, n_envs: int) -> gym.spaces.Space:
+        """Batch the parameterized space.
+
+        If the parameterized space is not fully bound, raise a ValueError.
+        """
+        raise NotImplementedError(f"{self.__class__.__name__} does not support batching. Bind space first.")
+
+    @override
+    def sample(self, mask: None = None, probability: None = None) -> NDArray[Any]:
+        raise ValueError(f"Sample is not available for this parameterized space {self.__class__.__name__}.")
+
+    @override
+    def contains(self, x: Any) -> bool:
+        raise NotImplementedError(f"contains() is not available for this parameterized space {self.__class__.__name__}.")
+
+    @override
+    def to_jsonable(self, sample_n: Sequence[NDArray[Any]]) -> list[list]:
+        raise ValueError(f"to_jsonable() is not available for this parameterized space {self.__class__.__name__}.")
+
+    @override
+    def from_jsonable(self, sample_n: Sequence[float | int]) -> list[NDArray[Any]]:
+        raise ValueError(f"from_jsonable() is not available for this parameterized space {self.__class__.__name__}.")
+
+class ParameterizedBox(gym.spaces.Box, ParameterizedSpace):
     """A parameterized box space."""
 
     def __init__(
         self,
-        low: SupportsFloat | NDArray[Any],
-        high: SupportsFloat | NDArray[Any],
+        low: SupportsFloat | NDArray[Any] | str,
+        high: SupportsFloat | NDArray[Any] | str,
         shape: Sequence[int | str],
         dtype: type[np.floating[Any]] | type[np.integer[Any]] = np.float32,
         seed: int | np.random.Generator | None = None,
@@ -623,49 +675,45 @@ class ParameterizedBox(gym.spaces.Box):
         self._seed = seed
 
         self.variables = {v: i for i, v in enumerate(shape) if isinstance(v, str)}
+        if isinstance(low, str):
+            self.variables[low] = None
+        if isinstance(high, str):
+            self.variables[high] = None
         if len(self.variables) == 0:
-            raise ValueError("No parameters found in shape. Use gym.spaces.Box instead.")
+            raise ValueError("No parameters found in shape or bounds. Use gym.spaces.Box instead.")
 
+    @override
     def bind_partial(self, **params: dict[str, int]) -> ParameterizedBox | gym.spaces.Box:
         """Bind the parameterized box space to the given parameters.
 
         If the parameterized box space is not fully bound, return a new parameterized box space with the parameters bound.
         Otherwise, return a gym.spaces.Box.
         """
+        low = params.get(self._low, self._low) if isinstance(self._low, str) else self._low
+        high = params.get(self._high, self._high) if isinstance(self._high, str) else self._high
         shape = [params[v] if v in params else self._shape[i] for i, v in enumerate(self._shape)]
         vars_left = [v for v in shape if isinstance(v, str)]
+        if isinstance(low, str):
+            vars_left.append(low)
+        if isinstance(high, str):
+            vars_left.append(high)
         if len(vars_left) > 0:
             return ParameterizedBox(
-                low=self._low,
-                high=self._high,
+                low=low,
+                high=high,
                 shape=shape,
                 dtype=self._dtype,
                 seed=self._seed,
             )
         return gym.spaces.Box(
-            low=self._low,
-            high=self._high,
+            low=low,
+            high=high,
             shape=shape,
             dtype=self._dtype,
             seed=self._seed,
         )
 
-    def bind(self, **params: dict[str, int]) -> gym.spaces.Box:
-        """Bind the parameterized box space to the given parameters.
-
-        If the parameterized box space is not fully bound, raise a ValueError.
-        """
-        bound = self.bind_partial(**params)
-        if isinstance(bound, ParameterizedBox):
-            vars_left = [v for v in bound._shape if isinstance(v, str)]
-            if len(vars_left) > 0:
-                raise ValueError(
-                    f"Unbound variables {vars_left} found in shape: {bound._shape}. All variables must be bound."
-                )
-
-            return bound
-        return bound
-
+    @override
     def batch(self, n_envs: int) -> ParameterizedBox | gym.spaces.Box:
         """Batch the parameterized box space.
 
@@ -692,10 +740,8 @@ class ParameterizedBox(gym.spaces.Box):
     def shape(self) -> tuple[int, ...]:  # noqa: D102
         return self._shape
 
-    def sample(self, mask: None = None, probability: None = None) -> NDArray[Any]:  # noqa: D102
-        raise ValueError("Sample is not available for parameterized box spaces.")
-
-    def contains(self, x: Any) -> bool:  # noqa: ANN401, D102
+    @override
+    def contains(self, x: Any) -> bool:
         if not isinstance(x, np.ndarray):
             gym.logger.warn("Casting input x to numpy array.")
             try:
@@ -719,8 +765,60 @@ class ParameterizedBox(gym.spaces.Box):
 
         raise ValueError(f"Cannot establish containment for parameterized box with shape {self.shape}.")
 
-    def to_jsonable(self, sample_n: Sequence[NDArray[Any]]) -> list[list]:  # noqa: D102
-        raise ValueError("to_jsonable() is not available for parameterized box spaces.")
+class ParameterizedDiscrete(gym.spaces.Discrete, ParameterizedSpace):
+    """A parameterized discrete space.
 
-    def from_jsonable(self, sample_n: Sequence[float | int]) -> list[NDArray[Any]]:  # noqa: D102
-        raise ValueError("from_jsonable() is not available for parameterized box spaces.")
+    Discrete is implemented as an integer Box space with the number of options for each discrete parameter.
+    """
+
+    def __init__(self, n: int | str, start: int | str | None = None):
+        self._n = n
+        self._start = start
+        self.variables = set()
+        if isinstance(n, str):
+            self.variables.add(n)
+        if isinstance(start, str):
+            self.variables.add(start)
+        if len(self.variables) == 0:
+            raise ValueError("No parameters found in n or start. Use gym.spaces.Discrete instead.")
+
+    @override
+    def bind_partial(self, **params: dict[str, int]) -> ParameterizedBox | gym.spaces.Box:
+        """Bind the parameterized box space to the given parameters.
+
+        If the parameterized box space is not fully bound, return a new parameterized box space with the parameters bound.
+        Otherwise, return a gym.spaces.Box.
+        """
+        n = params.get(self._n, self._n) if isinstance(self._n, str) else self._n
+        start = params.get(self._start, self._start) if isinstance(self._start, str) else self._start
+        vars_left = [v for v in self.variables if v not in params]
+        if isinstance(n, str):
+            vars_left.append(n)
+        if isinstance(start, str):
+            vars_left.append(start)
+        if len(vars_left) > 0:
+            return ParameterizedDiscrete(n=n, start=start)
+        return gym.spaces.Discrete(n=n, start=start if start is not None else 0)
+
+    @override
+    def bind(self, **params: dict[str, int]) -> gym.spaces.Box:
+        """Bind the parameterized box space to the given parameters.
+
+        If the parameterized box space is not fully bound, raise a ValueError.
+        """
+        bound = self.bind_partial(**params)
+        if isinstance(bound, ParameterizedBox):
+            if len(bound.variables) > 0:
+                raise ValueError(
+                    f"Unbound variables {bound.variables} found in shape: {bound._shape}. All variables must be bound."
+                )
+
+            return bound
+        return bound
+
+if __name__ == "__main__":
+    space = ParameterizedDiscrete(n="n_options", start=0)
+    bound = space.bind(n_options=10)
+    print(bound)
+    for i in range(10):
+        print(bound.sample())

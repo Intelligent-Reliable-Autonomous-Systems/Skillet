@@ -3,29 +3,18 @@
 from typing import Any, Generic
 
 import torch
-from jaxtyping import Float
 
-from examples.isaac_ik import IKEE_Obs
 from skillet.controllers import DifferentialIKController
+from skillet.core import SkillParamsSpec
 from skillet.core.math import quat_apply, quat_from_euler_xyz, quat_inv, quat_mul
-from skillet.core.policy import BatchedPPolicy, TBAction, TBPolicyObs, TBPolicyParams
+from skillet.core.policy import BatchedPPolicy, TBAction, TBPolicyParams
 from skillet.core.spaces import ActionSpec, ObservationSpec
-from skillet.envs.specs import IK_EE_SPEC_BATCHED
+from skillet.envs.specs import IKEE_Obs
+from skillet.skill.specs import ROLL_PITCH_YAW_Params, ROLL_PITCH_YAW_Params_Spec, XYZ_Params, XYZ_Params_Spec, XYZ_QUAT_Params, XYZ_QUAT_Params_Spec, XYZ_RPY_Params, XYZ_RPY_Params_Spec
 
-XYZ_Params = Float[torch.Tensor, "b 3"]
-"""XYZ parameters: torch.Tensor[(b, 3), float]"""
-
-XYZ_QUAT_Params = Float[torch.Tensor, "b 7"]
-"""XYZ + Quat parameters: torch.Tensor[(b, 7), float]"""
-
-XYZ_RPY_Params = Float[torch.Tensor, "b 6"]
-"""XYZ + RPY parameters: torch.Tensor[(b, 6), float]"""
-
-ROLL_PITCH_YAW_Params = Float[torch.Tensor, "b 3"]
-"""Roll Pitch Yaw parameters: torch.Tensor[(b, 3), float]"""
 
 class IKEEPolicy(BatchedPPolicy[IKEE_Obs, TBAction, TBPolicyParams], Generic[TBAction, TBPolicyParams]):
-    """Base class for Inverse Kinematics End Effector Policy.
+    """Abstract base class for Inverse Kinematics End Effector Policy.
 
     Generic Args:
         TBAction: The type of the action for the policy.
@@ -35,7 +24,7 @@ class IKEEPolicy(BatchedPPolicy[IKEE_Obs, TBAction, TBPolicyParams], Generic[TBA
     diff_ik: DifferentialIKController
     _params: torch.Tensor
 
-    def __init__(self, action_spec: ActionSpec[TBAction]) -> None:
+    def __init__(self, obs_spec: ObservationSpec[IKEE_Obs], action_spec: ActionSpec[TBAction]) -> None:
         """Initialize the policy.
 
         Generic Args:
@@ -47,7 +36,7 @@ class IKEEPolicy(BatchedPPolicy[IKEE_Obs, TBAction, TBPolicyParams], Generic[TBA
             action_spec: The action specification.
 
         """
-        self._obs_spec = IK_EE_SPEC_BATCHED
+        self._obs_spec = obs_spec
         self._action_spec = action_spec
 
     @property
@@ -112,18 +101,26 @@ class IKEEPolicy(BatchedPPolicy[IKEE_Obs, TBAction, TBPolicyParams], Generic[TBA
 class PosAbsIKEEPolicy(IKEEPolicy[TBAction, XYZ_Params], Generic[TBAction]):
     """A policy that produces ."""
 
-    def __init__(self, action_spec: ActionSpec[TBAction]) -> None:
+    def __init__(self, obs_spec: ObservationSpec[IKEE_Obs], action_spec: ActionSpec[TBAction]) -> None:
         """Initialize the policy.
+
+        Generic Args:
+            TBAction: The type of the action for the policy.
 
         Args:
             obs_spec: The observation specification.
             action_spec: The action specification.
 
         """
-        super().__init__(action_spec)
+        super().__init__(obs_spec, action_spec)
         self.diff_ik = DifferentialIKController(
             device=self._obs_spec.device, command_type="position", use_relative_mode=False
         )
+
+    @property
+    def params_spec(self) -> SkillParamsSpec[XYZ_Params]:
+        """The parameter specification for XYZ target positions."""
+        return XYZ_Params_Spec
 
     def reset(self, obs: IKEE_Obs, params: Any = None, env_ids: torch.Tensor = None) -> None:
         """Reset the PoseAbsolute IK EE Policy by setting the command of the DiffIK Controlller.
@@ -146,18 +143,26 @@ class PosAbsIKEEPolicy(IKEEPolicy[TBAction, XYZ_Params], Generic[TBAction]):
 class PoseAbsIKEEPolicy(IKEEPolicy[TBAction, XYZ_QUAT_Params], Generic[TBAction]):
     """A policy that produces pose ."""
 
-    def __init__(self, action_spec: ActionSpec[TBAction]) -> None:
+    def __init__(self, obs_spec: ObservationSpec[IKEE_Obs], action_spec: ActionSpec[TBAction]) -> None:
         """Initialize the policy.
+
+        Generic Args:
+            TBAction: The type of the action for the policy.
 
         Args:
             obs_spec: The observation specification.
             action_spec: The action specification.
 
         """
-        super().__init__(action_spec)
+        super().__init__(obs_spec, action_spec)
         self.diff_ik = DifferentialIKController(
             device=self._obs_spec.device, command_type="pose", use_relative_mode=False
         )
+
+    @property
+    def params_spec(self) -> SkillParamsSpec[XYZ_QUAT_Params]:
+        """The parameter specification for XYZ + Quat target poses."""
+        return XYZ_QUAT_Params_Spec
 
     def reset(self, obs: IKEE_Obs, params: Any = None, env_ids: torch.Tensor = None) -> None:
         """Reset the PoseAbsolute IK EE Policy by setting the command of the DiffIK Controlller.
@@ -176,18 +181,26 @@ class PoseAbsIKEEPolicy(IKEEPolicy[TBAction, XYZ_QUAT_Params], Generic[TBAction]
 class XYZRPYAbsIKEEPolicy(IKEEPolicy[TBAction, XYZ_RPY_Params], Generic[TBAction]):
     """A policy that produces pose ."""
 
-    def __init__(self, action_spec: ActionSpec[TBAction]) -> None:
+    def __init__(self, obs_spec: ObservationSpec[IKEE_Obs], action_spec: ActionSpec[TBAction]) -> None:
         """Initialize the policy.
+
+        Generic Args:
+            TBAction: The type of the action for the policy.
 
         Args:
             obs_spec: The observation specification.
             action_spec: The action specification.
 
         """
-        super().__init__(action_spec)
+        super().__init__(obs_spec, action_spec)
         self.diff_ik = DifferentialIKController(
             device=self._obs_spec.device, command_type="pose", use_relative_mode=False
         )
+
+    @property
+    def params_spec(self) -> SkillParamsSpec[XYZ_RPY_Params]:
+        """The parameter specification for XYZ + RPY target poses."""
+        return XYZ_RPY_Params_Spec
 
     def reset(self, obs: IKEE_Obs, params: Any = None, env_ids: torch.Tensor = None) -> None:
         """Reset the PoseAbsolute IK EE Policy by setting the command of the DiffIK Controlller.
@@ -208,18 +221,26 @@ class XYZRPYAbsIKEEPolicy(IKEEPolicy[TBAction, XYZ_RPY_Params], Generic[TBAction
 class OrientAbsIKEEPolicy(IKEEPolicy[TBAction, ROLL_PITCH_YAW_Params], Generic[TBAction]):
     """A policy that produces pose ."""
 
-    def __init__(self, action_spec: ActionSpec[TBAction]) -> None:
+    def __init__(self, obs_spec: ObservationSpec[IKEE_Obs], action_spec: ActionSpec[TBAction]) -> None:
         """Initialize the policy.
+
+        Generic Args:
+            TBAction: The type of the action for the policy.
 
         Args:
             obs_spec: The observation specification.
             action_spec: The action specification.
 
         """
-        super().__init__(action_spec)
+        super().__init__(obs_spec, action_spec)
         self.diff_ik = DifferentialIKController(
             device=self._obs_spec.device, command_type="pose", use_relative_mode=False
         )
+
+    @property
+    def params_spec(self) -> SkillParamsSpec[ROLL_PITCH_YAW_Params]:
+        """The parameter specification for Roll Pitch Yaw target orientations."""
+        return ROLL_PITCH_YAW_Params_Spec
 
     def reset(self, obs: IKEE_Obs, params: Any = None, env_ids: torch.Tensor = None) -> None:
         """Reset the PoseAbsolute IK EE Policy by setting the command of the DiffIK Controlller.

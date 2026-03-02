@@ -25,7 +25,7 @@ from skillet.core.math import (
 )
 from skillet.core.spaces import ActionSpec
 from skillet.envs.isaac_lab import DirectRlInterface, ManagerBasedRlInterface
-from skillet.envs.specs import IK_EE_SPEC_BATCHED, OSC_SPEC_BATCHED, RGBD_SPEC_BATCHED
+from skillet.envs.specs import IK_EE_SPEC_BATCHED, OSC_SPEC_BATCHED, RGBD_SPEC_BATCHED, BxN_Obs
 
 TBatchedObsTorch = TypeVar(
     "TBatchedObsTorch", bound=Float[torch.Tensor, "b ..."] | Mapping[str, Float[torch.Tensor, "b ..."]]
@@ -119,7 +119,7 @@ class IsaacEnvWrapper(
             policy_space = env.single_observation_space["policy"]
         else:
             policy_space = env.single_observation_space
-        self.obs_spec_policy = ObservationSpec[Float[torch.Tensor, "b ..."]](
+        self.obs_spec_policy = ObservationSpec[BxN_Obs](
             name="policy",
             space=policy_space,
         ).replace(**spec_args)

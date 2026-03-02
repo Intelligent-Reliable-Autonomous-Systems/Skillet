@@ -7,7 +7,7 @@ from jaxtyping import Int
 
 from skillet.core.env import BatchedEnvironment
 from skillet.core.policy import BatchedUPolicy
-from skillet.core.skill import CompositeSkill, Skill
+from skillet.core.skill import BatchedSkill, CompositeSkill
 from skillet.core.spaces import (
     ArrayLike,
     BatchedAction,
@@ -34,8 +34,8 @@ class PolicyOverOptionsAgent(Generic[THighLevelObs, TLowLevelObs, TBAction, TSki
     Generic type parameters:
         THighLevelObs: The type of the high level observation, batched.
         TLowLevelObs: The type of the low level observation, batched.
-        TSkillParams: The type of the skill parameters, batched.
         TBAction: The type of the batched action, batched.
+        TSkillParams: The type of the skill parameters, batched.
 
     Args:
         skills: The list of skills to execute.
@@ -46,7 +46,7 @@ class PolicyOverOptionsAgent(Generic[THighLevelObs, TLowLevelObs, TBAction, TSki
 
     def __init__(
         self,
-        skills: list[Skill[TLowLevelObs, TBAction, TSkillParams]],
+        skills: list[BatchedSkill[TLowLevelObs, TBAction, TSkillParams]],
         high_level_policy: BatchedUPolicy[THighLevelObs, SelectedSkills],
         params_policy: BatchedUPolicy[THighLevelObs, TSkillParams] | None = None,
     ) -> None:

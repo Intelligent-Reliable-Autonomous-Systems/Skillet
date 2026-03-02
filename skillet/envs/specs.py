@@ -10,6 +10,11 @@ from jaxtyping import Float
 from skillet.core import ObservationSpec
 from skillet.core.spaces import BatchedSpaceItem, ParameterizedBox
 
+BxN_Obs = Float[torch.Tensor, "b n"]
+"""A B-batched N-dim vector observation: torch.Tensor[(b, n), float]"""
+BxM_Action = Float[torch.Tensor, "b m"]
+"""A B-batched M-dim vector action: torch.Tensor[(b, m), float]"""
+
 RGBD_SPEC_BATCHED = ObservationSpec[dict[str, BatchedSpaceItem]](
     space=gym.spaces.Dict({
         "rgb": ParameterizedBox(low=0, high=255, shape=(3, "height", "width"), dtype=np.uint8),

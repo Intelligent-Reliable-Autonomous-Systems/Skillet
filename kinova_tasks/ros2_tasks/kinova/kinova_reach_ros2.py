@@ -120,7 +120,7 @@ class KinovaROS2ReachEnv(ROS2RLEnv):
         self.single_observation_space["policy"] = gym.spaces.Box(float("-inf"), float("inf"), shape=(16,))
         self.single_action_space = gym.spaces.Box(float("-inf"), float("inf"), shape=(8,))
 
-        self.observation_space = gym.vector.utils.batch_space(self.single_observation_space["policy"], self.num_envs)
+        self.observation_space = gym.vector.utils.batch_space(self.single_observation_space, self.num_envs)
         self.action_space = gym.vector.utils.batch_space(self.single_action_space, self.num_envs)
 
         self._current_joint_positions = np.zeros(shape=len(self.joint_names))

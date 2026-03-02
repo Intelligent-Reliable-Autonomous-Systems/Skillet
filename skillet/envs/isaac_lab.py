@@ -156,7 +156,6 @@ class DirectRlInterface(IsaacLabInterface):
         """Buffer for time out resets."""
         ...
 
-    @deprecated("_reset_idx is not currently supported across all environments.")
     def _reset_idx(self, env_ids: Sequence[int]) -> None:
         """Reset environments based on specified indices.
 

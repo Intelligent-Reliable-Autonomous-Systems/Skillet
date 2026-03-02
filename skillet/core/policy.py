@@ -98,11 +98,6 @@ class BatchedPPolicy(
 ):
     """A batched policy that takes a batched observation and outputs a batched action."""
 
-    @property
-    def params_spec(self) -> SkillParamsSpec[TBPolicyParams]:
-        """The specification of the parameters space for the policy."""
-        return replace(CommonSpecs.BatchedArrayEmpty, is_torch=self.action_spec.is_torch)
-
     def get_action(self, obs: TBPolicyObs, params: Any = None) -> TBAction:  # noqa: ANN401
         """Get the next low-level action for the robot based on the observation. The parameters are ignored."""
         raise NotImplementedError
