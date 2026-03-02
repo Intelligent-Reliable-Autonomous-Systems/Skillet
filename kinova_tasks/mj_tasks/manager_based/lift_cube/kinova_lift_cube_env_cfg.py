@@ -49,6 +49,13 @@ class KinovaLiftCubeEnvCfg(LiftCubeEnvCfg):
             "cube": EntityCfg(spec_fn=get_cube_spec),
         }
 
+        # Kinova specific
+        self.joint_ids = [0, 1, 2, 3, 4, 5, 6, 7]
+        self.tcp_offset = [0.0, 0.0, 0.120, 1.0, 0.0, 0.0, 0.0]
+        self.ee_link_name = "end_effector_link"
+        self.base_link_name = "base_link"
+        self.gripper_joint_names = ["robotiq_85_left_knuckle_joint"]
+
         # EE site for observations and rewards
         self.observations["policy"].terms["ee_to_cube"].params["asset_cfg"].site_names = ("pinch_site",)
         self.observations["critic"].terms["ee_to_cube"].params["asset_cfg"].site_names = ("pinch_site",)

@@ -202,7 +202,9 @@ class RealsenseEnv(_EnvironmentBase):
             raise ValueError(f"Observation spec {obs_spec} not supported by RealsenseEnv.")
         return obs_spec.cast(obs)
 
-    def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
+    def reset(
+        self, *, seed: int | None = None, options: dict[str, Any] | None = None
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
         return self.get_observation(), {}
 
     def step(self, action: Any) -> tuple[dict[str, Any], float, bool, bool, dict[str, Any]]:
@@ -221,6 +223,7 @@ class RealsenseEnv(_EnvironmentBase):
         except Exception:
             # Best-effort cleanup; ignore errors on interpreter shutdown.
             pass
+
 
 if __name__ == "__main__":
     env = RealsenseEnv()

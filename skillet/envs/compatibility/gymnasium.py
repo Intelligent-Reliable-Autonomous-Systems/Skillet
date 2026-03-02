@@ -1,4 +1,5 @@
 """Define a gymnasium environment interface for compatibility across different environments."""
+
 from typing import Any, Protocol
 
 import gymnasium as gym
@@ -114,12 +115,14 @@ class AsGymVectorEnv(gym.vector.VectorEnv):
 
         """
         self.env = env
+
         def env_attr(env: gym.Env | GymVectorInterface, attr: str) -> Any:
             if hasattr(env, attr):
                 return getattr(env, attr)
             if isinstance(env, gym.Env) and env.has_wrapper_attr(attr):
                 return env.get_wrapper_attr(attr)
             return None
+
         self.num_envs = num_envs or env_attr(env, "num_envs")
         if self.num_envs is None:
             raise ValueError("The environment does not have a number of environments .num_envs")
@@ -140,7 +143,9 @@ class AsGymVectorEnv(gym.vector.VectorEnv):
 
     def step(  # noqa: D102
         self, actions: BatchedAction
-    ) -> tuple[BatchedObservation, Float[torch.Tensor, "b"], Bool[torch.Tensor, "b"], Bool[torch.Tensor, "b"], dict[str, Any]]:
+    ) -> tuple[
+        BatchedObservation, Float[torch.Tensor, "b"], Bool[torch.Tensor, "b"], Bool[torch.Tensor, "b"], dict[str, Any]
+    ]:
         return self.env.step(actions)
 
     def render(self):  # noqa: ANN201, D102
@@ -148,4 +153,3 @@ class AsGymVectorEnv(gym.vector.VectorEnv):
 
     def close(self, **kwargs: Any) -> None:  # noqa: D102
         return self.env.close(**kwargs)
-

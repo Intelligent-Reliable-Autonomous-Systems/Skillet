@@ -123,7 +123,9 @@ class Environment(_EnvironmentBase[TObs, TAction], gym.Env[TObs, TAction], Gener
     """
 
 
-class BatchedEnvironment(_EnvironmentBase[TBObs, TBAction], gym.vector.VectorEnv[TBObs, TBAction, ArrayLike], Generic[TBObs, TBAction]):
+class BatchedEnvironment(
+    _EnvironmentBase[TBObs, TBAction], gym.vector.VectorEnv[TBObs, TBAction, ArrayLike], Generic[TBObs, TBAction]
+):
     """A batched environment that supports batched observations and actions.
 
     Generic type parameters:
@@ -135,7 +137,9 @@ class BatchedEnvironment(_EnvironmentBase[TBObs, TBAction], gym.vector.VectorEnv
 class BasicEnvironment(Environment[TObs, TAction], gym.Wrapper[TObs, TAction, TObs, TAction], Generic[TObs, TAction]):
     """A basic environment that supports raw state observations (full observability)."""
 
-    def __init__(self, env: gym.Env, is_torch: bool = False, device: torch.device | None = None, *args: Any, **kwargs: Any) -> None:
+    def __init__(
+        self, env: gym.Env, is_torch: bool = False, device: torch.device | None = None, *args: Any, **kwargs: Any
+    ) -> None:
         """Initialize a basic environment wrapper.
 
         Args:
@@ -185,7 +189,9 @@ class BasicEnvironment(Environment[TObs, TAction], gym.Wrapper[TObs, TAction, TO
         self.last_obs = obs
         return obs, info
 
-    def step(self, action: TAction, action_spec: ActionSpec[Any] | None = None) -> tuple[TObs, float, bool, bool, dict]:  # noqa: D102
+    def step(
+        self, action: TAction, action_spec: ActionSpec[Any] | None = None
+    ) -> tuple[TObs, float, bool, bool, dict]:  # noqa: D102
         if action_spec is not None and not self.supports_action_spec(action_spec):
             raise ValueError(f"Action spec {action_spec} not supported by environment.")
         obs, reward, term, trunc, info = self.env.step(action)
@@ -208,8 +214,7 @@ class BasicEnvironment(Environment[TObs, TAction], gym.Wrapper[TObs, TAction, TO
         return self.get_observation()
 
 
-class BasicBatchedEnvironment(BatchedEnvironment[TBObs, TBAction],
-            gym.vector.VectorWrapper, Generic[TBObs, TBAction]):
+class BasicBatchedEnvironment(BatchedEnvironment[TBObs, TBAction], gym.vector.VectorWrapper, Generic[TBObs, TBAction]):
     """A simple BatchedEnvironment implementation that wraps a standard gym.vector.VectorEnv.
 
     Generic type parameters:
@@ -217,7 +222,14 @@ class BasicBatchedEnvironment(BatchedEnvironment[TBObs, TBAction],
         TBAction: The type associated with the batched action spec
     """
 
-    def __init__(self, env: gym.vector.VectorEnv, is_torch: bool = False, device: torch.device | None = None, *args: Any, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        env: gym.vector.VectorEnv,
+        is_torch: bool = False,
+        device: torch.device | None = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
         """Initialize a basic batched environment wrapper.
 
         Args:
@@ -292,4 +304,3 @@ class BasicBatchedEnvironment(BatchedEnvironment[TBObs, TBAction],
 
     def get_state(self) -> TObs:  # noqa: D102
         return self.get_observation()
-

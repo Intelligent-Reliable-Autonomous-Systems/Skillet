@@ -36,6 +36,7 @@ if args_cli.ros2_ws is None:
     if args_cli.ros2_ws is None:
         raise ValueError("ROS2 workspace path must be provided via --ros2_ws argument or ROS2_WS environment variable.")
 
+
 def main() -> None:
     """Run keyboard teleoperation with Isaac Lab manipulation environment.
 

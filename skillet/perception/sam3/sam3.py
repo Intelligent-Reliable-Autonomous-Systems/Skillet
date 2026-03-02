@@ -201,6 +201,7 @@ class SAM3:
             prompt_indices.append(prompt_idx)
 
         return np.array(prompt_indices, dtype=np.int64)
+
     def _resize_masks_torch(
         self,
         masks: torch.Tensor,
@@ -305,12 +306,8 @@ class SAM3VideoTracker:
         self._pred.tracker.imgsz = sz
         self._pred.tracker.model.set_imgsz(sz)
         stride = self._pred.stride
-        self._pred.tracker._bb_feat_sizes = [
-            [int(x / (stride * i)) for x in sz] for i in [1 / 4, 1 / 2, 1]
-        ]
-        self._pred.interpol_size = (
-            self._pred.tracker.model.memory_encoder.mask_downsampler.interpol_size
-        )
+        self._pred.tracker._bb_feat_sizes = [[int(x / (stride * i)) for x in sz] for i in [1 / 4, 1 / 2, 1]]
+        self._pred.interpol_size = self._pred.tracker.model.memory_encoder.mask_downsampler.interpol_size
 
     def _init_state(self) -> None:
         """Manually build inference_state, bypassing the dataset requirement."""
@@ -377,9 +374,9 @@ class SAM3VideoTracker:
         # Fake self.batch so that add_prompt / _prepare_geometric_prompts can
         # read the original image shape from self.batch[1][0].shape[:2].
         self._pred.batch = (
-            ["<online>"],    # paths
-            [image],         # original images (list of HWC numpy)
-            [""],            # string descriptors
+            ["<online>"],  # paths
+            [image],  # original images (list of HWC numpy)
+            [""],  # string descriptors
         )
 
         if not self._initialized:
@@ -390,9 +387,7 @@ class SAM3VideoTracker:
             )
             self._initialized = True
         else:
-            out = self._pred._run_single_frame_inference(
-                self._frame_idx, reverse=False
-            )
+            out = self._pred._run_single_frame_inference(self._frame_idx, reverse=False)
 
         self._frame_idx += 1
 
@@ -417,16 +412,9 @@ class SAM3VideoTracker:
 
         sorted_ids = sorted(obj_id_to_mask.keys())
         low_res = torch.cat([obj_id_to_mask[oid] for oid in sorted_ids], dim=0)
-        masks_full = (
-            F.interpolate(
-                low_res.float().unsqueeze(0), (orig_h, orig_w), mode="bilinear"
-            )[0]
-            > 0.5
-        )
+        masks_full = F.interpolate(low_res.float().unsqueeze(0), (orig_h, orig_w), mode="bilinear")[0] > 0.5
 
-        scores = torch.tensor(
-            [obj_id_to_score[oid] for oid in sorted_ids], device=device
-        )
+        scores = torch.tensor([obj_id_to_score[oid] for oid in sorted_ids], device=device)
         cls_raw = torch.tensor(
             [obj_id_to_cls.get(oid, 0) for oid in sorted_ids],
             dtype=torch.int64,
@@ -449,4 +437,3 @@ class SAM3VideoTracker:
         if t.dtype != torch.uint8:
             t = (t.float().clamp(0.0, 1.0) * 255.0).to(torch.uint8)
         return t.cpu().numpy()
-

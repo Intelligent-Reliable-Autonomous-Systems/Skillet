@@ -137,9 +137,7 @@ def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
         env = gym.wrappers.RecordVideo(env, **video_kwargs)
 
     # wrap around environment for rsl-rl
-    env = (
-        SkillIsaacEnvWrapper(env) if args_cli.skill else IsaacEnvWrapper(env)
-    )
+    env = SkillIsaacEnvWrapper(env) if args_cli.skill else IsaacEnvWrapper(env)
     env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
 
     # create runner from rsl-rl

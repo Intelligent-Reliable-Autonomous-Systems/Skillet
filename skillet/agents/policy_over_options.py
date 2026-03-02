@@ -64,8 +64,9 @@ class PolicyOverOptionsAgent(Generic[THighLevelObs, TLowLevelObs, TBAction, TSki
     def execute(self, env: BatchedEnvironment[Any, TBAction]) -> None:
         """Execute the policy over the options configured."""
         n_envs = env.num_envs
-        terminated = cast('Bool[torch.Tensor, "n_envs"]',
-            env.obs_spec.with_n_envs(n_envs).zeros(shape=(n_envs,), dtype=torch.bool))
+        terminated = cast(
+            'Bool[torch.Tensor, "n_envs"]', env.obs_spec.with_n_envs(n_envs).zeros(shape=(n_envs,), dtype=torch.bool)
+        )
         composite_skill = CompositeSkill[TLowLevelObs, TBAction, TSkillParams](self.skills)
 
         while not terminated.all():

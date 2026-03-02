@@ -13,7 +13,6 @@ from skillet.envs.ros2_env_wrapper import ROS2EnvWrapper
 from skillet.envs.util import parse_ros2_env_cfg, setup_ros
 from skillet.perception.perception import Perception
 
-
 parser = argparse.ArgumentParser(description="Visualize latest RGB-D frame from ROS2 service.")
 parser.add_argument(
     "--prompts", nargs="+", type=str, default=["block", "eraser"], help="Prompts to use for segmentation."

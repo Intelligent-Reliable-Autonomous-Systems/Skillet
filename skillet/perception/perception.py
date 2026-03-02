@@ -2,6 +2,7 @@
 
 This class polls the environment for RGB-D observations and localizes objects in the scene.
 """
+
 from __future__ import annotations
 
 from contextlib import suppress
@@ -301,8 +302,14 @@ class Perception:
                 ty = y1 + th + 6
             cv2.rectangle(out, (tx - 1, ty - th - 4), (tx + tw + 5, ty + 4), color, cv2.FILLED)
             cv2.putText(
-                out, label, (tx + 2, ty), _FONT, _FONT_SCALE,
-                (255, 255, 255), _FONT_THICKNESS, cv2.LINE_AA,
+                out,
+                label,
+                (tx + 2, ty),
+                _FONT,
+                _FONT_SCALE,
+                (255, 255, 255),
+                _FONT_THICKNESS,
+                cv2.LINE_AA,
             )
 
         return out
@@ -433,19 +440,23 @@ class Perception:
 
         self.stop_visualization()
 
+
 if __name__ == "__main__":
     env = RealsenseEnv()
-    perception = Perception(env, env.obs_spec, 8, prompts={
-        "wooden_block": "a light brown wooden block",
-        "purple_block": "a solid purple block without any writing or markings",
-        "yellow_block": "a solid yellow block without any writing or markings",
-        "green_block": "a solid green block without any writing or markings",
-        # "plastic_block": "a bright, solid colored plastic block, not brown wood"
-        })
+    perception = Perception(
+        env,
+        env.obs_spec,
+        8,
+        prompts={
+            "wooden_block": "a light brown wooden block",
+            "purple_block": "a solid purple block without any writing or markings",
+            "yellow_block": "a solid yellow block without any writing or markings",
+            "green_block": "a solid green block without any writing or markings",
+            # "plastic_block": "a bright, solid colored plastic block, not brown wood"
+        },
+    )
     perception.start_visualization(
-        display_rgb=True, display_depth=True,
-        segment_rgb=True, segment_depth=True,
-        segment_point_cloud=True
+        display_rgb=True, display_depth=True, segment_rgb=True, segment_depth=True, segment_point_cloud=True
     )
     perception.run_thread()
     while True:

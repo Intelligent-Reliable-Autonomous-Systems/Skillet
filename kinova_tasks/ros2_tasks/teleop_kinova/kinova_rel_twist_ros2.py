@@ -19,7 +19,9 @@ class KinovaROS2TwistRelEnv(KinovaROS2Env):
     Joint positions published to a twist controller
     """
 
-    def __init__(self, cfg: TeleOpKinovaROS2EnvCfg, ros: Ros, render_mode: str | None = None, **kwargs: dict[str, Any]) -> None:
+    def __init__(
+        self, cfg: TeleOpKinovaROS2EnvCfg, ros: Ros, render_mode: str | None = None, **kwargs: dict[str, Any]
+    ) -> None:
         cfg.episode_length_s = 10e12  # Basically make it so no resets
         cfg.decimation = 1.0
         cfg.dt = 1 / 60
@@ -28,7 +30,6 @@ class KinovaROS2TwistRelEnv(KinovaROS2Env):
 
         self.single_action_space = gym.spaces.Box(float("-inf"), float("inf"), shape=(7,))
         self.action_space = gym.vector.utils.batch_space(self.single_action_space, self.num_envs)
-
 
     def _pre_process_action(self, actions: torch.Tensor) -> np.ndarray:
         """Pre process the robot action.
@@ -57,16 +58,8 @@ class KinovaROS2TwistRelEnv(KinovaROS2Env):
         """
         cartesian_pos = cartesian_pos.tolist()
         twist_cmd = {
-            "linear": {
-                "x": cartesian_pos[0],
-                "y": cartesian_pos[1],
-                "z":cartesian_pos[2]
-            },
-            "angular": {
-                "x": cartesian_pos[3],
-                "y": cartesian_pos[4],
-                "z": cartesian_pos[5]
-            }
+            "linear": {"x": cartesian_pos[0], "y": cartesian_pos[1], "z": cartesian_pos[2]},
+            "angular": {"x": cartesian_pos[3], "y": cartesian_pos[4], "z": cartesian_pos[5]},
         }
 
         gripper_val = float(cartesian_pos[-1])
@@ -77,7 +70,7 @@ class KinovaROS2TwistRelEnv(KinovaROS2Env):
         gripper_goal = {"command": {"name": self.cfg.gripper_joint_names, "position": [gripper_val]}}
 
         self.twist_vel_pub.publish(twist_cmd)
-        
+
         if gripper_goal != self.curr_gripper_goal:
             _ = self.gripper_client.send_goal(
                 gripper_goal, self._gripper_result_cb, self._gripper_feedback_cb, self._gripper_error_cb

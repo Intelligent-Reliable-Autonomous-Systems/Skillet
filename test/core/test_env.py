@@ -106,11 +106,20 @@ class TestEnvironmentBaseInterface:
         """Default obs_spec property raises NotImplementedError."""
 
         class Stub(_EnvironmentBase):
-            def supports_observation_spec(self, obs_spec): return True  # noqa: ANN001, ANN202
-            def supports_action_spec(self, action_spec): return True  # noqa: ANN001, ANN202
-            def get_observation(self, obs_spec=None): return None  # noqa: ANN001, ANN202
-            def reset(self, *, seed=None, options=None): return None, {}  # noqa: ANN001, ANN202
-            def step(self, action, action_spec=None): return None, 0, False, False, {}  # noqa: ANN001, ANN202
+            def supports_observation_spec(self, obs_spec):
+                return True  # noqa: ANN001, ANN202
+
+            def supports_action_spec(self, action_spec):
+                return True  # noqa: ANN001, ANN202
+
+            def get_observation(self, obs_spec=None):
+                return None  # noqa: ANN001, ANN202
+
+            def reset(self, *, seed=None, options=None):
+                return None, {}  # noqa: ANN001, ANN202
+
+            def step(self, action, action_spec=None):
+                return None, 0, False, False, {}  # noqa: ANN001, ANN202
 
         stub = Stub()
         with pytest.raises(NotImplementedError):
@@ -120,11 +129,20 @@ class TestEnvironmentBaseInterface:
         """Default action_spec property raises NotImplementedError."""
 
         class Stub(_EnvironmentBase):
-            def supports_observation_spec(self, obs_spec): return True
-            def supports_action_spec(self, action_spec): return True
-            def get_observation(self, obs_spec=None): return None
-            def reset(self, *, seed=None, options=None): return None, {}
-            def step(self, action, action_spec=None): return None, 0, False, False, {}
+            def supports_observation_spec(self, obs_spec):
+                return True
+
+            def supports_action_spec(self, action_spec):
+                return True
+
+            def get_observation(self, obs_spec=None):
+                return None
+
+            def reset(self, *, seed=None, options=None):
+                return None, {}
+
+            def step(self, action, action_spec=None):
+                return None, 0, False, False, {}
 
         stub = Stub()
         with pytest.raises(NotImplementedError):
@@ -134,11 +152,20 @@ class TestEnvironmentBaseInterface:
         """Default get_state() raises NotImplementedError."""
 
         class Stub(_EnvironmentBase):
-            def supports_observation_spec(self, obs_spec): return True
-            def supports_action_spec(self, action_spec): return True
-            def get_observation(self, obs_spec=None): return None
-            def reset(self, *, seed=None, options=None): return None, {}
-            def step(self, action, action_spec=None): return None, 0, False, False, {}
+            def supports_observation_spec(self, obs_spec):
+                return True
+
+            def supports_action_spec(self, action_spec):
+                return True
+
+            def get_observation(self, obs_spec=None):
+                return None
+
+            def reset(self, *, seed=None, options=None):
+                return None, {}
+
+            def step(self, action, action_spec=None):
+                return None, 0, False, False, {}
 
         stub = Stub()
         with pytest.raises(NotImplementedError):

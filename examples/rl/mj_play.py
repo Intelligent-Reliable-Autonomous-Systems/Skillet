@@ -1,23 +1,55 @@
 """Script to play RL agent with RSL-RL."""
 
+import argparse
 import os
 import sys
-from dataclasses import asdict, dataclass
-from pathlib import Path
+from dataclasses import dataclass
 from typing import Literal
 
-import torch
+import gymnasium as gym
+import numpy as np
 import tyro
-from mjlab.envs import ManagerBasedRlEnv
-from mjlab.rl import MjlabOnPolicyRunner, RslRlVecEnvWrapper
-from mjlab.tasks.registry import list_tasks, load_env_cfg, load_rl_cfg, load_runner_cls
-from mjlab.tasks.tracking.mdp import MotionCommandCfg
-from mjlab.utils.os import get_wandb_checkpoint_path
-from mjlab.utils.torch import configure_torch_backends
-from mjlab.utils.wrappers import VideoRecorder
 from mjlab.viewer import NativeMujocoViewer, ViserPlayViewer
 
-from skillet.envs.util import parse_mj_env_cfg
+import kinova_tasks.mj_tasks  # noqa: F401
+from skillet.envs.compatibility.rsl_rl import RslRlVecEnvWrapper
+from skillet.envs.mj_env_wrapper import MJEnvWrapper
+from skillet.envs.util import get_checkpoint_path, parse_mj_env_cfg
+from skillet.envs.util.dict import print_dict
+from skillet.envs.util.hydra import hydra_task_config
+from skillet.rl.cfg import RslRlBaseRunnerCfg
+from skillet.rl.exporter import export_policy_as_jit, export_policy_as_onnx
+from skillet.rl.rsl_rl import cli_args
+from skillet.rl.rsl_rl.runners import OnPolicyRunner
+
+parser = argparse.ArgumentParser(description="Train an RL agent with RSL-RL.")
+parser.add_argument("--video", action="store_true", default=False, help="Record videos during training.")
+parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
+parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
+parser.add_argument("--task", type=str, default=None, help="Name of the task.")
+parser.add_argument(
+    "--agent", type=str, default="rsl_rl_cfg_entry_point", help="Name of the RL agent configuration entry point."
+)
+parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment")
+parser.add_argument("--skill", action="store_true", help="If to use a skill environment or not")
+parser.add_argument(
+    "--use_pretrained_checkpoint",
+    action="store_true",
+    help="Use the pre-trained checkpoint from Nucleus.",
+)
+parser.add_argument("--real-time", action="store_true", default=False, help="Run in real-time, if possible.")
+parser.add_argument("--device", type=str, default="cuda", choices={"cuda", "cpu"}, help="Device to run on: cuda/cpu")
+parser.add_argument("--viewer", type=str, default="auto", help="Mujoco viewer backend to use/")
+cli_args.add_rsl_rl_args(parser)
+
+# append AppLauncher cli args
+args_cli, hydra_args = parser.parse_known_args()
+# always enable cameras to record video
+if args_cli.video:
+    args_cli.enable_cameras = True
+
+# clear out sys.argv for Hydra
+sys.argv = [sys.argv[0]] + hydra_args
 
 
 @dataclass(frozen=True)
@@ -43,78 +75,138 @@ class PlayConfig:
     _demo_mode: tyro.conf.Suppress[bool] = False
 
 
-def run_play(task_id: str, cfg: PlayConfig):
+@hydra_task_config(args_cli.task, args_cli.agent)
+def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
+    """Play with RSL-RL agent."""
+    np.set_printoptions(suppress=True, precision=4)
+
+    # override configurations with non-hydra CLI arguments
+    agent_cfg: RslRlBaseRunnerCfg = cli_args.update_rsl_rl_cfg(agent_cfg, args_cli)
+    env_cfg = parse_mj_env_cfg(
+        args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs
+    )  # Override hydra task cfg to avoid serialization
+    env_cfg.scene.num_envs = args_cli.num_envs if args_cli.num_envs is not None else env_cfg.scene.num_envs
+
+    # set the environment seed so
+    env_cfg.seed = agent_cfg.seed
+    env_cfg.sim.device = args_cli.device if args_cli.device is not None else env_cfg.sim.device
+
+    # specify directory for logging experiments
+    log_root_path = os.path.join("_logs", "rsl_rl", agent_cfg.experiment_name)
+    log_root_path = os.path.abspath(log_root_path)
+    print(f"[INFO] Loading experiment from directory: {log_root_path}")
+    if args_cli.checkpoint:
+        resume_path = os.path.abspath(args_cli.checkpoint)
+    else:
+        resume_path = get_checkpoint_path(log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
+
+    log_dir = os.path.dirname(resume_path)
+
+    # set the log directory for the environment (works for all environment types)
+    env_cfg.log_dir = log_dir
+
+    # create isaac environment
+    env = gym.make(args_cli.task, cfg=env_cfg)
+
+    # wrap for video recording
+    if args_cli.video:
+        video_kwargs = {
+            "video_folder": os.path.join(log_dir, "videos", "play"),
+            "step_trigger": lambda step: step == 0,
+            "video_length": args_cli.video_length,
+            "disable_logger": True,
+        }
+        print("[INFO] Recording videos during training.")
+        print_dict(video_kwargs, nesting=4)
+        env = gym.wrappers.RecordVideo(env, **video_kwargs)
+
+    # wrap around environment for rsl-rl
+    env = MJEnvWrapper(env)
+    env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
+
+    print(f"[INFO]: Loading model checkpoint from: {resume_path}")
+    # load previously trained model
+    if agent_cfg.class_name == "OnPolicyRunner":
+        runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=None, device=agent_cfg.device)
+    else:
+        raise ValueError(f"Unsupported runner class: {agent_cfg.class_name}")
+    runner.load(resume_path)
+
+    # obtain the trained policy for inference
+    policy = runner.get_inference_policy(device=env.unwrapped.device)
+
+    # extract the neural network module
+    # we do this in a try-except to maintain backwards compatibility.
+    try:
+        # version 2.3 onwards
+        policy_nn = runner.alg.policy
+    except AttributeError:
+        # version 2.2 and below
+        policy_nn = runner.alg.actor_critic
+
+    # extract the normalizer
+    if hasattr(policy_nn, "actor_obs_normalizer"):
+        normalizer = policy_nn.actor_obs_normalizer
+    elif hasattr(policy_nn, "student_obs_normalizer"):
+        normalizer = policy_nn.student_obs_normalizer
+    else:
+        normalizer = None
+
+    # export policy to onnx/jit
+    export_model_dir = os.path.join(os.path.dirname(resume_path), "exported")
+    export_policy_as_jit(policy_nn, normalizer=normalizer, path=export_model_dir, filename="policy.pt")
+    export_policy_as_onnx(policy_nn, normalizer=normalizer, path=export_model_dir, filename="policy.onnx")
+
+    # Handle "auto" viewer selection.
+    if args_cli.viewer == "auto":
+        has_display = bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+        resolved_viewer = "native" if has_display else "viser"
+        del has_display
+    else:
+        resolved_viewer = args_cli.viewer
+
+    if resolved_viewer == "native":
+        NativeMujocoViewer(env, policy).run()
+    elif resolved_viewer == "viser":
+        ViserPlayViewer(env, policy).run()
+    else:
+        raise RuntimeError(f"Unsupported viewer backend: {resolved_viewer}")
+
+    env.close()
+
+    """all_tasks = list_tasks()
+    task_id, remaining_args = tyro.cli(
+        tyro.extras.literal_type_from_choices(all_tasks),
+        add_help=False,
+        return_unknown_args=True,
+        config=mjlab.TYRO_FLAGS,
+    )
+
+    # Parse the rest of the arguments + allow overriding env_cfg and agent_cfg.
+    agent_cfg = load_rl_cfg(task_id)
+
+    cfg = tyro.cli(
+        PlayConfig,
+        args=remaining_args,
+        default=PlayConfig(),
+        prog=sys.argv[0] + f" {task_id}",
+        config=mjlab.TYRO_FLAGS,
+    )
+    del remaining_args, agent_cfg
+
     configure_torch_backends()
 
     device = cfg.device or ("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    env_cfg = parse_mj_env_cfg(
-        args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs
-    )  # Override hydra task cfg to avoid serialization
+    # env_cfg = parse_mj_env_cfg(
+    #     args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs
+    # )  # Override hydra task cfg to avoid serialization
 
-    load_env_cfg(task_id, play=True)
+    env_cfg = load_env_cfg(task_id, play=True)
     agent_cfg = load_rl_cfg(task_id)
 
     DUMMY_MODE = cfg.agent in {"zero", "random"}
     TRAINED_MODE = not DUMMY_MODE
-
-    # Disable terminations if requested (useful for viewing motions).
-    if cfg.no_terminations:
-        env_cfg.terminations = {}
-        print("[INFO]: Terminations disabled")
-
-    # Check if this is a tracking task by checking for motion command.
-    is_tracking_task = "motion" in env_cfg.commands and isinstance(env_cfg.commands["motion"], MotionCommandCfg)
-
-    if is_tracking_task and cfg._demo_mode:
-        # Demo mode: use uniform sampling to see more diversity with num_envs > 1.
-        motion_cmd = env_cfg.commands["motion"]
-        assert isinstance(motion_cmd, MotionCommandCfg)
-        motion_cmd.sampling_mode = "uniform"
-
-    if is_tracking_task:
-        motion_cmd = env_cfg.commands["motion"]
-        assert isinstance(motion_cmd, MotionCommandCfg)
-
-        # Check for local motion file first (works for both dummy and trained modes).
-        if cfg.motion_file is not None and Path(cfg.motion_file).exists():
-            print(f"[INFO]: Using local motion file: {cfg.motion_file}")
-            motion_cmd.motion_file = cfg.motion_file
-        elif DUMMY_MODE:
-            if not cfg.registry_name:
-                raise ValueError(
-                    "Tracking tasks require either:\n"
-                    "  --motion-file /path/to/motion.npz (local file)\n"
-                    "  --registry-name your-org/motions/motion-name (download from WandB)"
-                )
-            # Check if the registry name includes alias, if not, append ":latest".
-            registry_name = cfg.registry_name
-            if ":" not in registry_name:
-                registry_name = registry_name + ":latest"
-            import wandb
-
-            api = wandb.Api()
-            artifact = api.artifact(registry_name)
-            motion_cmd.motion_file = str(Path(artifact.download()) / "motion.npz")
-        else:
-            if cfg.motion_file is not None:
-                print(f"[INFO]: Using motion file from CLI: {cfg.motion_file}")
-                motion_cmd.motion_file = cfg.motion_file
-            else:
-                import wandb
-
-                api = wandb.Api()
-                if cfg.wandb_run_path is None and cfg.checkpoint_file is not None:
-                    raise ValueError(
-                        "Tracking tasks require `motion_file` when using `checkpoint_file`, "
-                        "or provide `wandb_run_path` so the motion artifact can be resolved."
-                    )
-                if cfg.wandb_run_path is not None:
-                    wandb_run = api.run(str(cfg.wandb_run_path))
-                    art = next((a for a in wandb_run.used_artifacts() if a.type == "motions"), None)
-                    if art is None:
-                        raise RuntimeError("No motion artifact found in the run.")
-                    motion_cmd.motion_file = str(Path(art.download()) / "motion.npz")
 
     log_dir: Path | None = None
     resume_path: Path | None = None
@@ -138,26 +230,9 @@ def run_play(task_id: str, cfg: PlayConfig):
 
     if cfg.num_envs is not None:
         env_cfg.scene.num_envs = cfg.num_envs
-    if cfg.video_height is not None:
-        env_cfg.viewer.height = cfg.video_height
-    if cfg.video_width is not None:
-        env_cfg.viewer.width = cfg.video_width
 
     render_mode = "rgb_array" if (TRAINED_MODE and cfg.video) else None
-    if cfg.video and DUMMY_MODE:
-        print("[WARN] Video recording with dummy agents is disabled (no checkpoint/log_dir).")
     env = ManagerBasedRlEnv(cfg=env_cfg, device=device, render_mode=render_mode)
-
-    if TRAINED_MODE and cfg.video:
-        print("[INFO] Recording videos during play")
-        assert log_dir is not None  # log_dir is set in TRAINED_MODE block
-        env = VideoRecorder(
-            env,
-            video_folder=log_dir / "videos" / "play",
-            step_trigger=lambda step: step == 0,
-            video_length=cfg.video_length,
-            disable_logger=True,
-        )
 
     env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
     if DUMMY_MODE:
@@ -199,35 +274,7 @@ def run_play(task_id: str, cfg: PlayConfig):
     else:
         raise RuntimeError(f"Unsupported viewer backend: {resolved_viewer}")
 
-    env.close()
-
-
-def main():
-    # Parse first argument to choose the task.
-    # Import tasks to populate the registry.
-    import mjlab.tasks
-
-    all_tasks = list_tasks()
-    chosen_task, remaining_args = tyro.cli(
-        tyro.extras.literal_type_from_choices(all_tasks),
-        add_help=False,
-        return_unknown_args=True,
-        config=mjlab.TYRO_FLAGS,
-    )
-
-    # Parse the rest of the arguments + allow overriding env_cfg and agent_cfg.
-    agent_cfg = load_rl_cfg(chosen_task)
-
-    args = tyro.cli(
-        PlayConfig,
-        args=remaining_args,
-        default=PlayConfig(),
-        prog=sys.argv[0] + f" {chosen_task}",
-        config=mjlab.TYRO_FLAGS,
-    )
-    del remaining_args, agent_cfg
-
-    run_play(chosen_task, args)
+    env.close()"""
 
 
 if __name__ == "__main__":

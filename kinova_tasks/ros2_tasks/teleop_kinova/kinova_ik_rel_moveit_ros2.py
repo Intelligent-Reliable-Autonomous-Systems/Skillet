@@ -19,13 +19,16 @@ from skillet.envs.ros2 import (
 from ..kinova.kinova_ros2 import KinovaROS2Env
 from .kinova_ik_rel_ros2 import TeleOpKinovaROS2EnvCfg
 
+
 class KinovaROS2IKRelMoveItEnv(KinovaROS2Env):
     """Relative inverse kinematics control assuming a 7 DoF action space (delta xyz, delta rpy + gripper).
 
     Joint positions published to MoveIt to resolve collisions.
     """
 
-    def __init__(self, cfg: TeleOpKinovaROS2EnvCfg, ros: Ros, render_mode: str | None = None, **kwargs: dict[str, Any]) -> None:
+    def __init__(
+        self, cfg: TeleOpKinovaROS2EnvCfg, ros: Ros, render_mode: str | None = None, **kwargs: dict[str, Any]
+    ) -> None:
         cfg.episode_length_s = 10e12  # Basically make it so no resets
         cfg.decimation = 60.0
         cfg.dt = 1 / 60

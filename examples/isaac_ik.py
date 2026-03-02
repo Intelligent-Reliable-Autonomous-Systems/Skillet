@@ -62,7 +62,6 @@ def main() -> None:
     # Set up Skill executor and environment in framework
     env = IsaacEnvWrapper(env)
 
-
     print("[INFO][Main] Testing Executor environment")
     print(f"[INFO][Main] Gym observation space: {env.observation_space}")
     print(f"[INFO][Main] Gym action space: {env.action_space}")
@@ -71,9 +70,7 @@ def main() -> None:
     ik_ee_pose_policy = PoseAbsIKEEPolicy(env.obs_spec_ikee, env.action_spec)
     # Skills
     skill_length = 100
-    reach_pose_skill = ReachPoseSkill(
-        name="reach_pose_skill", policy=ik_ee_pose_policy, length=skill_length
-    )
+    reach_pose_skill = ReachPoseSkill(name="reach_pose_skill", policy=ik_ee_pose_policy, length=skill_length)
     skills: list[BatchedSkill[IKEE_Obs, BxM_Action, XYZ_QUAT_Params]] = [reach_pose_skill]
 
     # Parameters policy
@@ -91,10 +88,11 @@ def main() -> None:
     )
 
     # High-level policy
-    options_spec = SELECT_OPTIONS_SPEC_BATCHED \
-        .bind(n_options=len(skills)) \
-        .with_n_envs(args_cli.num_envs) \
+    options_spec = (
+        SELECT_OPTIONS_SPEC_BATCHED.bind(n_options=len(skills))
+        .with_n_envs(args_cli.num_envs)
         .replace(device=env.device)
+    )
     policy_over_options = RandomPolicy(env.obs_spec, options_spec)
 
     policy_over_options_agent = PolicyOverOptionsAgent(

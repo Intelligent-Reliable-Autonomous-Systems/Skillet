@@ -261,9 +261,7 @@ class IsaacEnvWrapper(
         return obs_dict, info
 
     @override
-    def step(
-        self, action: BxM_Action
-    ) -> tuple[
+    def step(self, action: BxM_Action) -> tuple[
         BxN_Obs,
         Float[torch.Tensor, "b"],  # noqa: F821
         Bool[torch.Tensor, "b"],  # noqa: F821
@@ -289,7 +287,9 @@ class IsaacEnvWrapper(
     Helper functions
     """
 
-    def _get_joint_positions(self, env_ids: torch.Tensor | None = None, joint_ids: list | None = None) -> Float[torch.Tensor, "b n_joints"]:
+    def _get_joint_positions(
+        self, env_ids: torch.Tensor | None = None, joint_ids: list | None = None
+    ) -> Float[torch.Tensor, "b n_joints"]:
         """Return the joint positions (1 value per dof).
 
         Args:
@@ -305,7 +305,9 @@ class IsaacEnvWrapper(
             joint_ids = self._joint_ids
         return self.robot.data.joint_pos[:, joint_ids][env_ids]
 
-    def _get_joint_velocities(self, env_ids: torch.Tensor | None = None, joint_ids: list | None = None) -> Float[torch.Tensor, "b n_joints 3"]:
+    def _get_joint_velocities(
+        self, env_ids: torch.Tensor | None = None, joint_ids: list | None = None
+    ) -> Float[torch.Tensor, "b n_joints 3"]:
         """Return the joint velocities.
 
         Args:
@@ -556,7 +558,9 @@ class IsaacEnvWrapper(
         ee_ang_vel_b = quat_apply_inverse(self.robot.data.body_quat_w[env_ids, base_link_idx], relative_vel_w[:, 3:6])
         return torch.cat([ee_lin_vel_b, ee_ang_vel_b], dim=-1)
 
-    def _get_joint_centers(self, env_ids: torch.Tensor = None, arm_joint_ids: torch.Tensor = None) -> Float[torch.Tensor, "b n_arm_joints"]:
+    def _get_joint_centers(
+        self, env_ids: torch.Tensor = None, arm_joint_ids: torch.Tensor = None
+    ) -> Float[torch.Tensor, "b n_arm_joints"]:
         """Return the joint centers of the arm.
 
         Args:

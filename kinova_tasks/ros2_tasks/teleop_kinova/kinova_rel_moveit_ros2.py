@@ -19,7 +19,9 @@ class KinovaROS2IKRelMoveItEnv(KinovaROS2Env):
     Joint positions published to MoveIt to resolve collisions.
     """
 
-    def __init__(self, cfg: TeleOpKinovaROS2EnvCfg, ros: Ros, render_mode: str | None = None, **kwargs: dict[str, Any]) -> None:
+    def __init__(
+        self, cfg: TeleOpKinovaROS2EnvCfg, ros: Ros, render_mode: str | None = None, **kwargs: dict[str, Any]
+    ) -> None:
         cfg.episode_length_s = 10e12  # Basically make it so no resets
         cfg.decimation = 60.0
         cfg.dt = 1 / 60

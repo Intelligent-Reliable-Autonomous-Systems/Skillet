@@ -89,10 +89,12 @@ class ROS2SkilletEnv(
         self.obs_spec_rgbd = RGBD_SPEC_BATCHED.bind(height=480, width=640).replace(device=self.device)
         """Specification of RGB-D observations and metadata. Bound to the height and width of the RGB-D camera."""
         self.obs_spec_ikee = IK_EE_SPEC_BATCHED.bind(
-            n_joints=len(self._joint_ids), n_arm_joints=len(self._joint_ids[:-1])).replace(device=self.device)
+            n_joints=len(self._joint_ids), n_arm_joints=len(self._joint_ids[:-1])
+        ).replace(device=self.device)
         """Specification of IK-EE observations."""
         self.obs_spec_osc = OSC_SPEC_BATCHED.bind(
-            n_joints=len(self._joint_ids), n_arm_joints=len(self._joint_ids[:-1])).replace(device=self.device)
+            n_joints=len(self._joint_ids), n_arm_joints=len(self._joint_ids[:-1])
+        ).replace(device=self.device)
         """Specification of OSC observations."""
         self._action_spec = ActionSpec[BxM_Action](
             name="action",
@@ -293,9 +295,7 @@ class ROS2SkilletEnv(
         return self.get_observation(self.obs_spec_state)
 
     @override
-    def step(
-        self, action: BxM_Action
-    ) -> tuple[
+    def step(self, action: BxM_Action) -> tuple[
         BxN_Obs,
         Float[torch.Tensor, "b"],  # noqa: F821
         Bool[torch.Tensor, "b"],  # noqa: F821
