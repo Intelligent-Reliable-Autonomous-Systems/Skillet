@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 from tensordict import TensorDict
 
-from skillet.rl.rsl_rl.env import VecEnv
+from skillet.envs.rsl_rl import RslRlVecEnv
 from skillet.rl.rsl_rl.networks import MLP, EmpiricalDiscountedVariationNormalization, EmpiricalNormalization
 
 

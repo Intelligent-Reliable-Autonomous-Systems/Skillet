@@ -30,38 +30,38 @@ class RslRlVecEnv(ABC):
     action is applied to all environments and the same type of observation is returned from all environments.
     """
 
-    @abstractmethod
     @property
+    @abstractmethod
     def num_envs(self) -> int:
         """Number of environments."""
         raise NotImplementedError
 
-    @abstractmethod
     @property
+    @abstractmethod
     def num_actions(self) -> int:
         """Number of actions."""
         raise NotImplementedError
 
-    @abstractmethod
     @property
+    @abstractmethod
     def max_episode_length(self) -> int | torch.Tensor:
         """Maximum episode length."""
         raise NotImplementedError
 
-    @abstractmethod
     @property
+    @abstractmethod
     def episode_length_buf(self) -> torch.Tensor:
         """Buffer for current episode lengths."""
         raise NotImplementedError
 
-    @abstractmethod
     @property
+    @abstractmethod
     def device(self) -> torch.device | str:
         """Device to use."""
         raise NotImplementedError
 
-    @abstractmethod
     @property
+    @abstractmethod
     def cfg(self) -> dict | object:
         """Configuration object."""
         raise NotImplementedError
