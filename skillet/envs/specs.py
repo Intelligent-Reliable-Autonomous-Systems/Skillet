@@ -33,6 +33,7 @@ RGBD_SPEC_BATCHED = ObservationSpec[dict[str, BatchedSpaceItem]](
 )
 
 IKEE_Obs = Mapping[str, Float[torch.Tensor, "b ..."]]
+OSC_Obs = Mapping[str, Float[torch.Tensor, "b ..."]]
 IK_EE_SPEC_BATCHED = ObservationSpec[IKEE_Obs](
     space=gym.spaces.Dict(
         {
@@ -53,7 +54,7 @@ IK_EE_SPEC_BATCHED = ObservationSpec[IKEE_Obs](
     n_envs=-1,
 )
 
-OSC_SPEC_BATCHED = ObservationSpec[Mapping[str, Float[torch.Tensor, "b ..."]]](
+OSC_SPEC_BATCHED = ObservationSpec[OSC_Obs](
     space=gym.spaces.Dict(
         {
             "joint_pos": ParameterizedBox(low=-torch.pi, high=torch.pi, shape=("n_joints",)),

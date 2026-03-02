@@ -40,7 +40,10 @@ parser.add_argument("--device", type=str, default="cuda", choices={"cuda", "cpu"
 parser.add_argument(
     "--ros2_ws", type=str, default=None, required=True, help="Absolute path to ROS2 workspace containing bringup files"
 )
+parser.add_argument("--robot_ip", default="192.168.8.10", type=str, help="IP of the robot.")
 parser.add_argument("--launch_ros", action="store_true", help="If to launch robot bringup files.")
+parser.add_argument("--use_fake_hardware", default="false", type=str, help="If to use fake hardware (RViz) or not.")
+
 cli_args.add_rsl_rl_args(parser)
 args_cli, hydra_args = parser.parse_known_args()
 if args_cli.ros2_ws is None:
@@ -84,6 +87,8 @@ def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
 
     # Set the log directory for the environment
     env_cfg.log_dir = log_dir
+    env_cfg.robot_ip = args_cli.robot_ip
+    env_cfg.use_fake_hardware = args_cli.use_fake_hardware
     env_cfg.launch_ros = args_cli.launch_ros
 
     env = gym.make(args_cli.task, cfg=env_cfg, ros=setup_ros())
