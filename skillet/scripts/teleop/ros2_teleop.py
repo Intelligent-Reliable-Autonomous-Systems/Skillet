@@ -1,12 +1,15 @@
-"""Script to run a keyboard teleoperation with ROS2 manipulation environments."""
+"""ros2_teleop.py.
+
+Script to run a keyboard teleoperation with ROS2 manipulation environments.
+
+Written by Will Solow, 2026.
+"""
 
 import argparse
 import os
-from collections.abc import Callable
 
 import gymnasium as gym
 import torch
-from jaxtyping import Float
 
 import kinova_tasks.ros2_tasks  # noqa: F401
 from skillet.controllers.devices import Se3Keyboard, Se3KeyboardCfg
@@ -28,6 +31,9 @@ parser.add_argument("--sensitivity", type=float, default=1.0, help="Sensitivity 
 parser.add_argument(
     "--ros2_ws", type=str, default=None, help="Absolute path to ROS2 workspace containing bringup files"
 )
+parser.add_argument("--robot_ip", default="192.168.8.10", type=str, help="IP of the robot.")
+parser.add_argument("--launch_ros", action="store_true", help="If to launch robot bringup files.")
+parser.add_argument("--use_fake_hardware", default="false", type=str, help="If to use fake hardware (RViz) or not.")
 
 # parse the arguments
 args_cli = parser.parse_args()
@@ -38,14 +44,9 @@ if args_cli.ros2_ws is None:
 
 
 def main() -> None:
-    """Run keyboard teleoperation with Isaac Lab manipulation environment.
+    """Run keyboard teleoperation with ROS2.
 
-    Creates the environment, sets up teleoperation interfaces and callbacks,
-    and runs the main simulation loop until the application is closed.
-
-    Returns:
-        None
-
+    Defaults to ROS2-Kinova-Twist-Rel-v0 environment which assumes that actions are velocities of the end effector in 6 DoF.
     """
     env_cfg = parse_ros2_env_cfg(
         args_cli.task,
@@ -53,21 +54,17 @@ def main() -> None:
         num_envs=args_cli.num_envs,
         ros2_workspace=args_cli.ros2_ws,
     )
-    env_cfg.robot_ip = "192.168.1.10"
-    env_cfg.use_fake_hardware = "false"
-    env_cfg.launch_ros = False
+    env_cfg.robot_ip = args_cli.robot_ip
+    env_cfg.use_fake_hardware = args_cli.use_fake_hardware
+    env_cfg.launch_ros = args_cli.launch_ros
 
     # create environment
     env = gym.make(args_cli.task, cfg=env_cfg, ros=setup_ros())
 
-    # Set up Skill executor and environment in framework
+    # Wrap environment in Skillet
     env = ROS2SkilletEnv(env)
 
-    # Flags for controlling teleoperation flow
-    teleoperation_active = True
-
     # Always active for other devices
-    teleoperation_active = True  # TODO maybe switch to False
     sensitivity = args_cli.sensitivity
     # Create teleop device from config if present, otherwise create manually
     if args_cli.teleop_device.lower() == "keyboard":
@@ -77,29 +74,19 @@ def main() -> None:
     else:
         raise ValueError(f"Unsupported teleop device: {args_cli.teleop_device}")
 
-    print(f"Using teleop device: {teleop_interface}")
+    print(f"[INFO] Using teleop device: {teleop_interface}")
 
-    # reset environment
     env.reset()
     teleop_interface.reset()
 
-    print("Teleoperation started")
+    print("[INFO] Teleoperation started")
 
-    # simulate environment
     while True:
-        # run everything in inference mode
         with torch.inference_mode():
-            # get device command
             action = teleop_interface.advance()
-
-            # Only apply teleop commands when active
-            if teleoperation_active:
-                # process actions
-                actions = action.repeat(env.num_envs, 1)
-                # apply actions
-                env.step(actions)
+            actions = action.repeat(env.num_envs, 1)
+            env.step(actions)
 
 
 if __name__ == "__main__":
-    # run the main function
     main()
