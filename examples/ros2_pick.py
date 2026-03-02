@@ -60,7 +60,7 @@ def main() -> None:
     )
 
     env = KinovaROS2ReachEnv(cfg=env_cfg, ros=setup_ros())
-    env = ROS2SkilletEnv[BxN_Obs, BxM_Action](env)
+    env = ROS2SkilletEnv(env)
     env.reset()
 
     print("[INFO][Main] Testing Executor environment")

@@ -41,7 +41,6 @@ import torch
 from kinova_tasks.isaac_tasks.factory import create_isaac_env
 from skillet.agents.policy_over_options import PolicyOverOptionsAgent
 from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
-from skillet.envs.specs import BxM_Action, BxN_Obs
 from skillet.policy.dummy import FixedSequencePolicy, RandomPolicy
 from skillet.policy.ik_ee import PoseAbsIKEEPolicy
 from skillet.skill import ReachPoseSkill
@@ -49,6 +48,7 @@ from skillet.skill.specs import SELECT_OPTIONS_SPEC_BATCHED, XYZ_QUAT_Params
 
 if TYPE_CHECKING:
     from skillet.core import BatchedSkill
+    from skillet.envs.specs import BxM_Action, IKEE_Obs
 
 
 def main() -> None:
@@ -60,7 +60,7 @@ def main() -> None:
     }
     env = create_isaac_env(args_cli.task, cfg)
     # Set up Skill executor and environment in framework
-    env = IsaacEnvWrapper[BxN_Obs, BxM_Action](env)
+    env = IsaacEnvWrapper(env)
 
 
     print("[INFO][Main] Testing Executor environment")
@@ -74,7 +74,7 @@ def main() -> None:
     reach_pose_skill = ReachPoseSkill(
         name="reach_pose_skill", policy=ik_ee_pose_policy, length=skill_length
     )
-    skills: list[BatchedSkill[BxN_Obs, BxM_Action, XYZ_QUAT_Params]] = [reach_pose_skill]
+    skills: list[BatchedSkill[IKEE_Obs, BxM_Action, XYZ_QUAT_Params]] = [reach_pose_skill]
 
     # Parameters policy
     fixed_param_policy = FixedSequencePolicy(

@@ -28,27 +28,12 @@ from skillet.core.math import (
 from skillet.core.spaces import ActionSpec
 from skillet.envs.compatibility.isaac_lab import DirectRlInterface
 from skillet.envs.ros2 import ROS2RLEnv
-from skillet.envs.specs import IK_EE_SPEC_BATCHED, OSC_SPEC_BATCHED, RGBD_SPEC_BATCHED
-
-TBatchedObsTorch = TypeVar(
-    "TBatchedObsTorch", bound=Float[torch.Tensor, "b ..."] | Mapping[str, Float[torch.Tensor, "b ..."]]
-)
-"""A generic type of the batched observation tensor returned by the environment.
-
-Can be a batched observation tensor or a dictionary of batched observation tensors.
-
-torch.Tensor[(b, ...), float] | Mapping[str, torch.Tensor[(b, ...), float]]"""
-TBatchedActionTorch = TypeVar("TBatchedActionTorch", bound=Float[torch.Tensor, "b n"])
-"""A generic type of the batched action tensor expected by the environment.
-
-torch.Tensor[(b, n), float]
-"""
+from skillet.envs.specs import IK_EE_SPEC_BATCHED, OSC_SPEC_BATCHED, RGBD_SPEC_BATCHED, BxM_Action, BxN_Obs
 
 
 class ROS2SkilletEnv(
-    BatchedEnvironment[TBatchedObsTorch, TBatchedActionTorch],
+    BatchedEnvironment[BxN_Obs, BxM_Action],
     DirectRlInterface,
-    Generic[TBatchedObsTorch, TBatchedActionTorch],
 ):
     """An environment that interfaces with ROS2 and is compatible with skillet and IsaacLab DirectRLEnv.
 
@@ -57,10 +42,6 @@ class ROS2SkilletEnv(
 
     def __init__(self, env: ROS2RLEnv) -> None:
         """Initialize the environment.
-
-        Generic Args:
-            TBatchedObsTorch: The type of the batched observation tensor
-            TBatchedActionTorch: The type of the batched action tensor
 
         Args:
             env: ROS2RLEnv environment or a wrapped ROS2RLEnv environment
@@ -113,34 +94,34 @@ class ROS2SkilletEnv(
         self.obs_spec_osc = OSC_SPEC_BATCHED.bind(
             n_joints=len(self._joint_ids), n_arm_joints=len(self._joint_ids[:-1])).replace(device=self.device)
         """Specification of OSC observations."""
-        self._action_spec = ActionSpec[TBatchedActionTorch](
+        self._action_spec = ActionSpec[BxM_Action](
             name="action",
             space=env.single_action_space,
         ).replace(**spec_args)
 
     # ==================== DirectRlInterface ====================
-    @override
     @property
+    @override
     def cfg(self) -> dict | object:
         return self._env.cfg
 
-    @override
     @property
+    @override
     def num_envs(self) -> int:
         return self._env.num_envs
 
-    @override
     @property
+    @override
     def device(self) -> torch.device | str:
         return self._env.device
 
-    @override
     @property
+    @override
     def max_episode_length(self) -> int:
         return self._env.max_episode_length
 
-    @override
     @property
+    @override
     def episode_length_buf(self) -> torch.Tensor:
         return torch.tensor([self._env.get_wrapper_attr("episode_length_buf")], device=self.device)
 
@@ -149,7 +130,7 @@ class ROS2SkilletEnv(
         self._env.unwrapped.episode_length_buf = value.squeeze().item()
 
     @override
-    def _get_observations(self) -> TBatchedObsTorch:
+    def _get_observations(self) -> Mapping[str, torch.Tensor]:
         return self.obs_spec_state.cast(self._last_obs)
 
     @override
@@ -159,21 +140,21 @@ class ROS2SkilletEnv(
         self._env._reset_idx()
         self._last_obs = None
 
-    @override
     @property
+    @override
     def unwrapped(self) -> DirectRlInterface:
         # self satisfies the DirectRlInterface
         return self
 
     # ==================== Skillet Environment ====================
-    @override
     @property
-    def obs_spec(self) -> ObservationSpec[TBatchedObsTorch]:
+    @override
+    def obs_spec(self) -> ObservationSpec[BxN_Obs]:
         return self.obs_spec_policy
 
-    @override
     @property
-    def action_spec(self) -> ActionSpec[TBatchedActionTorch]:
+    @override
+    def action_spec(self) -> ActionSpec[BxM_Action]:
         return self._action_spec
 
     @override
@@ -224,7 +205,7 @@ class ROS2SkilletEnv(
     # ==================== Public methods ====================
 
     @override
-    def reset(self) -> tuple[TBatchedObsTorch, dict]:
+    def reset(self) -> tuple[BxN_Obs, dict]:
         """Reset the environment.
 
         Args:
@@ -242,7 +223,7 @@ class ROS2SkilletEnv(
         return obs_dict, info
 
     @overload
-    def get_observation(self) -> TBatchedObsTorch: ...
+    def get_observation(self) -> BxN_Obs: ...
     @overload
     def get_observation(self, obs_spec: ObservationSpec[TSpecObs]) -> TSpecObs: ...
     @override
@@ -308,14 +289,14 @@ class ROS2SkilletEnv(
         raise ValueError(f"Observation spec {obs_spec} not supported by environment.")
 
     @override
-    def get_state(self) -> TBatchedObsTorch:
+    def get_state(self) -> Mapping[str, torch.Tensor]:
         return self.get_observation(self.obs_spec_state)
 
     @override
     def step(
-        self, action: TBatchedActionTorch
+        self, action: BxM_Action
     ) -> tuple[
-        TBatchedObsTorch,
+        BxN_Obs,
         Float[torch.Tensor, "b"],  # noqa: F821
         Bool[torch.Tensor, "b"],  # noqa: F821
         Bool[torch.Tensor, "b"],  # noqa: F821

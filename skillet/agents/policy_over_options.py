@@ -1,15 +1,14 @@
 """A high level model-free agent that selects options/skills to execute in parallel."""
 
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar, cast
 
 import torch
-from jaxtyping import Int
+from jaxtyping import Bool, Int
 
 from skillet.core.env import BatchedEnvironment
 from skillet.core.policy import BatchedUPolicy
 from skillet.core.skill import BatchedSkill, CompositeSkill
 from skillet.core.spaces import (
-    ArrayLike,
     BatchedAction,
     BatchedObservation,
     BatchedSkillParams,
@@ -62,10 +61,11 @@ class PolicyOverOptionsAgent(Generic[THighLevelObs, TLowLevelObs, TBAction, TSki
         """Get low level policyobservations."""
         return env.get_observation(self.skills[0].obs_spec)
 
-    def execute(self, env: BatchedEnvironment[TLowLevelObs, TBAction]) -> None:
+    def execute(self, env: BatchedEnvironment[Any, TBAction]) -> None:
         """Execute the policy over the options configured."""
         n_envs = env.num_envs
-        terminated: ArrayLike = env.obs_spec.with_n_envs(n_envs).zeros(shape=(n_envs,), dtype=bool)
+        terminated = cast('Bool[torch.Tensor, "n_envs"]',
+            env.obs_spec.with_n_envs(n_envs).zeros(shape=(n_envs,), dtype=torch.bool))
         composite_skill = CompositeSkill[TLowLevelObs, TBAction, TSkillParams](self.skills)
 
         while not terminated.all():

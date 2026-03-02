@@ -6,7 +6,7 @@ Written by Will Solow and Jeff Jewett, 2026
 """
 
 from collections.abc import Mapping
-from typing import Any, Generic, TypeVar, cast
+from typing import Any, cast
 
 import gymnasium as gym
 import torch
@@ -26,27 +26,12 @@ from skillet.core.math import (
 from skillet.core.spaces import ActionSpec
 from skillet.envs.compatibility.gymnasium import AsGymVectorEnv
 from skillet.envs.compatibility.isaac_lab import DirectRlInterface, ManagerBasedRlInterface
-from skillet.envs.specs import IK_EE_SPEC_BATCHED, OSC_SPEC_BATCHED, RGBD_SPEC_BATCHED, BxN_Obs
-
-TBatchedObsTorch = TypeVar(
-    "TBatchedObsTorch", bound=Float[torch.Tensor, "b ..."] | Mapping[str, Float[torch.Tensor, "b ..."]]
-)
-"""A generic type of the batched observation tensor returned by the environment.
-
-Can be a batched observation tensor or a dictionary of batched observation tensors.
-
-torch.Tensor[(b, ...), float] | Mapping[str, torch.Tensor[(b, ...), float]]"""
-TBatchedActionTorch = TypeVar("TBatchedActionTorch", bound=Float[torch.Tensor, "b n"])
-"""A generic type of the batched action tensor expected by the environment.
-
-torch.Tensor[(b, n), float]
-"""
+from skillet.envs.specs import IK_EE_SPEC_BATCHED, OSC_SPEC_BATCHED, RGBD_SPEC_BATCHED, BxM_Action, BxN_Obs
 
 
 class IsaacEnvWrapper(
-    BatchedEnvironment[TBatchedObsTorch, TBatchedActionTorch],
+    BatchedEnvironment[BxN_Obs, BxM_Action],
     gym.vector.VectorWrapper,
-    Generic[TBatchedObsTorch, TBatchedActionTorch],
 ):
     """Wrapper for IsaacLab Environments.
 
@@ -140,36 +125,36 @@ class IsaacEnvWrapper(
             n_joints=len(self._joint_ids), n_arm_joints=len(self._joint_ids[:-1])
         ).replace(device=self.device)
         """Specification of OSC observations."""
-        self._action_spec = ActionSpec[TBatchedActionTorch](
+        self._action_spec = ActionSpec[BxM_Action](
             name="action",
             space=env.single_action_space,
         ).replace(**spec_args)
 
     # ==================== IsaacLab Interface ====================
-    @override
     @property
+    @override
     def num_envs(self) -> int:
         return self._env.unwrapped.num_envs
 
-    @override
     @property
+    @override
     def device(self) -> torch.device | str:
         return self._device
 
-    @override
     @property
+    @override
     def unwrapped(self) -> DirectRlInterface | ManagerBasedRlInterface:
         return self._env
 
     # ==================== Skillet Environment ====================
 
-    @override
     @property
+    @override
     def obs_spec(self):  # noqa: ANN201
         return self.obs_spec_policy
 
-    @override
     @property
+    @override
     def action_spec(self):  # noqa: ANN201
         return self._action_spec
 
@@ -254,13 +239,13 @@ class IsaacEnvWrapper(
         raise ValueError(f"Observation spec {obs_spec} not supported by environment.")
 
     @override
-    def get_state(self) -> TBatchedObsTorch:
+    def get_state(self) -> Mapping[str, torch.Tensor]:
         return self.get_observation(self.obs_spec_state)
 
     # ==================== Public methods ====================
 
     @override
-    def reset(self) -> tuple[TBatchedObsTorch, dict]:
+    def reset(self) -> tuple[BxN_Obs, dict]:
         """Reset the environment.
 
         Args:
@@ -277,9 +262,9 @@ class IsaacEnvWrapper(
 
     @override
     def step(
-        self, action: TBatchedActionTorch
+        self, action: BxM_Action
     ) -> tuple[
-        TBatchedObsTorch,
+        BxN_Obs,
         Float[torch.Tensor, "b"],  # noqa: F821
         Bool[torch.Tensor, "b"],  # noqa: F821
         Bool[torch.Tensor, "b"],  # noqa: F821
@@ -303,7 +288,7 @@ class IsaacEnvWrapper(
     Helper functions
     """
 
-    def _get_joint_positions(self, env_ids: torch.Tensor | None = None, joint_ids: list | None = None) -> torch.Tensor:
+    def _get_joint_positions(self, env_ids: torch.Tensor | None = None, joint_ids: list | None = None) -> Float[torch.Tensor, "b n_joints"]:
         """Return the joint positions (1 value per dof).
 
         Args:
@@ -319,7 +304,7 @@ class IsaacEnvWrapper(
             joint_ids = self._joint_ids
         return self.robot.data.joint_pos[:, joint_ids][env_ids]
 
-    def _get_joint_velocities(self, env_ids: torch.Tensor | None = None, joint_ids: list | None = None) -> torch.Tensor:
+    def _get_joint_velocities(self, env_ids: torch.Tensor | None = None, joint_ids: list | None = None) -> Float[torch.Tensor, "b n_joints 3"]:
         """Return the joint velocities.
 
         Args:
@@ -341,7 +326,7 @@ class IsaacEnvWrapper(
         ee_link: str = "robotiq_85_base_link",
         base_link: str = "base_link",
         arm_joint_ids: list | None = None,
-    ) -> torch.Tensor:
+    ) -> Float[torch.Tensor, "b 6 n_arm_joints"]:
         """Return the jacobians.
 
         For each arm joint, return linear and angular velocities in the robot base frame.
@@ -374,7 +359,7 @@ class IsaacEnvWrapper(
         self,
         env_ids: torch.Tensor | None = None,
         ee_link: str = "robotiq_85_base_link",
-    ) -> torch.Tensor:
+    ) -> Float[torch.Tensor, "b 7"]:
         """Get the TCP pose of the robot in the robot base frame.
 
         Args:
@@ -409,7 +394,7 @@ class IsaacEnvWrapper(
 
     def _get_gripper_state(
         self, env_ids: torch.Tensor | None = None, gripper_joints: list[str] = ["robotiq_85_left_knuckle_joint"]
-    ) -> torch.Tensor:
+    ) -> Float[torch.Tensor, "b n_gripper_joints"]:
         """Get the gripper state of the robot."""
         if env_ids is None:
             env_ids = self.robot._ALL_INDICES
@@ -422,7 +407,7 @@ class IsaacEnvWrapper(
         env_ids: torch.Tensor | None = None,
         ee_link: str = "robotiq_85_base_link",
         base_link: str = "base_link",
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    ) -> Float[torch.Tensor, "b 7"]:
         """Compute and return the end effector pose of the robot in the robot's base frame.
 
         Args:
@@ -455,7 +440,7 @@ class IsaacEnvWrapper(
 
     def _get_gripper_lims(
         self, env_ids: torch.Tensor | None = None, gripper_joints: str = ["robotiq_85_left_knuckle_joint"]
-    ) -> torch.Tensor:
+    ) -> Float[torch.Tensor, "b 2 n_gripper_joints"]:
         """Get the gripper limits (low and high).
 
         Args:
@@ -478,7 +463,7 @@ class IsaacEnvWrapper(
             dim=1,
         )
 
-    def _get_joint_lims(self, env_ids: torch.Tensor | None = None) -> torch.Tensor:
+    def _get_joint_lims(self, env_ids: torch.Tensor | None = None) -> Float[torch.Tensor, "b 2 n_joints"]:
         """Get the joint limits (low and high).
 
         Args:
@@ -501,7 +486,7 @@ class IsaacEnvWrapper(
         self,
         env_ids: torch.Tensor | None = None,
         arm_joint_ids: list | None = None,
-    ) -> torch.Tensor:
+    ) -> Float[torch.Tensor, "b n_arm_joints n_arm_joints"]:
         """Return the mass matrices.
 
         Args:
@@ -524,7 +509,7 @@ class IsaacEnvWrapper(
         self,
         env_ids: torch.Tensor | None = None,
         arm_joint_ids: list | None = None,
-    ) -> torch.Tensor:
+    ) -> Float[torch.Tensor, "b n_arm_joints"]:
         """Return the joint gravity of the arm joints.
 
         Args:
@@ -543,7 +528,7 @@ class IsaacEnvWrapper(
 
     def _get_ee_vel_b(
         self, env_ids: torch.Tensor = None, ee_link: str = "end_effector_link", base_link: str = "base_link"
-    ) -> torch.Tensor:
+    ) -> Float[torch.Tensor, "b 6"]:
         """Compute the velocity of the end effector relative to the robot base.
 
         Args:
@@ -570,7 +555,7 @@ class IsaacEnvWrapper(
         ee_ang_vel_b = quat_apply_inverse(self.robot.data.body_quat_w[env_ids, base_link_idx], relative_vel_w[:, 3:6])
         return torch.cat([ee_lin_vel_b, ee_ang_vel_b], dim=-1)
 
-    def _get_joint_centers(self, env_ids: torch.Tensor = None, arm_joint_ids: torch.Tensor = None) -> torch.Tensor:
+    def _get_joint_centers(self, env_ids: torch.Tensor = None, arm_joint_ids: torch.Tensor = None) -> Float[torch.Tensor, "b n_arm_joints"]:
         """Return the joint centers of the arm.
 
         Args:
