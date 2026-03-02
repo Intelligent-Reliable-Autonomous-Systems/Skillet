@@ -16,7 +16,7 @@ from tensordict import TensorDict
 
 import skillet.rl.rsl_rl
 from skillet.rl.rsl_rl.algorithms import PPO
-from skillet.rl.rsl_rl.env import VecEnv
+from skillet.envs.compatibility.rsl_rl import RslRlVecEnv as VecEnv
 from skillet.rl.rsl_rl.modules import ActorCritic, ActorCriticRecurrent, resolve_rnd_config, resolve_symmetry_config
 from skillet.rl.rsl_rl.utils import resolve_obs_groups, store_code_state
 
@@ -39,7 +39,7 @@ class OnPolicyRunner:
         self.save_interval = self.cfg["save_interval"]
 
         # Query observations from environment for algorithm construction
-        obs = self.env.get_observation()
+        obs = self.env.get_observations()
         default_sets = ["critic"]
         if "rnd_cfg" in self.alg_cfg and self.alg_cfg["rnd_cfg"] is not None:
             default_sets.append("rnd_state")
@@ -71,7 +71,7 @@ class OnPolicyRunner:
             )
 
         # Start learning
-        obs = self.env.get_observation().to(self.device)
+        obs = self.env.get_observations().to(self.device)
         self.train_mode()  # switch to train mode (for dropout for example)
 
         # Book keeping

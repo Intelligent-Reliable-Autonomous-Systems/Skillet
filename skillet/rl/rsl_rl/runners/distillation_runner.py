@@ -14,7 +14,7 @@ from tensordict import TensorDict
 
 import skillet.rl.rsl_rl
 from skillet.rl.rsl_rl.algorithms import Distillation
-from skillet.rl.rsl_rl.env import VecEnv
+from skillet.envs.compatibility.rsl_rl import RslRlVecEnv as VecEnv
 from skillet.rl.rsl_rl.modules import StudentTeacher, StudentTeacherRecurrent
 from skillet.rl.rsl_rl.runners import OnPolicyRunner
 from skillet.rl.rsl_rl.utils import resolve_obs_groups, store_code_state

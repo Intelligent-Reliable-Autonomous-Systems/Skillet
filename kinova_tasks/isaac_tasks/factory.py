@@ -7,7 +7,7 @@ import gymnasium as gym
 from isaaclab.envs import DirectRLEnv, ManagerBasedRLEnv
 from isaaclab_tasks.utils import parse_env_cfg
 
-from skillet.envs.isaac_lab import DirectRlInterface, ManagerBasedRlInterface
+from skillet.envs.compatibility.isaac_lab import DirectRlInterface, ManagerBasedRlInterface
 
 
 def create_isaac_env(task_name: str, cfg: dict[str, Any]) -> DirectRlInterface | ManagerBasedRlInterface:

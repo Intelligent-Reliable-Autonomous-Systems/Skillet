@@ -14,7 +14,7 @@ from jaxtyping import Bool, Float
 from typing_extensions import override
 
 from skillet.core import ObservationSpec
-from skillet.core.env import AsGymVectorEnv, BatchedEnvironment
+from skillet.core.env import BatchedEnvironment
 from skillet.core.math import (
     matrix_from_quat,
     quat_apply,
@@ -24,7 +24,8 @@ from skillet.core.math import (
     subtract_frame_transforms,
 )
 from skillet.core.spaces import ActionSpec
-from skillet.envs.isaac_lab import DirectRlInterface, ManagerBasedRlInterface
+from skillet.envs.compatibility.gymnasium import AsGymVectorEnv
+from skillet.envs.compatibility.isaac_lab import DirectRlInterface, ManagerBasedRlInterface
 from skillet.envs.specs import IK_EE_SPEC_BATCHED, OSC_SPEC_BATCHED, RGBD_SPEC_BATCHED, BxN_Obs
 
 TBatchedObsTorch = TypeVar(
@@ -254,7 +255,7 @@ class IsaacEnvWrapper(
 
     @override
     def get_state(self) -> TBatchedObsTorch:
-        return self.get_observation(self._obs_spec_state)
+        return self.get_observation(self.obs_spec_state)
 
     # ==================== Public methods ====================
 

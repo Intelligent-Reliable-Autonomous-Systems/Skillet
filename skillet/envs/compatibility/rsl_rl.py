@@ -8,19 +8,20 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import gymnasium as gym
 import torch
 from tensordict import TensorDict
 from typing_extensions import override
 
+from skillet.envs.compatibility.isaac_lab import DirectRlInterface
 from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
 from skillet.envs.ros2_skillet_env import ROS2SkilletEnv
 from skillet.envs.util import configure_seed
 
 if TYPE_CHECKING:
-    from skillet.envs.isaac_lab import DirectRlInterface, ManagerBasedRlInterface
+    from skillet.envs.compatibility.isaac_lab import ManagerBasedRlInterface
 
 
 class RslRlVecEnv(ABC):
@@ -52,6 +53,11 @@ class RslRlVecEnv(ABC):
     @abstractmethod
     def episode_length_buf(self) -> torch.Tensor:
         """Buffer for current episode lengths."""
+        raise NotImplementedError
+
+    @episode_length_buf.setter
+    def episode_length_buf(self, value: torch.Tensor) -> None:
+        """Set the episode length buffer."""
         raise NotImplementedError
 
     @property
@@ -174,48 +180,54 @@ class RslRlVecEnvWrapper(RslRlVecEnv, gym.vector.VectorWrapper):
 
     # ==================== RSL RL Properties ====================
 
-    @override
     @property
+    @override
     def num_envs(self) -> int:
         """Number of environments."""
         return self.env.num_envs
 
-    @override
     @property
-    def _num_actions(self) -> int:
-        """Number of actions."""
+    @override
+    def num_actions(self) -> int:
         return self._num_actions
 
-    @override
     @property
+    @override
     def max_episode_length(self) -> int | torch.Tensor:
         """Maximum episode length."""
-        return self.env.max_episode_length
+        return self.env.unwrapped.max_episode_length
 
-    @override
     @property
+    @override
     def episode_length_buf(self) -> torch.Tensor:
         """Buffer for current episode lengths."""
-        return self.env.unwrapped.episode_length_buf
+        if not hasattr(self.env.unwrapped, "episode_length_buf"):
+            raise TypeError("The environment is not a DirectRlInterface.")
+        drl_env = cast("DirectRlInterface", self.env.unwrapped)
+        return drl_env.episode_length_buf
 
     @episode_length_buf.setter
     def episode_length_buf(self, value: torch.Tensor) -> None:
         """Set the episode length buffer."""
-        self.env.episode_length_buf = value
+        if not hasattr(self.env.unwrapped, "episode_length_buf"):
+            raise TypeError("The environment is not a DirectRlInterface.")
+        drl_env = cast("DirectRlInterface", self.env.unwrapped)
+        drl_env.episode_length_buf = value
 
-    @override
     @property
+    @override
     def device(self) -> torch.device | str:
         """Device to use."""
         return self.env.device
 
-    @override
     @property
+    @override
     def cfg(self) -> dict | object:
         """Configuration object."""
         return self.env.unwrapped.cfg
 
     @property
+    @override
     def unwrapped(self) -> DirectRlInterface | ManagerBasedRlInterface:
         """Return the base environment, which is a DirectRlInterface."""
         return self.env.unwrapped
@@ -236,10 +248,10 @@ class RslRlVecEnvWrapper(RslRlVecEnv, gym.vector.VectorWrapper):
     @override
     def get_observations(self) -> TensorDict:
         """Return the current observations of the environment."""
-        if hasattr(self.unwrapped, "observation_manager"):
+        if isinstance(self.env, (IsaacEnvWrapper, ROS2SkilletEnv)):  # Is a IsaacEnvWrapper
+            obs_dict = self.env.get_state()
+        elif hasattr(self.unwrapped, "observation_manager"):
             obs_dict = self.unwrapped.observation_manager.compute()
-        elif isinstance(self.env, (IsaacEnvWrapper, ROS2SkilletEnv)):  # Is a IsaacEnvWrapper
-            obs_dict = self.env.get_observation()
         else:  # DirectRLEnv of ManagerBasedRLEnv
             obs_dict = self.unwrapped._get_observations()
 

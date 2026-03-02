@@ -26,7 +26,7 @@ from skillet.core.math import (
     subtract_frame_transforms,
 )
 from skillet.core.spaces import ActionSpec
-from skillet.envs.isaac_lab import DirectRlInterface
+from skillet.envs.compatibility.isaac_lab import DirectRlInterface
 from skillet.envs.ros2 import ROS2RLEnv
 from skillet.envs.specs import IK_EE_SPEC_BATCHED, OSC_SPEC_BATCHED, RGBD_SPEC_BATCHED
 

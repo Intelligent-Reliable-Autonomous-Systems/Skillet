@@ -19,7 +19,6 @@ from skillet.core.spaces import (
     ArrayLike,
     BatchedAction,
     BatchedObservation,
-    BatchedSpaceValue,
     Observation,
     ObservationSpec,
     State,
@@ -293,59 +292,4 @@ class BasicBatchedEnvironment(BatchedEnvironment[TBObs, TBAction],
 
     def get_state(self) -> TObs:  # noqa: D102
         return self.get_observation()
-
-
-class AsGymVectorEnv(gym.vector.VectorEnv):
-    """A wrapper for gym.Env environments that already have a vectorized interface to the gymnasium 1.0 vector API.
-
-    THIS ASSUMES THAT THE ENVIRONMENT WAS DESIGNED AS A VECTOR ENVIRONMENT BEFORE GYMNASIUM 1.0.
-
-    This assumes that the environment is a gym.Env (not a gym.vector.VectorEnv)
-    and that it has self.single_observation_space and self.single_action_space attributes.
-    """
-
-    def __init__(self, env: gym.Env, num_envs: int | None = None) -> None:
-        """Initialize the environment.
-
-        Args:
-            env: The gym.Env to wrap. Must have a single observation space and action space.
-            num_envs: Optionally, the number of environments to wrap.
-                If not provided, it requires env.get_wrapper_attr("num_envs") to be set.
-
-        """
-        self.env = env
-        def env_attr(env: gym.Env, attr: str) -> Any:
-            if hasattr(env, attr):
-                return getattr(env, attr)
-            if hasattr(env, "has_wrapper_attr") and env.has_wrapper_attr(attr):
-                return env.get_wrapper_attr(attr)
-            return None
-        self.num_envs = num_envs or env_attr(env, "num_envs")
-        if self.num_envs is None:
-            raise ValueError("The environment does not have a number of environments .num_envs")
-        if not env_attr(env, "single_observation_space") or not env_attr(env, "single_action_space"):
-            raise ValueError("The environment does not have a single observation space or action space.")
-        self.single_observation_space = env_attr(env, "single_observation_space")
-        self.single_action_space = env_attr(env, "single_action_space")
-        self.observation_space = env.observation_space
-        self.action_space = env.action_space
-
-    def reset(  # noqa: D102
-        self,
-        *,
-        seed: int | None = None,
-        options: dict[str, Any] | None = None,
-    ) -> tuple[BatchedSpaceValue, dict[str, Any]]:
-        return self.env.reset(seed=seed, options=options)
-
-    def step(  # noqa: D102
-        self, actions: BatchedAction
-    ) -> tuple[BatchedSpaceValue, Float[ArrayLike, "b"], Bool[ArrayLike, "b"], Bool[ArrayLike, "b"], dict[str, Any]]:
-        return self.env.step(actions)
-
-    def render(self):  # noqa: ANN201, D102
-        return self.env.render()
-
-    def close(self, **kwargs: Any) -> None:  # noqa: D102
-        return self.env.close(**kwargs)
 

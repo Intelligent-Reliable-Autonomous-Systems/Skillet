@@ -5,7 +5,10 @@
 
 from __future__ import annotations
 
-from skillet.rl.rsl_rl.env import VecEnv
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from skillet.envs.compatibility.rsl_rl import RslRlVecEnv as VecEnv
 
 
 def resolve_symmetry_config(alg_cfg: dict, env: VecEnv) -> dict:

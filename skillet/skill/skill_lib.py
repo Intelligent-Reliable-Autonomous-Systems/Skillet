@@ -7,9 +7,9 @@ import gymnasium as gym
 import torch
 from jaxtyping import Float, Int
 
-from skillet.core.env import AsGymVectorEnv
 from skillet.core.skill import Skill
 from skillet.core.spaces import ObservationSpec
+from skillet.envs.compatibility.gymnasium import GymVectorInterface
 from skillet.policy.ik_ee import IKEEPolicy, PosAbsIKEEPolicy, PoseAbsIKEEPolicy, XYZRPYAbsIKEEPolicy
 from skillet.policy.joint_pos import GripperPolicy, JointPosPolicy
 from skillet.policy.osc_ee import PoseAbsOSCEEPolicy
@@ -25,37 +25,6 @@ from skillet.skill.low_level import (
     ReachXYZSkill,
 )
 
-BxN_Obs = Float[torch.Tensor, "b n"]
-"""Environment observation: torch.Tensor[(b, n), float]"""
-BxM_Action = Float[torch.Tensor, "b m"]
-"""Environment action: torch.Tensor[(b, m), float]"""
-B_Int_HighLevel = Int[torch.Tensor, "b"]
-"""Selected skills action: torch.Tensor[(b,), int]"""
-
-
-def make_ik_obs_spec(device: str = "cuda") -> ObservationSpec:
-    """Make an observation spec for IK controllers."""
-    return ObservationSpec[Float[torch.Tensor, "b ..."]](
-        space=gym.spaces.Dict(),
-        name="ik_ee",
-        is_torch=True,
-        is_batched=True,
-        n_envs=-1,
-        device=device,
-    )
-
-
-def make_osc_obs_spec(device: str = "cuda") -> ObservationSpec:
-    """Make an observation spec for OSC controllers."""
-    return ObservationSpec[Float[torch.Tensor, "b ..."]](
-        space=gym.spaces.Dict(),
-        name="osc",
-        is_torch=True,
-        is_batched=True,
-        n_envs=-1,
-        device=device,
-    )
-
 
 def make_joint_obs_spec(device: str = "cuda") -> ObservationSpec:
     """Make an observation spec for IK controllers."""
@@ -69,109 +38,109 @@ def make_joint_obs_spec(device: str = "cuda") -> ObservationSpec:
     )
 
 
-def make_osc_ee_pose_policy(env: AsGymVectorEnv) -> IKEEPolicy:
+def make_osc_ee_pose_policy(env: GymVectorInterface) -> IKEEPolicy:
     return PoseAbsOSCEEPolicy[BxN_Obs, BxM_Action](make_osc_obs_spec(env.device), env.action_spec)
 
 
-def make_ik_ee_xyzrpy_policy(env: AsGymVectorEnv) -> IKEEPolicy:
+def make_ik_ee_xyzrpy_policy(env: GymVectorInterface) -> IKEEPolicy:
     return XYZRPYAbsIKEEPolicy[BxN_Obs, BxM_Action](make_ik_obs_spec(env.device), env.action_spec)
 
 
-def make_ik_ee_pose_policy(env: AsGymVectorEnv) -> IKEEPolicy:
+def make_ik_ee_pose_policy(env: GymVectorInterface) -> IKEEPolicy:
     return PoseAbsIKEEPolicy[BxN_Obs, BxM_Action](make_ik_obs_spec(env.device), env.action_spec)
 
 
-def make_ik_ee_pos_policy(env: AsGymVectorEnv) -> IKEEPolicy:
+def make_ik_ee_pos_policy(env: GymVectorInterface) -> IKEEPolicy:
     return PosAbsIKEEPolicy[BxN_Obs, BxM_Action](make_ik_obs_spec(env.device), env.action_spec)
 
 
-def make_gripper_policy(env: AsGymVectorEnv) -> GripperPolicy:
+def make_gripper_policy(env: GymVectorInterface) -> GripperPolicy:
     return GripperPolicy[BxN_Obs, BxM_Action](make_joint_obs_spec(env.device), env.action_spec)
 
 
-def make_joint_pos_policy(env: AsGymVectorEnv) -> JointPosPolicy:
+def make_joint_pos_policy(env: GymVectorInterface) -> JointPosPolicy:
     return JointPosPolicy[BxN_Obs, BxM_Action](make_joint_obs_spec(env.device), env.action_spec)
 
 
-def make_reach_xyzrpy_skill(env: AsGymVectorEnv, skill_length: int = 15) -> Skill:
+def make_reach_xyzrpy_skill(env: GymVectorInterface, skill_length: int = 15) -> Skill:
     return ReachXYZRPYSkill[BxN_Obs, BxM_Action, None](
         name="reach_xyzrpy_skill", policy=make_ik_ee_pose_policy(env), length=skill_length
     )
 
 
-def make_reach_xyz_skill(env: AsGymVectorEnv, skill_length: int = 15) -> Skill:
+def make_reach_xyz_skill(env: GymVectorInterface, skill_length: int = 15) -> Skill:
     return ReachXYZSkill[BxN_Obs, BxM_Action, None](
         name="reach_xyz_skill", policy=make_ik_ee_pos_policy(env), length=skill_length, clip=True
     )
 
 
-def make_orient_rpy_skill(env: AsGymVectorEnv, skill_length: int = 15) -> Skill:
+def make_orient_rpy_skill(env: GymVectorInterface, skill_length: int = 15) -> Skill:
     return OrientRPYSkill[BxN_Obs, BxM_Action, None](
         name="orient_rpy_skill", policy=make_ik_ee_pose_policy(env), length=skill_length
     )
 
 
-def make_orient_y_skill(env: AsGymVectorEnv, skill_length: int = 15) -> Skill:
+def make_orient_y_skill(env: GymVectorInterface, skill_length: int = 15) -> Skill:
     return OrientYSkill[BxN_Obs, BxM_Action, None](
         name="orient_y_skill", policy=make_ik_ee_pose_policy(env), length=skill_length
     )
 
 
-def make_gripper_oc_skill(env: AsGymVectorEnv, skill_length: int = 4) -> Skill:
+def make_gripper_oc_skill(env: GymVectorInterface, skill_length: int = 4) -> Skill:
     return GripperOCSkill[BxN_Obs, BxM_Action, None](
         name="gripper_oc_skill", policy=make_gripper_policy(env), length=skill_length
     )
 
 
-def make_gripper_o_skill(env: AsGymVectorEnv, skill_length: int = 4) -> Skill:
+def make_gripper_o_skill(env: GymVectorInterface, skill_length: int = 4) -> Skill:
     return GripperOpenSkill[BxN_Obs, BxM_Action, None](
         name="gripper_o_skill", policy=make_gripper_policy(env), length=skill_length
     )
 
 
-def make_gripper_c_skill(env: AsGymVectorEnv, skill_length: int = 4) -> Skill:
+def make_gripper_c_skill(env: GymVectorInterface, skill_length: int = 4) -> Skill:
     return GripperGraspSkill[BxN_Obs, BxM_Action, None](
         name="gripper_o_skill", policy=make_gripper_policy(env), length=skill_length
     )
 
 
-def make_joint_pos_skill(env: AsGymVectorEnv, skill_length: int = 15) -> Skill:
+def make_joint_pos_skill(env: GymVectorInterface, skill_length: int = 15) -> Skill:
     return JointPosSkill[BxN_Obs, BxM_Action, None](
         name="joint_pos_skill", policy=make_joint_pos_policy(env), length=skill_length
     )
 
 
-def make_pick_skill(env: AsGymVectorEnv, lift_height: float = 0.23, skill_length: int = 15) -> Skill:
+def make_pick_skill(env: GymVectorInterface, lift_height: float = 0.23, skill_length: int = 15) -> Skill:
     return PickSkill[BxN_Obs, BxM_Action, None](
         reach_policy=make_ik_ee_pose_policy(env), gripper_policy=None, lift_height=lift_height, length=skill_length
     )
 
 
-def make_place_skill(env: AsGymVectorEnv, lift_height: float = 0.23, skill_length: int = 15) -> Skill:
+def make_place_skill(env: GymVectorInterface, lift_height: float = 0.23, skill_length: int = 15) -> Skill:
     return PlaceSkill[BxN_Obs, BxM_Action, None](
         reach_policy=make_ik_ee_pose_policy(env), gripper_policy=None, lift_height=lift_height, length=skill_length
     )
 
 
-def make_push_skill(env: AsGymVectorEnv, skill_length: int = 15) -> Skill:
+def make_push_skill(env: GymVectorInterface, skill_length: int = 15) -> Skill:
     return PushSkill[BxN_Obs, BxM_Action, None](
         reach_policy=make_ik_ee_pose_policy(env), gripper_policy=None, length=skill_length
     )
 
 
-def make_grasp_xyz_skill(env: AsGymVectorEnv, skill_length: int = 15) -> Skill:
+def make_grasp_xyz_skill(env: GymVectorInterface, skill_length: int = 15) -> Skill:
     return GraspXYZSkill[BxN_Obs, BxM_Action, None](
         reach_policy=make_ik_ee_pose_policy(env), gripper_policy=None, length=skill_length
     )
 
 
-def make_osc_reach_xyz_skill(env: AsGymVectorEnv, skill_length: int = 15) -> Skill:
+def make_osc_reach_xyz_skill(env: GymVectorInterface, skill_length: int = 15) -> Skill:
     return ReachXYZSkill[BxN_Obs, BxM_Action, None](
         name="reach_xyz_skill_osc", policy=make_osc_ee_pose_policy(env), length=skill_length, clip=True
     )
 
 
-def make_osc_orient_rpy_skill(env: AsGymVectorEnv, skill_length: int = 15) -> Skill:  # TODO Change
+def make_osc_orient_rpy_skill(env: GymVectorInterface, skill_length: int = 15) -> Skill:  # TODO Change
     return OrientRPYSkill[BxN_Obs, BxM_Action, None](
         name="orient_rpy_skill_osc", policy=make_osc_ee_pose_policy(env), length=skill_length
     )

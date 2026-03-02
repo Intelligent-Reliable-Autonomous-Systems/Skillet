@@ -14,9 +14,10 @@ import torch
 from typing_extensions import deprecated
 
 from skillet.core.spaces import BatchedObservation
+from skillet.envs.compatibility.gymnasium import GymVectorInterface
 
 
-class IsaacLabInterface(Protocol):
+class IsaacLabInterface(GymVectorInterface):
     """An abstract interface for the Isaac Lab environment.
 
     The properties and methods are the intersection of the DirectRLEnv and ManagerBasedRLEnv interfaces.
@@ -30,6 +31,11 @@ class IsaacLabInterface(Protocol):
     - max_episode_length
     - num_envs
     """
+
+    @property
+    def unwrapped(self) -> "IsaacLabInterface":
+        """Return the base environment."""
+        ...
 
     @property
     def cfg(self) -> dict | object:
@@ -64,10 +70,10 @@ class IsaacLabInterface(Protocol):
         """Maximum episode length in seconds."""
         ...
 
-    @property
-    def num_envs(self) -> int:
-        """The number of instances of the environment that are running."""
-        ...
+    # @property
+    # def num_envs(self) -> int:
+    #     """The number of instances of the environment that are running."""
+    #     ...
 
     @property
     @deprecated("physics_dt is not currently supported across all environments.")
@@ -122,6 +128,11 @@ class DirectRlInterface(IsaacLabInterface):
     """
 
     @property
+    def unwrapped(self) -> "DirectRlInterface":
+        """Return the base environment."""
+        ...
+
+    @property
     @deprecated("common_step_counter is not currently supported across all environments.")
     def common_step_counter(self) -> int:
         """Step counter common to all environments."""
@@ -130,6 +141,11 @@ class DirectRlInterface(IsaacLabInterface):
     @property
     def episode_length_buf(self) -> torch.Tensor:
         """Buffer for current episode lengths."""
+        ...
+
+    @episode_length_buf.setter
+    def episode_length_buf(self, value: torch.Tensor) -> None:
+        """Set the episode length buffer."""
         ...
 
     @property
@@ -222,6 +238,11 @@ class ManagerBasedRlInterface(IsaacLabInterface):
     - max_episode_length
     - num_envs
     """
+
+    @property
+    def unwrapped(self) -> "ManagerBasedRlInterface":
+        """Return the base environment."""
+        ...
 
     @deprecated("export_IO_descriptors is not currently supported across all environments.")
     def export_IO_descriptors(self, output_dir: str | None = None) -> None:  # noqa: N802

@@ -65,7 +65,7 @@ from jaxtyping import Float, Int
 
 import kinova_tasks.isaac_tasks  # noqa: F401
 from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
-from skillet.envs.rsl_rl import RslRlVecEnvWrapper
+from skillet.envs.compatibility.rsl_rl import RslRlVecEnvWrapper
 from skillet.envs.skill_isaac_env_wrapper import SkillIsaacEnvWrapper
 from skillet.envs.util import get_checkpoint_path
 from skillet.envs.util.dict import print_dict

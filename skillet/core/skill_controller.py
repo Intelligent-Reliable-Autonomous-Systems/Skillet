@@ -6,15 +6,15 @@ Written by Will Solow, 2026
 import numpy as np
 import torch
 
-from skillet.core.env import AsGymVectorEnv
 from skillet.core.policy import TBAction, TBPolicyObs
+from skillet.envs.compatibility.gymnasium import GymVectorInterface
 from skillet.skill.skill_lib import SKILL_LIB
 
 
 class SkillController:
     """Class for contrilling skills in an RL environment."""
 
-    def __init__(self, skills: list[str], num_envs: int, env: AsGymVectorEnv, device: str = "cuda") -> None:
+    def __init__(self, skills: list[str], num_envs: int, env: GymVectorInterface, device: str = "cuda") -> None:
         """Initialize the skill controller based on the list of skills."""
         self.skill_names = skills
 
