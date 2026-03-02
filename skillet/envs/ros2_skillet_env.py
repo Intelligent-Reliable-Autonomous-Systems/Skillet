@@ -50,11 +50,11 @@ class ROS2SkilletEnv(
             None
 
         """
-        self._env = env
+        self._env = env.unwrapped
         self.observation_space = env.observation_space
         self.action_space = env.action_space
-        self.single_observation_space = env.single_observation_space
-        self.single_action_space = env.single_action_space
+        self.single_observation_space = env.unwrapped.single_observation_space
+        self.single_action_space = env.unwrapped.single_action_space
 
         # Robot specific information
         self._joint_ids = self.cfg.joint_ids
@@ -96,7 +96,7 @@ class ROS2SkilletEnv(
         """Specification of OSC observations."""
         self._action_spec = ActionSpec[BxM_Action](
             name="action",
-            space=env.single_action_space,
+            space=env.unwrapped.single_action_space,
         ).replace(**spec_args)
 
     # ==================== DirectRlInterface ====================
@@ -312,7 +312,7 @@ class ROS2SkilletEnv(
 
         """
         action = action.to(self.device)
-        obs_dict, reward, term, trunc, info = self.env.step(action)
+        obs_dict, reward, term, trunc, info = self._env.step(action)
         self.last_obs = obs_dict
         for k, v in obs_dict.items():
             obs_dict[k] = torch.as_tensor(v, device=self.device).unsqueeze(0)

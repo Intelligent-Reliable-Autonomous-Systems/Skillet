@@ -85,8 +85,6 @@ class KinovaROS2IKRelEnv(KinovaROS2Env):
     def _reset_idx(self) -> None:
         """Reset environment based on specified indices to default position."""
         super()._reset_idx()
-        # self._publish_action_to_robot(self.default_joint_positions, duration=8)
-        # time.sleep(8)
         self.ik_controller.reset(n_envs=self.num_envs)
 
     def _pre_process_action(self, actions: torch.Tensor) -> np.ndarray:

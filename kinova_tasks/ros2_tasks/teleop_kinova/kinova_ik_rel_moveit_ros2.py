@@ -1,4 +1,3 @@
-import time
 from typing import Any
 
 import gymnasium as gym
@@ -14,12 +13,11 @@ from skillet.core.math import (
     subtract_frame_transforms,
 )
 from skillet.envs.ros2 import (
-    ROS2RLEnvCfg,
     wait_for_action_server,
 )
 
 from ..kinova.kinova_ros2 import KinovaROS2Env
-
+from .kinova_ik_rel_ros2 import TeleOpKinovaROS2EnvCfg
 
 class KinovaROS2IKRelMoveItEnv(KinovaROS2Env):
     """Relative inverse kinematics control assuming a 7 DoF action space (delta xyz, delta rpy + gripper).
@@ -27,7 +25,7 @@ class KinovaROS2IKRelMoveItEnv(KinovaROS2Env):
     Joint positions published to MoveIt to resolve collisions.
     """
 
-    def __init__(self, cfg: ROS2RLEnvCfg, ros: Ros, render_mode: str | None = None, **kwargs: dict[str, Any]) -> None:
+    def __init__(self, cfg: TeleOpKinovaROS2EnvCfg, ros: Ros, render_mode: str | None = None, **kwargs: dict[str, Any]) -> None:
         cfg.episode_length_s = 10e12  # Basically make it so no resets
         cfg.decimation = 60.0
         cfg.dt = 1 / 60
@@ -71,8 +69,6 @@ class KinovaROS2IKRelMoveItEnv(KinovaROS2Env):
     def _reset_idx(self) -> None:
         """Reset environment based on specified indices to default position."""
         super()._reset_idx()
-        self._publish_action_to_robot(self.default_joint_positions, duration=8)
-        time.sleep(8)
         self.ik_controller.reset(n_envs=self.num_envs)
 
     def _pre_process_action(self, actions: torch.Tensor) -> np.ndarray:

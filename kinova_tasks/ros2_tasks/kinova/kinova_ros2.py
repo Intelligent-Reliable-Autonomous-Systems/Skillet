@@ -90,6 +90,7 @@ class KinovaROS2Env(ROS2RLEnv):
         )
         self.joint_state_topic = "/joint_states"
         self.joint_cmd_topic = "/joint_trajectory_controller/joint_trajectory"
+        self.twist_vel_topic = "/twist_controller/commands"
         self.gripper_cmd_topic = "/robotiq_gripper_controller/gripper_cmd"
         self.jacobian_topic = "/jacobian"
         self.mass_matrix_topic = "/mass_matrix"
@@ -102,7 +103,7 @@ class KinovaROS2Env(ROS2RLEnv):
         #     if cfg.use_fake_hardware == "true"
         #     else "control_msgs/action/ParallelGripperCommand"
         # )
-        self.gripper_topic_type = "control_msgs/action/ParallelGripperCommand"
+        self.gripper_topic_type = "control_msgs/action/ParallelGripperCommand" #TODO this won't work in fake hardware
         self.realsense_snapshot_service = "/table_camera/realsense/get_latest_frame"
         self.realsense_snapshot_service_type = "iras_realsense_msgs/srv/GetLatestRgbd"
 
@@ -142,8 +143,9 @@ class KinovaROS2Env(ROS2RLEnv):
 
         # Wait for topics to be exposed before continuing
         wait_for_topic_publish(self.ros, self.joint_cmd_topic, "trajectory_msgs/msg/JointTrajectory")
+        wait_for_topic_publish(self.ros, self.twist_vel_topic, "geometry_msgs/msg/Twist")
         wait_for_action_server(self.ros, self.gripper_cmd_topic, self.gripper_topic_type)
-        wait_for_topic_subscribe(self.ros, self.joint_state_topic, "sensor_msgs/JointState")
+        wait_for_topic_subscribe(self.ros, self.joint_state_topic, "sensor_msgs/msg/JointState") # Added /msg/
         wait_for_rviz(self.ros)
 
         wait_for_topic_subscribe(self.ros, self.jacobian_topic, "gen3_cpp/msg/LinkMatrix")
@@ -154,7 +156,7 @@ class KinovaROS2Env(ROS2RLEnv):
         wait_for_topic_subscribe(self.ros, self.gravity_vector_topic, "gen3_cpp/msg/LinkMatrix")
 
         # Subscribe to joint states
-        self.joint_states_sub = Topic(self.ros, self.joint_state_topic, "sensor_msgs/JointState")
+        self.joint_states_sub = Topic(self.ros, self.joint_state_topic, "sensor_msgs/msg/JointState") #added /msg/
 
         def _update_robot_state(msg: dict[str, Any]) -> None:
             """Update the state of the robot by subscribing to robot topics."""
@@ -171,10 +173,12 @@ class KinovaROS2Env(ROS2RLEnv):
 
         self.joint_states_sub.subscribe(_update_robot_state)
 
-        # Set up joint trajectory publisher
-        self.joint_states_pub = Topic(self.ros, self.joint_cmd_topic, "trajectory_msgs/JointTrajectory")
+        # Set up joint trajectory publisher and twist controller
+        self.joint_states_pub = Topic(self.ros, self.joint_cmd_topic, "trajectory_msgs/msg/JointTrajectory") # TODO might not work with extra /msg/
+        self.twist_vel_pub = Topic(self.ros, self.twist_vel_topic, "geometry_msgs/msg/Twist")
 
         self.gripper_client = ActionClient(self.ros, self.gripper_cmd_topic, self.gripper_topic_type)
+        self.curr_gripper_goal = None
         self.realsense_service = Service(
             self.ros,
             self.realsense_snapshot_service,
@@ -326,15 +330,15 @@ class KinovaROS2Env(ROS2RLEnv):
         if hasattr(status, "name"):
             status = status.name
         message = result.get("message", "")
-        if status.name == "SUCCEEDED":
+        if status == "SUCCEEDED":
             # print(f"[INFO] Gripper succeeded: {message}")
             self.gripper_ok = True
 
-        elif status.name == "ABORTED":
+        elif status == "ABORTED":
             print(f"[INFO] Gripper aborted: {message}")
             self.gripper_ok = False
 
-        elif status.name == "CANCELED":
+        elif status == "CANCELED":
             print(f"[INFO] Gripper canceled: {message}")
             self.gripper_ok = False
         else:
