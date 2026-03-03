@@ -23,7 +23,7 @@ class DeviceCfg:
     # Whether teleoperation should start active by default
     teleoperation_active_default: bool = True
     # Torch device string to place output tensors on
-    sim_device: str = "cpu"
+    sim_device: str = "cuda"
     # Retargeters that transform device data into robot commands
     retargeters: list[RetargeterCfg] = field(default_factory=list)
     # Concrete device class to construct for this config. Set by each device module.
@@ -108,7 +108,7 @@ class DeviceBase(ABC):
         """
         raise NotImplementedError("Derived class must implement _get_raw_data() or override advance()")
 
-    def advance(self) -> torch.Tensor:
+    def advance(self, tcp_pose_b: torch.Tensor = None) -> torch.Tensor:
         """Process current device state and return control commands.
 
         This method retrieves raw data from the device and optionally applies
@@ -117,6 +117,9 @@ class DeviceBase(ABC):
         Derived classes can either:
         1. Override _get_raw_data() and use this base implementation, or
         2. Override this method completely for custom command processing
+
+        Args:
+            tcp_pose: The TCP pose of the robot in the robot base frame
 
         Returns:
             When no retargeters are configured, returns raw device data in its native format.

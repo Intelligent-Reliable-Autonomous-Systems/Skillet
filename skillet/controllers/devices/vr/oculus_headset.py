@@ -7,22 +7,21 @@ from typing import Any
 from typing_extensions import override
 from dataclasses import dataclass
 
-import numpy as np
 import torch
-from scipy.spatial.transform import Rotation
+from skillet.core.math import euler_xyz_to_rotvec, base_to_tcp_twist
 
 from ..device_base import DeviceBase, DeviceCfg
 
 from .joystick_listener import VRJoystickListener
 
 from skillet.core.math import (
-    apply_delta_pose,
-    combine_frame_transforms,
-    compute_pose_error,
-    matrix_from_quat,
     euler_xyz_from_quat,
     subtract_frame_transforms,
 )
+
+
+import numpy as np
+from scipy.spatial.transform import Rotation as R
 
 
 class VRHeadset(DeviceBase):
@@ -46,16 +45,21 @@ class VRHeadset(DeviceBase):
         self.pos_sensitivity = cfg.pos_sensitivity
         self.rot_sensitivity = cfg.rot_sensitivity
         self.gripper_term = cfg.gripper_term
-        self._sim_device = cfg.sim_device
+        self._device = cfg.sim_device
         self._headset_offset = cfg.headset_offset
+        self.frame = cfg.reference_frame
 
-        self._workspace_lim = np.asarray([[0.1, -0.5, 0.1, -1.57, -1.57, -1.57], [0.7, 0.5, 0.7, 1.57, 1.57, 1.57]])
+        self._workspace_lim = torch.as_tensor(
+            [[0.3, -0.5, 0.03, -1.57, -1.57, -1.57], [0.7, 0.5, 0.8, 1.57, 1.57, 1.57]], device=self._device
+        )
+        self._vr_range = torch.as_tensor(
+            [[0.0, -0.4, 1.1, -1.57, -1.57, -1.57], [0.4, 0.4, 2.00, 1.57, 1.57, 1.57]], device=self._device
+        )
         # Command buffers
         self._close_gripper = False
-        self._delta_pos = np.zeros(3)
-        self._delta_rot = np.zeros(3)
-        # self._tcp_xyz_des_b = None
-        self._tcp_xyz_des_b = np.asarray([0.5, 0.0, 0.2, 3.14, 0.26, 3.14])
+        self._delta_pos = torch.zeros((3,), device=self._device)
+        self._delta_rot = torch.zeros((3,), device=self._device)
+        self._tcp_xyz_des_b = None
 
         # PID gains
         self.Kp_pos = 1.0
@@ -66,12 +70,12 @@ class VRHeadset(DeviceBase):
         self.Kd_rot = 0.1
 
         # PID integrals
-        self.integral_pos = np.zeros(3)
-        self.integral_rot = np.zeros(3)
+        self.integral_pos = torch.zeros((3,), device=self._device)
+        self.integral_rot = torch.zeros((3,), device=self._device)
 
         # Last errors for derivative
-        self.last_error_pos = np.zeros(3)
-        self.last_error_rot = np.zeros(3)
+        self.last_error_pos = torch.zeros((3,), device=self._device)
+        self.last_error_rot = torch.zeros((3,), device=self._device)
 
         self._additional_callbacks: dict[str, Callable] = {}
         self._listener = VRJoystickListener(host=cfg.host, port=cfg.port)
@@ -103,35 +107,29 @@ class VRHeadset(DeviceBase):
 
     def reset(self):
         self._close_gripper = False
-        self._delta_pos = np.zeros(3)
-        self._delta_rot = np.zeros(3)
+        self._delta_pos = torch.zeros((3,), device=self._device)
+        self._delta_rot = torch.zeros((3,), device=self._device)
 
     @override
-    def advance(self, curr_tcp_pose: torch.Tensor, dt: float = 1 / 60) -> torch.Tensor:
+    def advance(self, tcp_pose_b: torch.Tensor, dt: float = 1 / 60) -> torch.Tensor:
         """Return the current command as a tensor.
 
         Returns:
             torch.Tensor: [x, y, z, rx, ry, rz] or [x, y, z, rx, ry, rz, gripper]
 
         """
-        tcp = curr_tcp_pose.squeeze().cpu().numpy()
-        r, p, y = euler_xyz_from_quat(curr_tcp_pose[:, 3:7])
-        np.set_printoptions(precision=3, suppress=True)
-        print(np.asarray([tcp[0], tcp[1], tcp[2], r.item(), p.item(), y.item()]))
-        print(self._tcp_xyz_des_b)
-        # self._read_latest()
+        r, p, y = euler_xyz_from_quat(tcp_pose_b[:, 3:7])
+        self._read_latest()
         if self._tcp_xyz_des_b is None:
-            command = torch.zeros((6,))
+            command = torch.zeros((6,), device=self._device)
             if self.gripper_term:
                 gripper_value = 1.0 if self._close_gripper else -1.0
-                command = (
-                    torch.concatenate((command, torch.as_tensor([gripper_value])), dim=0)
-                    .to(self._sim_device)
-                    .to(torch.float32)
+                command = torch.concatenate((command, torch.as_tensor([gripper_value], device=self._device)), dim=0).to(
+                    torch.float32
                 )
             return command
-        r, p, y = euler_xyz_from_quat(curr_tcp_pose[:, 3:7])
-        robot_xyz_b = torch.cat((curr_tcp_pose[:, 0:3].squeeze(), r, p, y), dim=-1).cpu().numpy().squeeze()
+        r, p, y = euler_xyz_from_quat(tcp_pose_b[:, 3:7])
+        robot_xyz_b = torch.cat((tcp_pose_b[:, 0:3].squeeze(), r, p, y), dim=-1).squeeze()
 
         # Compute errors
         error_pos = robot_xyz_b[:3] - self._tcp_xyz_des_b[:3]
@@ -147,26 +145,35 @@ class VRHeadset(DeviceBase):
 
         # PID control for translation
         delta_pos = self.Kp_pos * error_pos + self.Ki_pos * self.integral_pos + self.Kd_pos * derivative_pos
-        self._delta_pos = np.clip(delta_pos, -self.pos_sensitivity, self.pos_sensitivity)
+        self._delta_pos = torch.clip(delta_pos, -self.pos_sensitivity, self.pos_sensitivity)
         self._delta_pos[1] = -self._delta_pos[1]
 
         # PID control for rotation (Euler -> rotation vector)
         delta_rot = self.Kp_rot * error_rot + self.Ki_rot * self.integral_rot + self.Kd_rot * derivative_rot
-        self._delta_rot = np.clip(delta_rot, -self.rot_sensitivity, self.rot_sensitivity)
-        rot_vec = Rotation.from_euler("XYZ", self._delta_rot).as_rotvec()
+        self._delta_rot = torch.clip(delta_rot, -self.rot_sensitivity, self.rot_sensitivity)
+        rot_vec = euler_xyz_to_rotvec(self._delta_rot)
 
         # Combine translation + rotation for twist command
-        command = np.concatenate([self._delta_pos, rot_vec])
-
+        if self.frame == "tcp":
+            command = torch.cat((self._delta_pos, rot_vec), dim=0)
+        elif self.frame == "base":
+            tcp_lin_vel, tcp_ang_vel = base_to_tcp_twist(
+                self._delta_pos, self._delta_rot, tcp_pose_b[:, 3:7].squeeze(0)
+            )
+            command = torch.cat((tcp_lin_vel, tcp_ang_vel), dim=0)
+            print(command)
+        command = torch.cat((self._delta_pos, rot_vec), dim=0)
+        command[3:] = 0
         # Append gripper command if needed
         if self.gripper_term:
             gripper_value = 1.0 if self._close_gripper else -1.0
-            command = np.append(command, gripper_value)
+            command = torch.cat((command, torch.as_tensor([gripper_value], device=self._device)), dim=0)
 
         # Save last errors
         self.last_error_pos = error_pos
         self.last_error_rot = error_rot
-        return torch.tensor(command, dtype=torch.float32, device=self._sim_device)
+
+        return command.to(torch.float32)
 
     def _read_latest(self) -> None:
         """Read the latest input from the VR Joystick."""
@@ -174,20 +181,32 @@ class VRHeadset(DeviceBase):
         s = self._listener.read_latest()
 
         if s is not None:
-            rc_pose_w = torch.as_tensor(s["right_controller"]["pose"]).unsqueeze(0)
-            h_pose_w = torch.as_tensor(s["headset"]["pose"]).unsqueeze(0)
+            left_elbow_pos, right_elbow_pos = get_tracker_data_fixed_arm(s)
+
+            rc_pose_w = torch.as_tensor(s["right_controller"]["pose"]).squeeze(0)
+            h_pose_w = torch.as_tensor(s["headset"]["pose"]).squeeze(0)
             h_pose_w[2] = h_pose_w[2] - self._headset_offset  # Offset Z axis by 0.5 meter
+            h_pose_w = h_pose_w.unsqueeze(0)
+            rc_pose_w = rc_pose_w.unsqueeze(0)
 
-            rc_pose_b = subtract_frame_transforms(
-                h_pose_w[:, 0:3], h_pose_w[:, 3:7], rc_pose_w[:, 0:3], rc_pose_w[:, 3:7]
+            rc_pos_b, rc_quat_b = subtract_frame_transforms(
+                h_pose_w[:, 0:3].to(torch.float32),
+                h_pose_w[:, 3:7].to(torch.float32),
+                rc_pose_w[:, 0:3].to(torch.float32),
+                rc_pose_w[:, 3:7].to(torch.float32),
             )
-            r, p, y = euler_xyz_from_quat(rc_pose_b[:, 3:7])
-            rc_xyz_b = torch.cat((rc_pose_b, r, p, y), dim=-1).cpu().numpy().squeeze()
+            r, p, y = euler_xyz_from_quat(rc_quat_b.to(self._device))
 
-            self._tcp_xyz_des_b = np.clip(rc_xyz_b, self._workspace_lim[0], self._workspace_lim[1])
+            right_elbow_pos_b = torch.as_tensor(right_elbow_pos).to(self._device)
+            right_elbow_pos_b[1] = right_elbow_pos_b[1] - 0.2
+            right_elbow_pos_b = (right_elbow_pos_b - self._vr_range[0, :3]) / (
+                self._vr_range[1, :3] - self._vr_range[0, :3]
+            )
+            print(right_elbow_pos_b)
+            rc_xyz_b = torch.cat((right_elbow_pos_b.squeeze().to(self._device), r, p, y), dim=-1)
+            self._tcp_xyz_des_b = torch.clip(rc_xyz_b, self._workspace_lim[0], self._workspace_lim[1]).to(torch.float32)
 
-            if s["right_controller"]["inputs"]["A_button"]:
-                self._close_gripper = not self._close_gripper
+            self._close_gripper = s["right_controller"]["inputs"]["trigger"] > 0.9
 
     def add_callback(self, key: Any, func: Callable):
         """Callback function."""
@@ -206,3 +225,181 @@ class VRHeadsetCfg(DeviceCfg):
     class_type: type[DeviceBase] = VRHeadset
     host: str = "192.168.2.33"
     port: int = 5555
+    reference_frame: str = "base"  # or base
+
+
+def convert_unity_to_world_coordinates(pose):
+    """
+    Convert pose from Unity (z-forward, x-right, y-up, left-handed) to world coordinates (x-forward, y-left, z-up).
+    Handles both position (xyz) and quaternion (xyzw) formats.
+    Unity coordinate system: Forward=+Z, Right=+X, Up=+Y (left-handed)
+    MuJoCo coordinate system: Forward=+X, Right=-Y, Up=+Z (right-handed)
+    """
+    # Rotation matrix to convert from Unity to MuJoCo world coordinates
+    # X_mujoco = Z_unity (forward)
+    # Y_mujoco = -X_unity (left, which is negative right)
+    # Z_mujoco = Y_unity (up)
+    rotation_matrix_3d = np.array(
+        [[0, 0, 1], [-1, 0, 0], [0, 1, 0]]  # X_mujoco = Z_unity  # Y_mujoco = -X_unity  # Z_mujoco = Y_unity
+    )
+
+    # Create 4x4 homogeneous transformation matrix
+    rotation_matrix_4d = np.eye(4)
+    rotation_matrix_4d[:3, :3] = rotation_matrix_3d
+
+    if type(pose) == list:
+        pose = np.array(pose)
+    elif type(pose) == np.ndarray:
+        pass
+    elif type(pose) == tuple:
+        pose = np.array(pose)
+    else:
+        raise ValueError("Pose must be list or numpy array")
+
+    pose = np.asarray(pose)
+    if pose.shape[0] == 3:
+        # Only position - use 3D rotation matrix
+        return rotation_matrix_3d @ pose
+    elif pose.shape[0] == 7:
+        # Position + quaternion (xyz, xyzw)
+        pos = pose[:3]
+        quat = pose[3:]  # [x, y, z, w]
+
+        # Convert quaternion to rotation matrix
+        r = R.from_quat(quat)
+        r_matrix = r.as_matrix()
+
+        # Create 4x4 transformation matrix from the quaternion rotation
+        transform_matrix = np.eye(4)
+        transform_matrix[:3, :3] = r_matrix
+        transform_matrix[:3, 3] = pos
+
+        # Apply the coordinate transformation
+        transformed_matrix = rotation_matrix_4d @ transform_matrix @ np.linalg.inv(rotation_matrix_4d)
+
+        # Extract new position and rotation
+        new_pos = transformed_matrix[:3, 3]
+        new_rotation_matrix = transformed_matrix[:3, :3]
+
+        # Convert back to quaternion
+        r_new = R.from_matrix(new_rotation_matrix)
+        quat_new = r_new.as_quat()
+
+        return np.concatenate([new_pos, quat_new])
+    else:
+        raise ValueError(f"Pose `{pose}` must be length 3 (xyz) or 7 (xyzxyzw)")
+
+
+def convert_to_world_coordinates(pose):
+    """
+    Convert pose from OpenVR (z-up, x-right, y-back) to world coordinates (x-forward, y-left, z-up).
+    Handles both position (xyz) and quaternion (xyzw) formats.
+    """
+    # Rotation matrix to convert from OpenVR to mujoco  world coordinates
+    rotation_matrix_3d = np.array([[0, 0, -1], [-1, 0, 0], [0, 1, 0]])
+
+    # Create 4x4 homogeneous transformation matrix
+    rotation_matrix_4d = np.eye(4)
+    rotation_matrix_4d[:3, :3] = rotation_matrix_3d
+
+    if type(pose) == list:
+        pose = np.array(pose)
+    elif type(pose) == np.ndarray:
+        pass
+    elif type(pose) == tuple:
+        pose = np.array(pose)
+    else:
+        raise ValueError("Pose must be list or numpy array")
+
+    pose = np.asarray(pose)
+    if pose.shape[0] == 3:
+        # Only position - use 3D rotation matrix
+        return rotation_matrix_3d @ pose
+    elif pose.shape[0] == 7:
+        # Position + quaternion (xyz, xyzw)
+        pos = pose[:3]
+        quat = pose[3:]  # [x, y, z, w]
+
+        # Convert quaternion to rotation matrix
+        from scipy.spatial.transform import Rotation as R
+
+        r = R.from_quat(quat)
+        r_matrix = r.as_matrix()
+
+        # Create 4x4 transformation matrix from the quaternion rotation
+        transform_matrix = np.eye(4)
+        transform_matrix[:3, :3] = r_matrix
+        transform_matrix[:3, 3] = pos
+
+        # Apply the coordinate transformation
+        transformed_matrix = rotation_matrix_4d @ transform_matrix @ np.linalg.inv(rotation_matrix_4d)
+
+        # Extract new position and rotation
+        new_pos = transformed_matrix[:3, 3]
+        new_rotation_matrix = transformed_matrix[:3, :3]
+
+        # Convert back to quaternion
+        r_new = R.from_matrix(new_rotation_matrix)
+        quat_new = r_new.as_quat()
+
+        return np.concatenate([new_pos, quat_new])
+    else:
+        print(pose)
+        raise ValueError("Pose must be length 3 (xyz) or 7 (xyzxyzw)")
+
+
+def get_quat_for_xy_plane(quat):
+    """
+    Get the quaternion for the xy plane - extract only yaw rotation
+    """
+    qx, qy, qz, qw = quat
+
+    # Extract yaw directly from quaternion components
+    # For a quaternion representing ZYX euler angles:
+    # yaw = atan2(2*(qw*qz + qx*qy), 1 - 2*(qy*qy + qz*qz))
+    yaw = np.arctan2(2 * (qw * qz + qx * qy), 1 - 2 * (qy * qy + qz * qz))
+
+    # Create a pure yaw rotation
+    return R.from_euler("z", yaw).as_quat()
+
+
+def get_tracker_data_fixed_arm(data):
+    # Integrate ZMQ position packets at the start - receive latest network data
+    # Check if we're using ZMQ objects (they have a 'receiver' attribute)
+
+    if data is None:
+        return None
+
+    # IMPORTANT: Always extract poses when available, regardless of grip state
+    # The main loop will decide whether to use them for arm control based on grip state
+    # This ensures arms work properly when grips are pressed
+
+    # Extract headset pose
+    h_pose_raw = np.array(data["headset"]["pose"], dtype=np.float64)
+    h_pose = convert_unity_to_world_coordinates(h_pose_raw)
+
+    lc_pose_raw = np.array(data["left_controller"]["pose"], dtype=np.float64)
+    lc_pose = convert_unity_to_world_coordinates(lc_pose_raw)
+
+    rc_pose_raw = np.array(data["right_controller"]["pose"], dtype=np.float64)
+    rc_pose = convert_unity_to_world_coordinates(rc_pose_raw)
+
+    #####################################################################################
+    # Get Elbow Positions
+    # Raw elbow positions are relative to headset position.
+    #####################################################################################
+    # Make elbow X/Y relative to head X/Y
+    left_elbow_pos = lc_pose[:3] - np.array([h_pose[0], h_pose[1], 0])
+    right_elbow_pos = rc_pose[:3] - np.array([h_pose[0], h_pose[1], 0])
+
+    # Make elbow Z relative to headset Z Headset Z is always at nominal height.
+    # Now you can sit down as long as your upper body is still at same configuration
+    nominal_headset_height = 1.65
+    left_elbow_pos[2] = nominal_headset_height - (h_pose[2] - lc_pose[2])
+    right_elbow_pos[2] = nominal_headset_height - (h_pose[2] - rc_pose[2])
+
+    # Rotate elbow positions to be relative to the headset Yaw orientation.
+    left_elbow_pos = R.from_quat(get_quat_for_xy_plane(h_pose[3:])).inv().apply(left_elbow_pos)
+    right_elbow_pos = R.from_quat(get_quat_for_xy_plane(h_pose[3:])).inv().apply(right_elbow_pos)
+
+    return left_elbow_pos, right_elbow_pos

@@ -54,7 +54,7 @@ class KinovaROS2EnvCfg(ROS2RLEnvCfg):
 
     dt = 1 / 60
 
-    decimation = 6.0
+    decimation = 1.0
 
     episode_length_s = 5.0
 
@@ -62,7 +62,7 @@ class KinovaROS2EnvCfg(ROS2RLEnvCfg):
 
     joint_ids = [0, 1, 2, 3, 4, 5, 6, 7]
     tcp_offset = [0.0, 0.0, 0.12, 1.0, 0.0, 0.0, 0.0]
-    ee_link_name = "robotiq_85_base_link"
+    ee_link_name = "end_effector_link"
     base_link_name = "base_link"
     gripper_joint_names = ["robotiq_85_left_knuckle_joint"]
 
@@ -299,9 +299,11 @@ class KinovaROS2Env(ROS2RLEnv):
 
         self.joint_states_pub.publish(joint_msg)
 
-        _ = self.gripper_client.send_goal(
-            gripper_goal, self._gripper_result_cb, self._gripper_feedback_cb, self._gripper_error_cb
-        )
+        if gripper_goal != self.curr_gripper_goal:
+            _ = self.gripper_client.send_goal(
+                gripper_goal, self._gripper_result_cb, self._gripper_feedback_cb, self._gripper_error_cb
+            )
+            self.curr_gripper_goal = gripper_goal
 
     def _reset_idx(self) -> None:
         """Reset environment based on specified indices to default position."""
@@ -449,3 +451,53 @@ class KinovaROS2Env(ROS2RLEnv):
                 return np.frombuffer(payload.encode("latin-1"), dtype=np.uint8)
 
         raise TypeError(f"Unsupported payload type for {field_name}: {type(payload).__name__}")
+
+
+class KinovaROS2VelEnv(KinovaROS2Env):
+    """Kinova Gen3 7DoF ROS2 implementation."""
+
+    def __init__(
+        self, cfg: KinovaROS2EnvCfg, ros: Ros, render_mode: str | None = None, **kwargs: dict[str, Any]
+    ) -> None:
+        """Initialize Kinova Arm ROS2."""
+        super().__init__(cfg, ros, render_mode, **kwargs)
+        print("INITIALIZING VEL ENV")
+
+    def _publish_action_to_robot(self, joint_vel: np.ndarray, duration: float = 3) -> None:
+        """Publish the robot action.
+
+        Args:
+            joint_pos: NDArray of joint velocities
+            duration: Duration of trajectory
+
+        """
+        joint_msg = {
+            "joint_names": self.joint_names[: -len(self.cfg.gripper_joint_names)].tolist(),
+            "points": [
+                {
+                    "positions": [],
+                    "velocities": joint_vel[: -len(self.cfg.gripper_joint_names)].tolist(),
+                    "accelerations": [],
+                    "effort": [],
+                    "time_from_start": {
+                        "secs": math.floor(duration),
+                        "nsecs": int((duration - math.floor(duration)) * 10e9),
+                    },
+                }
+            ],
+        }
+
+        gripper_val = float(joint_vel[-1])
+        gripper_val = max(0, min(gripper_val, 1)) * 0.8
+        # if self.cfg.use_fake_hardware == "true":
+        #     gripper_goal = {"command": {"position": gripper_val, "max_effort": 100.0}}
+        # else:
+        gripper_goal = {"command": {"name": self.cfg.gripper_joint_names, "position": [gripper_val]}}
+
+        self.joint_states_pub.publish(joint_msg)
+
+        if gripper_goal != self.curr_gripper_goal:
+            _ = self.gripper_client.send_goal(
+                gripper_goal, self._gripper_result_cb, self._gripper_feedback_cb, self._gripper_error_cb
+            )
+            self.curr_gripper_goal = gripper_goal

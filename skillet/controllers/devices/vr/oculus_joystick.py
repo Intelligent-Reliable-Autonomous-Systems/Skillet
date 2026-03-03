@@ -6,10 +6,9 @@ from collections.abc import Callable
 from typing import Any
 from dataclasses import dataclass
 
-import numpy as np
 import torch
-from pynput import keyboard as pynput_keyboard
-from scipy.spatial.transform import Rotation
+from skillet.core.math import euler_xyz_to_rotvec, base_to_tcp_twist
+
 
 from ..device_base import DeviceBase, DeviceCfg
 
@@ -37,12 +36,12 @@ class VRJoystick(DeviceBase):
         self.pos_sensitivity = cfg.pos_sensitivity
         self.rot_sensitivity = cfg.rot_sensitivity
         self.gripper_term = cfg.gripper_term
-        self._sim_device = cfg.sim_device
+        self._device = cfg.sim_device
 
         # Command buffers
         self._close_gripper = False
-        self._delta_pos = np.zeros(3)
-        self._delta_rot = np.zeros(3)
+        self._delta_pos = torch.zeros((3,), device=self._device)
+        self._delta_rot = torch.zeros((3,), device=self._device)
 
         self._additional_callbacks: dict[str, Callable] = {}
         self._listener = VRJoystickListener(host=cfg.host, port=cfg.port)
@@ -74,23 +73,33 @@ class VRJoystick(DeviceBase):
 
     def reset(self):
         self._close_gripper = False
-        self._delta_pos = np.zeros(3)
-        self._delta_rot = np.zeros(3)
+        self._delta_pos = torch.zeros((3,), device=self._device)
+        self._delta_rot = torch.zeros((3,), device=self._device)
 
-    def advance(self) -> torch.Tensor:
+    def advance(self, tcp_pose_b: torch.Tensor) -> torch.Tensor:
         """Return the current command as a tensor.
+
+        Args:
+            tcp_pose_b: TCP pose of robot in robot base frame.
 
         Returns:
             torch.Tensor: [x, y, z, rx, ry, rz] or [x, y, z, rx, ry, rz, gripper]
 
         """
         self._read_latest()
-        rot_vec = Rotation.from_euler("XYZ", self._delta_rot).as_rotvec()
-        command = np.concatenate([self._delta_pos, rot_vec])
+
+        rot_vec = euler_xyz_to_rotvec(self._delta_rot)
+        if self.frame == "tcp":
+            command = torch.cat((self._delta_pos, rot_vec), dim=0)
+        elif self.frame == "base":
+            tcp_lin_vel, tcp_ang_vel = base_to_tcp_twist(
+                self._delta_pos, self._delta_rot, tcp_pose_b[:, 3:7].squeeze(0)
+            )
+            command = torch.cat((tcp_lin_vel, tcp_ang_vel), dim=0)
         if self.gripper_term:
             gripper_value = 1.0 if self._close_gripper else -1.0
-            command = np.append(command, gripper_value)
-        return torch.tensor(command, dtype=torch.float32, device=self._sim_device)
+            command = torch.cat((command, torch.as_tensor([gripper_value], device=self._device)), dim=0)
+        return command.to(torch.float32)
 
     def _read_latest(self) -> None:
         """Read the latest input from the VR Joystick."""
@@ -128,3 +137,4 @@ class VRJoystickCfg(DeviceCfg):
     class_type: type[DeviceBase] = VRJoystick
     host: str = "192.168.2.33"
     port: int = 5555
+    reference_frame: str = "base"  # or base

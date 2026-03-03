@@ -71,7 +71,7 @@ def main() -> None:
     # Create teleop device from config if present, otherwise create manually
     if args_cli.teleop_device.lower() == "keyboard":
         teleop_interface = Se3Keyboard(
-            Se3KeyboardCfg(pos_sensitivity=0.25 * sensitivity, rot_sensitivity=10 * sensitivity)
+            Se3KeyboardCfg(pos_sensitivity=0.15 * sensitivity, rot_sensitivity=10 * sensitivity)
         )
     elif args_cli.teleop_device.lower() == "vr_joystick":
         teleop_interface = VRJoystick(
@@ -91,11 +91,8 @@ def main() -> None:
 
     while True:
         with torch.inference_mode():
-            if isinstance(teleop_interface, VRHeadset):
-                curr_tcp_pose = env._get_tcp_pose_b()
-                teleop = teleop_interface.advance(curr_tcp_pose)
-            else:
-                teleop = teleop_interface.advance()
+            curr_tcp_pose = env._get_tcp_pose_b()
+            teleop = teleop_interface.advance(curr_tcp_pose)
 
             # assuming teleop is a tensor
             actions = teleop.repeat(env.num_envs, 1)

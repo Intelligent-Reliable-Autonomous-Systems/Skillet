@@ -62,6 +62,7 @@ class DifferentialIKController:
         command_type: Literal["pose", "position"] = "pose",
         use_relative_mode: bool = False,
         ik_method: Literal["pinv", "svd", "trans", "dls"] = "dls",  # "pinv",
+        velocity_mode: bool = False,
     ) -> None:
         """Initialize the controller.
 
@@ -79,10 +80,12 @@ class DifferentialIKController:
         self.ik_method = ik_method
         self._device = device
         self.ik_params = self.default_ik_params[self.ik_method]
+        self.velocity_mode = velocity_mode
         # -- input command
         self._command = None
         self.ee_pos_des = None
         self.ee_quat_des = None
+        self.q_dot_prev = None
 
     """
     Properties.
@@ -115,10 +118,12 @@ class DifferentialIKController:
             self.ee_pos_des = torch.zeros(n_envs, 3, device=self._device)
             self.ee_quat_des = torch.zeros(n_envs, 4, device=self._device)
             self._command = torch.zeros(n_envs, self.action_dim, device=self._device)
+            self.q_dot_prev = torch.zeros(n_envs, self.action_dim, device=self._device)
         else:
             self.ee_pos_des[env_ids] = torch.zeros(env_ids.shape[0], 3, device=self._device)
             self.ee_quat_des[env_ids] = torch.zeros(env_ids.shape[0], 4, device=self._device)
             self._command[env_ids] = torch.zeros(env_ids.shape[0], self.action_dim, device=self._device)
+            self.q_dot_prev[env_ids] = torch.zeros(env_ids.shape[0], self.action_dim, device=self._device)
 
     def set_command(
         self,
@@ -211,8 +216,10 @@ class DifferentialIKController:
             )
             pose_error = torch.cat((position_error, axis_angle_error), dim=1)
             delta_joint_pos = self._compute_delta_joint_pos(delta_pose=pose_error, jacobian=jacobian)
+
         # return the desired joint positions
-        return joint_pos + delta_joint_pos
+        print(self._velocity_smoothing(delta_joint_pos))
+        return self._velocity_smoothing(delta_joint_pos) if self.velocity_mode else joint_pos + delta_joint_pos
 
     """
     Helper functions.
@@ -280,3 +287,37 @@ class DifferentialIKController:
             raise ValueError(f"Unsupported inverse-kinematics method: {self.ik_method}")
 
         return delta_joint_pos
+
+    def _velocity_smoothing(self, delta_joint_pos: torch.Tensor) -> torch.Tensor:
+        """
+        Smooth joint velocities computed from DiffIK.
+
+        Args:
+            delta_joint_pose: A tensor of shape (N, num_joints) for delta joint positions.
+
+        Returns:
+            A tensor of shape (N, num_joints) of smoothed joint positions.
+
+        """
+        self.max_delta = 0.05
+        self.dt = 1 / 60
+        self.max_vel = 0.25
+        self.alpha = 0.3
+
+        max_comp = torch.max(torch.abs(delta_joint_pos))
+        if max_comp > self.max_delta:
+            delta_joint_pos = delta_joint_pos * (self.max_delta / max_comp)
+
+        # 2. Convert to velocity
+        q_dot = delta_joint_pos  # * self.dt
+
+        # 3. Clamp to hardware limits
+        q_dot = torch.clip(q_dot, -self.max_vel, self.max_vel)
+
+        # 4. Low-pass filter
+        if self.q_dot_prev is None:
+            self.q_dot_prev = q_dot
+        q_dot = self.alpha * q_dot + (1 - self.alpha) * self.q_dot_prev
+        self.q_dot_prev = q_dot
+
+        return self.q_dot_prev

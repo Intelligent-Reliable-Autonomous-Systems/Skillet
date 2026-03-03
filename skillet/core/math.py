@@ -1999,3 +1999,78 @@ def generate_random_transformation_matrix(pos_boundary: float = 1, rot_boundary:
     t[:3, 3] = translation
 
     return t
+
+
+@torch.jit.script
+def euler_xyz_to_rotvec(euler: torch.Tensor) -> torch.Tensor:
+    """
+    Convert XYZ extrinsic Euler angles to rotation vector. Assumes input is NOT batched.
+
+    Args:
+        euler: tensor of shape (3,) in radians [rx, ry, rz].
+
+    Returns:
+        Torch tensor rotation matrix.
+    """
+    # Build individual rotation matrices
+    rx, ry, rz = euler[0], euler[1], euler[2]
+
+    # Rotation about X
+    Rx = torch.stack(
+        [
+            torch.stack([torch.ones_like(rx), torch.zeros_like(rx), torch.zeros_like(rx)]),
+            torch.stack([torch.zeros_like(rx), torch.cos(rx), -torch.sin(rx)]),
+            torch.stack([torch.zeros_like(rx), torch.sin(rx), torch.cos(rx)]),
+        ]
+    )
+
+    # Rotation about Y
+    Ry = torch.stack(
+        [
+            torch.stack([torch.cos(ry), torch.zeros_like(ry), torch.sin(ry)]),
+            torch.stack([torch.zeros_like(ry), torch.ones_like(ry), torch.zeros_like(ry)]),
+            torch.stack([-torch.sin(ry), torch.zeros_like(ry), torch.cos(ry)]),
+        ]
+    )
+
+    # Rotation about Z
+    Rz = torch.stack(
+        [
+            torch.stack([torch.cos(rz), -torch.sin(rz), torch.zeros_like(rz)]),
+            torch.stack([torch.sin(rz), torch.cos(rz), torch.zeros_like(rz)]),
+            torch.stack([torch.zeros_like(rz), torch.zeros_like(rz), torch.ones_like(rz)]),
+        ]
+    )
+
+    # Combined rotation matrix XYZ extrinsic = Z @ Y @ X intrinsic
+    R = Rz @ Ry @ Rx
+
+    # Convert rotation matrix to rotation vector (axis-angle)
+    angle = torch.acos(((R.trace() - 1) / 2).clamp(-1, 1))
+
+    if angle.abs() < 1e-6:
+        return torch.zeros(3, dtype=euler.dtype)
+
+    axis = torch.stack([R[2, 1] - R[1, 2], R[0, 2] - R[2, 0], R[1, 0] - R[0, 1]]) / (2 * torch.sin(angle))
+
+    return axis * angle
+
+
+@torch.jit.script
+def base_to_tcp_twist(
+    linear_vel: torch.Tensor,
+    angular_vel: torch.Tensor,
+    tcp_quat: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """
+    Transform a twist from base frame to TCP frame. Assumes input is unbatched
+
+    Skillet quaternions are [w, x, y, z] following IsaacLab convention.
+    """
+    tcp_quat_inv = quat_inv(tcp_quat.unsqueeze(0))
+
+    # Rotate linear and angular velocities into TCP frame
+    linear_vel_tcp = quat_apply(tcp_quat_inv, linear_vel.unsqueeze(0)).squeeze(0)
+    angular_vel_tcp = quat_apply(tcp_quat_inv, angular_vel.unsqueeze(0)).squeeze(0)
+
+    return linear_vel_tcp, angular_vel_tcp

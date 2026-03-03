@@ -5,12 +5,11 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-import numpy as np
 import torch
 from pynput import keyboard as pynput_keyboard
-from scipy.spatial.transform import Rotation
 
 from ..device_base import DeviceBase, DeviceCfg
+from skillet.core.math import euler_xyz_to_rotvec, base_to_tcp_twist
 
 
 class Se3Keyboard(DeviceBase):
@@ -37,12 +36,13 @@ class Se3Keyboard(DeviceBase):
         self.pos_sensitivity = cfg.pos_sensitivity
         self.rot_sensitivity = cfg.rot_sensitivity
         self.gripper_term = cfg.gripper_term
-        self._sim_device = cfg.sim_device
+        self._device = cfg.sim_device
+        self.frame = cfg.reference_frame
 
         # Command buffers
         self._close_gripper = False
-        self._delta_pos = np.zeros(3)
-        self._delta_rot = np.zeros(3)
+        self._delta_pos = torch.zeros((3,), device=self._device)
+        self._delta_rot = torch.zeros((3,), device=self._device)
 
         self._additional_callbacks: dict[str, Callable] = {}
 
@@ -80,8 +80,8 @@ class Se3Keyboard(DeviceBase):
 
     def reset(self):
         self._close_gripper = False
-        self._delta_pos = np.zeros(3)
-        self._delta_rot = np.zeros(3)
+        self._delta_pos = torch.zeros((3,), device=self._device)
+        self._delta_rot = torch.zeros((3,), device=self._device)
         self._pressed_keys.clear()
 
     def add_callback(self, key: str, func: Callable):
@@ -94,19 +94,30 @@ class Se3Keyboard(DeviceBase):
         """
         self._additional_callbacks[key.upper()] = func
 
-    def advance(self) -> torch.Tensor:
+    def advance(self, tcp_pose_b: torch.Tensor) -> torch.Tensor:
         """Return the current command as a tensor.
+
+        Args:
+            tcp_pose_b: TCP pose of the robot in the robot base frame.
 
         Returns:
             torch.Tensor: [x, y, z, rx, ry, rz] or [x, y, z, rx, ry, rz, gripper]
 
         """
-        rot_vec = Rotation.from_euler("XYZ", self._delta_rot).as_rotvec()
-        command = np.concatenate([self._delta_pos, rot_vec])
+        rot_vec = euler_xyz_to_rotvec(self._delta_rot)
+
+        if self.frame == "tcp":
+            command = torch.cat((self._delta_pos, rot_vec), dim=0)
+        elif self.frame == "base":
+            tcp_lin_vel, tcp_ang_vel = base_to_tcp_twist(
+                self._delta_pos, self._delta_rot, tcp_pose_b[:, 3:7].squeeze(0)
+            )
+            command = torch.cat((tcp_lin_vel, tcp_ang_vel), dim=0)
+
         if self.gripper_term:
             gripper_value = 1.0 if self._close_gripper else -1.0
-            command = np.append(command, gripper_value)
-        return torch.tensor(command, dtype=torch.float32, device=self._sim_device)
+            command = torch.cat((command, torch.as_tensor([gripper_value], device=self._device)), dim=0)
+        return command.to(torch.float32)
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -166,23 +177,23 @@ class Se3Keyboard(DeviceBase):
 
         self._INPUT_KEY_MAPPING = {
             # x-axis (forward/back)
-            "W": np.array([1.0, 0.0, 0.0]) * self.pos_sensitivity,
-            "S": np.array([-1.0, 0.0, 0.0]) * self.pos_sensitivity,
+            "W": torch.as_tensor([1.0, 0.0, 0.0], device=self._device) * self.pos_sensitivity,
+            "S": torch.as_tensor([-1.0, 0.0, 0.0], device=self._device) * self.pos_sensitivity,
             # y-axis (left/right)
-            "A": np.array([0.0, 1.0, 0.0]) * self.pos_sensitivity,
-            "D": np.array([0.0, -1.0, 0.0]) * self.pos_sensitivity,
+            "A": torch.as_tensor([0.0, 1.0, 0.0], device=self._device) * self.pos_sensitivity,
+            "D": torch.as_tensor([0.0, -1.0, 0.0], device=self._device) * self.pos_sensitivity,
             # z-axis (up/down)
-            "Q": np.array([0.0, 0.0, 1.0]) * self.pos_sensitivity,
-            "E": np.array([0.0, 0.0, -1.0]) * self.pos_sensitivity,
+            "Q": torch.as_tensor([0.0, 0.0, 1.0], device=self._device) * self.pos_sensitivity,
+            "E": torch.as_tensor([0.0, 0.0, -1.0], device=self._device) * self.pos_sensitivity,
             # roll (around x)
-            "Z": np.array([1.0, 0.0, 0.0]) * self.rot_sensitivity,
-            "X": np.array([-1.0, 0.0, 0.0]) * self.rot_sensitivity,
+            "Z": torch.as_tensor([1.0, 0.0, 0.0], device=self._device) * self.rot_sensitivity,
+            "X": torch.as_tensor([-1.0, 0.0, 0.0], device=self._device) * self.rot_sensitivity,
             # pitch (around y)
-            "T": np.array([0.0, 1.0, 0.0]) * self.rot_sensitivity,
-            "G": np.array([0.0, -1.0, 0.0]) * self.rot_sensitivity,
+            "T": torch.as_tensor([0.0, 1.0, 0.0], device=self._device) * self.rot_sensitivity,
+            "G": torch.as_tensor([0.0, -1.0, 0.0], device=self._device) * self.rot_sensitivity,
             # yaw (around z)
-            "C": np.array([0.0, 0.0, 1.0]) * self.rot_sensitivity,
-            "V": np.array([0.0, 0.0, -1.0]) * self.rot_sensitivity,
+            "C": torch.as_tensor([0.0, 0.0, 1.0], device=self._device) * self.rot_sensitivity,
+            "V": torch.as_tensor([0.0, 0.0, -1.0], device=self._device) * self.rot_sensitivity,
         }
 
 
@@ -195,3 +206,4 @@ class Se3KeyboardCfg(DeviceCfg):
     rot_sensitivity: float = 0.8
     retargeters: None = None
     class_type: type[DeviceBase] = Se3Keyboard
+    reference_frame: str = "base"  # or base
