@@ -118,11 +118,14 @@ class IsaacEnvWrapper(
         self.obs_spec_rgbd = RGBD_SPEC_BATCHED.bind(height=480, width=640).replace(device=self.device)
         """Specification of RGB-D observations and metadata. Bound to the height and width of the RGB-D camera."""
         self.obs_spec_ikee = IK_EE_SPEC_BATCHED.bind(
-            n_joints=len(self._joint_ids), n_arm_joints=len(self._joint_ids[:-len(self._gripper_joint_names)]) # Assumes all non gripper joints are arm joints
+            n_joints=len(self._joint_ids),
+            n_arm_joints=len(
+                self._joint_ids[: -len(self._gripper_joint_names)]
+            ),  # Assumes all non gripper joints are arm joints
         ).replace(device=self.device)
         """Specification of IK-EE observations."""
         self.obs_spec_osc = OSC_SPEC_BATCHED.bind(
-            n_joints=len(self._joint_ids), n_arm_joints=len(self._joint_ids[:-len(self._gripper_joint_names)])
+            n_joints=len(self._joint_ids), n_arm_joints=len(self._joint_ids[: -len(self._gripper_joint_names)])
         ).replace(device=self.device)
         """Specification of OSC observations."""
         self._action_spec = ActionSpec[BxM_Action](

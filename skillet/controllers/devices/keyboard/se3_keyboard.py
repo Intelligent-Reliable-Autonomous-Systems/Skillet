@@ -24,7 +24,6 @@ class Se3Keyboard(DeviceBase):
         Description                    Key (+ve axis)    Key (-ve axis)
         ============================== ================= =================
         Toggle gripper (open/close)    K
-        Reset                          L
         Move along x-axis              W                 S
         Move along y-axis              A                 D
         Move along z-axis              Q                 E
@@ -45,13 +44,10 @@ class Se3Keyboard(DeviceBase):
         self._delta_pos = np.zeros(3)
         self._delta_rot = np.zeros(3)
 
-        # Additional user-registered callbacks
         self._additional_callbacks: dict[str, Callable] = {}
 
-        # Build key->delta mappings
         self._create_key_bindings()
 
-        # Track which keys are currently held to avoid double-subtracting on release
         self._pressed_keys: set[str] = set()
 
         # Start the pynput listener in a background thread (non-blocking)
@@ -69,7 +65,6 @@ class Se3Keyboard(DeviceBase):
     def __str__(self) -> str:
         msg = f"Keyboard Controller for SE(3): {self.__class__.__name__}\n"
         msg += "\t----------------------------------------------\n"
-        msg += "\tReset: L\n"
         msg += "\tToggle gripper (open/close): K\n"
         msg += "\tMove arm along x-axis: W/S\n"
         msg += "\tMove arm along y-axis: A/D\n"
@@ -109,7 +104,7 @@ class Se3Keyboard(DeviceBase):
         rot_vec = Rotation.from_euler("XYZ", self._delta_rot).as_rotvec()
         command = np.concatenate([self._delta_pos, rot_vec])
         if self.gripper_term:
-            gripper_value = -1.0 if self._close_gripper else 1.0
+            gripper_value = 1.0 if self._close_gripper else -1.0
             command = np.append(command, gripper_value)
         return torch.tensor(command, dtype=torch.float32, device=self._sim_device)
 

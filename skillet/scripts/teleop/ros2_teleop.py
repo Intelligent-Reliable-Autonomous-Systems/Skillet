@@ -1,6 +1,6 @@
-"""ros2_teleop.py.
+"""ros2_teleop_vr.py.
 
-Script to run a keyboard teleoperation with ROS2 manipulation environments.
+Script to run a keyboard or joystick teleoperation with ROS2 manipulation environments.
 
 Written by Will Solow, 2026.
 """
@@ -12,7 +12,7 @@ import gymnasium as gym
 import torch
 
 import kinova_tasks.ros2_tasks  # noqa: F401
-from skillet.controllers.devices import Se3Keyboard, Se3KeyboardCfg
+from skillet.controllers.devices import Se3Keyboard, Se3KeyboardCfg, VRJoystickCfg, VRJoystick, VRHeadsetCfg, VRHeadset
 from skillet.envs.ros2_skillet_env import ROS2SkilletEnv
 from skillet.envs.util import parse_ros2_env_cfg, setup_ros
 
@@ -24,6 +24,7 @@ parser.add_argument(
     "--teleop_device",
     type=str,
     default="keyboard",
+    choices={"keyboard", "vr_joystick", "vr_headset"},
     help="Device for interacting with environment. Examples: keyboard, spacemouse, gamepad, handtracking, manusvive",
 )
 parser.add_argument("--task", type=str, default="ROS2-Kinova-Twist-Rel-v0", help="Name of the task.")
@@ -48,6 +49,7 @@ def main() -> None:
 
     Defaults to ROS2-Kinova-Twist-Rel-v0 environment which assumes that actions are velocities of the end effector in 6 DoF.
     """
+
     env_cfg = parse_ros2_env_cfg(
         args_cli.task,
         device=args_cli.device,
@@ -69,8 +71,14 @@ def main() -> None:
     # Create teleop device from config if present, otherwise create manually
     if args_cli.teleop_device.lower() == "keyboard":
         teleop_interface = Se3Keyboard(
-            Se3KeyboardCfg(pos_sensitivity=0.05 * sensitivity, rot_sensitivity=10 * sensitivity)
+            Se3KeyboardCfg(pos_sensitivity=0.25 * sensitivity, rot_sensitivity=10 * sensitivity)
         )
+    elif args_cli.teleop_device.lower() == "vr_joystick":
+        teleop_interface = VRJoystick(
+            VRJoystickCfg(pos_sensitivity=0.15 * sensitivity, rot_sensitivity=10 * sensitivity)
+        )
+    elif args_cli.teleop_device.lower() == "vr_headset":
+        teleop_interface = VRHeadset(VRHeadsetCfg(pos_sensitivity=0.15 * sensitivity, rot_sensitivity=10 * sensitivity))
     else:
         raise ValueError(f"Unsupported teleop device: {args_cli.teleop_device}")
 
@@ -83,8 +91,14 @@ def main() -> None:
 
     while True:
         with torch.inference_mode():
-            action = teleop_interface.advance()
-            actions = action.repeat(env.num_envs, 1)
+            if isinstance(teleop_interface, VRHeadset):
+                curr_tcp_pose = env._get_tcp_pose_b()
+                teleop = teleop_interface.advance(curr_tcp_pose)
+            else:
+                teleop = teleop_interface.advance()
+
+            # assuming teleop is a tensor
+            actions = teleop.repeat(env.num_envs, 1)
             env.step(actions)
 
 

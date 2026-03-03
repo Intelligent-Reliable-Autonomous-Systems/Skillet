@@ -174,9 +174,7 @@ class KinovaROS2Env(ROS2RLEnv):
         self.joint_states_sub.subscribe(_update_robot_state)
 
         # Set up joint trajectory publisher and twist controller
-        self.joint_states_pub = Topic(
-            self.ros, self.joint_cmd_topic, "trajectory_msgs/msg/JointTrajectory"
-        )  # TODO might not work with extra /msg/
+        self.joint_states_pub = Topic(self.ros, self.joint_cmd_topic, "trajectory_msgs/msg/JointTrajectory")
         self.twist_vel_pub = Topic(self.ros, self.twist_vel_topic, "geometry_msgs/msg/Twist")
 
         self.gripper_client = ActionClient(self.ros, self.gripper_cmd_topic, self.gripper_topic_type)

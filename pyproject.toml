@@ -32,6 +32,8 @@ dependencies = [
     "jaxtyping",
     "typing-extensions",
     "pynput",
+    "zmq",
+    "scipy",
 ]
 
 [project.optional-dependencies]
