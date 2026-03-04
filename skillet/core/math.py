@@ -12,7 +12,6 @@ import logging
 import math
 from typing import Literal
 
-import numpy as np
 import torch
 import torch.nn.functional
 
@@ -200,7 +199,8 @@ def matrix_from_quat(quaternions: torch.Tensor) -> torch.Tensor:
     return o.reshape(quaternions.shape[:-1] + (3, 3))
 
 
-def convert_quat(quat: torch.Tensor | np.ndarray, to: Literal["xyzw", "wxyz"] = "xyzw") -> torch.Tensor | np.ndarray:
+@torch.jit.script
+def convert_quat(quat: torch.Tensor, to: str = "xyzw") -> torch.Tensor:
     """Convert quaternion from one convention to another.
 
     The convention to convert TO is specified as an optional argument. If to == 'xyzw',
@@ -225,17 +225,6 @@ def convert_quat(quat: torch.Tensor | np.ndarray, to: Literal["xyzw", "wxyz"] = 
     if to not in ["xyzw", "wxyz"]:
         msg = f"Expected input argument `to` to be 'xyzw' or 'wxyz'. Received: {to}."
         raise ValueError(msg)
-    # check if input is numpy array (we support this backend since some classes use numpy)
-    if isinstance(quat, np.ndarray):
-        # use numpy functions
-        if to == "xyzw":
-            # wxyz -> xyzw
-            return np.roll(quat, -1, axis=-1)
-        # xyzw -> wxyz
-        return np.roll(quat, 1, axis=-1)
-    # convert to torch (sanity check)
-    if not isinstance(quat, torch.Tensor):
-        quat = torch.tensor(quat, dtype=float)
     # convert to specified quaternion type
     if to == "xyzw":
         # wxyz -> xyzw

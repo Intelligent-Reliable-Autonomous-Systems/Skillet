@@ -175,6 +175,7 @@ class KinovaROS2Env(ROS2Env):
             self.ros, "/controller_manager/switch_controller", "controller_manager_msgs/srv/SwitchController"
         )
         self.curr_gripper_goal = None
+        self.curr_moveit_goal = None
 
         # Subscribe to ROS2 topics
         self.joint_states_sub = Topic(self.ros, self.joint_state_topic, "sensor_msgs/msg/JointState")
@@ -232,7 +233,6 @@ class KinovaROS2Env(ROS2Env):
             duration: Duration of trajectory
 
         """
-        action_spec = action_spec.replace(name="moveit_joints")  # TODO don't hardcode this
         # Send the gripper command first as this will be non-blocking FOR NOW
         gripper_val = float(action[-1])
         gripper_val = max(0, min(gripper_val, 1)) * 0.8
@@ -251,8 +251,8 @@ class KinovaROS2Env(ROS2Env):
             self._publish_joint_spec(action, duration)
         elif action_spec.name == "twist_tcp":
             self._publish_twist_tcp_spec(action)
-        elif action_spec.name == "moveit_joints":
-            self._publish_moveit_joints_spec(action)
+        elif "moveit" in action_spec.name:
+            self._publish_moveit_spec(action, action_spec=action_spec)
         else:
             raise ValueError(f"Unknown Action Specification `{action_spec.name}`")
 
@@ -394,11 +394,14 @@ class KinovaROS2Env(ROS2Env):
 
         self.twist_vel_pub.publish(twist_cmd)
 
-    def _publish_moveit_joints_spec(self, moveit_joints: np.ndarray, timeout: int = 30) -> None:
+    def _publish_moveit_spec(
+        self, moveit_pose: np.ndarray, action_spec: ActionSpec[Any] | None = None, timeout: int = 30
+    ) -> None:
         """Publish a MoveIt trajectory to move the arm to specified joint positions.
 
         Args:
-            moveit_joints: The desired joint positions to send to moveit
+            moveit_pose: The desired joint positions to send to moveit
+            action_spec: Action specification for moveit
             timeout: Duration before the threading event should time out
 
         """
@@ -410,29 +413,12 @@ class KinovaROS2Env(ROS2Env):
             self.active_controller = "joint_trajectory_controller"
             print("[INFO] Successfully switched controller to `joint_trajectory_controller`")
 
-        moveit_goal = {
-            "request": {
-                "group_name": "manipulator",
-                "goal_constraints": [
-                    {
-                        "joint_constraints": [
-                            {
-                                "joint_name": j,
-                                "position": float(moveit_joints[i]),
-                                "tolerance_above": 0.01,
-                                "tolerance_below": 0.01,
-                                "weight": 1.0,
-                            }
-                            for i, j in enumerate(self.joint_names[:-1])
-                        ]
-                    }
-                ],
-                "num_planning_attempts": 10,
-                "allowed_planning_time": 5.0,
-                "max_velocity_scaling_factor": 0.5,
-                "max_acceleration_scaling_factor": 0.5,
-            }
-        }
+        if action_spec.name == "moveit_joints":
+            moveit_goal = self._moveit_joint_msg(moveit_pose)
+        elif action_spec.name == "moveit_tcp":
+            moveit_goal = self._moveit_tcp_pose_msg(moveit_pose)
+        else:
+            raise ValueError(f"Unsupported MoveIt ActionSpec `{action_spec.name}`")
 
         result_container = {}
         done_event = threading.Event()
@@ -448,7 +434,8 @@ class KinovaROS2Env(ROS2Env):
             result_container["error"] = error
             done_event.set()
 
-        _ = self.moveit_client.send_goal(moveit_goal, on_result, on_feedback, on_error)
+        if self.curr_moveit_goal != moveit_goal:
+            _ = self.moveit_client.send_goal(moveit_goal, on_result, on_feedback, on_error)
 
         finished = done_event.wait(timeout=timeout)
 
@@ -457,6 +444,7 @@ class KinovaROS2Env(ROS2Env):
 
         if "error" in result_container:
             raise RuntimeError(f"MoveIt action error: {result_container['error']}")
+
         print(f"[INFO] Executed MoveIt trajectory successfully. {result_container['result']}")
 
     @staticmethod
@@ -484,46 +472,14 @@ class KinovaROS2Env(ROS2Env):
 
         raise TypeError(f"Unsupported payload type for {field_name}: {type(payload).__name__}")
 
-    def _moveit_result_cb(self, result: dict[str, Any]) -> None:
-        """MoveIt action result callback."""
-        status = result.get("status")
-        message = result.get("message", "")
-        if status.name == "SUCCEEDED":
-            # print(f"[INFO] MoveIt succeeded: {message}")
-            self.moveit_ok = True
-
-        elif status.name == "ABORTED":
-            print(f"[INFO] MoveIt aborted: {message}")
-            self.moveit_ok = False
-
-        elif status.name == "CANCELED":
-            print(f"[INFO] MoveIt canceled: {message}")
-            self.moveit_ok = False
-        else:
-            print(f"[INFO] Unknown MoveIt result: {result}")
-            self.moveit_ok = False
-        pass
-
     def _moveit_feedback_cb(self, feedback: dict[str, Any]) -> None:
         """MoveIt action feedback callback."""
+        pos = feedback.get("position")
+        effort = feedback.get("effort")
         stalled = feedback.get("stalled", False)
+
         if stalled:
-            print("[INFO] MoveIt stalled before reaching goal")
-
-        pass
-
-    def _moveit_error_cb(self, err: dict[str, Any]) -> None:
-        """MoveIt action error callback."""
-        code = err.get("code")
-        message = err.get("message", "Unknown error")
-        details = err.get("details")
-
-        print(f"[INFO] MoveIt error! code={code}, message={message}, details={details}")
-
-        # Set internal state so higher-level logic can react
-        self.moveit_ok = False
-        self.last_moveit_err = err
-        pass
+            print(f"[INFO] MoveIt feedback: pos={pos}, effort={effort}, stalled={stalled}")
 
     def _gripper_result_cb(self, result: dict[str, Any]) -> None:
         """Gripper action result callback."""
@@ -567,3 +523,101 @@ class KinovaROS2Env(ROS2Env):
         # Set internal state so higher-level logic can react
         self.gripper_ok = False
         self.last_gripper_error = err
+
+    def _moveit_joint_msg(self, joint_pos: np.ndarray) -> dict:
+        joint_pos = joint_pos.tolist()
+        return {
+            "request": {
+                "group_name": "manipulator",
+                "start_state": {"is_diff": True},  # <-- tells MoveIt "use current real state, ignore what I send"
+                "goal_constraints": [
+                    {
+                        "joint_constraints": [
+                            {
+                                "joint_name": j,
+                                "position": joint_pos[i],
+                                "tolerance_above": 0.01,
+                                "tolerance_below": 0.01,
+                                "weight": 1.0,
+                            }
+                            for i, j in enumerate(self.joint_names[:-1])
+                        ]
+                    }
+                ],
+                "num_planning_attempts": 10,
+                "allowed_planning_time": 5.0,
+                "max_velocity_scaling_factor": 0.5,
+                "max_acceleration_scaling_factor": 0.5,
+            }
+        }
+
+    def _moveit_tcp_pose_msg(self, tcp_pose_b: np.ndarray) -> dict:
+        ee_pose_b = (
+            self._compute_goal_ee_pose_b_from_goal_tcp_b(
+                torch.as_tensor(tcp_pose_b).unsqueeze(0), torch.as_tensor(self.cfg.tcp_offset).unsqueeze(0)
+            )
+            .cpu()
+            .numpy()
+            .squeeze()
+            .tolist()
+        )
+
+        return {
+            "goal": {
+                "request": {
+                    "group_name": "manipulator",
+                    "goal_constraints": [
+                        {
+                            "name": "pose_goal",
+                            "position_constraints": [
+                                {
+                                    "header": {"frame_id": "base_link"},
+                                    "link_name": self.cfg.ee_link_name,
+                                    "constraint_region": {
+                                        "primitives": [
+                                            {
+                                                "type": 2,  # BOX type
+                                                "dimensions": [0.01, 0.01, 0.01],  # tolerance box (meters)
+                                            }
+                                        ],
+                                        "primitive_poses": [
+                                            {
+                                                "position": {"x": ee_pose_b[0], "y": ee_pose_b[1], "z": ee_pose_b[2]},
+                                                "orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
+                                            }
+                                        ],
+                                    },
+                                    "weight": 1.0,
+                                }
+                            ],
+                            # --- ORIENTATION (RPY → quaternion) ---
+                            "orientation_constraints": [
+                                {
+                                    "header": {"frame_id": "base_link"},
+                                    "link_name": self.cfg.ee_link_name,
+                                    "orientation": {
+                                        "x": ee_pose_b[4],
+                                        "y": ee_pose_b[5],
+                                        "z": ee_pose_b[6],
+                                        "w": ee_pose_b[3],
+                                    },  # Skillet quaternion is in WXYZ
+                                    "absolute_x_axis_tolerance": 0.1,  # radians
+                                    "absolute_y_axis_tolerance": 0.1,
+                                    "absolute_z_axis_tolerance": 0.1,
+                                    "weight": 1.0,
+                                }
+                            ],
+                        }
+                    ],
+                    "num_planning_attempts": 10,
+                    "allowed_planning_time": 5.0,
+                    "max_velocity_scaling_factor": 0.2,
+                    "max_acceleration_scaling_factor": 0.2,
+                },
+                "planning_options": {
+                    "plan_only": False,
+                    "replan": True,
+                    "replan_attempts": 3,
+                },
+            }
+        }
