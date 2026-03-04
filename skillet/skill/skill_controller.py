@@ -7,11 +7,12 @@ import numpy as np
 import torch
 
 from skillet.core.policy import TBAction, TBPolicyObs
+from skillet.core.skill import BatchedSkill
 from skillet.envs.compatibility.gymnasium import GymVectorInterface
 from skillet.skill.skill_lib import SKILL_LIB
 
 
-class SkillController:
+class SkillController(BatchedSkill):
     """Class for contrilling skills in an RL environment."""
 
     def __init__(self, skills: list[str], num_envs: int, env: GymVectorInterface, device: str = "cuda") -> None:
@@ -77,9 +78,9 @@ class SkillController:
             action: A torch Tensor of shape (num_envs, num_skills+max_param_dim).
 
         """
-        assert (
-            action.shape[-1] == self.action_dim
-        ), f"Action dimension {action.shape[-1]} does not match expected skill dimension {self.action_dim}"
+        assert action.shape[-1] == self.action_dim, (
+            f"Action dimension {action.shape[-1]} does not match expected skill dimension {self.action_dim}"
+        )
         self._skills_idx = self.get_skill_from_action(action)
         self._skills_params = self.get_params_from_action(action)
 
