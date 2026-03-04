@@ -12,7 +12,7 @@ from skillet.envs.util import configclass
 
 
 @configclass
-class ROS2RLEnvCfg:
+class ROS2EnvCfg:
     """The configuration class for ROS2 RL Envs."""
 
     """Robot configuration"""

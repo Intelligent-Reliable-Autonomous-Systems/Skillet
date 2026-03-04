@@ -15,7 +15,7 @@ import torch
 from kinova_tasks.ros2_tasks.kinova.kinova_ros2 import KinovaROS2Env, KinovaROS2EnvCfg
 from skillet.agents.policy_over_options import PolicyOverOptionsAgent
 from skillet.envs.ros2_skillet_env import ROS2SkilletEnv
-from skillet.envs.specs import BxM_Action, BxN_Obs, IKEE_Obs
+from skillet.envs.specs import BxM_Action, IKEE_Obs
 from skillet.envs.util import setup_ros
 from skillet.policy.dummy import FixedSequencePolicy, RandomPolicy
 from skillet.policy.ik_ee import PoseAbsIKEEPolicy

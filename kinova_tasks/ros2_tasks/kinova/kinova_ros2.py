@@ -8,6 +8,7 @@ Written by Will Solow, 2026
 
 import base64
 import math
+import threading
 from typing import Any
 
 import cv2
@@ -16,9 +17,10 @@ import numpy as np
 import torch
 from roslibpy import ActionClient, Ros, Service, Topic
 
+from skillet.core.spaces import ActionSpec
 from skillet.envs.ros2 import (
-    ROS2RLEnv,
-    ROS2RLEnvCfg,
+    ROS2Env,
+    ROS2EnvCfg,
     launch_robot_hardware,
     wait_for_action_server,
     wait_for_rviz,
@@ -27,10 +29,11 @@ from skillet.envs.ros2 import (
     wait_until_ready,
 )
 from skillet.envs.util import configclass
+from skillet.policy.specs import JOINTS_SPEC
 
 
 @configclass
-class KinovaROS2EnvCfg(ROS2RLEnvCfg):
+class KinovaROS2EnvCfg(ROS2EnvCfg):
     """The configuration class for Kinova Gen3 Arm."""
 
     """Robot configuration"""
@@ -67,7 +70,7 @@ class KinovaROS2EnvCfg(ROS2RLEnvCfg):
     gripper_joint_names = ["robotiq_85_left_knuckle_joint"]
 
 
-class KinovaROS2Env(ROS2RLEnv):
+class KinovaROS2Env(ROS2Env):
     """Kinova Gen3 7DoF ROS2 implementation."""
 
     def __init__(
@@ -98,19 +101,18 @@ class KinovaROS2Env(ROS2RLEnv):
         self.robot_description_topic = "/robot_info"
         self.body_pose_topic = "/robot_body_pose_w"
         self.body_vel_topic = "/robot_body_vel_w"
-        # self.gripper_topic_type = (
-        #     "control_msgs/action/GripperCommand"
-        #     if cfg.use_fake_hardware == "true"
-        #     else "control_msgs/action/ParallelGripperCommand"
-        # )
-        self.gripper_topic_type = "control_msgs/action/ParallelGripperCommand"  # TODO this won't work in fake hardware
+        self.gripper_topic_type = "control_msgs/action/ParallelGripperCommand"  # TODO this won't work in fake hardware control_msgs/action/GripperCommand"
+        self.moveit_cmd_topic = "/move_action"
+        self.moveit_cmd_topic_type = "moveit_msgs/action/MoveGroup"
         self.realsense_snapshot_service = "/table_camera/realsense/get_latest_frame"
         self.realsense_snapshot_service_type = "iras_realsense_msgs/srv/GetLatestRgbd"
+
+        self.active_controller = "joint_trajectory_controller"
 
         self._ready = {
             "joint_states": False,
             "jacobians": False,
-            "robot_info": False,  # includes joint centers
+            "robot_info": False,
             "body_pose": False,
             "body_vel": False,
             "gravity_vector": False,
@@ -122,10 +124,18 @@ class KinovaROS2Env(ROS2RLEnv):
 
         self.single_observation_space = gym.spaces.Dict()
         self.single_observation_space["policy"] = gym.spaces.Box(float("-inf"), float("inf"), shape=(16,))
-        self.single_action_space = gym.spaces.Box(float("-inf"), float("inf"), shape=(8,))
+        self.single_action_space = gym.spaces.Box(float("-inf"), float("inf"), shape=(len(self.cfg.joint_ids),))
 
         self.observation_space = gym.vector.utils.batch_space(self.single_observation_space, self.num_envs)
         self.action_space = gym.vector.utils.batch_space(self.single_action_space, self.num_envs)
+
+        self._action_specs = [
+            JOINTS_SPEC.bind(
+                n_joints=len(self.cfg.joint_ids),
+            ).replace(device=self.device),
+            # TWIST_TCP_SPEC.replace(device=self.device),
+            # MOVEIT_TCP_SPEC.replace(device=self.device),
+        ]
 
         self._current_joint_positions = np.zeros(shape=len(self.joint_names))
         self._current_joint_velocities = np.zeros(shape=len(self.joint_names))
@@ -145,7 +155,8 @@ class KinovaROS2Env(ROS2RLEnv):
         wait_for_topic_publish(self.ros, self.joint_cmd_topic, "trajectory_msgs/msg/JointTrajectory")
         wait_for_topic_publish(self.ros, self.twist_vel_topic, "geometry_msgs/msg/Twist")
         wait_for_action_server(self.ros, self.gripper_cmd_topic, self.gripper_topic_type)
-        wait_for_topic_subscribe(self.ros, self.joint_state_topic, "sensor_msgs/msg/JointState")  # Added /msg/
+        wait_for_action_server(self.ros, self.moveit_cmd_topic, self.moveit_cmd_topic_type)
+        wait_for_topic_subscribe(self.ros, self.joint_state_topic, "sensor_msgs/msg/JointState")
         wait_for_rviz(self.ros)
 
         wait_for_topic_subscribe(self.ros, self.jacobian_topic, "gen3_cpp/msg/LinkMatrix")
@@ -155,155 +166,95 @@ class KinovaROS2Env(ROS2RLEnv):
         wait_for_topic_subscribe(self.ros, self.body_vel_topic, "gen3_cpp/msg/BodyInfo")
         wait_for_topic_subscribe(self.ros, self.gravity_vector_topic, "gen3_cpp/msg/LinkMatrix")
 
-        # Subscribe to joint states
-        self.joint_states_sub = Topic(self.ros, self.joint_state_topic, "sensor_msgs/msg/JointState")  # added /msg/
-
-        def _update_robot_state(msg: dict[str, Any]) -> None:
-            """Update the state of the robot by subscribing to robot topics."""
-            self._current_joint_positions = np.asarray(
-                [msg["position"][msg["name"].index(j)] for j in self.joint_names]
-            ).astype(np.float32)
-            self._current_joint_velocities = np.asarray(
-                [msg["velocity"][msg["name"].index(j)] for j in self.joint_names]
-            ).astype(np.float32)
-            self._current_joint_efforts = np.asarray(
-                [msg["effort"][msg["name"].index(j)] for j in self.joint_names]
-            ).astype(np.float32)
-            self._ready["joint_states"] = True
-
-        self.joint_states_sub.subscribe(_update_robot_state)
-
-        # Set up joint trajectory publisher and twist controller
+        # Set up controller interfaces
+        self.moveit_client = ActionClient(self.ros, self.moveit_cmd_topic, self.moveit_cmd_topic_type)
         self.joint_states_pub = Topic(self.ros, self.joint_cmd_topic, "trajectory_msgs/msg/JointTrajectory")
         self.twist_vel_pub = Topic(self.ros, self.twist_vel_topic, "geometry_msgs/msg/Twist")
-
         self.gripper_client = ActionClient(self.ros, self.gripper_cmd_topic, self.gripper_topic_type)
+        self.controller_client = Service(
+            self.ros, "/controller_manager/switch_controller", "controller_manager_msgs/srv/SwitchController"
+        )
         self.curr_gripper_goal = None
+
+        # Subscribe to ROS2 topics
+        self.joint_states_sub = Topic(self.ros, self.joint_state_topic, "sensor_msgs/msg/JointState")
+        self.joint_states_sub.subscribe(self._update_robot_state)
+
+        self.jacobian_sub = Topic(self.ros, self.jacobian_topic, "gen3_cpp/msg/LinkMatrix")
+        self.jacobian_sub.subscribe(self._update_jacobians)
+
+        self.mass_matrix_sub = Topic(self.ros, self.mass_matrix_topic, "gen3_cpp/msg/LinkMatrix")
+        self.mass_matrix_sub.subscribe(self._update_mass_matrix)
+
+        self.gravity_vector_sub = Topic(self.ros, self.gravity_vector_topic, "gen3_cpp/msg/LinkMatrix")
+        self.gravity_vector_sub.subscribe(self._update_gravity_vector)
+
+        self.robot_description_sub = Topic(self.ros, self.robot_description_topic, "gen3_cpp/msg/RobotInfo")
+        self.robot_description_sub.subscribe(self._update_robot_links_and_joints)
+
+        self.body_pose_sub = Topic(self.ros, self.body_pose_topic, "gen3_cpp/msg/BodyInfo")
+        self.body_pose_sub.subscribe(self._update_body_pose)
+
+        self.body_vel_sub = Topic(self.ros, self.body_vel_topic, "gen3_cpp/msg/BodyInfo")
+        self.body_vel_sub.subscribe(self._update_body_vel)
+
+        wait_until_ready(self._ready)
+
         self.realsense_service = Service(
             self.ros,
             self.realsense_snapshot_service,
             self.realsense_snapshot_service_type,
         )
 
-        # Subscribe to jacobian topic
-        self.jacobian_sub = Topic(self.ros, self.jacobian_topic, "gen3_cpp/msg/LinkMatrix")
-
-        def _update_jacobians(msg: dict[str, Any]) -> None:
-            """Update jacobians the robot by subscribing to jacobian topic."""
-            self._current_jacobians = np.asarray(msg["matrix"], dtype=float).reshape(
-                msg["num_links"], msg["rows"], msg["cols"]
-            )
-            self._ready["jacobians"] = True
-
-        self.jacobian_sub.subscribe(_update_jacobians)
-
-        # Subscribe to mass matrix topic
-        self.mass_matrix_sub = Topic(self.ros, self.mass_matrix_topic, "gen3_cpp/msg/LinkMatrix")
-
-        def _update_mass_matrix(msg: dict[str, Any]) -> None:
-            """Update mass matrices by subscribing to mass matrix topic."""
-            self._current_mass_matrices = np.asarray(msg["matrix"], dtype=float).reshape(msg["rows"], msg["cols"])
-            self._ready["mass_matrices"] = True
-
-        self.mass_matrix_sub.subscribe(_update_mass_matrix)
-
-        # Subscribe gravity vector topic
-        self.gravity_vector_sub = Topic(self.ros, self.gravity_vector_topic, "gen3_cpp/msg/LinkMatrix")
-
-        def _update_gravity_vector(msg: dict[str, Any]) -> None:
-            """Update gravity vector by subscribing to the gravity vector topic."""
-            self._current_gravity_vector = np.asarray(msg["matrix"], dtype=float).reshape(msg["rows"])
-            self._ready["gravity_vector"] = True
-
-        self.gravity_vector_sub.subscribe(_update_gravity_vector)
-
-        # Subscribe to robot_description
-        self.robot_description_sub = Topic(self.ros, self.robot_description_topic, "gen3_cpp/msg/RobotInfo")
-
-        def _update_robot_links_and_joints(msg: dict[str, Any]) -> None:
-            """Update the state of the robot by subscribing to robot topics."""
-            self._robot_links = list(msg["links"])
-            self._robot_joints = list(msg["joints"])
-            self._current_upper_joint_limits = np.asarray(msg["upper_limits"], dtype=float)
-            self._current_lower_joint_limits = np.asarray(msg["lower_limits"], dtype=float)
-            self._current_joint_centers = (self._current_upper_joint_limits + self._current_lower_joint_limits) / 2
-            self._ready["robot_info"] = True
-
-        self.robot_description_sub.subscribe(_update_robot_links_and_joints)
-
-        # Subscribe to robot_description
-        self.body_pose_sub = Topic(self.ros, self.body_pose_topic, "gen3_cpp/msg/BodyInfo")
-
-        def _update_body_pose(msg: dict[str, Any]) -> None:
-            """Update the state of the robot by subscribing to robot topics."""
-            self._current_robot_body_pose_w = np.asarray(msg["body_w"], dtype=float).reshape(msg["num_links"], -1)
-            self._current_robot_root_pose_w = np.asarray(msg["root_w"], dtype=float)
-            self._ready["body_pose"] = True
-
-        self.body_pose_sub.subscribe(_update_body_pose)
-
-        # Subscribe to body vel topic
-        self.body_vel_sub = Topic(self.ros, self.body_vel_topic, "gen3_cpp/msg/BodyInfo")
-
-        def _update_body_vel(msg: dict[str, Any]) -> None:
-            """Update the velocity of the robot by subscribing to robot topics."""
-            self._current_robot_body_vel_w = np.asarray(msg["body_w"], dtype=float).reshape(msg["num_links"], -1)
-            self._ready["body_vel"] = True
-
-        self.body_vel_sub.subscribe(_update_body_vel)
-        wait_until_ready(self._ready)
-
-    def _pre_process_action(self, actions: torch.Tensor) -> np.ndarray:
+    def _pre_process_action(self, actions: torch.Tensor, action_spec: ActionSpec[Any] | None = None) -> np.ndarray:
         """Pre process the robot action.
 
         This function is responsible preprocessing the robot action (ie checking joint limits, etc).
 
         Args:
             actions: The actions to apply on the environment. Shape is (num_envs, num_joints).
+            action_spec: The action specification of the batch of actions. NOTE: Currently assumes all actions are
+                of same spec.
 
         """
         self.actions = actions.cpu().numpy().squeeze()  # Actions can only be 1 dimensional
 
         return self.actions
 
-    def _publish_action_to_robot(self, joint_pos: np.ndarray, duration: float = 3) -> None:
+    def _publish_action_to_ros(
+        self, action: np.ndarray, action_spec: ActionSpec[Any] | None = None, duration: float = 3
+    ) -> None:
         """Publish the robot action.
 
         Args:
-            joint_pos: NDArray of joint positions
+            action: NDArray of joint positions
+            action_spec: Action specficiation of each of the actions
             duration: Duration of trajectory
 
         """
-        joint_msg = {
-            "joint_names": self.joint_names[:-1].tolist(),
-            "points": [
-                {
-                    "positions": joint_pos[:-1].tolist(),
-                    "velocities": [],
-                    "accelerations": [],
-                    "effort": [],
-                    "time_from_start": {
-                        "secs": math.floor(duration),
-                        "nsecs": int((duration - math.floor(duration)) * 10e9),
-                    },
-                }
-            ],
-        }
-
-        gripper_val = float(joint_pos[-1])
+        action_spec = action_spec.replace(name="moveit_joints")  # TODO don't hardcode this
+        # Send the gripper command first as this will be non-blocking FOR NOW
+        gripper_val = float(action[-1])
         gripper_val = max(0, min(gripper_val, 1)) * 0.8
         # if self.cfg.use_fake_hardware == "true":
         #     gripper_goal = {"command": {"position": gripper_val, "max_effort": 100.0}}
         # else:
         gripper_goal = {"command": {"name": self.cfg.gripper_joint_names, "position": [gripper_val]}}
 
-        self.joint_states_pub.publish(joint_msg)
-
         if gripper_goal != self.curr_gripper_goal:
             _ = self.gripper_client.send_goal(
                 gripper_goal, self._gripper_result_cb, self._gripper_feedback_cb, self._gripper_error_cb
             )
             self.curr_gripper_goal = gripper_goal
+
+        if action_spec.name == "joints":
+            self._publish_joint_spec(action, duration)
+        elif action_spec.name == "twist_tcp":
+            self._publish_twist_tcp_spec(action)
+        elif action_spec.name == "moveit_joints":
+            self._publish_moveit_joints_spec(action)
+        else:
+            raise ValueError(f"Unknown Action Specification `{action_spec.name}`")
 
     def _reset_idx(self) -> None:
         """Reset environment based on specified indices to default position."""
@@ -326,48 +277,8 @@ class KinovaROS2Env(ROS2RLEnv):
         """Compute the rewards."""
         return np.array([0.0])
 
-    def _gripper_result_cb(self, result: dict[str, Any]) -> None:
-        """Gripper action result callback."""
-        status = result.get("status")
-        if hasattr(status, "name"):
-            status = status.name
-        message = result.get("message", "")
-        if status == "SUCCEEDED":
-            # print(f"[INFO] Gripper succeeded: {message}")
-            self.gripper_ok = True
-
-        elif status == "ABORTED":
-            print(f"[INFO] Gripper aborted: {message}")
-            self.gripper_ok = False
-
-        elif status == "CANCELED":
-            print(f"[INFO] Gripper canceled: {message}")
-            self.gripper_ok = False
-        else:
-            print(f"[INFO] Unknown gripper result: {result}")
-            self.gripper_ok = False
-        pass
-
-    def _gripper_feedback_cb(self, feedback: dict[str, Any]) -> None:
-        """Gripper action feedback callback."""
-        pos = feedback.get("position")
-        effort = feedback.get("effort")
-        stalled = feedback.get("stalled", False)
-
-        if stalled:
-            print(f"[INFO] Gripper feedback: pos={pos}, effort={effort}, stalled={stalled}")
-
-    def _gripper_error_cb(self, err: dict[str, Any]) -> None:
-        """Gripper action error callback."""
-        code = err.get("code")
-        message = err.get("message", "Unknown error")
-        details = err.get("details")
-
-        print(f"[INFO] Gripper error! code={code}, message={message}, details={details}")
-
-        # Set internal state so higher-level logic can react
-        self.gripper_ok = False
-        self.last_gripper_error = err
+    def _supports_action_spec(self, action_spec: ActionSpec[Any] | None = None) -> bool:
+        return action_spec.name in [s.name for s in self._action_specs]
 
     def _get_latest_rgbd(self) -> dict[str, Any]:
         """Request and decode the latest RGB-D snapshot synchronously.
@@ -427,6 +338,127 @@ class KinovaROS2Env(ROS2RLEnv):
             "timestamp": timestamp,
         }
 
+    def _publish_joint_spec(self, joint_pos: np.ndarray, duration: float = 3) -> None:
+        """Publish a joint position to the joint trajectory controller.
+
+        Args:
+            joint_pos: Joint positions of the robot.
+            duration: Duration of trajectory
+
+        """
+        if self.active_controller != "joint_trajectory_controller":
+            print("[INFO] Switching controller to `joint_trajectory_controller`")
+            if not self.switch_controllers(activate=["joint_trajectory_controller"], deactivate=["twist_controller"]):
+                print("[INFO] Unable to switch controller to `joint_trajectory_controller`. Aborting trajectory.")
+                return
+            self.active_controller = "joint_trajectory_controller"
+            print("[INFO] Successfully switched controller to `joint_trajectory_controller`")
+
+        joint_msg = {
+            "joint_names": self.joint_names[:-1].tolist(),
+            "points": [
+                {
+                    "positions": joint_pos[:-1].tolist(),
+                    "velocities": [],
+                    "accelerations": [],
+                    "effort": [],
+                    "time_from_start": {
+                        "secs": math.floor(duration),
+                        "nsecs": int((duration - math.floor(duration)) * 10e9),
+                    },
+                }
+            ],
+        }
+        self.joint_states_pub.publish(joint_msg)
+
+    def _publish_twist_tcp_spec(self, twist: np.ndarray) -> None:
+        """Publish a twist in the tcp frame to the robot twist controller.
+
+        Args:
+            twist: Cartesian twist command (velocity) in XYZ (linear) and RPY (angular).
+
+        """
+        if self.active_controller != "twist_controller":
+            print("[INFO] Switching controller to `twist_controller`")
+            if not self.switch_controllers(activate=["twist_controller"], deactivate=["joint_trajectory_controller"]):
+                print("[INFO] Unable to switch controller to `twist_controller`. Aborting trajectory.")
+                return
+            self.active_controller = "twist_controller"
+            print("[INFO] Successfully switched controller to `twist_controller`")
+
+        twist = twist.tolist()
+        twist_cmd = {
+            "linear": {"x": twist[0], "y": twist[1], "z": twist[2]},
+            "angular": {"x": twist[3], "y": twist[4], "z": twist[5]},
+        }
+
+        self.twist_vel_pub.publish(twist_cmd)
+
+    def _publish_moveit_joints_spec(self, moveit_joints: np.ndarray, timeout: int = 30) -> None:
+        """Publish a MoveIt trajectory to move the arm to specified joint positions.
+
+        Args:
+            moveit_joints: The desired joint positions to send to moveit
+            timeout: Duration before the threading event should time out
+
+        """
+        if self.active_controller != "joint_trajectory_controller":
+            print("[INFO] Switching controller to `joint_trajectory_controller`")
+            if not self.switch_controllers(activate=["joint_trajectory_controller"], deactivate=["twist_controller"]):
+                print("[INFO] Unable to switch controller to `joint_trajectory_controller`. Aborting trajectory.")
+                return
+            self.active_controller = "joint_trajectory_controller"
+            print("[INFO] Successfully switched controller to `joint_trajectory_controller`")
+
+        moveit_goal = {
+            "request": {
+                "group_name": "manipulator",
+                "goal_constraints": [
+                    {
+                        "joint_constraints": [
+                            {
+                                "joint_name": j,
+                                "position": float(moveit_joints[i]),
+                                "tolerance_above": 0.01,
+                                "tolerance_below": 0.01,
+                                "weight": 1.0,
+                            }
+                            for i, j in enumerate(self.joint_names[:-1])
+                        ]
+                    }
+                ],
+                "num_planning_attempts": 10,
+                "allowed_planning_time": 5.0,
+                "max_velocity_scaling_factor": 0.5,
+                "max_acceleration_scaling_factor": 0.5,
+            }
+        }
+
+        result_container = {}
+        done_event = threading.Event()
+
+        def on_result(result: dict[str, Any]) -> None:
+            result_container["result"] = result
+            done_event.set()
+
+        def on_feedback(feedback: dict[str, Any]) -> None:
+            self._moveit_feedback_cb(feedback)
+
+        def on_error(error: dict[str, Any]) -> None:
+            result_container["error"] = error
+            done_event.set()
+
+        _ = self.moveit_client.send_goal(moveit_goal, on_result, on_feedback, on_error)
+
+        finished = done_event.wait(timeout=timeout)
+
+        if not finished:
+            raise TimeoutError(f"MoveIt goal timed out after {timeout}s")
+
+        if "error" in result_container:
+            raise RuntimeError(f"MoveIt action error: {result_container['error']}")
+        print(f"[INFO] Executed MoveIt trajectory successfully. {result_container['result']}")
+
     @staticmethod
     def _decode_uint8_payload(payload: Any, field_name: str) -> np.ndarray:
         """Decode rosbridge-serialized uint8[] payload into np.uint8."""
@@ -452,52 +484,86 @@ class KinovaROS2Env(ROS2RLEnv):
 
         raise TypeError(f"Unsupported payload type for {field_name}: {type(payload).__name__}")
 
+    def _moveit_result_cb(self, result: dict[str, Any]) -> None:
+        """MoveIt action result callback."""
+        status = result.get("status")
+        message = result.get("message", "")
+        if status.name == "SUCCEEDED":
+            # print(f"[INFO] MoveIt succeeded: {message}")
+            self.moveit_ok = True
 
-class KinovaROS2VelEnv(KinovaROS2Env):
-    """Kinova Gen3 7DoF ROS2 implementation."""
+        elif status.name == "ABORTED":
+            print(f"[INFO] MoveIt aborted: {message}")
+            self.moveit_ok = False
 
-    def __init__(
-        self, cfg: KinovaROS2EnvCfg, ros: Ros, render_mode: str | None = None, **kwargs: dict[str, Any]
-    ) -> None:
-        """Initialize Kinova Arm ROS2."""
-        super().__init__(cfg, ros, render_mode, **kwargs)
-        print("INITIALIZING VEL ENV")
+        elif status.name == "CANCELED":
+            print(f"[INFO] MoveIt canceled: {message}")
+            self.moveit_ok = False
+        else:
+            print(f"[INFO] Unknown MoveIt result: {result}")
+            self.moveit_ok = False
+        pass
 
-    def _publish_action_to_robot(self, joint_vel: np.ndarray, duration: float = 3) -> None:
-        """Publish the robot action.
+    def _moveit_feedback_cb(self, feedback: dict[str, Any]) -> None:
+        """MoveIt action feedback callback."""
+        stalled = feedback.get("stalled", False)
+        if stalled:
+            print("[INFO] MoveIt stalled before reaching goal")
 
-        Args:
-            joint_pos: NDArray of joint velocities
-            duration: Duration of trajectory
+        pass
 
-        """
-        joint_msg = {
-            "joint_names": self.joint_names[: -len(self.cfg.gripper_joint_names)].tolist(),
-            "points": [
-                {
-                    "positions": [],
-                    "velocities": joint_vel[: -len(self.cfg.gripper_joint_names)].tolist(),
-                    "accelerations": [],
-                    "effort": [],
-                    "time_from_start": {
-                        "secs": math.floor(duration),
-                        "nsecs": int((duration - math.floor(duration)) * 10e9),
-                    },
-                }
-            ],
-        }
+    def _moveit_error_cb(self, err: dict[str, Any]) -> None:
+        """MoveIt action error callback."""
+        code = err.get("code")
+        message = err.get("message", "Unknown error")
+        details = err.get("details")
 
-        gripper_val = float(joint_vel[-1])
-        gripper_val = max(0, min(gripper_val, 1)) * 0.8
-        # if self.cfg.use_fake_hardware == "true":
-        #     gripper_goal = {"command": {"position": gripper_val, "max_effort": 100.0}}
-        # else:
-        gripper_goal = {"command": {"name": self.cfg.gripper_joint_names, "position": [gripper_val]}}
+        print(f"[INFO] MoveIt error! code={code}, message={message}, details={details}")
 
-        self.joint_states_pub.publish(joint_msg)
+        # Set internal state so higher-level logic can react
+        self.moveit_ok = False
+        self.last_moveit_err = err
+        pass
 
-        if gripper_goal != self.curr_gripper_goal:
-            _ = self.gripper_client.send_goal(
-                gripper_goal, self._gripper_result_cb, self._gripper_feedback_cb, self._gripper_error_cb
-            )
-            self.curr_gripper_goal = gripper_goal
+    def _gripper_result_cb(self, result: dict[str, Any]) -> None:
+        """Gripper action result callback."""
+        status = result.get("status")
+        if hasattr(status, "name"):
+            status = status.name
+        message = result.get("message", "")
+        if status == "SUCCEEDED":
+            # print(f"[INFO] Gripper succeeded: {message}")
+            self.gripper_ok = True
+
+        elif status == "ABORTED":
+            print(f"[INFO] Gripper aborted: {message}")
+            self.gripper_ok = False
+
+        elif status == "CANCELED":
+            print(f"[INFO] Gripper canceled: {message}")
+            self.gripper_ok = False
+        else:
+            print(f"[INFO] Unknown gripper result: {result}")
+            self.gripper_ok = False
+        pass
+
+    def _gripper_feedback_cb(self, feedback: dict[str, Any]) -> None:
+        """Gripper action feedback callback."""
+        pos = feedback.get("position")
+        effort = feedback.get("effort")
+        stalled = feedback.get("stalled", False)
+
+        if stalled:
+            print(f"[INFO] Gripper feedback: pos={pos}, effort={effort}, stalled={stalled}")
+
+    def _gripper_error_cb(self, err: dict[str, Any]) -> None:
+        """Gripper action error callback."""
+        code = err.get("code")
+        message = err.get("message", "Unknown error")
+        details = err.get("details")
+
+        print(f"[INFO] Gripper error! code={code}, message={message}, details={details}")
+
+        # Set internal state so higher-level logic can react
+        self.gripper_ok = False
+        self.last_gripper_error = err

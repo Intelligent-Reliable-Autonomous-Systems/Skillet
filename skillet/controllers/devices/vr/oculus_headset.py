@@ -3,25 +3,23 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
-from typing_extensions import override
 from dataclasses import dataclass
+from typing import Any
 
+import numpy as np
 import torch
-from skillet.core.math import euler_xyz_to_rotvec, base_to_tcp_twist
-
-from ..device_base import DeviceBase, DeviceCfg
-
-from .joystick_listener import VRJoystickListener
+from scipy.spatial.transform import Rotation as R
+from typing_extensions import override
 
 from skillet.core.math import (
+    base_to_tcp_twist,
     euler_xyz_from_quat,
+    euler_xyz_to_rotvec,
     subtract_frame_transforms,
 )
 
-
-import numpy as np
-from scipy.spatial.transform import Rotation as R
+from ..device_base import DeviceBase, DeviceCfg
+from .joystick_listener import VRJoystickListener
 
 
 class VRHeadset(DeviceBase):
@@ -151,17 +149,14 @@ class VRHeadset(DeviceBase):
         # PID control for rotation (Euler -> rotation vector)
         delta_rot = self.Kp_rot * error_rot + self.Ki_rot * self.integral_rot + self.Kd_rot * derivative_rot
         self._delta_rot = torch.clip(delta_rot, -self.rot_sensitivity, self.rot_sensitivity)
-        rot_vec = euler_xyz_to_rotvec(self._delta_rot)
+        rot_vec = euler_xyz_to_rotvec(self._delta_rot.unsqueeze(0)).squeeze(0)
 
         # Combine translation + rotation for twist command
         if self.frame == "tcp":
             command = torch.cat((self._delta_pos, rot_vec), dim=0)
         elif self.frame == "base":
-            tcp_lin_vel, tcp_ang_vel = base_to_tcp_twist(
-                self._delta_pos, self._delta_rot, tcp_pose_b[:, 3:7].squeeze(0)
-            )
-            command = torch.cat((tcp_lin_vel, tcp_ang_vel), dim=0)
-            print(command)
+            tcp_lin_vel, tcp_ang_vel = base_to_tcp_twist(self._delta_pos, self._delta_rot, tcp_pose_b[:, 3:7])
+            command = torch.cat((tcp_lin_vel.squeeze(0), tcp_ang_vel.squeeze(0)), dim=0)
         command = torch.cat((self._delta_pos, rot_vec), dim=0)
         command[3:] = 0
         # Append gripper command if needed
@@ -177,7 +172,6 @@ class VRHeadset(DeviceBase):
 
     def _read_latest(self) -> None:
         """Read the latest input from the VR Joystick."""
-
         s = self._listener.read_latest()
 
         if s is not None:
@@ -202,7 +196,6 @@ class VRHeadset(DeviceBase):
             right_elbow_pos_b = (right_elbow_pos_b - self._vr_range[0, :3]) / (
                 self._vr_range[1, :3] - self._vr_range[0, :3]
             )
-            print(right_elbow_pos_b)
             rc_xyz_b = torch.cat((right_elbow_pos_b.squeeze().to(self._device), r, p, y), dim=-1)
             self._tcp_xyz_des_b = torch.clip(rc_xyz_b, self._workspace_lim[0], self._workspace_lim[1]).to(torch.float32)
 
@@ -229,8 +222,7 @@ class VRHeadsetCfg(DeviceCfg):
 
 
 def convert_unity_to_world_coordinates(pose):
-    """
-    Convert pose from Unity (z-forward, x-right, y-up, left-handed) to world coordinates (x-forward, y-left, z-up).
+    """Convert pose from Unity (z-forward, x-right, y-up, left-handed) to world coordinates (x-forward, y-left, z-up).
     Handles both position (xyz) and quaternion (xyzw) formats.
     Unity coordinate system: Forward=+Z, Right=+X, Up=+Y (left-handed)
     MuJoCo coordinate system: Forward=+X, Right=-Y, Up=+Z (right-handed)
@@ -260,7 +252,7 @@ def convert_unity_to_world_coordinates(pose):
     if pose.shape[0] == 3:
         # Only position - use 3D rotation matrix
         return rotation_matrix_3d @ pose
-    elif pose.shape[0] == 7:
+    if pose.shape[0] == 7:
         # Position + quaternion (xyz, xyzw)
         pos = pose[:3]
         quat = pose[3:]  # [x, y, z, w]
@@ -286,13 +278,11 @@ def convert_unity_to_world_coordinates(pose):
         quat_new = r_new.as_quat()
 
         return np.concatenate([new_pos, quat_new])
-    else:
-        raise ValueError(f"Pose `{pose}` must be length 3 (xyz) or 7 (xyzxyzw)")
+    raise ValueError(f"Pose `{pose}` must be length 3 (xyz) or 7 (xyzxyzw)")
 
 
 def convert_to_world_coordinates(pose):
-    """
-    Convert pose from OpenVR (z-up, x-right, y-back) to world coordinates (x-forward, y-left, z-up).
+    """Convert pose from OpenVR (z-up, x-right, y-back) to world coordinates (x-forward, y-left, z-up).
     Handles both position (xyz) and quaternion (xyzw) formats.
     """
     # Rotation matrix to convert from OpenVR to mujoco  world coordinates
@@ -315,7 +305,7 @@ def convert_to_world_coordinates(pose):
     if pose.shape[0] == 3:
         # Only position - use 3D rotation matrix
         return rotation_matrix_3d @ pose
-    elif pose.shape[0] == 7:
+    if pose.shape[0] == 7:
         # Position + quaternion (xyz, xyzw)
         pos = pose[:3]
         quat = pose[3:]  # [x, y, z, w]
@@ -343,15 +333,11 @@ def convert_to_world_coordinates(pose):
         quat_new = r_new.as_quat()
 
         return np.concatenate([new_pos, quat_new])
-    else:
-        print(pose)
-        raise ValueError("Pose must be length 3 (xyz) or 7 (xyzxyzw)")
+    raise ValueError("Pose must be length 3 (xyz) or 7 (xyzxyzw)")
 
 
 def get_quat_for_xy_plane(quat):
-    """
-    Get the quaternion for the xy plane - extract only yaw rotation
-    """
+    """Get the quaternion for the xy plane - extract only yaw rotation"""
     qx, qy, qz, qw = quat
 
     # Extract yaw directly from quaternion components

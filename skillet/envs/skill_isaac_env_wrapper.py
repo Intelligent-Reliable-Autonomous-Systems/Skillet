@@ -53,9 +53,9 @@ class SkillIsaacEnvWrapper(
         """
         super().__init__(env)
         if hasattr(env.unwrapped.cfg, "skills"):
-            assert env.unwrapped.cfg.skills is not None, (
-                "`env.cfg.skills` must not be None. Configure to list of skills."
-            )
+            assert (
+                env.unwrapped.cfg.skills is not None
+            ), "`env.cfg.skills` must not be None. Configure to list of skills."
         else:
             raise ValueError(
                 f"Cannot use `SkillIsaacWrapper` when `{type(env.unwrapped.cfg)}` does not contain the `skills` attribute."
@@ -78,9 +78,7 @@ class SkillIsaacEnvWrapper(
             ),
         )
 
-    def step(
-        self, action: TBatchedActionTorch
-    ) -> tuple[
+    def step(self, action: TBatchedActionTorch) -> tuple[
         TBatchedObsTorch,
         Float[torch.Tensor, "b"],  # noqa: F821
         Bool[torch.Tensor, "b"],  # noqa: F821

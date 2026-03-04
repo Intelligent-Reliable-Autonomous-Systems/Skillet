@@ -12,7 +12,7 @@ import gymnasium as gym
 import torch
 
 import kinova_tasks.ros2_tasks  # noqa: F401
-from skillet.controllers.devices import Se3Keyboard, Se3KeyboardCfg, VRJoystickCfg, VRJoystick, VRHeadsetCfg, VRHeadset
+from skillet.controllers.devices import Se3Keyboard, Se3KeyboardCfg, VRHeadset, VRHeadsetCfg, VRJoystick, VRJoystickCfg
 from skillet.envs.ros2_skillet_env import ROS2SkilletEnv
 from skillet.envs.util import parse_ros2_env_cfg, setup_ros
 
@@ -27,7 +27,7 @@ parser.add_argument(
     choices={"keyboard", "vr_joystick", "vr_headset"},
     help="Device for interacting with environment. Examples: keyboard, spacemouse, gamepad, handtracking, manusvive",
 )
-parser.add_argument("--task", type=str, default="ROS2-Kinova-Twist-Rel-v0", help="Name of the task.")
+parser.add_argument("--task", type=str, default="ROS2-Kinova-v0", help="Name of the task.")
 parser.add_argument("--sensitivity", type=float, default=1.0, help="Sensitivity factor.")
 parser.add_argument(
     "--ros2_ws", type=str, default=None, help="Absolute path to ROS2 workspace containing bringup files"
@@ -47,9 +47,8 @@ if args_cli.ros2_ws is None:
 def main() -> None:
     """Run keyboard teleoperation with ROS2.
 
-    Defaults to ROS2-Kinova-Twist-Rel-v0 environment which assumes that actions are velocities of the end effector in 6 DoF.
+    Defaults to ROS2-Kinova-v0 environment and passes the twist_tcp Action Specification.
     """
-
     env_cfg = parse_ros2_env_cfg(
         args_cli.task,
         device=args_cli.device,
@@ -96,7 +95,7 @@ def main() -> None:
 
             # assuming teleop is a tensor
             actions = teleop.repeat(env.num_envs, 1)
-            env.step(actions)
+            env.step(actions, action_spec=env.action_spec_twist_tcp)
 
 
 if __name__ == "__main__":

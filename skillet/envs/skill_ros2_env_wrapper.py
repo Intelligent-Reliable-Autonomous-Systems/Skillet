@@ -16,7 +16,7 @@ from skillet.envs.ros2_skillet_env import ROS2SkilletEnv
 from skillet.skill.skill_controller import SkillController
 
 if TYPE_CHECKING:
-    from skillet.envs.ros2.ros2_rl_env import ROS2RLEnv
+    from skillet.envs.ros2.ros2_env import ROS2Env
 
 TBatchedObsTorch = TypeVar(
     "TBatchedObsTorch", bound=Float[torch.Tensor, "b ..."] | Mapping[str, Float[torch.Tensor, "b ..."]]
@@ -38,10 +38,10 @@ class SkillROS2EnvWrapper(
 ):
     """Wrapper for IsaacLab Environments.
 
-    This assumes that the environment is a ROS2RLEnv.
+    This assumes that the environment is a ROS2Env.
     """
 
-    def __init__(self, env: "ROS2RLEnv") -> None:
+    def __init__(self, env: "ROS2Env") -> None:
         """Initialize the environment.
 
         Args:
@@ -53,9 +53,9 @@ class SkillROS2EnvWrapper(
         """
         super().__init__(env)
         if hasattr(env.unwrapped.cfg, "skills"):
-            assert env.unwrapped.cfg.skills is not None, (
-                "`env.cfg.skills` must not be None. Configure to list of skills."
-            )
+            assert (
+                env.unwrapped.cfg.skills is not None
+            ), "`env.cfg.skills` must not be None. Configure to list of skills."
         else:
             raise ValueError(
                 f"Cannot use `SkillIsaacWrapper` when `{type(env.unwrapped.cfg)}` does not contain the `skills` attribute."
@@ -78,9 +78,7 @@ class SkillROS2EnvWrapper(
             ),
         )
 
-    def step(
-        self, action: TBatchedActionTorch
-    ) -> tuple[
+    def step(self, action: TBatchedActionTorch) -> tuple[
         TBatchedObsTorch,
         Float[torch.Tensor, "b"],  # noqa: F821
         Bool[torch.Tensor, "b"],  # noqa: F821

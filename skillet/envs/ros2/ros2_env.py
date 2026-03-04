@@ -16,12 +16,13 @@ import numpy as np
 import torch
 from roslibpy import Ros
 
+from skillet.core.spaces import ActionSpec
 from skillet.envs.util import configure_seed
 
-from .ros2_rl_env_cfg import ROS2RLEnvCfg
+from .ros2_env_cfg import ROS2EnvCfg
 
 
-class ROS2RLEnv(gym.Env):
+class ROS2Env(gym.Env):
     """The superclass for the ROS2 workflow to design environments.
 
     This class implements the core functionality for reinforcement learning (RL)
@@ -45,7 +46,7 @@ class ROS2RLEnv(gym.Env):
     _current_robot_body_vel_w: np.ndarray
     _current_joint_centers: np.ndarray
 
-    def __init__(self, cfg: ROS2RLEnvCfg, ros: Ros, render_mode: str | None = None, **kwargs: dict[str, Any]) -> None:
+    def __init__(self, cfg: ROS2EnvCfg, ros: Ros, render_mode: str | None = None, **kwargs: dict[str, Any]) -> None:
         """Initialize the environment.
 
         Args:
@@ -76,7 +77,7 @@ class ROS2RLEnv(gym.Env):
         # setup the action and observation spaces for Gym
         self._next_step_time = None
 
-        print("[INFO][ROS2RLEnv] Completed Environment Setup")
+        print("[INFO][ROS2Env] Completed Environment Setup")
 
     def __del__(self) -> None:
         """Cleanup for the environment."""
@@ -202,7 +203,9 @@ class ROS2RLEnv(gym.Env):
         # return observations
         return self._get_observations(), self.extras
 
-    def step(self, action: torch.Tensor) -> tuple[dict[str, np.ndarray], np.ndarray, bool, bool, dict[str, Any]]:  # type: ignore
+    def step(
+        self, action: torch.Tensor, action_spec: ActionSpec[Any] | None = None
+    ) -> tuple[dict[str, np.ndarray], np.ndarray, bool, bool, dict[str, Any]]:  # type: ignore
         """Execute one time-step of the ROS2 robot.
 
         The environment steps forward at a fixed time-step, while the physics simulation is decimated at a
@@ -219,26 +222,29 @@ class ROS2RLEnv(gym.Env):
         4. Get the observations
         Args:
             action: The actions to apply on the environment. Shape is (num_envs, action_dim).
+            action_spec: the action specification
 
         Returns:
             A tuple containing the observations, rewards, resets (terminated and truncated) and extras.
 
         """
+        assert self._supports_action_spec(
+            action_spec
+        ), f"Action specification `{action_spec.name}: {action_spec}` not supported by environment {self}."
         if self._next_step_time is None:
             self._next_step_time = time.monotonic()
 
         # Pre process the robot action
-        joint_pos = self._pre_process_action(action)
+        action = self._pre_process_action(action, action_spec=action_spec)
 
         # Send the robot action to hardware
-        self._publish_action_to_robot(joint_pos, duration=self.step_dt)
+        self._publish_action_to_ros(action, duration=self.step_dt, action_spec=action_spec)
         self._next_step_time += self.step_dt
         sleep_time = self._next_step_time - time.monotonic()
         if sleep_time > 0:
             time.sleep(sleep_time)
         else:
             print(f"[WARN] full loop overran by {-sleep_time * 1000:.1f}ms")
-        # time.sleep(self.step_dt)  # TODO this is crude
 
         self.episode_length_buf += 1
         self.common_step_counter += 1
@@ -283,6 +289,7 @@ class ROS2RLEnv(gym.Env):
 
     def close(self) -> None:
         """Cleanup for the environment."""
+        self.ros.terminate()
         pass
 
     """
@@ -323,34 +330,43 @@ class ROS2RLEnv(gym.Env):
     """
 
     @abstractmethod
-    def _pre_process_action(self, actions: torch.Tensor) -> np.ndarray:
+    def _supports_action_spec(self, action_spec: ActionSpec) -> bool:
+        """Return if the action specification is supported by the environment."""
+        raise NotImplementedError(f"Please implement the 'supports_action_spec' method for {self.__class__.__name__}.")
+
+    @abstractmethod
+    def _pre_process_action(self, actions: torch.Tensor, action_spec: ActionSpec[Any] | None = None) -> np.ndarray:
         """Pre process the robot action.
 
         This function is responsible preprocessing the robot action (ie checking joint limits, etc).
 
         Args:
             actions: The actions to apply on the environment. Shape is (num_envs, num_joints).
+            action_spec: The action specification telling the environment how to process the action
 
         Returns:
-            The joint positions to publish to the robot
+            The actions to publish to the robot
 
         """
         raise NotImplementedError(f"Please implement the '_pre_process_action' method for {self.__class__.__name__}.")
 
     @abstractmethod
-    def _publish_action_to_robot(self, actions: np.ndarray, duration: float = 1) -> None:
+    def _publish_action_to_ros(
+        self, actions: np.ndarray, action_spec: ActionSpec[Any] | None = None, duration: float = 1
+    ) -> None:
         """Publish action to robot controller.
 
-        This function is responsible publishing joint positions and velocities to
-        the correct robot target. These positions are set by _pre_process_action()
+        This function is responsible publishing actions to the correct robot controller. These positions are set by
+        _pre_process_action()
 
         Args:
             actions: joint positions to publish to the robot
-            duration: duration of trajectory
+            action_spec: The actions to publish to ROS
+            duration: duration that the action expects, useful for some action specs
 
         """
         raise NotImplementedError(
-            f"Please implement the '_publish_action_to_robot' method for {self.__class__.__name__}."
+            f"Please implement the '_publish_action_to_ros' method for {self.__class__.__name__}."
         )
 
     @abstractmethod
@@ -385,5 +401,79 @@ class ROS2RLEnv(gym.Env):
         raise NotImplementedError(f"Please implement the '_get_dones' method for {self.__class__.__name__}.")
 
     """
-    Inverse kinematics related helper functions
+    Helper functions to communicate with ROS2
     """
+
+    def _update_jacobians(self, msg: dict[str, Any]) -> None:
+        """Update jacobians the robot by subscribing to jacobian topic."""
+        self._current_jacobians = np.asarray(msg["matrix"], dtype=float).reshape(
+            msg["num_links"], msg["rows"], msg["cols"]
+        )
+        self._ready["jacobians"] = True
+
+    def _update_mass_matrix(self, msg: dict[str, Any]) -> None:
+        """Update mass matrices by subscribing to mass matrix topic."""
+        self._current_mass_matrices = np.asarray(msg["matrix"], dtype=float).reshape(msg["rows"], msg["cols"])
+        self._ready["mass_matrices"] = True
+
+    def _update_gravity_vector(self, msg: dict[str, Any]) -> None:
+        """Update gravity vector by subscribing to the gravity vector topic."""
+        self._current_gravity_vector = np.asarray(msg["matrix"], dtype=float).reshape(msg["rows"])
+        self._ready["gravity_vector"] = True
+
+    def _update_robot_links_and_joints(self, msg: dict[str, Any]) -> None:
+        """Update the state of the robot by subscribing to robot topics."""
+        self._robot_links = list(msg["links"])
+        self._robot_joints = list(msg["joints"])
+        self._current_upper_joint_limits = np.asarray(msg["upper_limits"], dtype=float)
+        self._current_lower_joint_limits = np.asarray(msg["lower_limits"], dtype=float)
+        self._current_joint_centers = (self._current_upper_joint_limits + self._current_lower_joint_limits) / 2
+        self._ready["robot_info"] = True
+
+    def _update_body_pose(self, msg: dict[str, Any]) -> None:
+        """Update the state of the robot by subscribing to robot topics."""
+        self._current_robot_body_pose_w = np.asarray(msg["body_w"], dtype=float).reshape(msg["num_links"], -1)
+        self._current_robot_root_pose_w = np.asarray(msg["root_w"], dtype=float)
+        self._ready["body_pose"] = True
+
+    def _update_body_vel(self, msg: dict[str, Any]) -> None:
+        """Update the velocity of the robot by subscribing to robot topics."""
+        self._current_robot_body_vel_w = np.asarray(msg["body_w"], dtype=float).reshape(msg["num_links"], -1)
+        self._ready["body_vel"] = True
+
+    def _update_robot_state(self, msg: dict[str, Any]) -> None:
+        """Update the state of the robot by subscribing to robot topics."""
+        self._current_joint_positions = np.asarray(
+            [msg["position"][msg["name"].index(j)] for j in self.joint_names]
+        ).astype(np.float32)
+        self._current_joint_velocities = np.asarray(
+            [msg["velocity"][msg["name"].index(j)] for j in self.joint_names]
+        ).astype(np.float32)
+        self._current_joint_efforts = np.asarray(
+            [msg["effort"][msg["name"].index(j)] for j in self.joint_names]
+        ).astype(np.float32)
+        self._ready["joint_states"] = True
+
+    def switch_controllers(self, activate: list[str], deactivate: list[str], strictness: int = 1) -> bool:
+        """Switch ROS2 controllers.
+
+        Args:
+            activate: List of controllers to activate.
+            deactivate: List of controllers to deactivate.
+            strictness: Control the switch beheavior. 1 or 2. Default 2 to "fail loudly
+
+        Returns:
+            Bool if the controller switch was successful
+
+        """
+        request = {
+            "activate_controllers": activate,
+            "deactivate_controllers": deactivate,
+            "strictness": strictness,
+            "activate_asap": True,
+            "timeout": {"sec": 5, "nanosec": 0},
+        }
+
+        result = self.controller_client.call(request)
+
+        return result["ok"]

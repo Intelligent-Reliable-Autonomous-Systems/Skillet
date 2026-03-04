@@ -12,7 +12,7 @@ from typing import Any
 
 from roslibpy import Ros, Service, Topic
 
-# from kinova_tasks.envs import ROS2RLEnvCfg
+# from kinova_tasks.envs import ROS2EnvCfg
 
 
 def launch_robot_hardware(cfg, workspace_path: str, pkg: str, launch_file: str, default_joint_positions: list) -> None:

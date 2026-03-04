@@ -3,15 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
 from dataclasses import dataclass
+from typing import Any
 
 import torch
-from skillet.core.math import euler_xyz_to_rotvec, base_to_tcp_twist
 
+from skillet.core.math import base_to_tcp_twist, euler_xyz_to_rotvec
 
 from ..device_base import DeviceBase, DeviceCfg
-
 from .joystick_listener import VRJoystickListener
 
 
@@ -88,14 +87,12 @@ class VRJoystick(DeviceBase):
         """
         self._read_latest()
 
-        rot_vec = euler_xyz_to_rotvec(self._delta_rot)
+        rot_vec = euler_xyz_to_rotvec(self._delta_rot.unsqueeze(0)).squeeze(0)
         if self.frame == "tcp":
             command = torch.cat((self._delta_pos, rot_vec), dim=0)
         elif self.frame == "base":
-            tcp_lin_vel, tcp_ang_vel = base_to_tcp_twist(
-                self._delta_pos, self._delta_rot, tcp_pose_b[:, 3:7].squeeze(0)
-            )
-            command = torch.cat((tcp_lin_vel, tcp_ang_vel), dim=0)
+            tcp_lin_vel, tcp_ang_vel = base_to_tcp_twist(self._delta_pos, self._delta_rot, tcp_pose_b[:, 3:7])
+            command = torch.cat((tcp_lin_vel.squeeze(0), tcp_ang_vel.squeeze(0)), dim=0)
         if self.gripper_term:
             gripper_value = 1.0 if self._close_gripper else -1.0
             command = torch.cat((command, torch.as_tensor([gripper_value], device=self._device)), dim=0)
@@ -103,7 +100,6 @@ class VRJoystick(DeviceBase):
 
     def _read_latest(self) -> None:
         """Read the latest input from the VR Joystick."""
-
         s = self._listener.read_latest()
 
         if s is not None:

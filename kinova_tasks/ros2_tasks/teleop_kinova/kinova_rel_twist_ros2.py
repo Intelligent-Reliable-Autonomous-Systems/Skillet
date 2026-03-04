@@ -3,11 +3,7 @@ from typing import Any
 import gymnasium as gym
 import numpy as np
 import torch
-from roslibpy import ActionClient, Ros
-
-from skillet.envs.ros2 import (
-    wait_for_action_server,
-)
+from roslibpy import Ros
 
 from ..kinova.kinova_ros2 import KinovaROS2Env
 from .kinova_ik_rel_ros2 import TeleOpKinovaROS2EnvCfg
@@ -48,7 +44,7 @@ class KinovaROS2TwistRelEnv(KinovaROS2Env):
         """Reset environment based on specified indices to default position."""
         super()._reset_idx()
 
-    def _publish_action_to_robot(self, cartesian_pos: np.ndarray, duration: float = 3) -> None:
+    def _publish_action_to_ros(self, cartesian_pos: np.ndarray, duration: float = 3) -> None:
         """Publish the robot action through the twist controller
 
         Args:

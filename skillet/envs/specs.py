@@ -34,6 +34,7 @@ RGBD_SPEC_BATCHED = ObservationSpec[dict[str, BatchedSpaceItem]](
 
 IKEE_Obs = Mapping[str, Float[torch.Tensor, "b ..."]]
 OSC_Obs = Mapping[str, Float[torch.Tensor, "b ..."]]
+TWIST_TCP_Obs = Mapping[str, Float[torch.Tensor, "b ..."]]
 IK_EE_SPEC_BATCHED = ObservationSpec[IKEE_Obs](
     space=gym.spaces.Dict(
         {
@@ -72,7 +73,22 @@ OSC_SPEC_BATCHED = ObservationSpec[OSC_Obs](
             "joint_centers": ParameterizedBox(low=-torch.pi, high=torch.pi, shape=("n_arm_joints",)),
         }
     ),
-    name="ik_ee",
+    name="osc_ee",
+    is_torch=True,
+    is_batched=True,
+    n_envs=-1,
+)
+
+TWIST_SPEC_BATCHED = ObservationSpec[TWIST_TCP_Obs](
+    space=gym.spaces.Dict(
+        {
+            "tcp_pose_b": gym.spaces.Box(low=-1.0, high=1.0, shape=(7,)),
+            "gripper_lim": gym.spaces.Box(low=0.0, high=1.0, shape=(2,)),
+            "gripper": gym.spaces.Box(low=0.0, high=1.0, shape=(1,)),
+            "dt": gym.spaces.Box(low=0.0, high=1.0, shape=(1,)),
+        }
+    ),
+    name="twist_tcp",
     is_torch=True,
     is_batched=True,
     n_envs=-1,

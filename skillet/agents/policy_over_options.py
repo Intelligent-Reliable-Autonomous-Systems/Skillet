@@ -89,10 +89,9 @@ class PolicyOverOptionsAgent(Generic[THighLevelObs, TLowLevelObs, TBAction, TSki
             while not skill_dones.all() and not bool(terminated.all()):
                 # 4a. Get the next action with the low-level observation
                 action = composite_skill.get_action(env.get_observation(composite_skill.obs_spec))
-                # print("Taking action", action)
                 # action[:, -1] = override_grip
                 # 4b. Take a step in the environment
-                _, r, term, trunc, _ = env.step(action)
+                _, r, term, trunc, _ = env.step(action, action_spec=composite_skill.action_spec)
                 terminated = terminated | term | trunc
                 # 4c. Check if the composite skill is terminated
                 skill_dones = composite_skill.is_terminated(self.get_low_level_obs(env))

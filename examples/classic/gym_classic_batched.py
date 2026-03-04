@@ -30,9 +30,6 @@ if __name__ == "__main__":
     env = gym.wrappers.vector.HumanRendering(env)
 
     env = BasicBatchedEnvironment[CartPoleObservation, CartPoleAction](env)
-    print(f"Created environment {env_id} (x{num_envs})")
-    print(env.obs_spec)
-    print(env.action_spec)
 
     # Low-level policies
     zero_policy = ZeroPolicy[CartPoleObservation, CartPoleAction](env.obs_spec, env.action_spec)
@@ -65,6 +62,6 @@ if __name__ == "__main__":
     for episode in range(10):
         env.reset()
         policy_over_options_agent.execute(env)
-        print(f"Episode {episode} finished")
+        print(f"[INFO] Episode {episode} finished")
 
     env.close()

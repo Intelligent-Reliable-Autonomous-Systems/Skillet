@@ -32,8 +32,5 @@ if __name__ == "__main__":
     )
     env = BasicEnvironment[CartPoleObservation, CartPoleAction](env)
     obs, _ = env.reset()
-    print(obs)
     action = action_spec.sample()
     obs, reward, term, trunc, info = env.step(action)
-    print(obs)
-    print(reward)
