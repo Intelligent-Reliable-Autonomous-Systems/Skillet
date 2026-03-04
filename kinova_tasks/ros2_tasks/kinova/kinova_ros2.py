@@ -144,7 +144,7 @@ class KinovaROS2Env(ROS2RLEnv):
         wait_for_topic_publish(self.ros, self.joint_cmd_topic, "trajectory_msgs/msg/JointTrajectory")
         wait_for_action_server(self.ros, self.gripper_cmd_topic, self.gripper_topic_type)
         wait_for_topic_subscribe(self.ros, self.joint_state_topic, "sensor_msgs/JointState")
-        wait_for_rviz(self.ros)
+        # wait_for_rviz(self.ros)
 
         wait_for_topic_subscribe(self.ros, self.jacobian_topic, "gen3_cpp/msg/LinkMatrix")
         wait_for_topic_subscribe(self.ros, self.mass_matrix_topic, "gen3_cpp/msg/LinkMatrix")

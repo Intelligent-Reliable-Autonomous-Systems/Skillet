@@ -4,10 +4,10 @@ This class polls the environment for RGB-D observations and localizes objects in
 """
 from __future__ import annotations
 
-from contextlib import suppress
-from dataclasses import replace
 import threading
 import time
+from contextlib import suppress
+from dataclasses import replace
 from typing import Any, TYPE_CHECKING
 
 import cv2
@@ -18,7 +18,6 @@ from skillet.perception.object_localization import segmented_rgbd_to_point_cloud
 from skillet.perception.realsense import RealsenseEnv
 from skillet.perception.sam3.sam3 import SAM3
 from skillet.perception.utils import depth_to_colormap_np
-from skillet.perception.visualize import point_cloud_to_open3d
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -26,11 +25,7 @@ if TYPE_CHECKING:
     from skillet.core import BatchedEnvironment
     from skillet.core.env import Environment
     from skillet.core.spaces import ObservationSpec
-
-try:
-    import open3d as o3d
-except ImportError:
-    o3d = None  # type: ignore[assignment]
+    from skillet.perception.visualize import PointCloudVisualizer
 
 _PALETTE_BGR: list[tuple[int, int, int]] = [
     (44, 44, 220),
@@ -65,6 +60,7 @@ class Perception:
         device: str = "cuda",
         max_depth_m: float | None = None,
         prompts: dict[str, str] | None = None,
+        world_bounds: tuple[float, float, float, float, float, float] | None = None,
         sam3_model_path: str | None = None,
         segmentation_fn: Callable[[Mapping[str, Any]], torch.Tensor] | None = None,
     ) -> None:
@@ -79,6 +75,7 @@ class Perception:
         self.prompts = prompts or {}
         self._prompt_names = list(self.prompts.keys())
         self._sam_prompts = list(self.prompts.values())
+        self.world_bounds = world_bounds
         self.segmentation_fn = segmentation_fn
         self.sam3: SAM3 | None = None
         if self._sam_prompts:
@@ -92,20 +89,16 @@ class Perception:
         self.latest_point_cloud: torch.Tensor | None = None
         self.latest_segment_indices: torch.Tensor | None = None
 
-        self._vis: Any | None = None
-        self._vis_pcd: Any | None = None
-        self._vis_active = False
-        self._display_point_cloud = False
+        self._pc_vis: PointCloudVisualizer | None = None
+        self._segment_point_cloud = False
+
         self._display_rgb = False
         self._display_depth = False
-        self._segment_point_cloud = False
         self._segment_rgb = False
         self._segment_depth = False
         self._cv2_window_name = "Perception RGB-D"
-        self._vis_needs_reset = False
-        self._vis_max_range_m = 0.0
+        self._cv2_active = False
         self._last_depth_debug_t = 0.0
-        self._vis_owner_thread_id: int | None = None
 
     @staticmethod
     def _maybe_unbatch(obs: Mapping[str, Any]) -> dict[str, torch.Tensor]:
@@ -213,58 +206,43 @@ class Perception:
         self._thread = threading.Thread(target=self.run, name="PerceptionThread", daemon=True)
         self._thread.start()
 
-    def start_visualization(
+    def set_visualizer(
         self,
-        display_point_cloud: bool = True,
+        vis: PointCloudVisualizer,
+        segment_point_cloud: bool = False,
+    ) -> None:
+        """Attach an external :class:`PointCloudVisualizer` for 3-D rendering.
+
+        The visualizer's ``run()`` should be called separately on the main
+        thread; this method just stores the reference so the perception loop
+        can push updates via ``vis.update()``.
+        """
+        self._pc_vis = vis
+        self._segment_point_cloud = segment_point_cloud
+
+    def start_cv2_visualization(
+        self,
         display_rgb: bool = False,
         display_depth: bool = False,
-        segment_point_cloud: bool = False,
         segment_rgb: bool = False,
         segment_depth: bool = False,
         cv2_window_name: str = "Perception RGB-D",
     ) -> None:
-        """Start Open3D and optional CV2 visualizations."""
-        if display_point_cloud and o3d is None:
-            raise ImportError("Open3D is required for visualization. Install with: pip install open3d")
-        if self._vis_active or self._display_rgb or self._display_depth:
-            return
-
-        self._display_point_cloud = display_point_cloud
+        """Enable the CV2 RGB-D preview window."""
         self._display_rgb = display_rgb
         self._display_depth = display_depth
-        self._segment_point_cloud = segment_point_cloud
         self._segment_rgb = segment_rgb
         self._segment_depth = segment_depth
         self._cv2_window_name = cv2_window_name
-        self._vis_needs_reset = True
-        self._vis_max_range_m = 0.0
-        # Visualization resources are created lazily on the run-loop thread so
-        # run_thread() and start_visualization() can be called from any order.
-        self._vis_active = False
-        self._vis_owner_thread_id = None
 
-    def _ensure_visualization_resources(self) -> None:
-        """Create visualization resources on the current thread if needed."""
-        if self._vis_active:
+    def _ensure_cv2_window(self) -> None:
+        """Create the CV2 window lazily on the run-loop thread."""
+        if self._cv2_active:
             return
-        if not (self._display_point_cloud or self._display_rgb or self._display_depth):
+        if not (self._display_rgb or self._display_depth):
             return
-
-        if self._display_point_cloud:
-            vis = o3d.visualization.Visualizer()
-            vis.create_window(window_name="Perception Point Cloud", width=1024, height=768)
-            pcd = o3d.geometry.PointCloud()
-            vis.add_geometry(pcd)
-            coord = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.2, origin=[0, 0, 0])
-            vis.add_geometry(coord)
-            self._vis = vis
-            self._vis_pcd = pcd
-
-        if self._display_rgb or self._display_depth:
-            cv2.namedWindow(self._cv2_window_name, cv2.WINDOW_NORMAL)
-
-        self._vis_active = True
-        self._vis_owner_thread_id = threading.get_ident()
+        cv2.namedWindow(self._cv2_window_name, cv2.WINDOW_NORMAL)
+        self._cv2_active = True
 
     def _draw_instance_annotations(
         self, image: np.ndarray, masks: torch.Tensor, segment_ids: torch.Tensor
@@ -349,41 +327,23 @@ class Perception:
         cv2.imshow(self._cv2_window_name, frame)
         cv2.waitKey(1)
 
-    def stop_visualization(self) -> None:
-        """Stop the Open3D visualization."""
-        if self._vis_owner_thread_id is not None and self._vis_owner_thread_id != threading.get_ident():
-            # Defer actual teardown to the owning run-loop thread.
-            self._display_point_cloud = False
-            self._display_rgb = False
-            self._display_depth = False
-            self._segment_point_cloud = False
-            self._segment_rgb = False
-            self._segment_depth = False
-            self._vis_active = False
-            return
-
-        if self._vis is not None:
-            self._vis.destroy_window()
-        if self._display_rgb or self._display_depth:
+    def _stop_cv2(self) -> None:
+        """Tear down the CV2 window."""
+        if self._cv2_active:
             with suppress(cv2.error):
                 cv2.destroyWindow(self._cv2_window_name)
-        self._vis = None
-        self._vis_pcd = None
-        self._vis_active = False
-        self._display_point_cloud = False
+            self._cv2_active = False
         self._display_rgb = False
         self._display_depth = False
-        self._segment_point_cloud = False
-        self._segment_rgb = False
-        self._segment_depth = False
-        self._vis_owner_thread_id = None
 
     def stop(self) -> None:
         """Signal the polling loop to stop and wait for the worker thread."""
         self._stop_event.set()
         if self._thread is not None and self._thread.is_alive():
             self._thread.join(timeout=2.0)
-        self.stop_visualization()
+        self._stop_cv2()
+        if self._pc_vis is not None:
+            self._pc_vis.request_close()
 
     def run(self) -> None:
         """Run the perception pipeline."""
@@ -396,33 +356,20 @@ class Perception:
             obs_unbatched = self._apply_far_plane(self._maybe_unbatch(obs))
             masks, segment_ids = self._get_masks(obs_unbatched)
             point_cloud, segment_indices = self._observation_to_point_cloud(obs_unbatched, masks, segment_ids)
-            self._ensure_visualization_resources()
 
             with self._lock:
                 self.latest_observation = obs
                 self.latest_point_cloud = point_cloud
                 self.latest_segment_indices = segment_indices
 
-            if self._display_point_cloud and self._vis_active and self._vis is not None and self._vis_pcd is not None:
-                # Color by instance ids if requested; otherwise use embedded RGB colors.
-                vis_segment_indices = segment_indices if self._segment_point_cloud else None
-                pcd = point_cloud_to_open3d(point_cloud, segment_indices=vis_segment_indices, filter_zero=True)
-                if pcd is not None:
-                    self._vis_pcd.points = pcd.points
-                    self._vis_pcd.colors = pcd.colors
-                    self._vis.update_geometry(self._vis_pcd)
-                    if point_cloud.shape[0] > 0:
-                        max_range_m = float(torch.linalg.vector_norm(point_cloud[:, :3], dim=1).max().item())
-                        if self._vis_needs_reset or max_range_m > (1.25 * self._vis_max_range_m + 0.05):
-                            # Refit the camera/frustum as range increases to avoid far-plane clipping.
-                            self._vis.reset_view_point(True)
-                            self._vis_needs_reset = False
-                            self._vis_max_range_m = max(self._vis_max_range_m, max_range_m)
-                    if not self._vis.poll_events():
-                        self.stop_visualization()
-                    else:
-                        self._vis.update_renderer()
+            if self._pc_vis is not None:
+                vis_seg = segment_indices if self._segment_point_cloud else None
+                self._pc_vis.update(
+                    point_cloud, segment_indices=vis_seg,
+                    camera_pose=obs_unbatched["camera_pose"],
+                )
 
+            self._ensure_cv2_window()
             self._update_rgbd_window(obs_unbatched, masks, segment_ids)
             self._debug_depth_range(obs)
 
@@ -431,22 +378,29 @@ class Perception:
             if sleep_s > 0:
                 time.sleep(sleep_s)
 
-        self.stop_visualization()
+        self._stop_cv2()
 
 if __name__ == "__main__":
+    from skillet.perception.visualize import PointCloudVisualizer
+
     env = RealsenseEnv()
+    TABLE_X0 = -0.0889
+    TABLE_Y0 = -0.577
+    TABLE_DX = 0.762
+    TABLE_DY = 1.2446
+    bounds = (TABLE_X0, TABLE_Y0, 0, TABLE_X0 + TABLE_DX, TABLE_Y0 + TABLE_DY, 1)
     perception = Perception(env, env.obs_spec, 8, prompts={
         "wooden_block": "a light brown wooden block",
         "purple_block": "a solid purple block without any writing or markings",
         "yellow_block": "a solid yellow block without any writing or markings",
         "green_block": "a solid green block without any writing or markings",
-        # "plastic_block": "a bright, solid colored plastic block, not brown wood"
-        })
-    perception.start_visualization(
+        }, world_bounds=bounds)
+
+    vis = PointCloudVisualizer(world_bounds=bounds)
+    perception.set_visualizer(vis, segment_point_cloud=True)
+    perception.start_cv2_visualization(
         display_rgb=True, display_depth=True,
         segment_rgb=True, segment_depth=True,
-        segment_point_cloud=True
     )
     perception.run_thread()
-    while True:
-        time.sleep(0.1)
+    vis.run()

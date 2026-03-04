@@ -2,19 +2,26 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import torch  # noqa: TC002 - used at runtime for tensor ops
 
 try:
     import open3d as o3d
+    import open3d.visualization.gui as _gui
+    import open3d.visualization.rendering as _rendering
 except ImportError:
     o3d = None  # type: ignore[assignment]
+    _gui = None  # type: ignore[assignment]
+    _rendering = None  # type: ignore[assignment]
 
 
 def point_cloud_to_open3d(
     points: torch.Tensor,
     segment_indices: torch.Tensor | None = None,
     filter_zero: bool = True,
+    world_bounds: tuple[float, float, float, float, float, float] | None = None,
 ) -> object | None:
     """Convert output of segmented_rgbd_to_point_cloud to an Open3D PointCloud.
 
@@ -24,6 +31,8 @@ def point_cloud_to_open3d(
         segment_indices: Optional (N,) segment indices. If provided, points are colored
             by segment id, overriding any embedded RGB colors.
         filter_zero: If True, remove points at (0, 0, 0) (invalid/masked). Default True.
+        world_bounds: Optional (x_min, y_min, z_min, x_max, y_max, z_max). Points
+            outside this axis-aligned box are removed before visualization.
 
     Returns:
         Open3D PointCloud, or None if open3d is not installed.
@@ -47,12 +56,20 @@ def point_cloud_to_open3d(
         raise ValueError(f"segment_indices shape {seg.shape} does not match points shape {x.shape}")
 
     xyz = x[:, :3].astype(np.float64)
-    valid_mask = None
+    keep = np.ones(xyz.shape[0], dtype=bool)
+
     if filter_zero:
-        valid_mask = np.any(xyz != 0, axis=1)
-        xyz = xyz[valid_mask]
-        if seg is not None:
-            seg = seg[valid_mask]
+        keep &= np.any(xyz != 0, axis=1)
+
+    if world_bounds is not None:
+        lo = np.array(world_bounds[:3], dtype=np.float64)
+        hi = np.array(world_bounds[3:], dtype=np.float64)
+        keep &= np.all((xyz >= lo) & (xyz <= hi), axis=1)
+
+    xyz = xyz[keep]
+    x = x[keep]
+    if seg is not None:
+        seg = seg[keep]
 
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(xyz)
@@ -63,7 +80,6 @@ def point_cloud_to_open3d(
         unique_seg = np.unique(seg)
         for sid in unique_seg:
             mask = seg == sid
-            # Simple deterministic color mapping from segment id
             r = ((sid * 37) % 255) / 255.0
             g = ((sid * 57) % 255) / 255.0
             b = ((sid * 97) % 255) / 255.0
@@ -72,14 +88,139 @@ def point_cloud_to_open3d(
     # Otherwise, if embedded RGB is present, use it.
     elif x.shape[-1] >= 6:
         rgb = x[:, 3:6]
-        if filter_zero and valid_mask is not None:
-            rgb = rgb[valid_mask]
-        # Open3D expects [0, 1]
         if rgb.size > 0 and rgb.max() > 1.0:
             rgb = np.clip(rgb / 255.0, 0.0, 1.0)
         pcd.colors = o3d.utility.Vector3dVector(rgb.astype(np.float64))
 
     return pcd
+
+
+def create_world_bounds_lineset(
+    bounds: tuple[float, float, float, float, float, float],
+) -> object | None:
+    """Create a wireframe box for the world bounds with axis-colored edges.
+
+    Args:
+        bounds: (x_min, y_min, z_min, x_max, y_max, z_max).
+
+    Returns:
+        Open3D LineSet, or None if open3d is not installed.
+
+    """
+    if o3d is None:
+        return None
+
+    x0, y0, z0, x1, y1, z1 = bounds
+    # 8 corners ordered so bit pattern (z_bit, y_bit, x_bit) maps to index.
+    corners = np.array([
+        [x0, y0, z0],  # 0
+        [x1, y0, z0],  # 1
+        [x0, y1, z0],  # 2
+        [x1, y1, z0],  # 3
+        [x0, y0, z1],  # 4
+        [x1, y0, z1],  # 5
+        [x0, y1, z1],  # 6
+        [x1, y1, z1],  # 7
+    ], dtype=np.float64)
+
+    RED = [1.0, 0.0, 0.0]
+    GREEN = [0.0, 1.0, 0.0]
+    BLUE = [0.0, 0.0, 1.0]
+
+    # (edge_start, edge_end, color) grouped by the axis the edge is parallel to.
+    edges_and_colors: list[tuple[list[int], list[float]]] = [
+        # X-axis edges (differ only in x)
+        ([0, 1], RED), ([2, 3], RED), ([4, 5], RED), ([6, 7], RED),
+        # Y-axis edges (differ only in y)
+        ([0, 2], GREEN), ([1, 3], GREEN), ([4, 6], GREEN), ([5, 7], GREEN),
+        # Z-axis edges (differ only in z)
+        ([0, 4], BLUE), ([1, 5], BLUE), ([2, 6], BLUE), ([3, 7], BLUE),
+    ]
+    lines = [e for e, _ in edges_and_colors]
+    colors = [c for _, c in edges_and_colors]
+
+    ls = o3d.geometry.LineSet()
+    ls.points = o3d.utility.Vector3dVector(corners)
+    ls.lines = o3d.utility.Vector2iVector(lines)
+    ls.colors = o3d.utility.Vector3dVector(colors)
+    return ls
+
+
+def create_camera_model(
+    camera_pose: np.ndarray,
+    face_width: float = 0.06,
+    face_height: float = 0.04,
+    face_depth: float = 0.008,
+    body_width: float = 0.035,
+    body_height: float = 0.03,
+    body_depth: float = 0.045,
+    marker_width: float = 0.015,
+    marker_height: float = 0.008,
+    marker_depth: float = 0.01,
+) -> list[object] | None:
+    """Build a simple 3-part camera model positioned at *camera_pose*.
+
+    The camera looks down its local +Z axis (OpenCV convention).  The model
+    consists of:
+      1. Face plate -- a thin, wide box at the front (light gray).
+      2. Body -- a narrower, longer box behind the face (dark gray).
+      3. Top marker -- a small red box on top to indicate orientation.
+
+    Args:
+        camera_pose: 7-element array (x, y, z, qw, qx, qy, qz).
+        face_*: Dimensions of the front face plate.
+        body_*: Dimensions of the camera body.
+        marker_*: Dimensions of the red orientation marker.
+
+    Returns:
+        List of three Open3D TriangleMesh objects, or None if open3d is
+        not installed.
+
+    """
+    if o3d is None:
+        return None
+
+    from scipy.spatial.transform import Rotation
+
+    pos = camera_pose[:3]
+    quat_wxyz = camera_pose[3:7]
+    quat_xyzw = np.array([quat_wxyz[1], quat_wxyz[2], quat_wxyz[3], quat_wxyz[0]])
+    rot_mat = Rotation.from_quat(quat_xyzw).as_matrix()
+
+    T = np.eye(4)
+    T[:3, :3] = rot_mat
+    T[:3, 3] = pos
+
+    def _make_box(
+        w: float, h: float, d: float,
+        offset: np.ndarray,
+        color: tuple[float, float, float],
+    ) -> object:
+        mesh = o3d.geometry.TriangleMesh.create_box(width=w, height=h, depth=d)
+        # Center the box at the local origin then apply offset.
+        mesh.translate(np.array([-w / 2, -h / 2, -d / 2]) + offset)
+        mesh.paint_uniform_color(color)
+        mesh.transform(T)
+        mesh.compute_vertex_normals()
+        return mesh
+
+    # Face plate: centered at local origin (front of camera).
+    face = _make_box(face_width, face_height, face_depth,
+                     np.array([0.0, 0.0, 0.0]), (0.7, 0.7, 0.7))
+
+    # Body: behind the face along -Z.
+    body = _make_box(body_width, body_height, body_depth,
+                     np.array([0.0, 0.0, -(face_depth / 2 + body_depth / 2)]),
+                     (0.35, 0.35, 0.35))
+
+    # Top marker: on top of the body (-Y in camera frame).
+    marker = _make_box(marker_width, marker_height, marker_depth,
+                       np.array([0.0,
+                                 -(body_height / 2 + marker_height / 2),
+                                 -(face_depth / 2 + body_depth / 2)]),
+                       (0.9, 0.1, 0.1))
+
+    return [face, body, marker]
 
 
 def visualize_point_cloud(
@@ -112,3 +253,200 @@ def visualize_point_cloud(
         width=1024,
         height=768,
     )
+
+
+class PointCloudVisualizer:
+    """Stateful Open3D visualizer using the ``gui.Application`` API.
+
+    Renders a point cloud with optional world-bounds wireframe, camera model,
+    and a HUD label showing the current camera pose.  Designed to ``run()`` on
+    the main thread while a perception pipeline pushes updates from a
+    background thread via ``update()``.
+    """
+
+    _CAM_GEOMETRY_NAMES = ("cam_face", "cam_body", "cam_marker")
+
+    def __init__(
+        self,
+        world_bounds: tuple[float, float, float, float, float, float] | None = None,
+        window_name: str = "Perception Point Cloud",
+        width: int = 1024,
+        height: int = 768,
+    ) -> None:
+        self.world_bounds = world_bounds
+        self._window_name = window_name
+        self._width = width
+        self._height = height
+
+        self._app: Any | None = None
+        self._window: Any | None = None
+        self._scene_widget: Any | None = None
+        self._hud_label: Any | None = None
+        self._mat_unlit: Any | None = None
+        self._mat_lit: Any | None = None
+        self._mat_line: Any | None = None
+
+        self._added_geometries: set[str] = set()
+        self._needs_camera_setup = True
+        self._closed = False
+
+    # ------------------------------------------------------------------
+    # Setup
+    # ------------------------------------------------------------------
+
+    def _setup(self) -> None:
+        """Initialize gui.Application, create window / scene / HUD / static geometry."""
+        self._app = _gui.Application.instance
+        self._app.initialize()
+
+        self._window = self._app.create_window(
+            self._window_name, self._width, self._height,
+        )
+        self._window.set_on_layout(self._on_layout)
+        self._window.set_on_close(self._on_close)
+
+        self._scene_widget = _gui.SceneWidget()
+        self._scene_widget.scene = _rendering.Open3DScene(self._window.renderer)
+        self._window.add_child(self._scene_widget)
+
+        self._hud_label = _gui.Label("Cam: waiting for data...")
+        self._window.add_child(self._hud_label)
+
+        # Materials
+        self._mat_unlit = _rendering.MaterialRecord()
+        self._mat_unlit.shader = "defaultUnlit"
+        self._mat_unlit.point_size = 3 * self._window.scaling
+
+        self._mat_lit = _rendering.MaterialRecord()
+        self._mat_lit.shader = "defaultLit"
+
+        self._mat_line = _rendering.MaterialRecord()
+        self._mat_line.shader = "unlitLine"
+        self._mat_line.line_width = 2 * self._window.scaling
+
+        # Static geometries
+        coord = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.2, origin=[0, 0, 0])
+        self._add_geometry("coord_frame", coord, self._mat_lit)
+
+        if self.world_bounds is not None:
+            bounds_ls = create_world_bounds_lineset(self.world_bounds)
+            if bounds_ls is not None:
+                self._add_geometry("world_bounds", bounds_ls, self._mat_line)
+
+    # ------------------------------------------------------------------
+    # Geometry helpers
+    # ------------------------------------------------------------------
+
+    def _add_geometry(self, name: str, geom: Any, mat: Any) -> None:
+        """Add or replace a named geometry in the scene."""
+        scene = self._scene_widget.scene
+        if name in self._added_geometries:
+            scene.remove_geometry(name)
+        scene.add_geometry(name, geom, mat)
+        self._added_geometries.add(name)
+
+    def _remove_geometry(self, name: str) -> None:
+        if name in self._added_geometries:
+            self._scene_widget.scene.remove_geometry(name)
+            self._added_geometries.discard(name)
+
+    # ------------------------------------------------------------------
+    # Layout / close callbacks (called on main thread by gui framework)
+    # ------------------------------------------------------------------
+
+    def _on_layout(self, layout_context: Any) -> None:
+        r = self._window.content_rect
+        self._scene_widget.frame = r
+        pref = self._hud_label.calc_preferred_size(
+            layout_context, _gui.Widget.Constraints(),
+        )
+        self._hud_label.frame = _gui.Rect(
+            r.x + 10, r.y + 10, pref.width, pref.height,
+        )
+
+    def _on_close(self) -> bool:
+        self._closed = True
+        return True
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def update(
+        self,
+        point_cloud: torch.Tensor,
+        segment_indices: torch.Tensor | None = None,
+        camera_pose: torch.Tensor | None = None,
+    ) -> None:
+        """Push new data from any thread; the scene update runs on the GUI thread."""
+        if self._closed or self._app is None or self._window is None:
+            return
+
+        # Prepare heavy geometry conversion on the calling (perception) thread.
+        pcd = point_cloud_to_open3d(
+            point_cloud, segment_indices=segment_indices,
+            filter_zero=True, world_bounds=self.world_bounds,
+        )
+
+        cam_meshes: list[Any] | None = None
+        hud_text = ""
+        if camera_pose is not None:
+            cam_np = camera_pose.detach().cpu().numpy().astype(np.float64)
+            cam_meshes = create_camera_model(cam_np)
+            pos = cam_np[:3]
+            q = cam_np[3:7]
+            hud_text = (
+                f"Cam: ({pos[0]:+.3f}, {pos[1]:+.3f}, {pos[2]:+.3f})  "
+                f"q=({q[0]:.3f}, {q[1]:.3f}, {q[2]:.3f}, {q[3]:.3f})"
+            )
+
+        do_camera_setup = self._needs_camera_setup
+
+        def _do_update() -> None:
+            if self._closed:
+                return
+
+            # Point cloud
+            if pcd is not None:
+                self._add_geometry("pcd", pcd, self._mat_unlit)
+            else:
+                self._remove_geometry("pcd")
+
+            # Camera model (3 meshes)
+            if cam_meshes is not None:
+                for name, mesh in zip(
+                    self._CAM_GEOMETRY_NAMES, cam_meshes, strict=True,
+                ):
+                    self._add_geometry(name, mesh, self._mat_lit)
+            else:
+                for name in self._CAM_GEOMETRY_NAMES:
+                    self._remove_geometry(name)
+
+            # HUD
+            if hud_text:
+                self._hud_label.text = hud_text
+                self._window.set_needs_layout()
+
+            # Auto-fit view on first valid point cloud
+            if do_camera_setup and pcd is not None:
+                bounds = self._scene_widget.scene.bounding_box
+                center = bounds.get_center()
+                self._scene_widget.setup_camera(60, bounds, center)
+                self._needs_camera_setup = False
+
+        self._app.post_to_main_thread(self._window, _do_update)
+
+    def run(self) -> None:
+        """Set up the window and block on the GUI event loop (call on main thread)."""
+        if o3d is None:
+            raise ImportError(
+                "Open3D is required for visualization. Install with: pip install open3d"
+            )
+        self._setup()
+        self._app.run()
+
+    def request_close(self) -> None:
+        """Request the GUI to shut down (safe to call from any thread)."""
+        self._closed = True
+        if self._app is not None:
+            self._app.quit()

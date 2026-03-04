@@ -10,12 +10,14 @@ from __future__ import annotations
 import time
 from collections.abc import Mapping
 from typing import Any
+from typing_extensions import override
 
 import cv2
 import gymnasium as gym
 import numpy as np
 import pyrealsense2 as rs
 
+from skillet.core import ActionSpec
 from skillet.core.env import _EnvironmentBase
 from skillet.core.spaces import ObservationSpec
 from skillet.perception.utils import depth_to_colormap_np
@@ -123,6 +125,10 @@ class RealsenseEnv(_EnvironmentBase):
     def supports_observation_spec(self, obs_spec: ObservationSpec[Mapping[str, Any]]) -> bool:
         """Return True if the given observation spec is supported."""
         return obs_spec.name == "rgb-d"
+
+    @override
+    def supports_action_spec(self, action_spec: ActionSpec[Any]) -> bool:
+        return True
 
     def _get_latest_rgbd_raw(self) -> dict[str, Any]:
         """Grab the latest RGB-D snapshot in the raw ROS-style format.

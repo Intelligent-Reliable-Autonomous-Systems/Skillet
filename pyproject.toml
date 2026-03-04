@@ -32,12 +32,16 @@ dependencies = [
     "jaxtyping",
     "typing-extensions",
     "pynput",
+    "tensordict",
 ]
 
 [project.optional-dependencies]
 perception = [
     "ultralytics",
+    "open3d",
+    "pyrealsense2",
 ]
+muj
 dev = [
     "ruff",
     "mypy",
