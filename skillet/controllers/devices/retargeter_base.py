@@ -34,6 +34,7 @@ class RetargeterBase(ABC):
 
         Args:
             cfg: Configuration for the retargeter
+
         """
         self._sim_device = cfg.sim_device
 
@@ -53,8 +54,9 @@ class RetargeterBase(ABC):
 
         Returns:
             Retargeted data in implementation-specific format
+
         """
-        pass
+        ...
 
     def get_requirements(self) -> list["RetargeterBase.Requirement"]:
         """Return the list of required data features for this retargeter.

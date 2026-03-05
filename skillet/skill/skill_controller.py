@@ -26,9 +26,9 @@ class SkillController(BatchedSkill):
         self.device = device
         self.num_envs = num_envs
         self.env_ids = torch.arange(self.num_envs, device=self.device)
-        self.param_dim = int(np.max([skill.param_dim for skill in self.skills]))
+        self.sk_param_dim = int(np.max([skill.param_dim for skill in self.skills]))
         self.num_skills = len(self.skills)
-        self.action_dim = self.num_skills + self.param_dim
+        self.action_dim = self.num_skills + self.sk_param_dim
         self._env_action_dim = int(np.prod(env.single_action_space.shape))
         self._obs_func = env.get_observation
         self.num_calls = 0
@@ -70,6 +70,14 @@ class SkillController(BatchedSkill):
             success_idx = sk.is_success(self._obs_func(sk.obs_spec)[sk_env_ids])
             self._successes[sk_env_ids] = success_idx
         return self._successes
+
+    @property
+    def param_dim(self): ...
+    @property
+    def policy(self): ...
+    @property
+    def status(self): ...
+    def reward(self): ...
 
     def reset(self, action: TBAction) -> None:
         """Reset the skill controller based on the action parameters.
@@ -124,8 +132,8 @@ class SkillController(BatchedSkill):
         return torch.argmax(actions[:, : self.num_skills], dim=1)
 
     def get_params_from_action(self, actions: torch.Tensor) -> torch.Tensor:
-        """Return a tensor of shape (num_envs, param_dim) denoting each skill parameter."""
-        return actions[:, -self.param_dim :]
+        """Return a tensor of shape (num_envs, sk_param_dim) denoting each skill parameter."""
+        return actions[:, -self.sk_param_dim :]
 
     def post_process_reward(self, reward: torch.Tensor) -> torch.Tensor:
         """Post process the reward according to skill success.

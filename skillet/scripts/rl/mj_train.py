@@ -16,6 +16,7 @@ import torch
 import kinova_tasks.mj_tasks  # noqa: F401
 from skillet.envs.compatibility.rsl_rl import RslRlVecEnvWrapper
 from skillet.envs.mj_env_wrapper import MJEnvWrapper
+from skillet.envs.skill_mj_env_wrapper import SkillMJEnvWrapper
 from skillet.envs.util import get_checkpoint_path, parse_mj_env_cfg
 from skillet.envs.util.dict import print_dict
 from skillet.envs.util.hydra import hydra_task_config
@@ -37,6 +38,7 @@ parser.add_argument(
 parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment")
 parser.add_argument("--max_iterations", type=int, default=None, help="RL Policy training iterations.")
 parser.add_argument("--device", type=str, default="cuda", help="Name of GPU device")
+parser.add_argument("--skill", action="store_true", help="If to use a a skill-based RL environment")
 
 cli_args.add_rsl_rl_args(parser)
 args_cli, hydra_args = parser.parse_known_args()
@@ -99,7 +101,7 @@ def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
         env = gym.wrappers.RecordVideo(env, **video_kwargs)
 
     # Wrap environment for RSL-RL
-    env = MJEnvWrapper(env)
+    env = SkillMJEnvWrapper(env) if args_cli.skill else MJEnvWrapper(env)
     env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
 
     # Create runner from RSL-RL

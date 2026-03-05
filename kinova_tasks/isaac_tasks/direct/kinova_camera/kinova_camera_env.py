@@ -44,7 +44,7 @@ class KinovaGenCameraEnvCfg(SkillsDirectRLEnvCfg):
     tcp_offset = [0.0, 0.0, 0.120, 1.0, 0.0, 0.0, 0.0]
     ee_link_name = "end_effector_link"
     base_link_name = "base_link"
-    gripper_joint_names = "robotiq_85_left_knuckle_joint"
+    gripper_joint_names = ["robotiq_85_left_knuckle_joint"]
 
     # --- simulation ---
     sim: SimulationCfg = SimulationCfg(

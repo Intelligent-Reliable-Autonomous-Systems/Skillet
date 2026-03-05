@@ -509,7 +509,6 @@ class KinovaROS2Env(ROS2Env):
         else:
             print(f"[INFO] Unknown gripper result: {result}")
             self.gripper_ok = False
-        pass
 
     def _gripper_feedback_cb(self, feedback: dict[str, Any]) -> None:
         """Gripper action feedback callback."""

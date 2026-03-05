@@ -202,4 +202,4 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
 
     def reward(self, obs: TBSkillObs) -> Float[ArrayLike, "b"]:  # noqa: F821
         """Compute the reward of the skill."""
-        pass
+        ...

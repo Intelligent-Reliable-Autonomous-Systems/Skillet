@@ -246,7 +246,7 @@ class ROS2Env(gym.Env):
             time.sleep(sleep_time)
         else:
             print(f"[WARN] full loop overran by {-sleep_time * 1000:.1f}ms")
-            pass
+            ...
 
         self.episode_length_buf += 1
         self.common_step_counter += 1
@@ -287,12 +287,11 @@ class ROS2Env(gym.Env):
 
     def render(self) -> None:
         """Run rendering by visualizing with RViz."""
-        pass
+        ...
 
     def close(self) -> None:
         """Cleanup for the environment."""
         self.ros.terminate()
-        pass
 
     """
     Helper functions.

@@ -93,8 +93,7 @@ class StudentTeacher(nn.Module):
 
     def reset(
         self, dones: torch.Tensor | None = None, hidden_states: tuple[HiddenState, HiddenState] = (None, None)
-    ) -> None:
-        pass
+    ) -> None: ...
 
     def forward(self) -> NoReturn:
         raise NotImplementedError
@@ -152,8 +151,7 @@ class StudentTeacher(nn.Module):
     def get_hidden_states(self) -> tuple[HiddenState, HiddenState]:
         return None, None
 
-    def detach_hidden_states(self, dones: torch.Tensor | None = None) -> None:
-        pass
+    def detach_hidden_states(self, dones: torch.Tensor | None = None) -> None: ...
 
     def train(self, mode: bool = True) -> None:
         super().train(mode)

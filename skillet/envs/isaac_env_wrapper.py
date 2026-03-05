@@ -122,10 +122,13 @@ class IsaacEnvWrapper(
             n_arm_joints=len(
                 self._joint_ids[: -len(self._gripper_joint_names)]
             ),  # Assumes all non gripper joints are arm joints
+            n_gripper_joints=len(self._gripper_joint_names),
         ).replace(device=self.device)
         """Specification of IK-EE observations."""
         self.obs_spec_osc = OSC_SPEC_BATCHED.bind(
-            n_joints=len(self._joint_ids), n_arm_joints=len(self._joint_ids[: -len(self._gripper_joint_names)])
+            n_joints=len(self._joint_ids),
+            n_arm_joints=len(self._joint_ids[: -len(self._gripper_joint_names)]),
+            n_gripper_joints=len(self._gripper_joint_names),
         ).replace(device=self.device)
         """Specification of OSC observations."""
         self._action_spec = ActionSpec[BxM_Action](
@@ -461,8 +464,10 @@ class IsaacEnvWrapper(
             env_ids = self.robot._ALL_INDICES
 
         gripper_joint_idxs = [self.robot.find_joints(j)[0][0] for j in gripper_joints]
-        gripper_low = self._robot_dof_lower_limits[gripper_joint_idxs]
-        gripper_high = self._robot_dof_upper_limits[gripper_joint_idxs]
+        gripper_low = self._robot_dof_lower_limits[gripper_joint_idxs][
+            :1
+        ]  # TODO might not work for non parallel gripper
+        gripper_high = self._robot_dof_upper_limits[gripper_joint_idxs][:1]
 
         return torch.cat(
             (gripper_low.unsqueeze(0).repeat(self.num_envs, 1), gripper_high.unsqueeze(0).repeat(self.num_envs, 1)),

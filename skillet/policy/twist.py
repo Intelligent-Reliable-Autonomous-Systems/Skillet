@@ -44,10 +44,7 @@ class TwistTcpFramePolicy(BatchedPPolicy[TBPolicyObs, torch.Tensor, TBAction], G
         """Reset the policy. Useful if policy is stateful."""
         self._params = params
         gripper_lim = obs["gripper_lim"]
-        gripper_dim = obs["gripper"].shape[-1]
-        self.start_gripper_pos = (obs["gripper"] - gripper_lim[:, 0:gripper_dim]) / (
-            gripper_lim[:, gripper_dim:] - gripper_lim[:, 0:gripper_dim]
-        )
+        self.start_gripper_pos = (obs["gripper"] - gripper_lim[:, :1]) / (gripper_lim[:, 1:] - gripper_lim[:, :1])
 
 
 class TwistTcpBasePolicy(BatchedPPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[TBPolicyObs, TBAction]):
@@ -84,10 +81,7 @@ class TwistTcpBasePolicy(BatchedPPolicy[TBPolicyObs, torch.Tensor, TBAction], Ge
         lin_vel_b, ang_vel_b = base_to_tcp_twist(params[:, 0:3], params[:, 3:6], obs["tcp_pose_b"][:, 3:7])
         self.twist_cmd = torch.cat((lin_vel_b, ang_vel_b), dim=-1)
         gripper_lim = obs["gripper_lim"]
-        gripper_dim = obs["gripper"].shape[-1]
-        self.start_gripper_pos = (obs["gripper"] - gripper_lim[:, 0:gripper_dim]) / (
-            gripper_lim[:, gripper_dim:] - gripper_lim[:, 0:gripper_dim]
-        )
+        self.start_gripper_pos = (obs["gripper"] - gripper_lim[:, :1]) / (gripper_lim[:, 1:] - gripper_lim[:, :1])
 
 
 class TwistPIDPosePolicy(BatchedPPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[TBPolicyObs, TBAction]):
@@ -212,7 +206,4 @@ class TwistPIDPosePolicy(BatchedPPolicy[TBPolicyObs, torch.Tensor, TBAction], Ge
         )
 
         gripper_lim = obs["gripper_lim"]
-        gripper_dim = obs["gripper"].shape[-1]
-        self.start_gripper_pos = (obs["gripper"] - gripper_lim[:, 0:gripper_dim]) / (
-            gripper_lim[:, gripper_dim:] - gripper_lim[:, 0:gripper_dim]
-        )
+        self.start_gripper_pos = (obs["gripper"] - gripper_lim[:, :1]) / (gripper_lim[:, 1:] - gripper_lim[:, :1])

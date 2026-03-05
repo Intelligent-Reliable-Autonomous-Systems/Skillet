@@ -35,6 +35,9 @@ class OSCEEPolicy(BatchedPPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[T
     def action_spec(self) -> ActionSpec[TBAction]:  # noqa: D102
         return self._action_spec
 
+    @property
+    def params_spec(self) -> None: ...
+
     def get_action(self, obs: TBPolicyObs, params: Any = None) -> TBAction:
         """Get the next joint positions by computing differential inverse kinematics."""
         ee_pose_b = obs["ee_pose_b"]
@@ -66,11 +69,9 @@ class OSCEEPolicy(BatchedPPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[T
         self.osc.reset(n_envs, env_ids=env_ids)
         self.tcp_offset = obs["tcp_offset"]
         gripper_lim = obs["gripper_lim"]
-        gripper_dim = obs["gripper"].shape[-1]
         self.joint_centers = obs["joint_centers"][:, :7]  # Ignore gripper
-        self.start_gripper_pos = (obs["gripper"] - gripper_lim[:, 0:gripper_dim]) / (
-            gripper_lim[:, gripper_dim:] - gripper_lim[:, 0:gripper_dim]
-        )
+        gripper_lim = obs["gripper_lim"]
+        self.start_gripper_pos = (obs["gripper"] - gripper_lim[:, :1]) / (gripper_lim[:, 1:] - gripper_lim[:, :1])
 
     def _compute_goal_ee_pose_b_from_goal_tcp_b(
         self, tcp_pose_b: torch.Tensor, tcp_offset: torch.Tensor

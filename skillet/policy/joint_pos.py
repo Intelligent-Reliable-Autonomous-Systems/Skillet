@@ -32,6 +32,9 @@ class GripperPolicy(BatchedPPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic
     def action_spec(self) -> ActionSpec[TBAction]:  # noqa: D102
         return self._action_spec
 
+    @property
+    def params_spec(self) -> None: ...
+
     def get_action(self, obs: TBPolicyObs, params: Any = None) -> TBAction:
         """Get the next gripper position."""
         return torch.cat((obs["joint_pos"][:, :7], self._goal_gripper_pos), dim=1)
@@ -64,6 +67,9 @@ class JointPosPolicy(BatchedPPolicy[TBPolicyObs, torch.Tensor, TBAction], Generi
     @property
     def action_spec(self) -> ActionSpec[TBAction]:  # noqa: D102
         return self._action_spec
+
+    @property
+    def params_spec(self) -> None: ...
 
     def get_action(self, obs: TBPolicyObs, params: Any = None) -> TBAction:
         """Get the next gripper position."""

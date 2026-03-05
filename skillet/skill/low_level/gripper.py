@@ -94,7 +94,7 @@ class GripperOCSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[
 
     def reward(self, obs: TBSkillObs) -> Float[ArrayLike, "b"]:  # noqa: F821
         """Compute the reward of the skill."""
-        pass
+        ...
 
 
 class GripperOpenSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSkillObs, TBAction, TBSkillParams]):
@@ -174,7 +174,7 @@ class GripperOpenSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generi
 
     def reward(self, obs: TBSkillObs) -> Float[ArrayLike, "b"]:  # noqa: F821
         """Compute the reward of the skill."""
-        pass
+        ...
 
 
 class GripperGraspSkill(
@@ -256,4 +256,4 @@ class GripperGraspSkill(
 
     def reward(self, obs: TBSkillObs) -> Float[ArrayLike, "b"]:  # noqa: F821
         """Compute the reward of the skill."""
-        pass
+        ...

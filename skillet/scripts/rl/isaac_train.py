@@ -37,6 +37,7 @@ parser.add_argument(
 )
 parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment")
 parser.add_argument("--max_iterations", type=int, default=None, help="RL Policy training iterations.")
+parser.add_argument("--skill", action="store_true", help="If to use a a skill-based RL environment")
 
 cli_args.add_rsl_rl_args(parser)
 AppLauncher.add_app_launcher_args(parser)
@@ -73,6 +74,7 @@ def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
     # Set the environment seed
     env_cfg.seed = agent_cfg.seed
     env_cfg.sim.device = args_cli.device if args_cli.device is not None else env_cfg.sim.device
+    env_cfg.use_sc = args_cli.skill
 
     # Specify directory for logging experiments
     log_root_path = os.path.join("_logs", "rsl_rl", agent_cfg.experiment_name)

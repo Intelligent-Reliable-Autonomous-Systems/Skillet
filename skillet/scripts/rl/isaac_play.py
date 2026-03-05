@@ -16,6 +16,7 @@ from isaaclab.app import AppLauncher
 
 from skillet.envs.compatibility.rsl_rl import RslRlVecEnvWrapper
 from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
+from skillet.envs.skill_isaac_env_wrapper import SkillIsaacEnvWrapper
 from skillet.envs.util import get_checkpoint_path
 from skillet.envs.util.dict import print_dict
 from skillet.envs.util.hydra import hydra_task_config
@@ -34,6 +35,7 @@ parser.add_argument(
     "--agent", type=str, default="rsl_rl_cfg_entry_point", help="Name of the RL agent configuration entry point."
 )
 parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment")
+parser.add_argument("--skill", action="store_true", help="If to use a a skill-based RL environment")
 
 cli_args.add_rsl_rl_args(parser)
 AppLauncher.add_app_launcher_args(parser)
@@ -75,6 +77,13 @@ def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
 
     log_dir = os.path.dirname(resume_path)
 
+    # env_cfg = OmegaConf.structured(type(env_cfg), flags={"allow_objects": True})
+    # env_yaml_cfg = OmegaConf.load(f"{log_dir}/params/env.yaml")
+    # env_cfg = OmegaConf.merge(env_cfg, env_yaml_cfg)
+
+    # agent_cfg = OmegaConf.structured(type(agent_cfg))
+    # agent_yaml_cfg = OmegaConf.load(f"{log_dir}/params/agent.yaml")
+    # agent_cfg = OmegaConf.merge(agent_cfg, agent_yaml_cfg)
     # Set the log directory for the environment
     env_cfg.log_dir = log_dir
 
@@ -92,7 +101,7 @@ def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
         env = gym.wrappers.RecordVideo(env, **video_kwargs)
 
     # Wrap around environment for RSL-RL
-    env = IsaacEnvWrapper(env)
+    env = SkillIsaacEnvWrapper(env) if args_cli.skill else IsaacEnvWrapper(env)
     env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
 
     print(f"[INFO]: Loading model checkpoint from: {resume_path}")

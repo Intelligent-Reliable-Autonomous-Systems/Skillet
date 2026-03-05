@@ -9,7 +9,9 @@ from collections.abc import Mapping
 from typing import Any, cast
 
 import gymnasium as gym
+import mujoco_warp as mjwarp
 import torch
+import warp as wp
 from jaxtyping import Bool, Float
 from mjlab.utils.spaces import Box as MjBox
 from mjlab.utils.spaces import Dict as MjDict
@@ -64,27 +66,13 @@ class MJEnvWrapper(
         vector_env.action_space = self._convert_mj_space(vector_env.action_space)
         vector_env.single_action_space = self._convert_mj_space(vector_env.single_action_space)
 
-        """if hasattr(self._env, "robot"):
-            self.robot = self._env.robot
-        elif hasattr(self._env, "_robot"):
-            self.robot = self._env._robot
-        elif hasattr(self._env, "scene"):
-            scene = self._env.scene
-            if hasattr(scene, "_robot"):
-                self.robot = scene._robot
-            elif hasattr(scene, "robot"):
-                self.robot = scene.robot
-            elif hasattr(scene, "_articulations"):
-                self.robot = scene._articulations["robot"]
-            else:
-                raise ValueError(
-                    f"Environment `{self._env} `scene.robot` or `scene._robot`. Unable to parse robot Articulation."
-                )
+        if hasattr(self._env, "scene"):
+            if hasattr(self._env.scene, "entities"):
+                if "robot" in self._env.scene.entities:
+                    self.robot = self._env.scene.entities["robot"]
         else:
-            raise ValueError(
-                f"Environment `{self._env}` has no attribute `_robot` or `robot` or `scene.robot` or `scene._robot`. Unable to parse robot Articulation."
-            )
-        """
+            raise ValueError(f"Environment `{self._env}` `scene['robot']`. Unable to parse robot Articulation.")
+
         # Robot specific information
         self._joint_ids = env.unwrapped.cfg.joint_ids
         self._tcp_offset = env.unwrapped.cfg.tcp_offset
@@ -92,16 +80,27 @@ class MJEnvWrapper(
         self._base_link_name = env.unwrapped.cfg.base_link_name
         self._gripper_joint_names = env.unwrapped.cfg.gripper_joint_names
 
-        # self._robot_dof_lower_limits = self.robot.data.soft_joint_pos_limits[0, :, 0].to(device=self._device)[
-        #     self._joint_ids
-        # ]
-        # self._robot_dof_upper_limits = self.robot.data.soft_joint_pos_limits[0, :, 1].to(device=self._device)[
-        #     self._joint_ids
-        # ]
-        # self._robot_dof_lower_limits[self._robot_dof_lower_limits == -float("inf")] = -torch.pi
-        # self._robot_dof_upper_limits[self._robot_dof_upper_limits == float("inf")] = torch.pi
+        self._robot_dof_lower_limits = self.robot.data.soft_joint_pos_limits[0, :, 0].to(device=self._device)[
+            self._joint_ids
+        ]
+        self._robot_dof_upper_limits = self.robot.data.soft_joint_pos_limits[0, :, 1].to(device=self._device)[
+            self._joint_ids
+        ]
+        self._robot_dof_lower_limits[self._robot_dof_lower_limits == -float("inf")] = -torch.pi
+        self._robot_dof_upper_limits[self._robot_dof_upper_limits == float("inf")] = torch.pi
 
         self._tcp_offset = torch.as_tensor(self._tcp_offset, device=self._device).unsqueeze(0).repeat(self.num_envs, 1)
+
+        with wp.ScopedDevice(self._env.sim.wp_device):
+            self._jacp_wp = wp.zeros((self.num_envs, 3, self._env.sim.mj_model.nv), dtype=float)
+            self._jacr_wp = wp.zeros((self.num_envs, 3, self._env.sim.mj_model.nv), dtype=float)
+            self._point_wp = wp.zeros(self.num_envs, dtype=wp.vec3)
+            self._body_wp = wp.zeros(self.num_envs, dtype=wp.int32)
+            self._body_wp.fill_(self.robot.find_bodies(self._base_link_name)[0][0])
+
+        self._jacp_torch = wp.to_torch(self._jacp_wp)
+        self._jacr_torch = wp.to_torch(self._jacr_wp)
+        self._point_torch = wp.to_torch(self._point_wp).view(self.num_envs, 3)
 
         # Define the obseravation and action specifications
         spec_args = {
@@ -127,11 +126,15 @@ class MJEnvWrapper(
         self.obs_spec_rgbd = RGBD_SPEC_BATCHED.bind(height=480, width=640).replace(device=self.device)
         """Specification of RGB-D observations and metadata. Bound to the height and width of the RGB-D camera."""
         self.obs_spec_ikee = IK_EE_SPEC_BATCHED.bind(
-            n_joints=len(self._joint_ids), n_arm_joints=len(self._joint_ids[: -len(self._gripper_joint_names)])
+            n_joints=len(self._joint_ids),
+            n_arm_joints=len(self._joint_ids[: -len(self._gripper_joint_names)]),
+            n_gripper_joints=len(self._gripper_joint_names),
         ).replace(device=self.device)
         """Specification of IK-EE observations."""
         self.obs_spec_osc = OSC_SPEC_BATCHED.bind(
-            n_joints=len(self._joint_ids), n_arm_joints=len(self._joint_ids[: -len(self._gripper_joint_names)])
+            n_joints=len(self._joint_ids),
+            n_arm_joints=len(self._joint_ids[: -len(self._gripper_joint_names)]),
+            n_gripper_joints=len(self._gripper_joint_names),
         ).replace(device=self.device)
         """Specification of OSC observations."""
         self._action_spec = ActionSpec[BxM_Action](
@@ -323,7 +326,7 @@ class MJEnvWrapper(
 
         """
         if env_ids is None:
-            env_ids = self.robot._ALL_INDICES
+            env_ids = torch.arange(self.num_envs, device=self._device)
         if joint_ids is None:
             joint_ids = self._joint_ids
         return self.robot.data.joint_pos[:, joint_ids][env_ids]
@@ -341,7 +344,7 @@ class MJEnvWrapper(
 
         """
         if env_ids is None:
-            env_ids = self.robot._ALL_INDICES
+            env_ids = torch.arange(self.num_envs, device=self._device)
         if joint_ids is None:
             joint_ids = self._joint_ids
         return self.robot.data.joint_vel[:, joint_ids][env_ids]
@@ -349,7 +352,7 @@ class MJEnvWrapper(
     def _get_jacobians(
         self,
         env_ids: torch.Tensor | None = None,
-        ee_link: str = "robotiq_85_base_link",
+        ee_link: str = "end_effector_link",
         base_link: str = "base_link",
         arm_joint_ids: list | None = None,
     ) -> Float[torch.Tensor, "b 6 n_arm_joints"]:
@@ -367,15 +370,16 @@ class MJEnvWrapper(
 
         """
         if env_ids is None:
-            env_ids = self.robot._ALL_INDICES
+            env_ids = torch.arange(self.num_envs, device=self._device)
         if arm_joint_ids is None:
             arm_joint_ids = self._joint_ids[:-1]
         ee_link_idx = self.robot.find_bodies(ee_link)[0][0]
         ee_jacobi_idx = ee_link_idx - 1
         base_link_idx = self.robot.find_bodies(base_link)[0][0]
-        robot_base_pose_w = self.robot.data.body_pose_w[env_ids, base_link_idx]
+        robot_base_pose_w = self.robot.data.body_link_pose_w[env_ids, base_link_idx]
         base_rot_matrix = matrix_from_quat(quat_inv(robot_base_pose_w[:, 3:7]))
-        jacobian = self.robot.root_physx_view.get_jacobians()[:, ee_jacobi_idx, :, arm_joint_ids][env_ids]
+
+        jacobian = self._compute_jacobian()[:, ee_jacobi_idx, :, arm_joint_ids][env_ids]  # TODO TEST
         jacobian[:, :3, :] = torch.bmm(base_rot_matrix, jacobian[:, :3, :])
         jacobian[:, 3:, :] = torch.bmm(base_rot_matrix, jacobian[:, 3:, :])
 
@@ -398,14 +402,14 @@ class MJEnvWrapper(
 
         """
         if env_ids is None:
-            env_ids = self.robot._ALL_INDICES
+            env_ids = torch.arange(self.num_envs, device=self._device)
 
         ee_link_idx = self.robot.find_bodies(ee_link)[0][0]
 
-        ee_pos_w = self.robot.data.body_pos_w[env_ids, ee_link_idx]
-        ee_quat_w = self.robot.data.body_quat_w[env_ids, ee_link_idx]
-        root_pos_w = self.robot.data.root_pos_w[env_ids]
-        root_quat_w = self.robot.data.root_quat_w[env_ids]
+        ee_pos_w = self.robot.data.body_link_pos_w[env_ids, ee_link_idx]
+        ee_quat_w = self.robot.data.body_link_quat_w[env_ids, ee_link_idx]
+        root_pos_w = self.robot.data.root_link_pos_w[env_ids]
+        root_quat_w = self.robot.data.root_link_quat_w[env_ids]
 
         ee_pos_b = quat_apply_inverse(root_quat_w, ee_pos_w - root_pos_w)
         ee_quat_b = quat_mul(quat_inv(root_quat_w), ee_quat_w)
@@ -419,11 +423,11 @@ class MJEnvWrapper(
         )
 
     def _get_gripper_state(
-        self, env_ids: torch.Tensor | None = None, gripper_joints: list[str] = ["robotiq_85_left_knuckle_joint"]
+        self, env_ids: torch.Tensor | None = None, gripper_joints: list[str] = ["right_driver_joint"]
     ) -> Float[torch.Tensor, "b n_gripper_joints"]:
         """Get the gripper state of the robot."""
         if env_ids is None:
-            env_ids = self.robot._ALL_INDICES
+            env_ids = torch.arange(self.num_envs, device=self._device)
         gripper_joint_idxs = [self.robot.find_joints(j)[0][0] for j in gripper_joints]
 
         return self.robot.data.joint_pos[:, gripper_joint_idxs][env_ids]
@@ -448,12 +452,12 @@ class MJEnvWrapper(
 
         """
         if env_ids is None:
-            env_ids = self.robot._ALL_INDICES
+            env_ids = torch.arange(self.num_envs, device=self._device)
         ee_link_idx = self.robot.find_bodies(ee_link)[0][0]
         base_link_idx = self.robot.find_bodies(base_link)[0][0]
 
-        robot_ee_pose_w = self.robot.data.body_pose_w[env_ids, ee_link_idx]
-        robot_base_pose_w = self.robot.data.body_pose_w[env_ids, base_link_idx]
+        robot_ee_pose_w = self.robot.data.body_link_pose_w[env_ids, ee_link_idx]
+        robot_base_pose_w = self.robot.data.body_link_pose_w[env_ids, base_link_idx]
 
         robot_ee_pos_b, robot_ee_quat_b = subtract_frame_transforms(
             robot_base_pose_w[:, :3],
@@ -465,7 +469,7 @@ class MJEnvWrapper(
         return torch.cat((robot_ee_pos_b, robot_ee_quat_b), dim=1)
 
     def _get_gripper_lims(
-        self, env_ids: torch.Tensor | None = None, gripper_joints: str = ["robotiq_85_left_knuckle_joint"]
+        self, env_ids: torch.Tensor | None = None, gripper_joints: str = ["right_driver_joint"]
     ) -> Float[torch.Tensor, "b 2 n_gripper_joints"]:
         """Get the gripper limits (low and high).
 
@@ -478,11 +482,11 @@ class MJEnvWrapper(
 
         """
         if env_ids is None:
-            env_ids = self.robot._ALL_INDICES
+            env_ids = torch.arange(self.num_envs, device=self._device)
 
         gripper_joint_idxs = [self.robot.find_joints(j)[0][0] for j in gripper_joints]
         gripper_low = self._robot_dof_lower_limits[gripper_joint_idxs]
-        gripper_high = self._robot_dof_upper_limits[gripper_joint_idxs]
+        gripper_high = self._robot_dof_upper_limits[gripper_joint_idxs]  # TODO this joint is out of range
 
         return torch.cat(
             (gripper_low.unsqueeze(0).repeat(self.num_envs, 1), gripper_high.unsqueeze(0).repeat(self.num_envs, 1)),
@@ -500,7 +504,7 @@ class MJEnvWrapper(
 
         """
         if env_ids is None:
-            env_ids = self.robot._ALL_INDICES
+            env_ids = torch.arange(self.num_envs, device=self._device)
 
         return (
             torch.stack((self._robot_dof_lower_limits, self._robot_dof_upper_limits), dim=0)
@@ -523,7 +527,7 @@ class MJEnvWrapper(
 
         """
         if env_ids is None:
-            env_ids = self.robot._ALL_INDICES
+            env_ids = torch.arange(self.num_envs, device=self._device)
         if arm_joint_ids is None:
             arm_joint_ids = self._joint_ids[:7]
 
@@ -546,11 +550,13 @@ class MJEnvWrapper(
 
         """
         if env_ids is None:
-            env_ids = self.robot._ALL_INDICES
+            env_ids = torch.arange(self.num_envs, device=self._device)
         if arm_joint_ids is None:
             arm_joint_ids = self._joint_ids[:7]
 
-        return self.robot.root_physx_view.get_gravity_compensation_forces()[:, arm_joint_ids][env_ids]
+        return self.robot.root_physx_view.get_gravity_compensation_forces()[:, arm_joint_ids][
+            env_ids
+        ]  # TODO need alternative to this
 
     def _get_ee_vel_b(
         self, env_ids: torch.Tensor = None, ee_link: str = "end_effector_link", base_link: str = "base_link"
@@ -565,20 +571,24 @@ class MJEnvWrapper(
         """
         # Compute the current velocity of the end-effector
         if env_ids is None:
-            env_ids = self.robot._ALL_INDICES
+            env_ids = torch.arange(self.num_envs, device=self._device)
 
         ee_link_idx = self.robot.find_bodies(ee_link)[0][0]
         base_link_idx = self.robot.find_bodies(base_link)[0][0]
 
-        ee_vel_w = self.robot.data.body_vel_w[
+        ee_vel_w = self.robot.data.body_link_vel_w[
             env_ids, ee_link_idx, :
         ]  # Extract end-effector velocity in the world frame
-        root_vel_w = self.robot.data.body_vel_w[env_ids, base_link_idx, :]  # Extract root velocity in the world frame
+        root_vel_w = self.robot.data.body_link_vel_w[
+            env_ids, base_link_idx, :
+        ]  # Extract root velocity in the world frame
         relative_vel_w = ee_vel_w - root_vel_w  # Compute the relative velocity in the world frame
         ee_lin_vel_b = quat_apply_inverse(
-            self.robot.data.body_quat_w[env_ids, base_link_idx], relative_vel_w[:, 0:3]
+            self.robot.data.body_link_quat_w[env_ids, base_link_idx], relative_vel_w[:, 0:3]
         )  # From world to root frame
-        ee_ang_vel_b = quat_apply_inverse(self.robot.data.body_quat_w[env_ids, base_link_idx], relative_vel_w[:, 3:6])
+        ee_ang_vel_b = quat_apply_inverse(
+            self.robot.data.body_link_quat_w[env_ids, base_link_idx], relative_vel_w[:, 3:6]
+        )
         return torch.cat([ee_lin_vel_b, ee_ang_vel_b], dim=-1)
 
     def _get_joint_centers(
@@ -594,7 +604,7 @@ class MJEnvWrapper(
 
         """
         if env_ids is None:
-            env_ids = self.robot._ALL_INDICES
+            env_ids = torch.arange(self.num_envs, device=self._device)
         if arm_joint_ids is None:
             arm_joint_ids = self._joint_ids[:7]
         return torch.nan_to_num(
@@ -603,3 +613,22 @@ class MJEnvWrapper(
             posinf=0.0,
             neginf=0.0,
         )
+
+    def _compute_jacobian(self) -> None:
+        """Compute the frame Jacobian."""
+        _jacobians = torch.zeros(
+            size=(self.num_envs, self._env.sim.mj_model.nv, 6, self.robot.num_joints), device=self.device
+        )
+        for i in range(self.robot.num_joints):
+            self._body_wp.fill_(i)
+            with wp.ScopedDevice(self._env.sim.wp_device):
+                mjwarp.jac(
+                    self._env.sim.wp_model,
+                    self._env.sim.wp_data,
+                    self._jacp_wp,
+                    self._jacr_wp,
+                    self._point_wp,
+                    self._body_wp,
+                )
+            _jacobians[:, :, :, i] = torch.cat((self._jacp_torch, self._jacr_torch), dim=1).permute(0, 2, 1)
+        return _jacobians

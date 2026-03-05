@@ -45,7 +45,7 @@ IK_EE_SPEC_BATCHED = ObservationSpec[IKEE_Obs](
             "ee_pose_b": gym.spaces.Box(low=-1.0, high=1.0, shape=(7,)),
             "tcp_pose_b": gym.spaces.Box(low=-1.0, high=1.0, shape=(7,)),
             "gripper_lim": gym.spaces.Box(low=0.0, high=1.0, shape=(2,)),
-            "gripper": gym.spaces.Box(low=0.0, high=1.0, shape=(1,)),
+            "gripper": ParameterizedBox(low=0.0, high=1.0, shape=("n_gripper_joints",)),
             "joint_lims": ParameterizedBox(low=-torch.pi, high=torch.pi, shape=(2, "n_joints")),
         }
     ),
@@ -65,7 +65,7 @@ OSC_SPEC_BATCHED = ObservationSpec[OSC_Obs](
             "ee_pose_b": gym.spaces.Box(low=-1.0, high=1.0, shape=(7,)),
             "tcp_pose_b": gym.spaces.Box(low=-1.0, high=1.0, shape=(7,)),
             "gripper_lim": gym.spaces.Box(low=0.0, high=1.0, shape=(2,)),
-            "gripper": gym.spaces.Box(low=0.0, high=1.0, shape=(1,)),
+            "gripper": ParameterizedBox(low=0.0, high=1.0, shape=("n_gripper_joints",)),
             "joint_lims": ParameterizedBox(low=-torch.pi, high=torch.pi, shape=(2, "n_joints")),
             "mass_matrix": ParameterizedBox(low=-1, high=1, shape=("n_arm_joints", "n_arm_joints")),
             "joint_gravity": ParameterizedBox(low=-10.0, high=10.0, shape=("n_arm_joints",)),
@@ -84,7 +84,7 @@ TWIST_SPEC_BATCHED = ObservationSpec[TWIST_TCP_Obs](
         {
             "tcp_pose_b": gym.spaces.Box(low=-1.0, high=1.0, shape=(7,)),
             "gripper_lim": gym.spaces.Box(low=0.0, high=1.0, shape=(2,)),
-            "gripper": gym.spaces.Box(low=0.0, high=1.0, shape=(1,)),
+            "gripper": ParameterizedBox(low=0.0, high=1.0, shape=("n_gripper_joints",)),
             "dt": gym.spaces.Box(low=0.0, high=1.0, shape=(1,)),
         }
     ),

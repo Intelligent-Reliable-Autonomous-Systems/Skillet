@@ -63,6 +63,9 @@ class ROS2EnvCfg:
     skills: list[str] | None = None
     """List of behavior primitives available"""
 
+    use_sc: bool = False
+    """If to use the skill controller through SkillEnvWrapper"""
+
     joint_ids: list[int] = MISSING
     """Joint Ids in the observation space"""
 

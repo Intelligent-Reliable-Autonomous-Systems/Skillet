@@ -15,7 +15,6 @@ from skillet.core.math import (
     base_to_tcp_twist,
     euler_xyz_from_quat,
     euler_xyz_to_rotvec,
-    subtract_frame_transforms,
 )
 
 from ..device_base import DeviceBase, DeviceCfg
@@ -220,7 +219,7 @@ class VRHeadset(DeviceBase):
                 if not self._b_clicked:
                     self._enable_teleop = False
                     self._reference_pose_w = torch.as_tensor(s["headset"]["pose"]).squeeze(0)
-                    print(f"[INFO] Set new reference frame. Disabling VR Teleoperation.")
+                    print("[INFO] Set new reference frame. Disabling VR Teleoperation.")
                     self._b_clicked = True
             else:
                 self._b_clicked = False
@@ -240,14 +239,14 @@ class VRHeadset(DeviceBase):
 
             self._close_gripper = s["right_controller"]["inputs"]["trigger"] > 0.9
 
-    def add_callback(self, key: Any, func: Callable):
-        """Callback function."""
-        pass
+    def add_callback(self, key: Any, func: Callable) -> None:
+        """Handle callback."""
+        ...
 
 
 @dataclass
 class VRHeadsetCfg(DeviceCfg):
-    """Configuration for VR Joystick"""
+    """Configuration for VR Joystick."""
 
     gripper_term: bool = True
     pos_sensitivity: float = 0.4

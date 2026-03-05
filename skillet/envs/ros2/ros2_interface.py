@@ -82,9 +82,11 @@ def wait_for_topic_publish(ros: Ros, topic_name: str, topic_type: str, timeout: 
         try:
             topic.publish({})  # attempt a dummy publish
             print(f"[INFO][ROS2] Topic {topic_name} is now publishable")
-            return
+            # TODO check that moving the return to else works
         except Exception:
             pass
+        else:
+            return
 
         if time.time() - start > timeout:
             raise TimeoutError(f"Timeout waiting for topic {topic_name} to be publishable")

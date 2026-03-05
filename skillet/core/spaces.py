@@ -441,7 +441,6 @@ TAction = TypeVar("TAction", bound=Action | BatchedAction)
 # class ActionSpec(SpaceSpecification[TAction], Generic[TAction]):
 #     """The specification of an action space."""
 
-#     pass
 
 ActionSpec: TypeAlias = SpaceSpecification[TAction]
 
@@ -461,7 +460,6 @@ TObs = TypeVar("TObs", bound=Observation | BatchedObservation)
 # class ObservationSpec(SpaceSpecification[TObs], Generic[TObs]):
 #     """The specification of an observation space."""
 
-#     pass
 
 ObservationSpec: TypeAlias = SpaceSpecification[TObs]
 
@@ -485,7 +483,7 @@ TSkillParams = TypeVar("TSkillParams", bound=SkillParams)
 class SkillParamsSpec(SpaceSpecification[TSkillParams], Generic[TSkillParams]):
     """The specification of a skill parameter space."""
 
-    pass
+    ...
 
 
 TBSkillParams = TypeVar("TBSkillParams", bound=BatchedSkillParams)
@@ -494,7 +492,7 @@ TBSkillParams = TypeVar("TBSkillParams", bound=BatchedSkillParams)
 class BatchedSkillParamsSpec(SpaceSpecification[TBSkillParams], Generic[TBSkillParams]):
     """The specification of a batched skill parameter space."""
 
-    pass
+    ...
 
 
 # Brainstorming parameter examples:

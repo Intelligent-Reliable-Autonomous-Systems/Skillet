@@ -97,7 +97,7 @@ class ActionsCfg:
         actuator_names=(".*",),
         scale=0.5,  # Override per-robot.
         use_default_offset=True,
-    )
+    )  # TODO resolve the fact that the gripper is not actuated?
 
 
 @configclass

@@ -12,6 +12,9 @@ class SkillsDirectRLEnvCfg(DirectRLEnvCfg):
     skills: list[str] | None = None
     """List of behavior primitives available"""
 
+    use_sc: bool = False
+    """If to use the skill controller through SkillEnvWrapper"""
+
     joint_ids: list[int] = MISSING
     """Joint Ids in the observation space"""
 
@@ -24,5 +27,5 @@ class SkillsDirectRLEnvCfg(DirectRLEnvCfg):
     base_link_name: str = MISSING
     """Name of the base link for Diff IK"""
 
-    gripper_joint_names: str = MISSING
+    gripper_joint_names: list[str] = MISSING
     """Name of the gripper joint for gripper pose"""

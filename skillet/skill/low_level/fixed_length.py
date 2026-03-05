@@ -70,4 +70,4 @@ class FixedLengthSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generi
 
     def reward(self, obs: TBSkillObs) -> Float[ArrayLike, "b"]:  # noqa: F821
         """Compute the reward of the skill."""
-        pass
+        ...

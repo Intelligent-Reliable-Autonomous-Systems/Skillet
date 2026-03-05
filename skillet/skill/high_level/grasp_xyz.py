@@ -169,4 +169,4 @@ class GraspXYZSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[T
 
     def reward(self, obs: TBSkillObs) -> Float[ArrayLike, "b"]:  # noqa: F821
         """Compute the reward of the skill."""
-        pass
+        ...
