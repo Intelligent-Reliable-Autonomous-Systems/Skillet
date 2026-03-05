@@ -34,7 +34,7 @@ parser.add_argument(
 )
 parser.add_argument("--robot_ip", default="192.168.8.10", type=str, help="IP of the robot.")
 parser.add_argument("--launch_ros", action="store_true", help="If to launch robot bringup files.")
-parser.add_argument("--use_fake_hardware", default="false", type=str, help="If to use fake hardware (RViz) or not.")
+parser.add_argument("--use_fake_hardware", default="true", type=str, help="If to use fake hardware (RViz) or not.")
 
 # parse the arguments
 args_cli = parser.parse_args()

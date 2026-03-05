@@ -111,11 +111,11 @@ class ROS2SkilletEnv(
             space=env.unwrapped.single_action_space,
         ).replace(**spec_args)
         self.action_spec_twist_tcp = ActionSpec[BxM_Action](
-            name="tcp_twist",
+            name="twist_tcp",
             space=gym.spaces.Box(-float("inf"), float("inf"), shape=(6 + len(self._env.cfg.gripper_joint_names),)),
         ).replace(**spec_args)
-        self.action_spec_moveit = ActionSpec[BxM_Action](
-            name="tcp_moveit",
+        self.action_spec_moveit_joints = ActionSpec[BxM_Action](
+            name="moveit_joints",
             space=gym.spaces.Box(-float("inf"), float("inf"), shape=(6 + len(self._env.cfg.gripper_joint_names),)),
         ).replace(**spec_args)
 
@@ -192,7 +192,7 @@ class ROS2SkilletEnv(
         return action_spec.name in [
             self.action_spec_joints.name,
             self.action_spec_twist_tcp.name,
-            self.action_spec_moveit.name,
+            self.action_spec_moveit_joints.name,
         ]
 
     @override

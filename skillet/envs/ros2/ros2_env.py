@@ -246,6 +246,7 @@ class ROS2Env(gym.Env):
             time.sleep(sleep_time)
         else:
             print(f"[WARN] full loop overran by {-sleep_time * 1000:.1f}ms")
+            pass
 
         self.episode_length_buf += 1
         self.common_step_counter += 1

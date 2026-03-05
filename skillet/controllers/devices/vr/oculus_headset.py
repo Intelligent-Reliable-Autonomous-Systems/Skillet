@@ -48,7 +48,7 @@ class VRHeadset(DeviceBase):
         self.frame = cfg.reference_frame
 
         self._workspace_lim = torch.as_tensor(
-            [[0.3, -0.5, 0.03, -1.57, -1.57, -1.57], [0.7, 0.5, 0.8, 1.57, 1.57, 1.57]], device=self._device
+            [[0.3, -0.5, 0.03, -1.57, -1.57, -1.57], [0.6, 0.5, 0.8, 1.57, 1.57, 1.57]], device=self._device
         )
         self._vr_range = torch.as_tensor(
             [[0.0, -0.4, 1.1, -1.57, -1.57, -1.57], [0.4, 0.4, 2.00, 1.57, 1.57, 1.57]], device=self._device
@@ -58,6 +58,10 @@ class VRHeadset(DeviceBase):
         self._delta_pos = torch.zeros((3,), device=self._device)
         self._delta_rot = torch.zeros((3,), device=self._device)
         self._tcp_xyz_des_b = None
+        self._enable_teleop = False
+        self._reference_pose_w = None
+        self._a_clicked = False
+        self._b_clicked = False
 
         # PID gains
         self.Kp_pos = 1.0
@@ -86,7 +90,9 @@ class VRHeadset(DeviceBase):
     def __str__(self) -> str:
         msg = f"VR Joystick Controller for SE(3): {self.__class__.__name__}\n"
         msg += "\t--------------------------------------------------\n"
-        msg += "\tToggle gripper (open/close): RC - A\n"
+        msg += "\t Enable/Disable teloperation: RC - A button"
+        msg += "\t Set new reference frame: RC - B button"
+        msg += "\tToggle gripper (open/close): RC - Trigger\n"
         msg += "\n"
         msg += "\tTranslation Controls (Right Controller)\n"
         msg += "\tMove arm along x-axis: RC - Joystick Right / Left\n"
@@ -105,8 +111,21 @@ class VRHeadset(DeviceBase):
 
     def reset(self):
         self._close_gripper = False
+        self._reference_pose_w = None
+        self._enable_teleop = False
+        self._tcp_xyz_des_b = None
+        self._a_clicked = False
+        self._b_clicked = False
+
         self._delta_pos = torch.zeros((3,), device=self._device)
         self._delta_rot = torch.zeros((3,), device=self._device)
+        # PID integrals
+        self.integral_pos = torch.zeros((3,), device=self._device)
+        self.integral_rot = torch.zeros((3,), device=self._device)
+
+        # Last errors for derivative
+        self.last_error_pos = torch.zeros((3,), device=self._device)
+        self.last_error_rot = torch.zeros((3,), device=self._device)
 
     @override
     def advance(self, tcp_pose_b: torch.Tensor, dt: float = 1 / 60) -> torch.Tensor:
@@ -118,10 +137,10 @@ class VRHeadset(DeviceBase):
         """
         r, p, y = euler_xyz_from_quat(tcp_pose_b[:, 3:7])
         self._read_latest()
-        if self._tcp_xyz_des_b is None:
+        if self._tcp_xyz_des_b is None or not self._enable_teleop:
             command = torch.zeros((6,), device=self._device)
             if self.gripper_term:
-                gripper_value = 1.0 if self._close_gripper else -1.0
+                gripper_value = 1.0
                 command = torch.concatenate((command, torch.as_tensor([gripper_value], device=self._device)), dim=0).to(
                     torch.float32
                 )
@@ -175,26 +194,46 @@ class VRHeadset(DeviceBase):
         s = self._listener.read_latest()
 
         if s is not None:
-            left_elbow_pos, right_elbow_pos = get_tracker_data_fixed_arm(s)
+            if self._reference_pose_w == None:
+                self._reference_pose_w = torch.as_tensor(s["headset"]["pose"]).squeeze(0)
 
-            rc_pose_w = torch.as_tensor(s["right_controller"]["pose"]).squeeze(0)
-            h_pose_w = torch.as_tensor(s["headset"]["pose"]).squeeze(0)
-            h_pose_w[2] = h_pose_w[2] - self._headset_offset  # Offset Z axis by 0.5 meter
-            h_pose_w = h_pose_w.unsqueeze(0)
-            rc_pose_w = rc_pose_w.unsqueeze(0)
-
-            rc_pos_b, rc_quat_b = subtract_frame_transforms(
-                h_pose_w[:, 0:3].to(torch.float32),
-                h_pose_w[:, 3:7].to(torch.float32),
-                rc_pose_w[:, 0:3].to(torch.float32),
-                rc_pose_w[:, 3:7].to(torch.float32),
+            left_elbow_pos, right_elbow_pos = get_tracker_data_fixed_arm(
+                s, h_pose_raw=self._reference_pose_w.cpu().numpy()
             )
-            r, p, y = euler_xyz_from_quat(rc_quat_b.to(self._device))
+
+            # Enable/Disable teleoperation
+            if s["right_controller"]["inputs"]["A_button"]:
+                if not self._a_clicked:
+                    old_teleop = self._enable_teleop
+                    self._enable_teleop = not self._enable_teleop
+                    if old_teleop != self._enable_teleop:
+                        if self._enable_teleop:
+                            print("[INFO] Enabling VR Teleoperation")
+                        else:
+                            print("[INFO] Disabling VR Teleoperation")
+                    self._a_clicked = True
+            else:
+                self._a_clicked = False
+
+            # Set new reference frame
+            if s["right_controller"]["inputs"]["B_button"]:
+                if not self._b_clicked:
+                    self._enable_teleop = False
+                    self._reference_pose_w = torch.as_tensor(s["headset"]["pose"]).squeeze(0)
+                    print(f"[INFO] Set new reference frame. Disabling VR Teleoperation.")
+                    self._b_clicked = True
+            else:
+                self._b_clicked = False
 
             right_elbow_pos_b = torch.as_tensor(right_elbow_pos).to(self._device)
             right_elbow_pos_b[1] = right_elbow_pos_b[1] - 0.2
             right_elbow_pos_b = (right_elbow_pos_b - self._vr_range[0, :3]) / (
                 self._vr_range[1, :3] - self._vr_range[0, :3]
+            )
+            r, p, y = (
+                torch.tensor([0], device=self._device),
+                torch.tensor([0], device=self._device),
+                torch.tensor([0], device=self._device),
             )
             rc_xyz_b = torch.cat((right_elbow_pos_b.squeeze().to(self._device), r, p, y), dim=-1)
             self._tcp_xyz_des_b = torch.clip(rc_xyz_b, self._workspace_lim[0], self._workspace_lim[1]).to(torch.float32)
@@ -218,7 +257,7 @@ class VRHeadsetCfg(DeviceCfg):
     class_type: type[DeviceBase] = VRHeadset
     host: str = "192.168.2.33"
     port: int = 5555
-    reference_frame: str = "base"  # or base
+    reference_frame: str = "tcp"  # or base
 
 
 def convert_unity_to_world_coordinates(pose):
@@ -281,7 +320,7 @@ def convert_unity_to_world_coordinates(pose):
     raise ValueError(f"Pose `{pose}` must be length 3 (xyz) or 7 (xyzxyzw)")
 
 
-def convert_to_world_coordinates(pose):
+def convert_to_world_coordinates(pose: np.ndarray) -> np.ndarray:
     """Convert pose from OpenVR (z-up, x-right, y-back) to world coordinates (x-forward, y-left, z-up).
     Handles both position (xyz) and quaternion (xyzw) formats.
     """
@@ -336,8 +375,16 @@ def convert_to_world_coordinates(pose):
     raise ValueError("Pose must be length 3 (xyz) or 7 (xyzxyzw)")
 
 
-def get_quat_for_xy_plane(quat):
-    """Get the quaternion for the xy plane - extract only yaw rotation"""
+def get_quat_for_xy_plane(quat: np.ndarray) -> np.ndarray:
+    """Get the quaternion for the xy plane - extract only yaw rotation
+
+    Args:
+        quat: Quaternion rotation in xyzw
+
+    Returns:
+        Quaternion for XY plane
+
+    """
     qx, qy, qz, qw = quat
 
     # Extract yaw directly from quaternion components
@@ -349,7 +396,7 @@ def get_quat_for_xy_plane(quat):
     return R.from_euler("z", yaw).as_quat()
 
 
-def get_tracker_data_fixed_arm(data):
+def get_tracker_data_fixed_arm(data, h_pose_raw: np.ndarray = None) -> tuple[np.ndarray, np.ndarray]:
     # Integrate ZMQ position packets at the start - receive latest network data
     # Check if we're using ZMQ objects (they have a 'receiver' attribute)
 
@@ -361,7 +408,8 @@ def get_tracker_data_fixed_arm(data):
     # This ensures arms work properly when grips are pressed
 
     # Extract headset pose
-    h_pose_raw = np.array(data["headset"]["pose"], dtype=np.float64)
+    if h_pose_raw is None:
+        h_pose_raw = np.array(data["headset"]["pose"], dtype=np.float64)
     h_pose = convert_unity_to_world_coordinates(h_pose_raw)
 
     lc_pose_raw = np.array(data["left_controller"]["pose"], dtype=np.float64)

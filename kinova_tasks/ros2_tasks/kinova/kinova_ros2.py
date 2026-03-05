@@ -133,6 +133,14 @@ class KinovaROS2Env(ROS2Env):
             JOINTS_SPEC.bind(
                 n_joints=len(self.cfg.joint_ids),
             ).replace(device=self.device),
+            ActionSpec(
+                name="twist_tcp",
+                space=gym.spaces.Box(low=-float("inf"), high=float("inf"), shape=(7,)),
+                is_torch=True,
+                is_batched=True,
+                n_envs=-1,
+                device=self.device,
+            ),
             # TWIST_TCP_SPEC.replace(device=self.device),
             # MOVEIT_TCP_SPEC.replace(device=self.device),
         ]
@@ -233,7 +241,6 @@ class KinovaROS2Env(ROS2Env):
             duration: Duration of trajectory
 
         """
-        action_spec = action_spec.replace(name="moveit_joint") # TODO remove this
         # Send the gripper command first as this will be non-blocking FOR NOW
         gripper_val = float(action[-1])
         gripper_val = max(0, min(gripper_val, 1)) * 0.8
@@ -380,9 +387,9 @@ class KinovaROS2Env(ROS2Env):
 
         """
         if self.active_controller != "twist_controller":
-            print("[INFO] Switching controller to `twist_controller`")
+            # print("[INFO] Switching controller to `twist_controller`") # TODO uncomment
             if not self.switch_controllers(activate=["twist_controller"], deactivate=["joint_trajectory_controller"]):
-                print("[INFO] Unable to switch controller to `twist_controller`. Aborting trajectory.")
+                # print("[INFO] Unable to switch controller to `twist_controller`. Aborting trajectory.")
                 return
             self.active_controller = "twist_controller"
             print("[INFO] Successfully switched controller to `twist_controller`")
