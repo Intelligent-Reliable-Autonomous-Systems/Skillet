@@ -233,6 +233,7 @@ class KinovaROS2Env(ROS2Env):
             duration: Duration of trajectory
 
         """
+        action_spec = action_spec.replace(name="moveit_joint") # TODO remove this
         # Send the gripper command first as this will be non-blocking FOR NOW
         gripper_val = float(action[-1])
         gripper_val = max(0, min(gripper_val, 1)) * 0.8
@@ -413,7 +414,7 @@ class KinovaROS2Env(ROS2Env):
             self.active_controller = "joint_trajectory_controller"
             print("[INFO] Successfully switched controller to `joint_trajectory_controller`")
 
-        if action_spec.name == "moveit_joints":
+        if action_spec.name == "moveit_joint":
             moveit_goal = self._moveit_joint_msg(moveit_pose)
         elif action_spec.name == "moveit_tcp":
             moveit_goal = self._moveit_tcp_pose_msg(moveit_pose)
@@ -546,8 +547,8 @@ class KinovaROS2Env(ROS2Env):
                 ],
                 "num_planning_attempts": 10,
                 "allowed_planning_time": 5.0,
-                "max_velocity_scaling_factor": 0.5,
-                "max_acceleration_scaling_factor": 0.5,
+                "max_velocity_scaling_factor": 0.3,
+                "max_acceleration_scaling_factor": 0.3,
             }
         }
 

@@ -218,7 +218,6 @@ class DifferentialIKController:
             delta_joint_pos = self._compute_delta_joint_pos(delta_pose=pose_error, jacobian=jacobian)
 
         # return the desired joint positions
-        print(self._velocity_smoothing(delta_joint_pos))
         return self._velocity_smoothing(delta_joint_pos) if self.velocity_mode else joint_pos + delta_joint_pos
 
     """
