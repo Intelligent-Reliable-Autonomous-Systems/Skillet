@@ -25,7 +25,7 @@ from skillet.skill.specs import SELECT_OPTIONS_SPEC_BATCHED, XYZ_QUAT_Params
 # Add argparse arguments
 parser = argparse.ArgumentParser(description="Main IsaacSim Executor file through IsaacLab.")
 parser.add_argument("--num_envs", type=int, default=4, required=True, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="Kinova-Reach-IK-v0", required=True, help="Name of the task.")
+parser.add_argument("--task", type=str, default="Gen3-Reach-IK-v0", required=True, help="Name of the task.")
 
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
@@ -34,7 +34,7 @@ app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
 
-from kinova_tasks.isaac_tasks.factory import create_isaac_env
+from skillet_tasks.isaac_tasks.factory import create_isaac_env
 
 
 def main() -> None:

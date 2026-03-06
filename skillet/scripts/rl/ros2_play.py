@@ -13,7 +13,7 @@ import gymnasium as gym
 import numpy as np
 import torch
 
-import kinova_tasks.ros2_tasks  # noqa: F401
+import skillet_tasks.ros2_tasks  # noqa: F401
 from skillet.envs.compatibility.rsl_rl import RslRlVecEnvWrapper
 from skillet.envs.ros2_skillet_env import ROS2SkilletEnv
 from skillet.envs.skill_ros2_env_wrapper import SkillROS2EnvWrapper

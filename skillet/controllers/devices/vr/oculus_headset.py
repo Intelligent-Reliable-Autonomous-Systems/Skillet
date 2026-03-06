@@ -47,7 +47,7 @@ class VRHeadset(DeviceBase):
         self.frame = cfg.reference_frame
 
         self._workspace_lim = torch.as_tensor(
-            [[0.3, -0.5, 0.03, -1.57, -1.57, -1.57], [0.6, 0.5, 0.8, 1.57, 1.57, 1.57]], device=self._device
+            [[0.35, -0.5, 0.03, -1.57, -1.57, -1.57], [0.6, 0.5, 0.75, 1.57, 1.57, 1.57]], device=self._device
         )
         self._vr_range = torch.as_tensor(
             [[0.0, -0.4, 1.1, -1.57, -1.57, -1.57], [0.4, 0.4, 2.00, 1.57, 1.57, 1.57]], device=self._device

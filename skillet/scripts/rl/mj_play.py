@@ -13,7 +13,7 @@ import gymnasium as gym
 import numpy as np
 from mjlab.viewer import NativeMujocoViewer, ViserPlayViewer
 
-import kinova_tasks.mj_tasks  # noqa: F401
+import skillet_tasks.mj_tasks  # noqa: F401
 from skillet.envs.compatibility.rsl_rl import RslRlVecEnvWrapper
 from skillet.envs.mj_env_wrapper import MJEnvWrapper
 from skillet.envs.skill_mj_env_wrapper import SkillMJEnvWrapper

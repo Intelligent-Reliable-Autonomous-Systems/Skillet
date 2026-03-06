@@ -54,7 +54,7 @@ simulation_app = app_launcher.app
 
 import isaaclab_tasks  # noqa: F401
 
-import kinova_tasks.isaac_tasks  # noqa: F401
+import skillet_tasks.isaac_tasks  # noqa: F401
 
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True

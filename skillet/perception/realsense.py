@@ -25,7 +25,7 @@ class RealsenseEnv(_EnvironmentBase):
     """Environment that streams RGB-D observations from an Intel RealSense camera.
 
     The raw RGB-D snapshot matches `_get_latest_rgbd` in
-    `kinova_reach_ros2.py` (RGB HxWx3, depth HxW, intrinsics, pose, timestamp).
+    `gen3_ros2.py` (RGB HxWx3, depth HxW, intrinsics, pose, timestamp).
     The public observation returned by `get_observation()` also mirrors the
     post-processing done in `ROS2EnvWrapper` for the `"rgb-d"` observation:
 

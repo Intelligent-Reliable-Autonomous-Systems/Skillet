@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 import torch
 
-from kinova_tasks.ros2_tasks.kinova.kinova_ros2 import KinovaROS2Env, KinovaROS2EnvCfg
+from skillet_tasks.ros2_tasks.gen3.gen3_ros2 import Gen3ROS2Env, Gen3ROS2EnvCfg
 from skillet.agents.policy_over_options import PolicyOverOptionsAgent
 from skillet.envs.ros2_skillet_env import ROS2SkilletEnv
 from skillet.envs.specs import BxM_Action, IKEE_Obs
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Main ROS2 executor file.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="ROS2-Kinova-Velocity-v0", help="Name of the task.")
+parser.add_argument("--task", type=str, default="ROS2-Gen3-Velocity-v0", help="Name of the task.")
 parser.add_argument("--device", type=str, default="cuda", help="Device to use")
 parser.add_argument(
     "--ros2_ws", type=str, default=None, help="Absolute path to ROS2 workspace containing bringup files"
@@ -50,7 +50,7 @@ if args_cli.ros2_ws is None:
 def main() -> None:
     """Run the ROS2 pick example."""
     # create environment
-    env_cfg = KinovaROS2EnvCfg(
+    env_cfg = Gen3ROS2EnvCfg(
         robot_ip=args_cli.robot_ip,
         use_fake_hardware=args_cli.use_fake_hardware,
         launch_ros=args_cli.launch_ros,
@@ -60,7 +60,7 @@ def main() -> None:
         episode_length_s=30.0,
     )
 
-    env = KinovaROS2Env(cfg=env_cfg, ros=setup_ros())
+    env = Gen3ROS2Env(cfg=env_cfg, ros=setup_ros())
     env = ROS2SkilletEnv(env)
     env.reset()
 

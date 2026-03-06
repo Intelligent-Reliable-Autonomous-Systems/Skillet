@@ -8,8 +8,8 @@ import cv2
 import numpy as np
 from jaxtyping import Int
 
-from kinova_tasks.ros2_tasks.kinova.kinova_ros2 import KinovaROS2Env, KinovaROS2EnvCfg
-from skillet.envs.ros2_env_wrapper import ROS2EnvWrapper
+from skillet_tasks.ros2_tasks.gen3.gen3_ros2 import Gen3ROS2Env, Gen3ROS2EnvCfg
+from skillet.envs.ros2_skillet_env import ROS2SkilletEnv
 from skillet.envs.util import parse_ros2_env_cfg, setup_ros
 from skillet.perception.perception import Perception
 
@@ -18,7 +18,7 @@ parser.add_argument(
     "--prompts", nargs="+", type=str, default=["block", "eraser"], help="Prompts to use for segmentation."
 )
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="ROS2-Reach-Kinova-v0", help="Name of the task.")
+parser.add_argument("--task", type=str, default="ROS2-Gen3-v0", help="Name of the task.")
 parser.add_argument("--device", type=str, default="cuda", help="Device to use")
 parser.add_argument(
     "--ros2_ws", type=str, default=None, help="Absolute path to ROS2 workspace containing bringup files"
@@ -44,7 +44,7 @@ if args_cli.ros2_ws is None:
 
 def main() -> None:
     """Visualize RGB + depth color map from _get_latest_rgbd()."""
-    env_cfg = KinovaROS2EnvCfg(
+    env_cfg = Gen3ROS2EnvCfg(
         robot_ip=args_cli.robot_ip,
         use_fake_hardware=args_cli.use_fake_hardware,
         launch_ros=args_cli.launch_ros,
@@ -54,8 +54,8 @@ def main() -> None:
     )
 
     sam3 = SAM3(device=args_cli.device)
-    env = KinovaROS2Env(cfg=env_cfg, ros=setup_ros())
-    env = ROS2EnvWrapper(env)
+    env = Gen3ROS2Env(cfg=env_cfg, ros=setup_ros())
+    env = ROS2SkilletEnv(env)
     env.reset()
     rgbd_spec = env.obs_spec_rgbd.unbatched()
 

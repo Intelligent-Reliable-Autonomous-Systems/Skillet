@@ -50,7 +50,7 @@ simulation_app = app_launcher.app
 
 import isaaclab_tasks  # noqa: F401
 
-import kinova_tasks.isaac_tasks  # noqa: F401
+import skillet_tasks.isaac_tasks  # noqa: F401
 
 
 @hydra_task_config(args_cli.task, args_cli.agent)

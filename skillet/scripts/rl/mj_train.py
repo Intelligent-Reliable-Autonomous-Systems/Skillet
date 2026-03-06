@@ -13,7 +13,7 @@ from datetime import datetime
 import gymnasium as gym
 import torch
 
-import kinova_tasks.mj_tasks  # noqa: F401
+import skillet_tasks.mj_tasks  # noqa: F401
 from skillet.envs.compatibility.rsl_rl import RslRlVecEnvWrapper
 from skillet.envs.mj_env_wrapper import MJEnvWrapper
 from skillet.envs.skill_mj_env_wrapper import SkillMJEnvWrapper

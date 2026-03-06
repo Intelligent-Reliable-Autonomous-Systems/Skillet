@@ -19,9 +19,6 @@ See [IsaacLab Installation](https://isaac-sim.github.io/IsaacLab/main/source/set
 4. Install IsaacLab: `cd IsaacLab`, `./isaaclab.sh --install`
 5. Navigate back to Robot-Skills repository `cd ../Robot-Skills`
 
-To run experiment with dummy task policy and low level policy: `python3 examples/isaac_dummy.py --num_envs 4 --task Kinova-Reach-Skill-v0`
-To run experiment with an inverse kinematics controller low level policy: `python3 examples/isaac_ik.py --num_envs 4 --task Kinova-Reach-Skill-v0`
-
 ### Perception installation
 
 1. Make sure to activate conda environment: `conda activate skills`
@@ -45,12 +42,19 @@ To run:
    - Source IRAS-Kinova ROS2 overlay: `source install/setup.bash`
    - Laucn ROSBridge Node: `ros2 launch rosbridge_server rosbridge_websocket_launch.xml`
 2. Navigate back to Robot-Skills in another terminal. Ensure virtual env is active: `conda activate skills`
-3. Run dummy task policy with ROS2/RViz: `python3 examples/ros2_dummy.py --num_envs 1 --task ROS2-Reach-Kinova-v0 --ros2_ws <absolute-path-to-IRAS/Kinova>`
+3. Run a Pick Skill with ROS2/RViz: `python3 examples/ros2_pick.py --num_envs 1 --task ROS2-Gen3-v0 --ros2_ws <absolute-path-to-IRAS/Kinova>`
 
 ### Hardware Experiment 1
-Launch IRAS-Kinova
+Launch Gen3
 ```bash
-ros2 launch gen3_py gen3.launch.py robot_ip:=192.168.8.10 use_fake_hardware:=false gripper:=robotiq_2f_85 vision:=false
+ros2 launch gen3_py gen3.launch.py robot_ip:=192.168.8.10 use_fake_hardware:=false gripper:=robotiq_2f_85
+```
+
+OR 
+
+Launch Gen3Lite
+```bash
+ros2 launch gen3lite_py gen3_lite.launch.py robot_ip:=192.168.1.10 use_fake_hardware:=false
 ```
 
 Launch rosbridge
@@ -68,6 +72,9 @@ ros2 topic pub /joint_trajectory_controller/joint_trajectory trajectory_msgs/Joi
     }" -1
 ```
 
-```
-python examples/ros2_pick.py
-```
+    ros2 topic pub /joint_trajectory_controller/joint_trajectory trajectory_msgs/JointTrajectory "{
+    joint_names: [joint_1, joint_2, joint_3, joint_4, joint_5, joint_6],
+    points: [
+        { positions: [0.2, -0.18, 2.16, -1.57, -0.6, -1.34], time_from_start: { sec: 5 } },
+    ]
+    }" -1

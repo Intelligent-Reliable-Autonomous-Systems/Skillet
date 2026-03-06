@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 import gymnasium as gym
 import torch
 
-import kinova_tasks.mj_tasks  # noqa: F401
+import skillet_tasks.mj_tasks  # noqa: F401
 from skillet.agents.policy_over_options import PolicyOverOptionsAgent
 from skillet.envs.mj_env_wrapper import MJEnvWrapper
 from skillet.envs.util import parse_mj_env_cfg
@@ -27,7 +27,7 @@ from skillet.skill.specs import SELECT_OPTIONS_SPEC_BATCHED, XYZ_QUAT_Params
 # Add argparse arguments
 parser = argparse.ArgumentParser(description="Main IsaacSim Executor file through IsaacLab.")
 parser.add_argument("--num_envs", type=int, default=4, required=False, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="MJ-Kinova-Lift-Cube-v0", required=False, help="Name of the task.")
+parser.add_argument("--task", type=str, default="MJ-Gen3-Lift-Cube-v0", required=False, help="Name of the task.")
 parser.add_argument("--device", type=str, default="cuda", required=False, help="Name of device.")
 
 args_cli = parser.parse_args()
