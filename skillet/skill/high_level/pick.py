@@ -116,7 +116,7 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         self._params = params
         self._n_steps = 0
 
-        self._pos_threshold = 0.02
+        self._pos_threshold = 0.05  # NOTE updated for Gen3Lite
         self._quat_threshold = 0.08
 
         ee_pose_b = obs["tcp_pose_b"]
@@ -160,12 +160,12 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
             < self._pos_threshold
         )
         reached_height = self._pick_status == PickStatusCodes.ASCEND & (
-            ee_pose_b[:, 2] >= self._current_target_poses[:, 2]
+            ee_pose_b[:, 2] >= self._current_target_poses[:, 2] - self._pos_threshold  # NOTE added for Gen3Lite
         )
         reached_quat = (
             quat_error_magnitude(ee_pose_b[:, 3:7], self._current_target_poses[:, 3:7]) < self._quat_threshold
         )
-        reached_pose = (reached_pos & reached_quat) | reached_height
+        reached_pose = (reached_pos) | reached_height  # & reached_quat
 
         if reached_pose.any():
             idx = torch.arange(self.n_envs, device=reached_pose.device)

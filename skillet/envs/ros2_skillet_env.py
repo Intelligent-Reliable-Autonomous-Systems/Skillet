@@ -118,9 +118,13 @@ class ROS2SkilletEnv(
             name="twist_tcp",
             space=gym.spaces.Box(-float("inf"), float("inf"), shape=(6 + len(self._env.cfg.gripper_joint_names),)),
         ).replace(**spec_args)
-        self.action_spec_moveit_joints = ActionSpec[BxM_Action](
-            name="moveit_joints",
-            space=gym.spaces.Box(-float("inf"), float("inf"), shape=(6 + len(self._env.cfg.gripper_joint_names),)),
+        self.action_spec_moveit_joint = ActionSpec[BxM_Action](
+            name="moveit_joint",
+            space=gym.spaces.Box(-float("inf"), float("inf"), shape=(len(self._env.cfg.joint_ids),)),
+        ).replace(**spec_args)
+        self.action_spec_moveit_tcp_quat = ActionSpec[BxM_Action](
+            name="moveit_tcp_quat",
+            space=gym.spaces.Box(-float("inf"), float("inf"), shape=(7 + len(self._env.cfg.gripper_joint_names),)),
         ).replace(**spec_args)
 
     # ==================== DirectRlInterface ====================
@@ -196,7 +200,8 @@ class ROS2SkilletEnv(
         return action_spec.name in [
             self.action_spec_joints.name,
             self.action_spec_twist_tcp.name,
-            self.action_spec_moveit_joints.name,
+            self.action_spec_moveit_joint.name,
+            self.action_spec_moveit_tcp_quat.name,
         ]
 
     @override
@@ -406,7 +411,7 @@ class ROS2SkilletEnv(
     def _get_jacobians(
         self,
         env_ids: torch.Tensor | None = None,
-        ee_link: str = "robotiq_85_base_link",
+        ee_link: str = "end_effector_link",
         base_link: str = "base_link",
         arm_joint_ids: list | None = None,
     ) -> torch.Tensor:
@@ -448,7 +453,7 @@ class ROS2SkilletEnv(
     def _get_tcp_pose_b(
         self,
         env_ids: torch.Tensor | None = None,
-        ee_link: str = "robotiq_85_base_link",
+        ee_link: str = "end_effector_link",
     ) -> torch.Tensor:
         """Get the TCP pose of the robot in the robot base frame.
 
@@ -500,7 +505,7 @@ class ROS2SkilletEnv(
     def _get_ee_pose_b(
         self,
         env_ids: torch.Tensor | None = None,
-        ee_link: str = "robotiq_85_base_link",
+        ee_link: str = "end_effector_link",
         base_link: str = "base_link",
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Compute and return the end effector pose of the robot in the robot's base frame.

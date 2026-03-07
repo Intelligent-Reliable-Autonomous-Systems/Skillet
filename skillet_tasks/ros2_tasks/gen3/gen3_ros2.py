@@ -34,7 +34,7 @@ from skillet.policy.specs import JOINTS_SPEC
 
 @configclass
 class Gen3ROS2EnvCfg(ROS2EnvCfg):
-    """The configuration class for Gen3 Gen3 Arm."""
+    """The configuration class for Kinova Gen3 Arm."""
 
     """Robot configuration"""
 
@@ -69,30 +69,30 @@ class Gen3ROS2EnvCfg(ROS2EnvCfg):
     base_link_name = "base_link"
     gripper_joint_names = ["robotiq_85_left_knuckle_joint"]
 
+    arm_joint_names = ["joint_1", "joint_2", "joint_3", "joint_4", "joint_5", "joint_6", "joint_7"]
+
+    gripper_cmd_topic = "/robotiq_gripper_controller/gripper_cmd"
+
+    move_group_name = "manipulator"
+
+    tool_frame_name = "tcp"
+
 
 class Gen3ROS2Env(ROS2Env):
-    """Gen3 Gen3 7DoF ROS2 implementation."""
+    """Kinova Gen3 7DoF ROS2 implementation."""
 
-    def __init__(self, cfg: Gen3ROS2EnvCfg, ros: Ros, render_mode: str | None = None, **kwargs: dict[str, Any]) -> None:
+    def __init__(self, cfg: ROS2EnvCfg, ros: Ros, render_mode: str | None = None, **kwargs: dict[str, Any]) -> None:
         """Initialize Gen3 Arm ROS2."""
         super().__init__(cfg, ros, render_mode, **kwargs)
 
-        self.joint_names = np.asarray(
-            [
-                "joint_1",
-                "joint_2",
-                "joint_3",
-                "joint_4",
-                "joint_5",
-                "joint_6",
-                "joint_7",
-                "robotiq_85_left_knuckle_joint",
-            ]
-        )
+        self.joint_names = np.asarray(self.cfg.arm_joint_names + self.cfg.gripper_joint_names)
+        self.arm_joint_names = np.asarray(self.cfg.arm_joint_names)
+        self.gripper_joint_names = np.asarray(self.cfg.gripper_joint_names)
+
         self.joint_state_topic = "/joint_states"
         self.joint_cmd_topic = "/joint_trajectory_controller/joint_trajectory"
         self.twist_vel_topic = "/twist_controller/commands"
-        self.gripper_cmd_topic = "/robotiq_gripper_controller/gripper_cmd"
+        self.gripper_cmd_topic = self.cfg.gripper_cmd_topic
         self.jacobian_topic = "/jacobian"
         self.mass_matrix_topic = "/mass_matrix"
         self.gravity_vector_topic = "/gravity_vector"
@@ -118,10 +118,12 @@ class Gen3ROS2Env(ROS2Env):
         }
 
         self.default_joint_positions = np.asarray(self.cfg.default_joint_positions)
-        self.prev_action = np.zeros(shape=(8,))
+        self.prev_action = np.zeros(shape=(len(self.joint_names),))
 
         self.single_observation_space = gym.spaces.Dict()
-        self.single_observation_space["policy"] = gym.spaces.Box(float("-inf"), float("inf"), shape=(16,))
+        self.single_observation_space["policy"] = gym.spaces.Box(
+            float("-inf"), float("inf"), shape=(2 * len(self.joint_names),)
+        )
         self.single_action_space = gym.spaces.Box(float("-inf"), float("inf"), shape=(len(self.cfg.joint_ids),))
 
         self.observation_space = gym.vector.utils.batch_space(self.single_observation_space, self.num_envs)
@@ -133,7 +135,17 @@ class Gen3ROS2Env(ROS2Env):
             ).replace(device=self.device),
             ActionSpec(
                 name="twist_tcp",
-                space=gym.spaces.Box(low=-float("inf"), high=float("inf"), shape=(7,)),
+                space=gym.spaces.Box(low=-float("inf"), high=float("inf"), shape=(len(self.cfg.arm_joint_names),)),
+                is_torch=True,
+                is_batched=True,
+                n_envs=-1,
+                device=self.device,
+            ),
+            ActionSpec(
+                name="moveit_tcp_quat",
+                space=gym.spaces.Box(
+                    low=-float("inf"), high=float("inf"), shape=(7 + len(self.cfg.gripper_joint_names),)
+                ),
                 is_torch=True,
                 is_batched=True,
                 n_envs=-1,
@@ -239,6 +251,8 @@ class Gen3ROS2Env(ROS2Env):
             duration: Duration of trajectory
 
         """
+        # TODO undo this
+        # action_spec = action_spec.replace(name="moveit_tcp")
         # Send the gripper command first as this will be non-blocking FOR NOW
         gripper_val = float(action[-1])
         gripper_val = max(0, min(gripper_val, 1)) * 0.8
@@ -361,10 +375,10 @@ class Gen3ROS2Env(ROS2Env):
             print("[INFO] Successfully switched controller to `joint_trajectory_controller`")
 
         joint_msg = {
-            "joint_names": self.joint_names[:-1].tolist(),
+            "joint_names": self.arm_joint_names.tolist(),
             "points": [
                 {
-                    "positions": joint_pos[:-1].tolist(),
+                    "positions": joint_pos[: len(self.arm_joint_names)].tolist(),
                     "velocities": [],
                     "accelerations": [],
                     "effort": [],
@@ -421,7 +435,7 @@ class Gen3ROS2Env(ROS2Env):
 
         if action_spec.name == "moveit_joint":
             moveit_goal = self._moveit_joint_msg(moveit_pose)
-        elif action_spec.name == "moveit_tcp":
+        elif "moveit_tcp" in action_spec.name:
             moveit_goal = self._moveit_tcp_pose_msg(moveit_pose)
         else:
             raise ValueError(f"Unsupported MoveIt ActionSpec `{action_spec.name}`")
@@ -451,7 +465,7 @@ class Gen3ROS2Env(ROS2Env):
         if "error" in result_container:
             raise RuntimeError(f"MoveIt action error: {result_container['error']}")
 
-        print(f"[INFO] Executed MoveIt trajectory successfully. {result_container['result']}")
+        # print(f"[INFO] Executed MoveIt trajectory successfully. {result_container['result']}")
 
     @staticmethod
     def _decode_uint8_payload(payload: Any, field_name: str) -> np.ndarray:
@@ -533,8 +547,8 @@ class Gen3ROS2Env(ROS2Env):
         joint_pos = joint_pos.tolist()
         return {
             "request": {
-                "group_name": "manipulator",
-                "start_state": {"is_diff": True},  # <-- tells MoveIt "use current real state, ignore what I send"
+                "group_name": self.cfg.move_group_name,
+                "start_state": {"is_diff": True},
                 "goal_constraints": [
                     {
                         "joint_constraints": [
@@ -545,7 +559,7 @@ class Gen3ROS2Env(ROS2Env):
                                 "tolerance_below": 0.01,
                                 "weight": 1.0,
                             }
-                            for i, j in enumerate(self.joint_names[:-1])
+                            for i, j in enumerate(self.arm_joint_names)
                         ]
                     }
                 ],
@@ -557,72 +571,67 @@ class Gen3ROS2Env(ROS2Env):
         }
 
     def _moveit_tcp_pose_msg(self, tcp_pose_b: np.ndarray) -> dict:
-        ee_pose_b = (
-            self._compute_goal_ee_pose_b_from_goal_tcp_b(
-                torch.as_tensor(tcp_pose_b).unsqueeze(0), torch.as_tensor(self.cfg.tcp_offset).unsqueeze(0)
-            )
-            .cpu()
-            .numpy()
-            .squeeze()
-            .tolist()
-        )
+        tcp_pose_b = tcp_pose_b.tolist()
 
         return {
-            "goal": {
-                "request": {
-                    "group_name": "manipulator",
-                    "goal_constraints": [
-                        {
-                            "name": "pose_goal",
-                            "position_constraints": [
-                                {
-                                    "header": {"frame_id": "base_link"},
-                                    "link_name": self.cfg.ee_link_name,
-                                    "constraint_region": {
-                                        "primitives": [
-                                            {
-                                                "type": 2,  # BOX type
-                                                "dimensions": [0.01, 0.01, 0.01],  # tolerance box (meters)
-                                            }
-                                        ],
-                                        "primitive_poses": [
-                                            {
-                                                "position": {"x": ee_pose_b[0], "y": ee_pose_b[1], "z": ee_pose_b[2]},
-                                                "orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
-                                            }
-                                        ],
-                                    },
-                                    "weight": 1.0,
-                                }
-                            ],
-                            # --- ORIENTATION (RPY → quaternion) ---
-                            "orientation_constraints": [
-                                {
-                                    "header": {"frame_id": "base_link"},
-                                    "link_name": self.cfg.ee_link_name,
-                                    "orientation": {
-                                        "x": ee_pose_b[4],
-                                        "y": ee_pose_b[5],
-                                        "z": ee_pose_b[6],
-                                        "w": ee_pose_b[3],
-                                    },  # Skillet quaternion is in WXYZ
-                                    "absolute_x_axis_tolerance": 0.1,  # radians
-                                    "absolute_y_axis_tolerance": 0.1,
-                                    "absolute_z_axis_tolerance": 0.1,
-                                    "weight": 1.0,
-                                }
-                            ],
-                        }
-                    ],
-                    "num_planning_attempts": 10,
-                    "allowed_planning_time": 5.0,
-                    "max_velocity_scaling_factor": 0.2,
-                    "max_acceleration_scaling_factor": 0.2,
-                },
-                "planning_options": {
-                    "plan_only": False,
-                    "replan": True,
-                    "replan_attempts": 3,
-                },
-            }
+            "request": {
+                "group_name": self.cfg.move_group_name,
+                "start_state": {"is_diff": True},
+                "goal_constraints": [
+                    {
+                        "name": "pose_goal",
+                        "position_constraints": [
+                            {
+                                "header": {"frame_id": "base_link"},
+                                "link_name": self.cfg.tool_frame_name,
+                                "constraint_region": {
+                                    "primitives": [
+                                        {
+                                            "type": 2,  # BOX type
+                                            "dimensions": [0.03, 0.03, 0.03],  # tolerance box (meters)
+                                        }
+                                    ],
+                                    "primitive_poses": [
+                                        {
+                                            "position": {"x": tcp_pose_b[0], "y": tcp_pose_b[1], "z": tcp_pose_b[2]},
+                                            "orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
+                                        }
+                                    ],
+                                },
+                                "weight": 1.0,
+                            }
+                        ],
+                        # --- ORIENTATION (RPY → quaternion) ---
+                        "orientation_constraints": [
+                            {
+                                "header": {"frame_id": "base_link"},
+                                "link_name": self.cfg.tool_frame_name,
+                                "orientation": {
+                                    "x": tcp_pose_b[4],
+                                    "y": tcp_pose_b[5],
+                                    "z": tcp_pose_b[6],
+                                    "w": tcp_pose_b[3],
+                                    # "x": 1.0,#tcp_pose_b[4],
+                                    # "y": 0.0, #tcp_pose_b[5],
+                                    # "z": 0.0, #tcp_pose_b[6],
+                                    # "w": 0.0, #tcp_pose_b[3],
+                                },  # Skillet quaternion is in WXYZ
+                                "absolute_x_axis_tolerance": 0.1,  # radians
+                                "absolute_y_axis_tolerance": 0.1,
+                                "absolute_z_axis_tolerance": 0.1,
+                                "weight": 1.0,
+                            }
+                        ],
+                    }
+                ],
+                "num_planning_attempts": 10,
+                "allowed_planning_time": 5.0,
+                "max_velocity_scaling_factor": 0.2,
+                "max_acceleration_scaling_factor": 0.2,
+            },
+            "planning_options": {
+                "plan_only": False,
+                "replan": True,
+                "replan_attempts": 3,
+            },
         }

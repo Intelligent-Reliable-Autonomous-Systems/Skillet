@@ -388,7 +388,7 @@ class MJEnvWrapper(
     def _get_tcp_pose_b(
         self,
         env_ids: torch.Tensor | None = None,
-        ee_link: str = "robotiq_85_base_link",
+        ee_link: str = "end_effector_link",
     ) -> Float[torch.Tensor, "b 7"]:
         """Get the TCP pose of the robot in the robot base frame.
 
@@ -435,7 +435,7 @@ class MJEnvWrapper(
     def _get_ee_pose_b(  # Passes
         self,
         env_ids: torch.Tensor | None = None,
-        ee_link: str = "robotiq_85_base_link",
+        ee_link: str = "end_effector_link",
         base_link: str = "base_link",
     ) -> Float[torch.Tensor, "b 7"]:
         """Compute and return the end effector pose of the robot in the robot's base frame.

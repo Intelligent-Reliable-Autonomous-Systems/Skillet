@@ -15,10 +15,10 @@ import gymnasium as gym
 
 from skillet.agents.policy_over_options import PolicyOverOptionsAgent
 from skillet.envs.ros2_skillet_env import ROS2SkilletEnv
-from skillet.envs.specs import BxM_Action, IKEE_Obs
+from skillet.envs.specs import BxM_Action, MOVEIT_TCP_Obs
 from skillet.envs.util import parse_ros2_env_cfg, setup_ros
 from skillet.policy.dummy import FixedSequencePolicy, RandomPolicy
-from skillet.policy.ik_ee import PoseAbsIKEEPolicy
+from skillet.policy.moveit import MoveItTcpQuatPolicy
 from skillet.skill.high_level.pick import PickSkill
 from skillet.skill.specs import SELECT_OPTIONS_SPEC_BATCHED, XYZ_YAW_Params
 import skillet_tasks.ros2_tasks  # noqa: F401
@@ -67,11 +67,11 @@ def main() -> None:
     print(f"[INFO][Main] Gym action space: {env.action_space}")
 
     # Low-level policies
-    ik_ee_pose_policy = PoseAbsIKEEPolicy(env.obs_spec_ikee, env.action_spec)
+    moveit_tcp_policy = MoveItTcpQuatPolicy(env.obs_spec_ikee, env.action_spec_moveit_tcp_quat)
     # Skills
     skill_length = 200
-    pick_skill = PickSkill(reach_policy=ik_ee_pose_policy, gripper_policy=None, lift_height=0.23, length=skill_length)
-    skills: list[BatchedSkill[IKEE_Obs, BxM_Action, XYZ_YAW_Params]] = [pick_skill]
+    pick_skill = PickSkill(reach_policy=moveit_tcp_policy, gripper_policy=None, lift_height=0.23, length=skill_length)
+    skills: list[BatchedSkill[MOVEIT_TCP_Obs, BxM_Action, XYZ_YAW_Params]] = [pick_skill]
 
     # Parameters policy
     fixed_param_policy = FixedSequencePolicy(
@@ -79,7 +79,7 @@ def main() -> None:
         env.action_spec,
         torch.as_tensor(
             [
-                [0.5, -0.2, 0.03, 0.0],
+                [0.3, -0.2, 0.03, 0.0],
                 [0.3, 0.2, 0.05, 0.0],
                 [0.2, 0.4, 0.05, 0.0],
             ],

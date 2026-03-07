@@ -60,7 +60,7 @@ class IKEEPolicy(BatchedPPolicy[IKEE_Obs, TBAction, TBPolicyParams], Generic[TBA
         """Get the next joint positions by computing differential inverse kinematics."""
         ee_pose_b = obs["ee_pose_b"]
         jacobians = obs["jacobians"]
-        joint_pos = obs["joint_pos"][:, :7]  # Ignore gripper
+        joint_pos = obs["joint_pos"][:, : jacobians.shape[-1]]  # Ignore gripper
         arm_joint_pos = self.diff_ik.compute(ee_pose_b[:, 0:3], ee_pose_b[:, 3:7], jacobians, joint_pos)
         return torch.cat(
             (arm_joint_pos, self.start_gripper_pos),

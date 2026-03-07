@@ -80,3 +80,15 @@ class ROS2EnvCfg:
 
     gripper_joint_names: list[str] = MISSING
     """Name of the gripper joint for gripper pose"""
+
+    arm_joint_names: list[str] = MISSING
+    """Name of the arm joints for Diff IK"""
+
+    gripper_cmd_topic: str = MISSING
+    """Name of gripper command topic"""
+
+    move_group_name: str = MISSING
+    """Name of move group for arm"""
+
+    tool_frame_name: str = MISSING
+    """Name of tool frame of robot"""
