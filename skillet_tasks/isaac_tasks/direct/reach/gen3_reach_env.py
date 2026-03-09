@@ -1,8 +1,3 @@
-# Copyright (c) 2022-2025, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
-# All rights reserved.
-#
-# SPDX-License-Identifier: BSD-3-Clause
-
 from __future__ import annotations
 
 import torch
@@ -12,9 +7,9 @@ from isaaclab.utils.math import (
     quat_error_magnitude,
 )
 
+from skillet.envs.util import configclass
 from skillet_tasks.isaac_tasks.direct.cfg import Gen3BaseCfg
 from skillet_tasks.isaac_tasks.direct.reach.reach_env import ReachEnv
-from skillet.envs.util import configclass
 
 
 @configclass

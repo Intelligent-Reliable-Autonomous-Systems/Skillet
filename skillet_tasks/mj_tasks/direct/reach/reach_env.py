@@ -79,6 +79,7 @@ class ReachEnv(DirectRLEnv):
 
     # post-physics step calls
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
+        """Terminate if max length is reached."""
         truncated = self.episode_length_buf >= self.max_episode_length - 1
         return torch.zeros((self.num_envs), dtype=torch.bool), truncated
 

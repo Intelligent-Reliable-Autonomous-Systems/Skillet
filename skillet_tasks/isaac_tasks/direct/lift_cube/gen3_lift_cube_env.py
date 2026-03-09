@@ -1,8 +1,3 @@
-# Copyright (c) 2022-2025, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
-# All rights reserved.
-#
-# SPDX-License-Identifier: BSD-3-Clause
-
 from __future__ import annotations
 
 import isaaclab.sim as sim_utils
@@ -12,8 +7,8 @@ from isaaclab.markers import VisualizationMarkersCfg
 from isaaclab.markers.config import FRAME_MARKER_CFG
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 
-from skillet_tasks.isaac_tasks.direct.cfg import Gen3BaseCfg
 from skillet.envs.util import configclass
+from skillet_tasks.isaac_tasks.direct.cfg import Gen3BaseCfg
 
 from .lift_cube_env import LiftCubeEnv
 

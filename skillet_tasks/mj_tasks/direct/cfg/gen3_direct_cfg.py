@@ -1,9 +1,10 @@
 from skillet.envs.mujoco import SkillsDirectRLEnvCfg
 from mjlab.scene import SceneCfg
-from mjlab.sensor import ContactMatch, ContactSensorCfg
+
 from mjlab.sim import MujocoCfg, SimulationCfg
 from mjlab.terrains import TerrainImporterCfg
 from dataclasses import MISSING
+from mjlab.viewer import ViewerConfig
 
 
 class BaseSceneCfg(SceneCfg):
@@ -12,20 +13,6 @@ class BaseSceneCfg(SceneCfg):
     terrain = TerrainImporterCfg(terrain_type="plane")
     num_envs = 1
     env_spacing = 2.5
-    sensors = (
-        ContactSensorCfg(
-            name="ee_ground_collision",
-            primary=ContactMatch(
-                mode="subtree",
-                pattern="",  # Set per-robot (e.g., "link_6" for all geoms in end-effector).
-                entity="robot",
-            ),
-            secondary=ContactMatch(mode="body", pattern="terrain"),
-            fields=("found",),
-            reduce="none",
-            num_slots=1,
-        ),
-    )
 
 
 class Gen3BaseCfg(SkillsDirectRLEnvCfg):
@@ -55,6 +42,15 @@ class Gen3BaseCfg(SkillsDirectRLEnvCfg):
             impratio=10,
             cone="elliptic",
         ),
+    )
+
+    viewer = ViewerConfig(
+        origin_type=ViewerConfig.OriginType.ASSET_BODY,
+        entity_name="robot",
+        body_name="base_link",
+        distance=1.5,
+        elevation=-5.0,
+        azimuth=120.0,
     )
 
     # scene
