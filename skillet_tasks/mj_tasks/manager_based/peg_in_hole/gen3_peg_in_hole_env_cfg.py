@@ -345,7 +345,7 @@ class ObservationsCfg:
     """Observations configuration."""
 
     @configclass
-    class ActorCfg(ObservationGroupCfg):
+    class ActorCfg:
         """Observations for actor."""
 
         peg_to_hole = ObservationTermCfg(
@@ -362,7 +362,7 @@ class ObservationsCfg:
         enable_corruption = True
 
     @configclass
-    class CriticCfg(ObservationGroupCfg):
+    class CriticCfg:
         """Observations for critic."""
 
         joint_vel = ObservationTermCfg(
@@ -425,9 +425,8 @@ class ObservationsCfg:
 
         enable_corruption = False
 
-    actor_terms: ActorCfg = ActorCfg()
-
-    critic_terms: CriticCfg = CriticCfg()
+    policy = ObservationGroupCfg(terms=ActorCfg().__dict__, enable_corruption=True)  # TODO this used to be actor
+    critic = ObservationGroupCfg(terms=CriticCfg().__dict__, enable_corruption=True)
 
 
 @configclass
@@ -604,12 +603,12 @@ class RewardsCfg:
 
 
 @configclass
-class KinovaPegInHoleSceneCfg(SceneCfg):
+class Gen3PegInHoleSceneCfg(SceneCfg):
     terrain = TerrainImporterCfg(terrain_type="plane")
 
     num_envs = 4096
 
-    env_spacing = 1.0
+    env_spacing = 2.5
 
     entities = {
         "robot": Gen3ClosedPegCfg(),
@@ -706,7 +705,7 @@ class CurriculumCfg:
 
 
 @configclass
-class KinovaPegInHoleEnvCfg(ManagerBasedRlEnvCfg):
+class Gen3PegInHoleEnvCfg(ManagerBasedRlEnvCfg):
     """Kinova peg-in-hole with cartesian (IK) control.
 
     The peg is placed in the gripper on reset. The gripper stays closed
@@ -717,7 +716,7 @@ class KinovaPegInHoleEnvCfg(ManagerBasedRlEnvCfg):
         - ik_pose (6D): position + axis-angle deltas relative to home EE pose
     """
 
-    scene: KinovaPegInHoleSceneCfg = KinovaPegInHoleSceneCfg()
+    scene: Gen3PegInHoleSceneCfg = Gen3PegInHoleSceneCfg()
 
     observations = ObservationsCfg().__dict__
     actions = ActionsCfg().__dict__
@@ -740,7 +739,7 @@ class KinovaPegInHoleEnvCfg(ManagerBasedRlEnvCfg):
         nconmax=55,
         njmax=600,
         mujoco=MujocoCfg(
-            timestep=0.01,  # 100 Hz simulation/IK rate
+            timestep=0.01,
             iterations=10,
             ls_iterations=20,
             impratio=10,
@@ -748,9 +747,9 @@ class KinovaPegInHoleEnvCfg(ManagerBasedRlEnvCfg):
         ),
     )
 
-    decimation = 10  # 10 Hz policy rate (100/10)
+    decimation = 2
 
-    episode_length_s = 10.0
+    episode_length_s = 5.0
 
     if False:
         episode_length_s = int(1e9)

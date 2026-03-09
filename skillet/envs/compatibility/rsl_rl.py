@@ -11,6 +11,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, cast
 
 import gymnasium as gym
+import numpy as np
 import torch
 from tensordict import TensorDict
 from typing_extensions import override
@@ -171,7 +172,13 @@ class RslRlVecEnvWrapper(RslRlVecEnv, gym.vector.VectorWrapper):
         if hasattr(self.unwrapped, "action_manager"):
             self._num_actions = self.unwrapped.action_manager.total_action_dim
         else:
-            self._num_actions = gym.spaces.flatdim(self.unwrapped.single_action_space)
+            try:
+                self._num_actions = gym.spaces.flatdim(self.unwrapped.single_action_space)
+            except AttributeError:
+                print(
+                    f"[WARN] Manually flattening `{self.unwrapped.single_action_space}`, assuming type mjlab.utils.spaces.Box"
+                )
+                self._num_actions = int(np.prod(self.unwrapped.single_action_space.shape))
 
         # modify the action space to the clip range
         if self._clip_actions is not None:

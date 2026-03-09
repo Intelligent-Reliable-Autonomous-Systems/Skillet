@@ -279,7 +279,7 @@ class LiftCubeEnvCfg(ManagerBasedRLEnvCfg):
         nconmax=55,
         njmax=600,
         mujoco=MujocoCfg(
-            timestep=0.005,
+            timestep=0.01,
             iterations=10,
             ls_iterations=20,
             impratio=10,
@@ -287,9 +287,9 @@ class LiftCubeEnvCfg(ManagerBasedRLEnvCfg):
         ),
     )
 
-    decimation = 4
+    decimation = 2
 
-    episode_length_s = 20.0
+    episode_length_s = 5.0
 
     is_finite_horizon = False
 

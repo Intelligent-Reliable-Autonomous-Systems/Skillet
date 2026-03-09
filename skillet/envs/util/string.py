@@ -170,7 +170,8 @@ def string_to_callable(name: str) -> Callable:
             " The format of input should be 'module:attribute_name'.\n"
             f"Received the error:\n {e}."
         )
-        raise ValueError(msg)
+        # raise ValueError(msg)
+        pass  # TODO address
 
 
 """

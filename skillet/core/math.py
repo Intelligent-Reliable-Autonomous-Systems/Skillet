@@ -1257,6 +1257,12 @@ def unproject_depth(depth: torch.Tensor, intrinsics: torch.Tensor, is_ortho: boo
 
 
 @torch.jit.script
+def tf_combine(q1: torch.Tensor, t1: torch.Tensor, q2: torch.Tensor, t2: torch.Tensor):
+    """Apply tf transformation."""
+    return quat_mul(q1, q2), quat_apply(q1, t2) + t1
+
+
+@torch.jit.script
 def project_points(points: torch.Tensor, intrinsics: torch.Tensor) -> torch.Tensor:
     r"""Projects 3D points into 2D image plane.
 

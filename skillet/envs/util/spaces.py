@@ -3,11 +3,12 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-import gymnasium as gym
 import json
+from typing import Any, TypeVar
+
+import gymnasium as gym
 import numpy as np
 import torch
-from typing import Any, TypeVar
 
 SpaceType = TypeVar("SpaceType", gym.spaces.Space, int, set, tuple, list, dict)
 """A sentinel object to indicate a valid space type to specify states, observations and actions."""
@@ -24,27 +25,28 @@ def spec_to_gym_space(spec: SpaceType) -> gym.spaces.Space:
 
     Raises:
         ValueError: If the given space specification is not valid/supported.
+
     """
     if isinstance(spec, gym.spaces.Space):
         return spec
     # fundamental spaces
     # Box
-    elif isinstance(spec, int):
+    if isinstance(spec, int):
         return gym.spaces.Box(low=-np.inf, high=np.inf, shape=(spec,))
-    elif isinstance(spec, list) and all(isinstance(x, int) for x in spec):
+    if isinstance(spec, list) and all(isinstance(x, int) for x in spec):
         return gym.spaces.Box(low=-np.inf, high=np.inf, shape=spec)
     # Discrete
-    elif isinstance(spec, set) and len(spec) == 1:
+    if isinstance(spec, set) and len(spec) == 1:
         return gym.spaces.Discrete(n=next(iter(spec)))
     # MultiDiscrete
-    elif isinstance(spec, list) and all(isinstance(x, set) and len(x) == 1 for x in spec):
+    if isinstance(spec, list) and all(isinstance(x, set) and len(x) == 1 for x in spec):
         return gym.spaces.MultiDiscrete(nvec=[next(iter(x)) for x in spec])
     # composite spaces
     # Tuple
-    elif isinstance(spec, tuple):
+    if isinstance(spec, tuple):
         return gym.spaces.Tuple([spec_to_gym_space(x) for x in spec])
     # Dict
-    elif isinstance(spec, dict):
+    if isinstance(spec, dict):
         return gym.spaces.Dict({k: spec_to_gym_space(v) for k, v in spec.items()})
     raise ValueError(f"Unsupported space specification: {spec}")
 
@@ -60,6 +62,7 @@ def sample_space(space: gym.spaces.Space, device: str, batch_size: int = -1, fil
 
     Returns:
         Tensorized sampled space.
+
     """
 
     def tensorize(s, x):
@@ -68,13 +71,13 @@ def sample_space(space: gym.spaces.Space, device: str, batch_size: int = -1, fil
             if fill_value is not None:
                 tensor.fill_(fill_value)
             return tensor
-        elif isinstance(s, gym.spaces.Discrete):
+        if isinstance(s, gym.spaces.Discrete):
             if isinstance(x, np.ndarray):
                 tensor = torch.tensor(x, device=device, dtype=torch.int64).reshape(batch_size, 1)
                 if fill_value is not None:
                     tensor.fill_(int(fill_value))
                 return tensor
-            elif isinstance(x, np.number) or type(x) in [int, float]:
+            if isinstance(x, np.number) or type(x) in [int, float]:
                 tensor = torch.tensor([x], device=device, dtype=torch.int64).reshape(batch_size, 1)
                 if fill_value is not None:
                     tensor.fill_(int(fill_value))
@@ -102,11 +105,12 @@ def serialize_space(space: SpaceType) -> str:
 
     Returns:
         Serialized JSON representation.
+
     """
     # Gymnasium spaces
     if isinstance(space, gym.spaces.Discrete):
         return json.dumps({"type": "gymnasium", "space": "Discrete", "n": int(space.n)})
-    elif isinstance(space, gym.spaces.Box):
+    if isinstance(space, gym.spaces.Box):
         return json.dumps(
             {
                 "type": "gymnasium",
@@ -116,30 +120,30 @@ def serialize_space(space: SpaceType) -> str:
                 "shape": space.shape,
             }
         )
-    elif isinstance(space, gym.spaces.MultiDiscrete):
+    if isinstance(space, gym.spaces.MultiDiscrete):
         return json.dumps({"type": "gymnasium", "space": "MultiDiscrete", "nvec": space.nvec.tolist()})
-    elif isinstance(space, gym.spaces.Tuple):
+    if isinstance(space, gym.spaces.Tuple):
         return json.dumps({"type": "gymnasium", "space": "Tuple", "spaces": tuple(map(serialize_space, space.spaces))})
-    elif isinstance(space, gym.spaces.Dict):
+    if isinstance(space, gym.spaces.Dict):
         return json.dumps(
             {"type": "gymnasium", "space": "Dict", "spaces": {k: serialize_space(v) for k, v in space.spaces.items()}}
         )
     # Python data types
     # Box
-    elif isinstance(space, int) or (isinstance(space, list) and all(isinstance(x, int) for x in space)):
+    if isinstance(space, int) or (isinstance(space, list) and all(isinstance(x, int) for x in space)):
         return json.dumps({"type": "python", "space": "Box", "value": space})
     # Discrete
-    elif isinstance(space, set) and len(space) == 1:
+    if isinstance(space, set) and len(space) == 1:
         return json.dumps({"type": "python", "space": "Discrete", "value": next(iter(space))})
     # MultiDiscrete
-    elif isinstance(space, list) and all(isinstance(x, set) and len(x) == 1 for x in space):
+    if isinstance(space, list) and all(isinstance(x, set) and len(x) == 1 for x in space):
         return json.dumps({"type": "python", "space": "MultiDiscrete", "value": [next(iter(x)) for x in space]})
     # composite spaces
     # Tuple
-    elif isinstance(space, tuple):
+    if isinstance(space, tuple):
         return json.dumps({"type": "python", "space": "Tuple", "value": [serialize_space(x) for x in space]})
     # Dict
-    elif isinstance(space, dict):
+    if isinstance(space, dict):
         return json.dumps(
             {"type": "python", "space": "Dict", "value": {k: serialize_space(v) for k, v in space.items()}}
         )
@@ -154,38 +158,36 @@ def deserialize_space(string: str) -> gym.spaces.Space:
 
     Returns:
         Space specification.
+
     """
     obj = json.loads(string)
     # Gymnasium spaces
     if obj["type"] == "gymnasium":
         if obj["space"] == "Discrete":
             return gym.spaces.Discrete(n=obj["n"])
-        elif obj["space"] == "Box":
+        if obj["space"] == "Box":
             return gym.spaces.Box(low=np.array(obj["low"]), high=np.array(obj["high"]), shape=obj["shape"])
-        elif obj["space"] == "MultiDiscrete":
+        if obj["space"] == "MultiDiscrete":
             return gym.spaces.MultiDiscrete(nvec=np.array(obj["nvec"]))
-        elif obj["space"] == "Tuple":
+        if obj["space"] == "Tuple":
             return gym.spaces.Tuple(spaces=tuple(map(deserialize_space, obj["spaces"])))
-        elif obj["space"] == "Dict":
+        if obj["space"] == "Dict":
             return gym.spaces.Dict(spaces={k: deserialize_space(v) for k, v in obj["spaces"].items()})
-        else:
-            raise ValueError(f"Unsupported space ({obj['spaces']})")
+        raise ValueError(f"Unsupported space ({obj['spaces']})")
     # Python data types
-    elif obj["type"] == "python":
+    if obj["type"] == "python":
         if obj["space"] == "Discrete":
             return {obj["value"]}
-        elif obj["space"] == "Box":
+        if obj["space"] == "Box":
             return obj["value"]
-        elif obj["space"] == "MultiDiscrete":
+        if obj["space"] == "MultiDiscrete":
             return [{x} for x in obj["value"]]
-        elif obj["space"] == "Tuple":
+        if obj["space"] == "Tuple":
             return tuple(map(deserialize_space, obj["value"]))
-        elif obj["space"] == "Dict":
+        if obj["space"] == "Dict":
             return {k: deserialize_space(v) for k, v in obj["value"].items()}
-        else:
-            raise ValueError(f"Unsupported space ({obj['spaces']})")
-    else:
-        raise ValueError(f"Unsupported type ({obj['type']})")
+        raise ValueError(f"Unsupported space ({obj['spaces']})")
+    raise ValueError(f"Unsupported type ({obj['type']})")
 
 
 def replace_env_cfg_spaces_with_strings(env_cfg: object) -> object:
@@ -196,6 +198,7 @@ def replace_env_cfg_spaces_with_strings(env_cfg: object) -> object:
 
     Returns:
         Environment config instance with spaces replaced if any.
+
     """
     for attr in ["observation_space", "action_space", "state_space"]:
         if hasattr(env_cfg, attr):
@@ -214,6 +217,7 @@ def replace_strings_with_env_cfg_spaces(env_cfg: object) -> object:
 
     Returns:
         Environment config instance with spaces replaced if any.
+
     """
     for attr in ["observation_space", "action_space", "state_space"]:
         if hasattr(env_cfg, attr):

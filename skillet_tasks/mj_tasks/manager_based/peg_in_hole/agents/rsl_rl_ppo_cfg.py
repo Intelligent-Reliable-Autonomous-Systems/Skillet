@@ -10,14 +10,12 @@ class Gen3PegInHolePPORunnerCfg(RslRlOnPolicyRunnerCfg):
         hidden_dims=(512, 256, 128),
         activation="elu",
         obs_normalization=True,
-        stochastic=True,
         init_noise_std=1.0,
     )
     critic = RslRlPpoPolicyCfg(
         hidden_dims=(512, 256, 128),
         activation="elu",
         obs_normalization=True,
-        stochastic=False,
         init_noise_std=1.0,
     )
     policy = RslRlPpoActorCriticCfg(

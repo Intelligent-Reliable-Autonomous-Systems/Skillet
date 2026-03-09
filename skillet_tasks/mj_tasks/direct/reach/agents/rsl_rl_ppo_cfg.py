@@ -5,21 +5,23 @@ from skillet.rl.cfg import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, RslRl
 
 
 @configclass
-class Gen3LiftCubePPORunnerCfg(RslRlOnPolicyRunnerCfg):
-    num_steps_per_env = 24
-    max_iterations = 1000
-    save_interval = 50
-    experiment_name = "mj_gen3_lift_cube"
-    run_name = ""
-    obs_groups = {"policy": ["policy"], "critic": ["policy"]}
-    resume = False
-    empirical_normalization = False
-    actor = RslRlPpoPolicyCfg(init_noise_std=1.0, hidden_dims=[256, 128, 64], activation="elu", obs_normalization=True)
-    critic = RslRlPpoPolicyCfg(init_noise_std=1.0, hidden_dims=[256, 128, 64], activation="elu", obs_normalization=True)
+class Gen3ReachPPORunnerCfg(RslRlOnPolicyRunnerCfg):
+    actor = RslRlPpoPolicyCfg(
+        hidden_dims=(64, 64),
+        activation="elu",
+        obs_normalization=True,
+        init_noise_std=1.0,
+    )
+    critic = RslRlPpoPolicyCfg(
+        hidden_dims=(64, 64),
+        activation="elu",
+        obs_normalization=True,
+        init_noise_std=1.0,
+    )
     policy = RslRlPpoActorCriticCfg(
         init_noise_std=1.0,
-        actor_hidden_dims=[256, 128, 64],
-        critic_hidden_dims=[256, 128, 64],
+        actor_hidden_dims=[64, 64],
+        critic_hidden_dims=[64, 64],
         activation="elu",
         hierarchical_policy=False,
         actor_obs_normalization=True,
@@ -29,8 +31,8 @@ class Gen3LiftCubePPORunnerCfg(RslRlOnPolicyRunnerCfg):
         value_loss_coef=1.0,
         use_clipped_value_loss=True,
         clip_param=0.2,
-        entropy_coef=0.001,
-        num_learning_epochs=8,
+        entropy_coef=0.005,
+        num_learning_epochs=5,
         num_mini_batches=4,
         learning_rate=1.0e-3,
         schedule="adaptive",
@@ -39,3 +41,7 @@ class Gen3LiftCubePPORunnerCfg(RslRlOnPolicyRunnerCfg):
         desired_kl=0.01,
         max_grad_norm=1.0,
     )
+    experiment_name = "mj_gen3_reach_direct"
+    save_interval = 50
+    num_steps_per_env = 24
+    max_iterations = 5000
