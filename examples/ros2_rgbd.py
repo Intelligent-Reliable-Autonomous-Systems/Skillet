@@ -7,6 +7,8 @@ from kinova_tasks.ros2_tasks.kinova.kinova_ros2 import KinovaROS2Env, KinovaROS2
 from skillet.envs.ros2_skillet_env import ROS2SkilletEnv
 from skillet.envs.util import setup_ros
 from skillet.perception.perception import Perception
+from skillet.perception.realsense import RealsenseEnv
+from skillet.perception.sam3.sam3 import SAMConcept
 from skillet.perception.visualize import PointCloudVisualizer
 
 parser = argparse.ArgumentParser(description="Visualize latest RGB-D frame from ROS2 service.")
@@ -15,6 +17,9 @@ parser.add_argument("--device", type=str, default="cuda", help="Device to use")
 parser.add_argument(
     "--ros2_ws", type=str, default=None, help="Absolute path to ROS2 workspace containing bringup files"
 )
+parser.add_argument("--segmentation", action=argparse.BooleanOptionalAction, default=True, help="Use segmentation.")
+parser.add_argument("--realsense_env", action="store_true", help="Use RealSense camera environment.")
+parser.add_argument("--viz", type=str, default="rgb,depth,pointcloud", help="Visualization modes to display, as comma-separated string.")
 parser.add_argument("--robot_ip", type=str, default="192.168.1.10", help="Robot IP.")
 parser.add_argument("--use_fake_hardware", type=str, default="true", help="'true' or 'false'.")
 parser.add_argument("--launch_ros", action="store_true", help="Launch ROS from env startup.")
@@ -32,29 +37,37 @@ TABLE_X0 = -0.0889
 TABLE_Y0 = -0.577
 TABLE_DX = 0.762
 TABLE_DY = 1.2446
-WORLD_BOUNDS = (TABLE_X0, TABLE_Y0, 0, TABLE_X0 + TABLE_DX, TABLE_Y0 + TABLE_DY, 1)
+WORLD_BOUNDS = (TABLE_X0, TABLE_Y0, 0, TABLE_X0 + TABLE_DX, TABLE_Y0 + TABLE_DY, 1) # min_x, min_y, min_z, max_x, max_y, max_z
 
-PROMPTS = {
-    "wooden_block": "a light brown wooden block",
-    "purple_block": "a solid purple block without any writing or markings",
-    "yellow_block": "a solid yellow block without any writing or markings",
-    "green_block": "a solid green block without any writing or markings",
-}
+# PROMPTS = {
+#     "wooden_block": "a light brown wooden block",
+#     "purple_block": "a solid purple block without any writing or markings",
+#     "yellow_block": "a solid yellow block without any writing or markings",
+#     "green_block": "a solid green block without any writing or markings",
+# }
+PROMPTS = [
+    SAMConcept(name="block_8", prompt="wooden block with number 8 on it", exemplar_images=["/home/iras/skillet/data/images/wooden_block_8.png"]),
+    SAMConcept(name="block_7", prompt="wooden block with number 7 on it", exemplar_images=["/home/iras/skillet/data/images/wooden_block_7.png"]),
+    SAMConcept(name="mouse", prompt="a computer mouse", exemplar_images=["/home/iras/skillet/data/images/computer_mouse.jpeg"]),
+]
 
 
 def main() -> None:
     """Visualize RGB + depth color map from _get_latest_rgbd()."""
-    env_cfg = KinovaROS2EnvCfg(
-        robot_ip=args_cli.robot_ip,
-        use_fake_hardware=args_cli.use_fake_hardware,
-        launch_ros=args_cli.launch_ros,
-        device=args_cli.device,
-        num_envs=args_cli.num_envs,
-        ros2_workspace=args_cli.ros2_ws,
-    )
+    if args_cli.realsense_env:
+        env = RealsenseEnv()
+    else:
+        env_cfg = KinovaROS2EnvCfg(
+            robot_ip=args_cli.robot_ip,
+            use_fake_hardware=args_cli.use_fake_hardware,
+            launch_ros=args_cli.launch_ros,
+            device=args_cli.device,
+            num_envs=args_cli.num_envs,
+            ros2_workspace=args_cli.ros2_ws,
+        )
 
-    env = KinovaROS2Env(cfg=env_cfg, ros=setup_ros())
-    env = ROS2SkilletEnv(env)
+        env = KinovaROS2Env(cfg=env_cfg, ros=setup_ros())
+        env = ROS2SkilletEnv(env)
     env.reset()
     rgbd_spec = env.obs_spec_rgbd.unbatched()
 
@@ -62,6 +75,7 @@ def main() -> None:
     perception = Perception(
         env=env,
         obs_spec=rgbd_spec,
+        segmentation=args_cli.segmentation,
         poll_rate=poll_rate_hz,
         device=args_cli.device,
         max_depth_m=args_cli.max_depth_m,
@@ -70,10 +84,11 @@ def main() -> None:
     )
 
     vis = PointCloudVisualizer(world_bounds=WORLD_BOUNDS)
-    perception.set_visualizer(vis, segment_point_cloud=True)
+    if "pointcloud" in args_cli.viz:
+        perception.set_visualizer(vis, segment_point_cloud=True)
     perception.start_cv2_visualization(
-        display_rgb=True, display_depth=True,
-        segment_rgb=True, segment_depth=True,
+        display_rgb="rgb" in args_cli.viz, display_depth="depth" in args_cli.viz,
+        segment_rgb="rgb" in args_cli.viz, segment_depth="depth" in args_cli.viz,
     )
     perception.run_thread()
 

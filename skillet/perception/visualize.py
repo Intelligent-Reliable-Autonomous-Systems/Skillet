@@ -395,9 +395,12 @@ class PointCloudVisualizer:
             cam_meshes = create_camera_model(cam_np)
             pos = cam_np[:3]
             q = cam_np[3:7]
+            roll, pitch, yaw = quat_to_roll_pitch_yaw(q)
             hud_text = (
                 f"Cam: ({pos[0]:+.3f}, {pos[1]:+.3f}, {pos[2]:+.3f})  "
-                f"q=({q[0]:.3f}, {q[1]:.3f}, {q[2]:.3f}, {q[3]:.3f})"
+                f"q=({q[0]:.3f}, {q[1]:.3f}, {q[2]:.3f}, {q[3]:.3f}) \n"
+                f"rpy=({roll:.3f}, {pitch:.3f}, {yaw:.3f})  "
+                f"Tilt: {tilt_from_quat_wxyz(q):.3f}°"
             )
 
         do_camera_setup = self._needs_camera_setup
@@ -450,3 +453,29 @@ class PointCloudVisualizer:
         self._closed = True
         if self._app is not None:
             self._app.quit()
+
+def quat_to_roll_pitch_yaw(quat: np.ndarray) -> tuple[float, float, float]:
+    """Convert a quaternion to roll, pitch, yaw.
+    
+    Args:
+        quat: The quaternion in (w, x, y, z).
+
+    Returns:
+        A tuple containing roll, pitch, yaw.
+    """
+    roll = np.arctan2(2 * (quat[0] * quat[1] + quat[2] * quat[3]), 1 - 2 * (quat[1] * quat[1] + quat[2] * quat[2]))
+    pitch = np.arcsin(2 * (quat[0] * quat[2] - quat[3] * quat[1]))
+    yaw = np.arctan2(2 * (quat[0] * quat[3] + quat[1] * quat[2]), 1 - 2 * (quat[2] * quat[2] + quat[3] * quat[3]))
+    return roll, pitch, yaw
+
+def tilt_from_quat_wxyz(q):
+    w, x, y, z = q
+
+    # right vector z-component from rotation matrix
+    right_z = 2 * (x*z - y*w)
+
+    # tilt angle
+    tilt = np.arcsin(np.clip(right_z, -1.0, 1.0))
+
+    tilt_deg = np.degrees(tilt)
+    return tilt_deg  # degrees

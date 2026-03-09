@@ -16,7 +16,7 @@ import torch
 
 from skillet.perception.object_localization import segmented_rgbd_to_point_cloud
 from skillet.perception.realsense import RealsenseEnv
-from skillet.perception.sam3.sam3 import SAM3
+from skillet.perception.sam3.sam3 import SAM3, SAMConcept
 from skillet.perception.utils import depth_to_colormap_np
 
 if TYPE_CHECKING:
@@ -56,10 +56,11 @@ class Perception:
         self,
         env: Environment | BatchedEnvironment,
         obs_spec: ObservationSpec,
-        poll_rate: float,
+        segmentation: bool = True,
+        poll_rate: float = 8,
         device: str = "cuda",
         max_depth_m: float | None = None,
-        prompts: dict[str, str] | None = None,
+        prompts: list[SAMConcept] | None = None,
         world_bounds: tuple[float, float, float, float, float, float] | None = None,
         sam3_model_path: str | None = None,
         segmentation_fn: Callable[[Mapping[str, Any]], torch.Tensor] | None = None,
@@ -72,13 +73,13 @@ class Perception:
         self.obs_spec = replace(obs_spec, device=device, is_torch=True)
         self.poll_rate = poll_rate
         self.max_depth_m = max_depth_m
-        self.prompts = prompts or {}
-        self._prompt_names = list(self.prompts.keys())
-        self._sam_prompts = list(self.prompts.values())
+        self.prompts = prompts or []
+        self._prompt_names = [prompt.name for prompt in self.prompts]
+        self._sam_prompts = self.prompts
         self.world_bounds = world_bounds
         self.segmentation_fn = segmentation_fn
         self.sam3: SAM3 | None = None
-        if self._sam_prompts:
+        if segmentation and self._sam_prompts:
             self.sam3 = SAM3(model_path=sam3_model_path, device=str(self.device))
 
         self._thread: threading.Thread | None = None

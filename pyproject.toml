@@ -40,8 +40,8 @@ perception = [
     "ultralytics",
     "open3d",
     "pyrealsense2",
+    "pupil-apriltags",
 ]
-muj
 dev = [
     "ruff",
     "mypy",
