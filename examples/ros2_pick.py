@@ -10,10 +10,10 @@ import argparse
 import os
 from typing import TYPE_CHECKING
 
-import torch
 import gymnasium as gym
+import torch
 
-from kinova_tasks.ros2_tasks.kinova.kinova_ros2 import KinovaROS2Env, KinovaROS2EnvCfg
+import skillet_tasks.ros2_tasks  # noqa: F401
 from skillet.agents.policy_over_options import PolicyOverOptionsBatchedAgent
 from skillet.envs.ros2_skillet_env import ROS2SkilletEnv
 from skillet.envs.util import setup_ros
@@ -21,7 +21,7 @@ from skillet.policy.dummy import FixedSequencePolicy, RandomPolicy
 from skillet.policy.ik_ee import PoseAbsIKEEPolicy
 from skillet.skill.high_level.pick import PickSkill
 from skillet.skill.specs import SELECT_OPTIONS_SPEC_BATCHED, XYZ_YAW_Params
-import skillet_tasks.ros2_tasks  # noqa: F401
+from skillet_tasks.ros2_tasks.gen3.gen3_ros2 import Gen3ROS2Env, Gen3ROS2EnvCfg
 
 if TYPE_CHECKING:
     from skillet.core import BatchedSkill
@@ -52,7 +52,7 @@ if args_cli.ros2_ws is None:
 def main() -> None:
     """Run the ROS2 pick example."""
     # create environment
-    env_cfg = KinovaROS2EnvCfg(
+    env_cfg = Gen3ROS2EnvCfg(
         robot_ip=args_cli.robot_ip,
         use_fake_hardware=args_cli.use_fake_hardware,
         launch_ros=args_cli.launch_ros,
@@ -62,7 +62,7 @@ def main() -> None:
         episode_length_s=30.0,
     )
 
-    env = KinovaROS2Env(cfg=env_cfg, ros=setup_ros())
+    env = Gen3ROS2Env(cfg=env_cfg, ros=setup_ros())
     env = ROS2SkilletEnv(env)
     env.reset()
 

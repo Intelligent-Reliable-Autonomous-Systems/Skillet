@@ -165,4 +165,7 @@ class FixedSequencePolicy(UPolicy[TPolicyObs, TAction], Generic[TPolicyObs, TAct
         actions = self._sequence[self._current_index]
         self._current_index = (self._current_index + 1) % self._sequence.shape[0]
         # Use these indices to get the random items
+        if self._action_spec.is_batched:
+            n_envs = self._obs_spec.n_envs_from(obs)
+            return self._action_spec.with_n_envs(n_envs).cast(actions)
         return self._action_spec.cast(actions)

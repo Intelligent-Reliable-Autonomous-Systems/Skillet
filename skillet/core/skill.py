@@ -2,6 +2,7 @@ import abc
 from collections.abc import Sequence
 from enum import IntEnum
 from typing import Generic, TypeAlias, TypeVar
+from typing_extensions import deprecated
 
 import numpy as np
 from jaxtyping import Bool, Float, Int
@@ -82,12 +83,6 @@ class Skill(abc.ABC, Generic[TSkillObs, TAction, TSkillParams]):
     """
 
     @property
-    @abc.abstractmethod
-    def param_dim(self) -> int:
-        """The number of parameters expected by the skill."""
-        raise NotImplementedError
-
-    @property
     def name(self) -> str:
         """The name of the skill."""
         return self.__class__.__name__
@@ -144,7 +139,7 @@ class Skill(abc.ABC, Generic[TSkillObs, TAction, TSkillParams]):
         """Check if the skill failed."""
         return self.status == SkillStatusCodes.FAILED
 
-    @abc.abstractmethod
+    @deprecated("We may consider moving this out of the skill class. Not every workflow requires it.")
     def reward(self, obs: TSkillObs) -> float | Float[ArrayLike, "b"]:  # noqa: F821
         """Compute the dense reward of the skill for reward shaping."""
         raise NotImplementedError
@@ -234,11 +229,6 @@ class CompositeSkill(
         # self._observation_spec = replace(self.skills[0].obs_spec, n_envs=len(env_indices))
         # self._action_spec = replace(self.skills[0].action_spec, n_envs=len(env_indices))
         self._status: Int[ArrayLike, b] | None = None  # noqa: F821
-
-    @property
-    def param_dim(self) -> int:
-        """Return the maximum number of allowable parameters."""
-        return int(np.sum(s.param_dim for s in self.skills))
 
     @property
     def name(self) -> str:

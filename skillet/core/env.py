@@ -22,6 +22,7 @@ from skillet.core.spaces import (
     BatchedObservation,
     Observation,
     ObservationSpec,
+    SpaceSpecification,
     State,
 )
 
@@ -331,35 +332,39 @@ class BatchToSingleWrapper(Environment[TObs, TAction], Generic[TObs, TAction]):
 
     @override
     def supports_observation_spec(self, obs_spec: ObservationSpec[Any]) -> bool:
-        return self.batched_env.supports_observation_spec(obs_spec.replace(is_batched=False))
+        return self.batched_env.supports_observation_spec(obs_spec.unbatched())
 
     @override
     def supports_action_spec(self, action_spec: ActionSpec[Any]) -> bool:
-        return self.batched_env.supports_action_spec(action_spec.replace(is_batched=True))
+        return self.batched_env.supports_action_spec(action_spec.batched())
 
     @override
     def coerce_obs_spec(self, obs_spec: str | ObservationSpec[Any]) -> ObservationSpec[Any]:
-        if isinstance(obs_spec, ObservationSpec):
-            obs_spec = obs_spec.replace(is_batched=True)
+        if isinstance(obs_spec, SpaceSpecification):
+            obs_spec = obs_spec.batched()
         return self.batched_env.coerce_obs_spec(obs_spec).unbatched()
 
     @override
     def coerce_action_spec(self, action_spec: str | ActionSpec[Any]) -> ActionSpec[Any]:
-        if isinstance(action_spec, ActionSpec):
-            action_spec = action_spec.replace(is_batched=True)
+        if isinstance(action_spec, SpaceSpecification):
+            action_spec = action_spec.batched()
         return self.batched_env.coerce_action_spec(action_spec).unbatched()
 
     @override
     def get_observation(self, obs_spec: ObservationSpec[Any] | None = None) -> Any:
         if obs_spec is not None:
-            obs_spec = obs_spec.replace(is_batched=True)
+            obs_spec = obs_spec.batched()
         batched_obs = self.batched_env.get_observation(obs_spec)
-        return self.obs_spec.cast(batched_obs)
+        return obs_spec.cast(batched_obs)
 
     @override
     def get_state(self) -> State:
         batched_state = self.batched_env.get_state()
-        return self.obs_spec.cast(batched_state)
+        try:
+            obs_spec = self.coerce_obs_spec("state")
+        except:
+            obs_spec = self.obs_spec
+        return obs_spec.cast(batched_state)
 
     @override
     def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None) -> tuple[TObs, dict]:
@@ -369,7 +374,7 @@ class BatchToSingleWrapper(Environment[TObs, TAction], Generic[TObs, TAction]):
     @override
     def step(self, action: TAction, action_spec: ActionSpec[Any] | None = None) -> tuple[TObs, float, bool, bool, dict]:
         if action_spec is not None:
-            action = action_spec.replace(is_batched=True)
+            action = action_spec.batched()
         batched_obs, reward, term, trunc, info = self.batched_env.step(action)
         return self.obs_spec.cast(batched_obs), reward[0], term[0], trunc[0], self._unbatch_info(info)
 

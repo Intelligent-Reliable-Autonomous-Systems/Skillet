@@ -29,6 +29,7 @@ from skillet.envs.ros2 import (
     wait_until_ready,
 )
 from skillet.envs.util import configclass
+from skillet.perception.apriltag import CameraLocalizer
 from skillet.policy.specs import JOINTS_SPEC
 
 
@@ -267,7 +268,7 @@ class Gen3ROS2Env(ROS2Env):
             )
             self.curr_gripper_goal = gripper_goal
 
-        if action_spec.name == "joints":
+        if action_spec is None or action_spec.name == "joints":
             self._publish_joint_spec(action, duration)
         elif action_spec.name == "twist_tcp":
             self._publish_twist_tcp_spec(action)
@@ -298,6 +299,8 @@ class Gen3ROS2Env(ROS2Env):
         return np.array([0.0])
 
     def _supports_action_spec(self, action_spec: ActionSpec[Any] | None = None) -> bool:
+        if action_spec is None:
+            return True
         return action_spec.name in [s.name for s in self._action_specs]
 
     def _get_latest_rgbd(self) -> dict[str, Any]:
@@ -346,6 +349,11 @@ class Gen3ROS2Env(ROS2Env):
         # wrapper must convert to wxyz format
         quat_xyzw = np.asarray([q["x"], q["y"], q["z"], q["w"]], dtype=np.float64)
         camera_pos_quat = np.concatenate((translation, quat_xyzw), axis=0)
+        if q["x"] == 0.0 and q["y"] == 0.0 and q["z"] == 0.0:
+            # TODO: This is a hack for fake hardware
+            if not hasattr(self, "_camera_localizer"):
+                self._camera_localizer = CameraLocalizer(apriltag_size_m=0.036, apriltag_id=0)
+            camera_pos_quat = self._camera_localizer.get_camera_pose(rgb=rgb, intrinsic_k=k)
 
         stamp = data.get("stamp", {"sec": 0, "nanosec": 0})
         timestamp = float(stamp.get("sec", 0)) + float(stamp.get("nanosec", 0)) * 1e-9

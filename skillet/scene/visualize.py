@@ -285,6 +285,9 @@ class Open3DVisualizer:
         self._needs_camera_setup = True
         self._closed = False
 
+        self._thread: threading.Thread | None = None
+        self._stop_event = threading.Event()
+
     # ------------------------------------------------------------------
     # Setup
     # ------------------------------------------------------------------

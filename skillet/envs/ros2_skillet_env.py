@@ -81,16 +81,24 @@ class ROS2SkilletEnv(
             "n_envs": -1,
             "device": self.device,
         }
-        assert isinstance(env.observation_space, gym.spaces.Dict)
-        assert "policy" in env.observation_space.keys()
+        if hasattr(env, "single_observation_space") and hasattr(env, "single_action_space"):
+            obs_space = env.single_observation_space
+            action_space = env.single_action_space
+        else:
+            # if using batched spaces, must set n_envs to the number of environments
+            obs_space = env.observation_space
+            action_space = env.action_space
+            spec_args["n_envs"] = env.num_envs
+        assert isinstance(obs_space, gym.spaces.Dict)
+        assert "policy" in obs_space.keys()  # noqa: SIM118
         self.obs_spec_policy = ObservationSpec[Float[torch.Tensor, "b ..."]](
             name="policy",
-            space=env.observation_space["policy"],
+            space=obs_space["policy"],
         ).replace(**spec_args)
         """Specification of the vector observation passed to a low level policy"""
         self.obs_spec_state = ObservationSpec[Mapping[str, Float[torch.Tensor, "b ..."]]](
             name="state",
-            space=env.observation_space,
+            space=obs_space,
         ).replace(**spec_args)
         """Specification of the raw dictionary environment state"""
         self.obs_spec_rgbd = RGBD_SPEC_BATCHED.bind(height=480, width=640).replace(device=self.device)
@@ -112,7 +120,7 @@ class ROS2SkilletEnv(
 
         self.action_spec_joints = ActionSpec[BxM_Action](
             name="joints",
-            space=env.unwrapped.single_action_space,
+            space=action_space,
         ).replace(**spec_args)
         self.action_spec_twist_tcp = ActionSpec[BxM_Action](
             name="twist_tcp",
@@ -178,7 +186,7 @@ class ROS2SkilletEnv(
     @property
     @override
     def obs_spec(self) -> ObservationSpec[BxN_Obs]:
-        return self.obs_spec_policy
+        return self.obs_spec_state
 
     @property
     @override
@@ -238,17 +246,8 @@ class ROS2SkilletEnv(
     # ==================== Public methods ====================
 
     @override
-    def reset(self) -> tuple[BxN_Obs, dict]:
-        """Reset the environment.
-
-        Args:
-            None
-
-        Returns:
-            A tuple containing the observation of observations tensor (N, obs_dim) and info dictionary
-
-        """
-        obs_dict, info = self._env.reset()
+    def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None) -> tuple[BxN_Obs, dict]:
+        obs_dict, info = self._env.reset(seed=seed, options=options)
         self._last_obs = obs_dict
         for k, v in obs_dict.items():
             obs_dict[k] = torch.as_tensor(v, device=self.device).unsqueeze(0)

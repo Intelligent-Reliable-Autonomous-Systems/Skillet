@@ -324,26 +324,38 @@ class SpaceSpecification(Generic[TSpace]):
             if self.is_torch:
                 arr = torch.as_tensor(v, dtype=as_torch_dtype(dtype), device=self.device)
                 if arr.shape != expected_shape:
-                    if self.n_envs != -1 and arr.shape == expected_shape[1:]:
+                    if self.is_batched and self.n_envs != -1 and arr.shape == expected_shape[1:]:
                         arr = arr.unsqueeze(0)
                         arr = arr.expand((self.n_envs, *expected_shape[1:]))
-                    elif self.n_envs == -1 and arr.shape[1:] == expected_shape:
+                    elif self.is_batched and self.n_envs == -1 and arr.shape[1:] == expected_shape:
                         pass  # arr is already batched
+                    elif not self.is_batched and arr.shape[0] == 1 and arr.shape[1:] == expected_shape:
+                        arr = arr.squeeze(0) # can remove a singleton dimension
                     else:
                         raise ValueError(f"Expected shape {expected_shape} (n_envs={self.n_envs}) but got {arr.shape} \
                             for value {key}.")
+                elif self.is_batched and self.n_envs == -1:
+                    raise ValueError(f"Batched space with shape {(-1, *expected_shape)} cannot infer batch size from \
+                            value shape {arr.shape}.")
                 return arr
             # numpy case
+            if isinstance(v, torch.Tensor):
+                v = v.cpu().numpy()
             arr = np.asarray(v, dtype=dtype)
             if arr.shape != expected_shape:
-                if self.n_envs != -1 and arr.shape == expected_shape[1:]:
+                if self.is_batched and self.n_envs != -1 and arr.shape == expected_shape[1:]:
                     arr = arr[np.newaxis, ...]
                     arr = np.broadcast_to(arr, (self.n_envs, *expected_shape[1:]))
-                elif self.n_envs == -1 and arr.shape[1:] == expected_shape:
+                elif self.is_batched and self.n_envs == -1 and arr.shape[1:] == expected_shape:
                     pass  # arr is already batched
+                elif not self.is_batched and arr.shape[0] == 1 and arr.shape[1:] == expected_shape:
+                        arr = np.squeeze(arr, 0) # can remove a singleton dimension
                 else:
                     raise ValueError(f"Expected shape {expected_shape} (n_envs={self.n_envs}) but got {arr.shape} \
                         for value {key}.")
+            elif self.is_batched and self.n_envs == -1:
+                raise ValueError(f"Batched space with shape {(-1, *expected_shape)} cannot infer batch size from \
+                        value shape {arr.shape}.")
             return arr
 
         if isinstance(self.space, gym.spaces.Dict):
@@ -397,7 +409,7 @@ class SpaceSpecification(Generic[TSpace]):
         """Return a new space specification with the batch dimension added."""
         if self.is_batched:
             return self
-        return replace(self, is_batched=True)
+        return replace(self, is_batched=True, n_envs=-1)
 
     def unbatched(self) -> SpaceSpecification[Any]:
         """Return a new space specification with the batch dimension removed."""

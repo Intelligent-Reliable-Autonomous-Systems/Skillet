@@ -21,6 +21,7 @@ from pupil_apriltags import Detector as AprilTagDetector
 from skillet.core import ActionSpec
 from skillet.core.env import _EnvironmentBase
 from skillet.core.spaces import ObservationSpec
+from skillet.perception.apriltag import CameraLocalizer
 from skillet.perception.utils import depth_to_colormap_np
 from skillet.envs.specs import RGBD_SPEC_BATCHED
 
@@ -69,6 +70,8 @@ class RealsenseEnv(_EnvironmentBase):
         self._latest_camera_pose = T_to_xyz_quat_xyzw(self._T_base_to_tag)
         self._apriltag_size_m = apriltag_size_m
         self._apriltag_id = apriltag_id
+
+        self._camera_localizer = CameraLocalizer(apriltag_pose=apriltag_pose, apriltag_size_m=apriltag_size_m, apriltag_id=apriltag_id)
 
         self._profile = self._pipeline.start(self._config)
 
@@ -179,18 +182,18 @@ class RealsenseEnv(_EnvironmentBase):
         # (H, W) uint16 depth image (no conversion to meters here).
         depth = np.asanyarray(depth_frame.get_data()).astype(np.uint16, copy=False)
 
-        camera_params = (self._intrinsic_k[0,0], self._intrinsic_k[1,1], self._intrinsic_k[0,2], self._intrinsic_k[1,2])
-        tag_size_m = self._apriltag_size_m
-        gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
-        detections = self._tag_detector.detect(gray, estimate_tag_pose=True, camera_params=camera_params, tag_size=tag_size_m)
-        if detections:
-            for detection in detections:
-                if detection.tag_id == self._apriltag_id:
-                    T_tag_cam = make_T(detection.pose_R, detection.pose_t.reshape(3))
-                    T_cam_tag = _inv_T(T_tag_cam)
-                    T_base_cam = self._T_base_to_tag @ T_cam_tag
-                    self._latest_camera_pose = T_to_xyz_quat_xyzw(T_base_cam)
-                    break
+        # camera_params = (self._intrinsic_k[0,0], self._intrinsic_k[1,1], self._intrinsic_k[0,2], self._intrinsic_k[1,2])
+        # tag_size_m = self._apriltag_size_m
+        # gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+        # detections = self._tag_detector.detect(gray, estimate_tag_pose=True, camera_params=camera_params, tag_size=tag_size_m)
+        # if detections:
+        #     for detection in detections:
+        #         if detection.tag_id == self._apriltag_id:
+        #             T_tag_cam = make_T(detection.pose_R, detection.pose_t.reshape(3))
+        #             T_cam_tag = _inv_T(T_tag_cam)
+        #             T_base_cam = self._T_base_to_tag @ T_cam_tag
+        #             self._latest_camera_pose = T_to_xyz_quat_xyzw(T_base_cam)
+        #             break
 
         # Wall-clock timestamp in seconds.
         timestamp = float(time.time())
@@ -199,7 +202,7 @@ class RealsenseEnv(_EnvironmentBase):
             "rgb": rgb,
             "depth": depth,
             "intrinsic_k": self._intrinsic_k,
-            "camera_pose": self._latest_camera_pose,
+            "camera_pose": self._camera_localizer.get_camera_pose(rgb=rgb, intrinsic_k=self._intrinsic_k),
             "timestamp": timestamp,
         }
 

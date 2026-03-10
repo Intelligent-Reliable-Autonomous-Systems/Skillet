@@ -28,6 +28,7 @@ class PickBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
             is_torch=False,
             is_batched=False
         )
+        self._status = None
 
     @property
     def name(self) -> str:
@@ -56,7 +57,8 @@ class PickBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
 
     def initiate(self, obs, params):
         """Initiate the skill with the given observation and parameters."""
-        params = self.obs_spec.cast(params)
+        self._status = None
+        params = self.params_spec.cast(params)
         if params < 0 or params >= len(self._scene.objects):
             self._status = SkillStatusCodes.FAILED.value
             return
@@ -67,7 +69,7 @@ class PickBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
         target_xyz = self._target_block.pose[:3]
         yaw = 0 # TODO: get yaw from target block
         target_pose = torch.tensor([target_xyz[0], target_xyz[1], target_xyz[2], yaw])
-        target_pose = self._pick_skill.params_spec.cast(target_pose)
+        target_pose = self._pick_skill.params_spec.with_n_envs(1).cast(target_pose)
         self._pick_skill.initiate(obs, target_pose)
 
     @override
@@ -79,4 +81,6 @@ class PickBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
     @property
     def status(self) -> SkillStatus:
         """The status of the skills."""
+        if self._status is not None:
+            return self._status
         return self._pick_skill.status[0]

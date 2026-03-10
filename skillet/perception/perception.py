@@ -401,24 +401,18 @@ if __name__ == "__main__":
     from skillet.perception.visualize import Open3DVisualizer
 
     env = RealsenseEnv()
-    TABLE_X0 = -0.0889
-    TABLE_Y0 = -0.577
-    TABLE_DX = 0.762
-    TABLE_DY = 1.2446
-    bounds = (TABLE_X0, TABLE_Y0, 0, TABLE_X0 + TABLE_DX, TABLE_Y0 + TABLE_DY, 1)
-    prompts = [
-        SAMConcept(name="wooden_block", prompt="a light brown wooden block"),
-        SAMConcept(name="purple_block", prompt="a solid purple block"),
-        SAMConcept(name="yellow_block", prompt="a solid yellow block"),
-        SAMConcept(name="green_block", prompt="a solid green block"),
-    ]
-    perception = Perception(env, env.obs_spec, Scene(), 8, prompts=prompts)
-
-    # vis = PointCloudVisualizer(world_bounds=bounds)
-    # perception.set_visualizer(vis, segment_point_cloud=True)
-    # perception.start_cv2_visualization(
-    #     display_rgb=True, display_depth=True,
-    #     segment_rgb=True, segment_depth=True,
-    # )
-    perception.run()
-    # vis.run()
+    perception = Perception(env, env.obs_spec, 8, prompts={
+        "wooden_block": "a light brown wooden block",
+        "purple_block": "a solid purple block without any writing or markings",
+        "yellow_block": "a solid yellow block without any writing or markings",
+        "green_block": "a solid green block without any writing or markings",
+        # "plastic_block": "a bright, solid colored plastic block, not brown wood"
+        })
+    perception.start_visualization(
+        display_rgb=True, display_depth=True,
+        segment_rgb=True, segment_depth=True,
+        segment_point_cloud=True
+    )
+    perception.run_thread()
+    while True:
+        time.sleep(0.1)

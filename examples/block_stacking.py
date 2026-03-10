@@ -7,7 +7,6 @@ from typing import Any
 import gymnasium as gym
 import torch
 
-from kinova_tasks.ros2_tasks.kinova.kinova_ros2 import KinovaROS2Env, KinovaROS2EnvCfg
 from skillet.agents.policy_over_options import PolicyOverOptionsAgent, SelectedSkill
 from skillet.core import ActionSpec, ObservationSpec
 from skillet.core.env import BatchToSingleWrapper
@@ -17,13 +16,14 @@ from skillet.envs.util import setup_ros
 from skillet.perception.perception import Perception
 from skillet.perception.realsense import RealsenseEnv
 from skillet.perception.sam3.sam3 import SAMConcept
-from skillet.policy.dummy import FixedSequencePolicy, FixedSkillSequencePolicy
+from skillet.policy.dummy import FixedSequencePolicy
 from skillet.policy.ik_ee import PoseAbsIKEEPolicy
 from skillet.scene.base import Scene
 from skillet.scene.cube import Cube
 from skillet.scene.visualize import Open3DVisualizer
 from skillet.skill.high_level.pick import PickSkill
 from skillet.skill.high_level.pick_block import PickBlockSkill
+from skillet_tasks.ros2_tasks.gen3.gen3_ros2 import Gen3ROS2Env, Gen3ROS2EnvCfg
 
 parser = argparse.ArgumentParser(description="Visualize latest RGB-D frame from ROS2 service.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
@@ -74,22 +74,23 @@ def main() -> None:
     if args_cli.realsense_env:
         env = RealsenseEnv(apriltag_size_m=0.036, apriltag_id=0)
     else:
-        env_cfg = KinovaROS2EnvCfg(
+        env_cfg = Gen3ROS2EnvCfg(
             robot_ip=args_cli.robot_ip,
             use_fake_hardware=args_cli.use_fake_hardware,
             launch_ros=args_cli.launch_ros,
             device=args_cli.device,
             num_envs=args_cli.num_envs,
             ros2_workspace=args_cli.ros2_ws,
+            episode_length_s=30.0,
         )
 
-        env = KinovaROS2Env(cfg=env_cfg, ros=setup_ros())
+        env = Gen3ROS2Env(cfg=env_cfg, ros=setup_ros())
         env = ROS2SkilletEnv(env)
     env = BatchToSingleWrapper[N_Obs, M_Action](env)
     env.reset()
     rgbd_spec = env.coerce_obs_spec("rgb-d")
-    ikee_spec: ObservationSpec[IKEE_Obs] = env.coerce_obs_spec("ikee").batched()
-    low_action_spec: ActionSpec[BxM_Action] = env.coerce_action_spec("policy").batched()
+    ikee_spec: ObservationSpec[IKEE_Obs] = env.coerce_obs_spec("ik_ee").batched()
+    low_action_spec: ActionSpec[BxM_Action] = env.coerce_action_spec("joints").batched()
 
     poll_rate_hz = 1.0 / max(args_cli.period_s, 1e-6)
     perception = Perception(
@@ -111,7 +112,9 @@ def main() -> None:
         segment_rgb="rgb" in args_cli.viz, segment_depth="depth" in args_cli.viz,
     )
     perception.run_thread()
+    # perception.run()
     vis.run_thread()
+    # vis.run()
 
     # Low-level policies
     ik_ee_pose_policy = PoseAbsIKEEPolicy(ikee_spec, low_action_spec)
@@ -120,32 +123,33 @@ def main() -> None:
     pick_skill = PickSkill(
         reach_policy=ik_ee_pose_policy, gripper_policy=None, lift_height=0.23, length=skill_length
     )
-    pick_block_skill = PickBlockSkill(pick_skill)
+    pick_block_skill = PickBlockSkill(scene, pick_skill)
     skills = [pick_block_skill]
 
 
     # High-level policy
     options_spec = ActionSpec[SelectedSkill](
-        space=gym.spaces.MultiDiscrete([len(skills)] * args_cli.num_envs),
+        space=gym.spaces.Discrete(len(skills)),
         name="options",
         is_torch=True,
         is_batched=False,
     )
     policy_over_options = FixedSequencePolicy[Any, SelectedSkill](
-        env.obs_spec,
+        rgbd_spec,
         options_spec,
         torch.as_tensor(
             [0],
-            device=env.device,
+            device=rgbd_spec.device,
             dtype=torch.int32,
         ),
     )
     fixed_param_policy = FixedSequencePolicy(
-        env.obs_spec,
-        env.action_spec,
+        rgbd_spec,
+        pick_block_skill.params_spec,
         torch.as_tensor(
-            [0],
-            device=env.device,
+            [1, 0],
+            device=rgbd_spec.device,
+            dtype=torch.int32,
         ),
     )
 
