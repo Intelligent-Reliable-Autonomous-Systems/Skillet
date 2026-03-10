@@ -29,6 +29,7 @@ from skillet.envs.ros2 import (
     wait_until_ready,
 )
 from skillet.envs.util import configclass
+from skillet.perception.apriltag import CameraLocalizer
 from skillet.policy.specs import JOINTS_SPEC
 
 
@@ -99,7 +100,10 @@ class Gen3ROS2Env(ROS2Env):
         self.robot_description_topic = "/robot_info"
         self.body_pose_topic = "/robot_body_pose_w"
         self.body_vel_topic = "/robot_body_vel_w"
-        self.gripper_topic_type = "control_msgs/action/ParallelGripperCommand"  # TODO this won't work in fake hardware control_msgs/action/GripperCommand"
+        if self.cfg.use_fake_hardware == "true":
+            self.gripper_topic_type = "control_msgs/action/GripperCommand"
+        else:
+            self.gripper_topic_type = "control_msgs/action/ParallelGripperCommand"  # TODO this won't work in fake hardware control_msgs/action/GripperCommand"
         self.moveit_cmd_topic = "/move_action"
         self.moveit_cmd_topic_type = "moveit_msgs/action/MoveGroup"
         self.realsense_snapshot_service = "/table_camera/realsense/get_latest_frame"
@@ -256,10 +260,10 @@ class Gen3ROS2Env(ROS2Env):
         # Send the gripper command first as this will be non-blocking FOR NOW
         gripper_val = float(action[-1])
         gripper_val = max(0, min(gripper_val, 1)) * 0.8
-        # if self.cfg.use_fake_hardware == "true":
-        #     gripper_goal = {"command": {"position": gripper_val, "max_effort": 100.0}}
-        # else:
-        gripper_goal = {"command": {"name": self.cfg.gripper_joint_names, "position": [gripper_val]}}
+        if self.cfg.use_fake_hardware == "true":
+            gripper_goal = {"command": {"position": gripper_val, "max_effort": 100.0}}
+        else:
+            gripper_goal = {"command": {"name": self.cfg.gripper_joint_names, "position": [gripper_val]}}
 
         if gripper_goal != self.curr_gripper_goal:
             _ = self.gripper_client.send_goal(
@@ -267,7 +271,7 @@ class Gen3ROS2Env(ROS2Env):
             )
             self.curr_gripper_goal = gripper_goal
 
-        if action_spec.name == "joints":
+        if action_spec is None or action_spec.name == "joints":
             self._publish_joint_spec(action, duration)
         elif action_spec.name == "twist_tcp":
             self._publish_twist_tcp_spec(action)
@@ -298,6 +302,8 @@ class Gen3ROS2Env(ROS2Env):
         return np.array([0.0])
 
     def _supports_action_spec(self, action_spec: ActionSpec[Any] | None = None) -> bool:
+        if action_spec is None:
+            return True
         return action_spec.name in [s.name for s in self._action_specs]
 
     def _get_latest_rgbd(self) -> dict[str, Any]:
@@ -346,6 +352,11 @@ class Gen3ROS2Env(ROS2Env):
         # wrapper must convert to wxyz format
         quat_xyzw = np.asarray([q["x"], q["y"], q["z"], q["w"]], dtype=np.float64)
         camera_pos_quat = np.concatenate((translation, quat_xyzw), axis=0)
+        if q["x"] == 0.0 and q["y"] == 0.0 and q["z"] == 0.0:
+            # TODO: This is a hack for fake hardware
+            if not hasattr(self, "_camera_localizer"):
+                self._camera_localizer = CameraLocalizer(apriltag_size_m=0.1, apriltag_id=0)
+            camera_pos_quat = self._camera_localizer.get_camera_pose(rgb=rgb, intrinsic_k=k)
 
         stamp = data.get("stamp", {"sec": 0, "nanosec": 0})
         timestamp = float(stamp.get("sec", 0)) + float(stamp.get("nanosec", 0)) * 1e-9

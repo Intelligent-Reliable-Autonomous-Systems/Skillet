@@ -4,7 +4,7 @@ import gymnasium as gym
 import numpy as np
 from jaxtyping import Float, Int
 
-from skillet.agents.policy_over_options import PolicyOverOptionsAgent
+from skillet.agents.policy_over_options import PolicyOverOptionsBatchedAgent
 from skillet.core.env import BasicBatchedEnvironment
 from skillet.core.spaces import (
     ActionSpec,
@@ -53,7 +53,7 @@ if __name__ == "__main__":
     )
     policy_over_options = RandomPolicy[CartPoleObservation, B_Int_HighLevel](env.obs_spec, options_spec)
 
-    policy_over_options_agent = PolicyOverOptionsAgent[CartPoleObservation, CartPoleObservation, CartPoleAction, None](
+    policy_over_options_agent = PolicyOverOptionsBatchedAgent[CartPoleObservation, CartPoleObservation, CartPoleAction, None](
         skills=[zero_skill, random_skill],
         high_level_policy=policy_over_options,
         params_policy=None,

@@ -32,6 +32,7 @@ dependencies = [
     "jaxtyping",
     "typing-extensions",
     "pynput",
+    "tensordict",
     "zmq",
     "scipy",
 ]
@@ -39,6 +40,9 @@ dependencies = [
 [project.optional-dependencies]
 perception = [
     "ultralytics",
+    "open3d",
+    "pyrealsense2",
+    "pupil-apriltags",
 ]
 dev = [
     "ruff",

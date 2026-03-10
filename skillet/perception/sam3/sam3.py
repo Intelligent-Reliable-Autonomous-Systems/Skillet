@@ -10,7 +10,7 @@ Provides:
 from __future__ import annotations
 
 import sys
-from collections import defaultdict
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +27,15 @@ except ImportError:
     print("  pip install ultralytics", file=sys.stderr)
     raise
 
+@dataclass
+class SAMConcept:
+    name: str
+    prompt: str
+    exemplar_images: list[np.ndarray] = field(default_factory=list)
+
+    def __post_init__(self):
+        if self.exemplar_images:
+            self.exemplar_images = [cv2.imread(img) for img in self.exemplar_images]
 
 class SAM3:
     """SAM3 model for image segmentation with concept-based prompting.
@@ -48,7 +57,7 @@ class SAM3:
     def __init__(
         self,
         model_path: str | Path | None = None,  # type: ignore[type-arg]
-        conf: float = 0.25,
+        conf: float = 0.5,
         half: bool = True,
         device: str | None = None,
     ) -> None:
@@ -82,7 +91,10 @@ class SAM3:
         self.device = device
         self._image_hw: tuple[int, int] | None = None  # (H, W) of last set image
 
-    def set_image(self, image: np.ndarray | torch.Tensor) -> None:
+        self._example_bboxes: list[tuple[int, int, int, int]] = []
+        self._pad_height = 80
+
+    def set_image(self, image: np.ndarray | torch.Tensor, prompts: list[SAMConcept]) -> None:
         """Set the current RGB image for subsequent `segment()` calls.
 
         Args:
@@ -105,9 +117,39 @@ class SAM3:
         # self.predictor.set_image(image_tensor.unsqueeze(0))
         image_np = image_tensor.permute(1, 2, 0).cpu().numpy() * 255.0
         image_np = cv2.cvtColor(image_np.astype(np.uint8), cv2.COLOR_RGB2BGR)
-        self.predictor.set_image(image_np)
+        self._image_np = image_np
 
-    def segment(self, prompts: list[str]) -> tuple[torch.Tensor, torch.Tensor]:
+        all_exemplars = []
+        exemplar_sources = []
+        for idx, prompt in enumerate(prompts):
+            for img in prompt.exemplar_images:
+                all_exemplars.append(img)
+                exemplar_sources.append(idx)
+        example_bboxes = []
+
+        if len(all_exemplars) > 0:
+            col = 0
+            pad_height = self._pad_height
+            # Add an 80px black row to the bottom of the image.
+            black_row = np.zeros((pad_height, image_np.shape[1], image_np.shape[2]), dtype=image_np.dtype)
+            padded_img = np.concatenate([image_np, black_row], axis=0)
+            for exemplar_image in all_exemplars:
+                pad_width = int(image_np.shape[1] * pad_height / image_np.shape[0])
+                resized = cv2.resize(exemplar_image, (pad_width, pad_height))
+                example_bbox = (col, image_np.shape[0], col+pad_width, image_np.shape[0]+pad_height)
+                example_bboxes.append(example_bbox)
+                col += pad_width
+                padded_img[example_bbox[1]:example_bbox[3], example_bbox[0]:example_bbox[2]] = resized
+            self._image_np = padded_img
+            #     cv2.rectangle(padded_img, example_bbox[:2], example_bbox[2:], (0, 0, 255), 2)
+            # cv2.imshow("test", padded_img)
+            # cv2.waitKey(0)
+        # self._image_hw = self._image_hw[0] + pad_height, self._image_hw[1]
+        self._example_bboxes = example_bboxes
+        self._exemplar_sources = exemplar_sources
+        self.predictor.set_image(self._image_np)
+
+    def segment(self, prompts: list[SAMConcept]) -> tuple[torch.Tensor, torch.Tensor]:
         """Segment all instances of the given concept prompts on the currently set image.
 
         Returns:
@@ -118,7 +160,8 @@ class SAM3:
         if self._image_hw is None:
             raise RuntimeError("No image set. Call set_image(image) before segment(prompts).")
 
-        results = self.predictor(text=prompts)
+        prompt_texts = [prompt.prompt for prompt in prompts]
+        results = self.predictor(text=prompt_texts)
         h, w = self._image_hw
         device = next(self.predictor.model.parameters()).device
 
@@ -140,8 +183,9 @@ class SAM3:
         prompt_indices_np = self._get_prompt_indices(result, m, prompts)
         prompt_indices = torch.as_tensor(prompt_indices_np, dtype=torch.int64, device=masks.device)
 
-        if masks.shape[1] != h or masks.shape[2] != w:
-            masks = self._resize_masks_torch(masks, h, w)
+        assert masks.shape[1] == h and masks.shape[2] == w, f"Expected masks shape (M, {h}, {w}), got {masks.shape}"
+        # if masks.shape[1] != h or masks.shape[2] != w:
+        #     masks = self._resize_masks_torch(masks, h, w)
 
         masks = (masks > 0.5).to(torch.uint8)
         return masks, prompt_indices
@@ -149,17 +193,73 @@ class SAM3:
     def predict(
         self,
         image: np.ndarray | torch.Tensor,
-        prompts: list[str],
+        prompts: list[SAMConcept],
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Set image then segment with prompts."""
-        self.set_image(image)
-        return self.segment(prompts)
+        self.set_image(image, prompts)
+        if len(self._example_bboxes) == 0:
+            return self.segment(prompts)
+        else:
+            return self.segment_exemplars(prompts)
+
+    def segment_exemplars(self, prompts: list[SAMConcept]) -> tuple[torch.Tensor, torch.Tensor]:
+        """Segment all instances of the given concept prompts on the currently set image.
+
+        Returns:
+            - masks: (M, H, W) torch.uint8 on model device
+            - prompt_indices: (M,) torch.int64 on model device; indexes into `prompts`
+
+        """
+        if self._image_hw is None:
+            raise RuntimeError("No image set. Call set_image(image) before segment(prompts).")
+
+        all_results = []
+        prompt_indices = []
+        features = self.predictor.features
+        for prompt_idx, prompt in enumerate(prompts):
+            labels = [int(i == prompt_idx) for i in self._exemplar_sources]
+            masks, boxes = self.predictor.inference_features(
+                features,
+                src_shape=self._image_np.shape,
+                text=[prompt.prompt],
+                bboxes=self._example_bboxes, 
+                labels=labels,
+            )
+            print(prompt_idx, 'labels', labels, boxes[:, 4:6])
+            if masks is not None and masks.shape[0] > 0:
+                all_results.append(masks)
+                for _ in range(masks.shape[0]):
+                    prompt_indices.append(prompt_idx)
+        h, w = self._image_hw
+        device = next(self.predictor.model.parameters()).device
+
+        if not all_results:
+            return (
+                torch.zeros((0, h, w), dtype=torch.uint8, device=device),
+                torch.zeros((0,), dtype=torch.int64, device=device),
+            )
+
+        result = torch.cat(all_results, dim=0)
+        if len(result) == 0:
+            return (
+                torch.zeros((0, h, w), dtype=torch.uint8, device=device),
+                torch.zeros((0,), dtype=torch.int64, device=device),
+            )
+        
+        prompt_indices = torch.as_tensor(prompt_indices, dtype=torch.int64, device=masks.device)
+
+        if result.shape[1] != h + self._pad_height or result.shape[2] != w:
+            result = self._resize_masks_torch(result, h + self._pad_height, w)
+
+        result = (result > 0.5).to(torch.uint8)
+        result = result[:, :h, :w]
+        return result, prompt_indices
 
     def _get_prompt_indices(
         self,
         result: Any,  # noqa: ANN401
         num_masks: int,
-        prompts: list[str],
+        prompts: list[SAMConcept],
     ) -> np.ndarray:
         """Map each mask to its prompt index.
 
@@ -173,35 +273,11 @@ class SAM3:
 
         """
         # result.names can be dict (class_id -> prompt) or list (index -> prompt)
-        names = result.names
-        boxes = result.boxes
+        # prompt_texts = [prompt.prompt for prompt in prompts]
+        # p_idx = [prompt_texts.index(name) for name in result.names]
+        result_indices = [int(result.boxes.cls[i].item()) for i in range(num_masks)]
 
-        prompt_indices = []
-
-        for i in range(num_masks):
-            # Get class ID for this mask
-            cls_id = int(boxes.cls[i].item()) if boxes.cls is not None and i < len(boxes.cls) else i
-
-            # Map class ID to prompt
-            if isinstance(names, dict):
-                prompt_text = names.get(cls_id, "")
-            elif isinstance(names, (list, tuple)) and 0 <= cls_id < len(names):
-                prompt_text = str(names[cls_id])
-            else:
-                prompt_text = ""
-
-            # Find prompt index
-            try:
-                prompt_idx = prompts.index(prompt_text)
-            except ValueError:
-                # If prompt not found, try to match by index
-                # SAM3 may return masks in prompt order
-                prompt_idx = cls_id if cls_id < len(prompts) else 0
-
-            prompt_indices.append(prompt_idx)
-
-        return np.array(prompt_indices, dtype=np.int64)
-
+        return np.array(result_indices, dtype=np.int64)
     def _resize_masks_torch(
         self,
         masks: torch.Tensor,
@@ -232,208 +308,3 @@ class SAM3:
             )
             resized.append(resized_mask.astype(np.float32) / 255.0)
         return np.stack(resized, axis=0)
-
-
-class SAM3VideoTracker:
-    """Online/streaming SAM-3 video tracker with persistent object IDs.
-
-    Wraps ``SAM3VideoSemanticPredictor`` so that frames can be fed one at a
-    time (e.g. from a ROS topic or webcam) instead of requiring a complete
-    video file up-front.
-
-    Internally the Ultralytics predictor's ``_run_single_frame_inference``
-    method is invoked directly, bypassing the dataset/batch loop.
-
-    Example:
-        >>> tracker = SAM3VideoTracker(prompts=["cup", "bottle"])
-        >>> for rgb_frame in camera:                       # (H, W, 3) uint8 RGB
-        ...     obj_ids, masks, cls_indices = tracker.track(rgb_frame)
-        ...     # obj_ids:     (M,) int64 - persistent IDs across frames
-        ...     # masks:       (M, H, W) bool
-        ...     # cls_indices: (M,) int64 - indexes into prompts list
-
-    """
-
-    _MAX_FRAMES = 10_000_000
-
-    def __init__(
-        self,
-        prompts: list[str],
-        model_path: str | Path | None = None,
-        imgsz: int = 1008,
-        conf: float = 0.25,
-        half: bool = True,
-        device: str | None = None,
-    ) -> None:
-        """Initialize online SAM-3 video tracker.
-
-        Args:
-            prompts: Text concept prompts (e.g. ``["cup", "bottle"]``).
-            model_path: Path to ``sam3.pt``. Defaults to ``data/models/sam3.pt``.
-            imgsz: Square input resolution for the model.
-            conf: Confidence threshold for detections.
-            half: Use FP16 inference.
-            device: Torch device string (e.g. ``"cuda:0"``).
-
-        """
-        if model_path is None:
-            repo_root = Path(__file__).resolve().parents[3]
-            model_path = repo_root / "data" / "models" / "sam3.pt"
-
-        self.prompts = prompts
-        self._frame_idx = 0
-
-        overrides: dict[str, Any] = {
-            "conf": conf,
-            "task": "segment",
-            "mode": "predict",
-            "imgsz": imgsz,
-            "model": str(model_path),
-            "half": half,
-            "device": device or None,
-            "save": False,
-            "verbose": False,
-        }
-        self._pred = SAM3VideoSemanticPredictor(overrides=overrides)
-        self._pred.setup_model()
-        self._setup_geometry(imgsz)
-        self._initialized = False
-
-    def _setup_geometry(self, imgsz: int) -> None:
-        """Configure image sizes and backbone feature map sizes."""
-        sz = (imgsz, imgsz) if isinstance(imgsz, int) else tuple(imgsz)
-        self._pred.imgsz = sz
-        self._pred.tracker.imgsz = sz
-        self._pred.tracker.model.set_imgsz(sz)
-        stride = self._pred.stride
-        self._pred.tracker._bb_feat_sizes = [[int(x / (stride * i)) for x in sz] for i in [1 / 4, 1 / 2, 1]]
-        self._pred.interpol_size = self._pred.tracker.model.memory_encoder.mask_downsampler.interpol_size
-
-    def _init_state(self) -> None:
-        """Manually build inference_state, bypassing the dataset requirement."""
-        self._pred.inference_state = {
-            "num_frames": self._MAX_FRAMES,
-            "tracker_inference_states": [],
-            "tracker_metadata": {},
-            "text_prompt": None,
-            "per_frame_geometric_prompt": defaultdict(lambda: None),
-        }
-        self._initialized = False
-        self._frame_idx = 0
-
-    def _preprocess_image(self, image: np.ndarray) -> torch.Tensor:
-        """Letterbox + normalize an HWC uint8 RGB numpy image to a BCHW tensor.
-
-        Replicates the SAM3SemanticPredictor preprocessing chain:
-        ``LetterBox(scale_fill=True)`` -> BGR flip -> normalize ``(x - 127.5) / 127.5``.
-        """
-        from ultralytics.data.augment import LetterBox
-
-        if image.dtype != np.uint8:
-            image = np.clip(image, 0, 255).astype(np.uint8)
-
-        letterbox = LetterBox(self._pred.imgsz, auto=False, center=False, scale_fill=True)
-        im = letterbox(image=image)
-
-        im = im[..., ::-1].transpose((2, 0, 1))  # HWC RGB -> CHW BGR
-        im = np.ascontiguousarray(im)
-        im_t = torch.from_numpy(im).to(self._pred.device)
-        im_t = (im_t - self._pred.mean) / self._pred.std
-        im_t = im_t.half() if self._pred.model.fp16 else im_t.float()
-        return im_t.unsqueeze(0)  # (1, 3, H, W)
-
-    @torch.inference_mode()
-    def track(
-        self,
-        image: np.ndarray | torch.Tensor,
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Process one frame and return tracked objects.
-
-        Args:
-            image: RGB image as ``(H, W, 3)`` uint8 numpy array **or**
-                ``(3, H, W)`` torch tensor (uint8 or float [0, 1]).
-
-        Returns:
-            obj_ids: ``(M,)`` int64 tensor of persistent object IDs.
-            masks:   ``(M, H, W)`` bool tensor at original image resolution.
-            cls_indices: ``(M,)`` int64 tensor indexing into ``self.prompts``.
-
-        """
-        if isinstance(image, torch.Tensor):
-            image = self._tensor_to_hwc_uint8(image)
-
-        orig_h, orig_w = image.shape[:2]
-        im = self._preprocess_image(image)
-
-        if not self._initialized:
-            self._init_state()
-
-        state = self._pred.inference_state
-        state["im"] = im
-
-        # Fake self.batch so that add_prompt / _prepare_geometric_prompts can
-        # read the original image shape from self.batch[1][0].shape[:2].
-        self._pred.batch = (
-            ["<online>"],  # paths
-            [image],  # original images (list of HWC numpy)
-            [""],  # string descriptors
-        )
-
-        if not self._initialized:
-            # add_prompt runs _run_single_frame_inference internally
-            _, out = self._pred.add_prompt(
-                frame_idx=self._frame_idx,
-                text=self.prompts,
-            )
-            self._initialized = True
-        else:
-            out = self._pred._run_single_frame_inference(self._frame_idx, reverse=False)
-
-        self._frame_idx += 1
-
-        return self._build_result(out, orig_h, orig_w)
-
-    def _build_result(
-        self, out: dict[str, Any], orig_h: int, orig_w: int
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Convert raw predictor output into (obj_ids, masks, cls_indices)."""
-        obj_id_to_mask = out["obj_id_to_mask"]
-        obj_id_to_score = out["obj_id_to_score"]
-        obj_id_to_cls = out.get("obj_id_to_cls", {})
-        device = self._pred.device
-        conf = self._pred.args.conf
-
-        if not obj_id_to_mask:
-            return (
-                torch.zeros(0, dtype=torch.int64, device=device),
-                torch.zeros(0, orig_h, orig_w, dtype=torch.bool, device=device),
-                torch.zeros(0, dtype=torch.int64, device=device),
-            )
-
-        sorted_ids = sorted(obj_id_to_mask.keys())
-        low_res = torch.cat([obj_id_to_mask[oid] for oid in sorted_ids], dim=0)
-        masks_full = F.interpolate(low_res.float().unsqueeze(0), (orig_h, orig_w), mode="bilinear")[0] > 0.5
-
-        scores = torch.tensor([obj_id_to_score[oid] for oid in sorted_ids], device=device)
-        cls_raw = torch.tensor(
-            [obj_id_to_cls.get(oid, 0) for oid in sorted_ids],
-            dtype=torch.int64,
-            device=device,
-        )
-        ids_t = torch.tensor(sorted_ids, dtype=torch.int64, device=device)
-
-        keep = (scores > conf) & masks_full.any(dim=(1, 2))
-        return ids_t[keep], masks_full[keep], cls_raw[keep]
-
-    def reset(self) -> None:
-        """Reset tracker state (call when scene changes)."""
-        self._init_state()
-
-    @staticmethod
-    def _tensor_to_hwc_uint8(image: torch.Tensor) -> np.ndarray:
-        t = image.detach()
-        if t.ndim == 3 and t.shape[0] == 3:
-            t = t.permute(1, 2, 0)
-        if t.dtype != torch.uint8:
-            t = (t.float().clamp(0.0, 1.0) * 255.0).to(torch.uint8)
-        return t.cpu().numpy()

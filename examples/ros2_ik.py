@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from skillet.envs.specs import BxM_Action, IKEE_Obs
 
 import skillet_tasks.ros2_tasks  # noqa: F401
-from skillet.agents.policy_over_options import PolicyOverOptionsAgent
+from skillet.agents.policy_over_options import PolicyOverOptionsBatchedAgent
 from skillet.envs.ros2_skillet_env import ROS2SkilletEnv
 from skillet.envs.util import parse_ros2_env_cfg, setup_ros
 from skillet.policy.dummy import FixedSequencePolicy, RandomPolicy
@@ -94,7 +94,7 @@ def main() -> None:
     )
     policy_over_options = RandomPolicy(env.obs_spec, options_spec)
 
-    policy_over_options_agent = PolicyOverOptionsAgent(
+    policy_over_options_agent = PolicyOverOptionsBatchedAgent(
         skills=skills,
         high_level_policy=policy_over_options,
         params_policy=fixed_param_policy,

@@ -76,7 +76,7 @@ def main() -> None:
     # Parameters policy
     fixed_param_policy = FixedSequencePolicy(
         env.obs_spec,
-        env.action_spec,
+        pick_skill.params_spec,
         torch.as_tensor(
             [
                 [0.3, -0.2, 0.03, 0.0],

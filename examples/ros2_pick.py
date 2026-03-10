@@ -10,21 +10,23 @@ import argparse
 import os
 from typing import TYPE_CHECKING
 
-import torch
 import gymnasium as gym
+import torch
 
-from skillet.agents.policy_over_options import PolicyOverOptionsAgent
+import skillet_tasks.ros2_tasks  # noqa: F401
+from skillet.agents.policy_over_options import PolicyOverOptionsBatchedAgent
 from skillet.envs.ros2_skillet_env import ROS2SkilletEnv
-from skillet.envs.specs import BxM_Action, IKEE_Obs
-from skillet.envs.util import parse_ros2_env_cfg, setup_ros
+from skillet.envs.util import setup_ros
 from skillet.policy.dummy import FixedSequencePolicy, RandomPolicy
 from skillet.policy.ik_ee import PoseAbsIKEEPolicy
 from skillet.skill.high_level.pick import PickSkill
 from skillet.skill.specs import SELECT_OPTIONS_SPEC_BATCHED, XYZ_YAW_Params
-import skillet_tasks.ros2_tasks  # noqa: F401
+from skillet_tasks.ros2_tasks.gen3.gen3_ros2 import Gen3ROS2Env, Gen3ROS2EnvCfg
+from skillet_tasks.ros2_tasks.gen3_lite.gen3lite_ros2 import Gen3LiteROS2Env, Gen3LiteROS2EnvCfg
 
 if TYPE_CHECKING:
     from skillet.core import BatchedSkill
+    from skillet.envs.specs import BxM_Action, IKEE_Obs
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Main ROS2 executor file.")
@@ -51,14 +53,28 @@ if args_cli.ros2_ws is None:
 def main() -> None:
     """Run the ROS2 pick example."""
     # create environment
-    env_cfg = parse_ros2_env_cfg(
-        args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs, ros2_workspace=args_cli.ros2_ws
-    )
-    env_cfg.robot_ip = args_cli.robot_ip
-    env_cfg.use_fake_hardware = args_cli.use_fake_hardware
-    env_cfg.launch_ros = args_cli.launch_ros
+    # env_cfg = Gen3ROS2EnvCfg(
+    #     robot_ip=args_cli.robot_ip,
+    #     use_fake_hardware=args_cli.use_fake_hardware,
+    #     launch_ros=args_cli.launch_ros,
+    #     device=args_cli.device,
+    #     num_envs=args_cli.num_envs,
+    #     ros2_workspace=args_cli.ros2_ws,
+    #     episode_length_s=30.0,
+    # )
 
-    env = gym.make(args_cli.task, cfg=env_cfg, ros=setup_ros())
+    # env = Gen3ROS2Env(cfg=env_cfg, ros=setup_ros())
+    env_cfg = Gen3LiteROS2EnvCfg(
+        robot_ip=args_cli.robot_ip,
+        use_fake_hardware=args_cli.use_fake_hardware,
+        launch_ros=args_cli.launch_ros,
+        device=args_cli.device,
+        num_envs=args_cli.num_envs,
+        ros2_workspace=args_cli.ros2_ws,
+        episode_length_s=30.0,
+    )
+
+    env = Gen3LiteROS2Env(cfg=env_cfg, ros=setup_ros())
     env = ROS2SkilletEnv(env)
     env.reset()
 
@@ -76,7 +92,7 @@ def main() -> None:
     # Parameters policy
     fixed_param_policy = FixedSequencePolicy(
         env.obs_spec,
-        env.action_spec,
+        pick_skill.params_spec,
         torch.as_tensor(
             [
                 [0.5, -0.2, 0.03, 0.0],
@@ -95,7 +111,7 @@ def main() -> None:
     )
     policy_over_options = RandomPolicy(env.obs_spec, options_spec)
 
-    policy_over_options_agent = PolicyOverOptionsAgent(
+    policy_over_options_agent = PolicyOverOptionsBatchedAgent(
         skills=skills,
         high_level_policy=policy_over_options,
         params_policy=fixed_param_policy,
