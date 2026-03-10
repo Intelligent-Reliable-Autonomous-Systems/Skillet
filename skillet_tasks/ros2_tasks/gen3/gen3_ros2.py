@@ -100,7 +100,10 @@ class Gen3ROS2Env(ROS2Env):
         self.robot_description_topic = "/robot_info"
         self.body_pose_topic = "/robot_body_pose_w"
         self.body_vel_topic = "/robot_body_vel_w"
-        self.gripper_topic_type = "control_msgs/action/ParallelGripperCommand"  # TODO this won't work in fake hardware control_msgs/action/GripperCommand"
+        if self.cfg.use_fake_hardware == "true":
+            self.gripper_topic_type = "control_msgs/action/GripperCommand"
+        else:
+            self.gripper_topic_type = "control_msgs/action/ParallelGripperCommand"  # TODO this won't work in fake hardware control_msgs/action/GripperCommand"
         self.moveit_cmd_topic = "/move_action"
         self.moveit_cmd_topic_type = "moveit_msgs/action/MoveGroup"
         self.realsense_snapshot_service = "/table_camera/realsense/get_latest_frame"
@@ -257,10 +260,10 @@ class Gen3ROS2Env(ROS2Env):
         # Send the gripper command first as this will be non-blocking FOR NOW
         gripper_val = float(action[-1])
         gripper_val = max(0, min(gripper_val, 1)) * 0.8
-        # if self.cfg.use_fake_hardware == "true":
-        #     gripper_goal = {"command": {"position": gripper_val, "max_effort": 100.0}}
-        # else:
-        gripper_goal = {"command": {"name": self.cfg.gripper_joint_names, "position": [gripper_val]}}
+        if self.cfg.use_fake_hardware == "true":
+            gripper_goal = {"command": {"position": gripper_val, "max_effort": 100.0}}
+        else:
+            gripper_goal = {"command": {"name": self.cfg.gripper_joint_names, "position": [gripper_val]}}
 
         if gripper_goal != self.curr_gripper_goal:
             _ = self.gripper_client.send_goal(
@@ -352,7 +355,7 @@ class Gen3ROS2Env(ROS2Env):
         if q["x"] == 0.0 and q["y"] == 0.0 and q["z"] == 0.0:
             # TODO: This is a hack for fake hardware
             if not hasattr(self, "_camera_localizer"):
-                self._camera_localizer = CameraLocalizer(apriltag_size_m=0.036, apriltag_id=0)
+                self._camera_localizer = CameraLocalizer(apriltag_size_m=0.1, apriltag_id=0)
             camera_pos_quat = self._camera_localizer.get_camera_pose(rgb=rgb, intrinsic_k=k)
 
         stamp = data.get("stamp", {"sec": 0, "nanosec": 0})

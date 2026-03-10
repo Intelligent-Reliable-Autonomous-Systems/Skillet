@@ -2,6 +2,7 @@
 
 import argparse
 import os
+import sys
 from typing import Any
 
 import gymnasium as gym
@@ -24,6 +25,7 @@ from skillet.scene.visualize import Open3DVisualizer
 from skillet.skill.high_level.pick import PickSkill
 from skillet.skill.high_level.pick_block import PickBlockSkill
 from skillet_tasks.ros2_tasks.gen3.gen3_ros2 import Gen3ROS2Env, Gen3ROS2EnvCfg
+from skillet_tasks.ros2_tasks.gen3_lite.gen3lite_ros2 import Gen3LiteROS2Env, Gen3LiteROS2EnvCfg
 
 parser = argparse.ArgumentParser(description="Visualize latest RGB-D frame from ROS2 service.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
@@ -31,7 +33,7 @@ parser.add_argument("--device", type=str, default="cuda", help="Device to use")
 parser.add_argument(
     "--ros2_ws", type=str, default=None, help="Absolute path to ROS2 workspace containing bringup files"
 )
-parser.add_argument("--segmentation", action=argparse.BooleanOptionalAction, default=True, help="Use segmentation.")
+parser.add_argument("--segmentation", action=argparse.BooleanOptionalAction, default=False, help="Use segmentation.")
 parser.add_argument("--realsense_env", action="store_true", help="Use RealSense camera environment.")
 parser.add_argument("--viz", type=str, default="rgb,depth,pointcloud", help="Visualization modes to display, as comma-separated string.")
 parser.add_argument("--robot_ip", type=str, default="192.168.1.10", help="Robot IP.")
@@ -53,11 +55,12 @@ TABLE_DY = 1.2446
 
 def main() -> None:
     """Visualize RGB + depth color map from _get_latest_rgbd()."""
-    cube_0 = Cube(size=0.04, face_apriltags=[{"face": "top", "size": 0.036, "id": 0}])
-    cube_1 = Cube(size=0.04, face_apriltags=[{"face": "front", "size": 0.036, "id": 3}])
+    cube_0 = Cube(size=0.041, face_apriltags=[{"face": "top", "size": 0.036, "id": 1}])
+    cube_1 = Cube(size=0.041, face_apriltags=[{"face": "front", "size": 0.036, "id": 2}])
+    cube_2 = Cube(size=0.041, face_apriltags=[{"face": "front", "size": 0.036, "id": 4}])
 
     world_bounds = (TABLE_X0, TABLE_Y0, 0, TABLE_X0 + TABLE_DX, TABLE_Y0 + TABLE_DY, 1) # min_x, min_y, min_z, max_x, max_y, max_z
-    scene = Scene(objects=[cube_0, cube_1], closed_set=True, bounds=world_bounds)
+    scene = Scene(objects=[cube_0, cube_1, cube_2], closed_set=True, bounds=world_bounds)
 
     # PROMPTS = {
     #     "wooden_block": "a light brown wooden block",
@@ -72,9 +75,20 @@ def main() -> None:
     ]
 
     if args_cli.realsense_env:
-        env = RealsenseEnv(apriltag_size_m=0.036, apriltag_id=0)
+        env = RealsenseEnv(apriltag_size_m=0.1, apriltag_id=0)
     else:
-        env_cfg = Gen3ROS2EnvCfg(
+        # env_cfg = Gen3ROS2EnvCfg(
+        #     robot_ip=args_cli.robot_ip,
+        #     use_fake_hardware=args_cli.use_fake_hardware,
+        #     launch_ros=args_cli.launch_ros,
+        #     device=args_cli.device,
+        #     num_envs=args_cli.num_envs,
+        #     ros2_workspace=args_cli.ros2_ws,
+        #     episode_length_s=30.0,
+        # )
+
+        # env = Gen3ROS2Env(cfg=env_cfg, ros=setup_ros())
+        env_cfg = Gen3LiteROS2EnvCfg(
             robot_ip=args_cli.robot_ip,
             use_fake_hardware=args_cli.use_fake_hardware,
             launch_ros=args_cli.launch_ros,
@@ -84,13 +98,13 @@ def main() -> None:
             episode_length_s=30.0,
         )
 
-        env = Gen3ROS2Env(cfg=env_cfg, ros=setup_ros())
+        env = Gen3LiteROS2Env(cfg=env_cfg, ros=setup_ros())
         env = ROS2SkilletEnv(env)
-    env = BatchToSingleWrapper[N_Obs, M_Action](env)
-    env.reset()
+        ikee_spec: ObservationSpec[IKEE_Obs] = env.coerce_obs_spec("ik_ee").batched()
+        low_action_spec: ActionSpec[BxM_Action] = env.coerce_action_spec("joints").batched()
+        env = BatchToSingleWrapper[N_Obs, M_Action](env)
+        env.reset()
     rgbd_spec = env.coerce_obs_spec("rgb-d")
-    ikee_spec: ObservationSpec[IKEE_Obs] = env.coerce_obs_spec("ik_ee").batched()
-    low_action_spec: ActionSpec[BxM_Action] = env.coerce_action_spec("joints").batched()
 
     poll_rate_hz = 1.0 / max(args_cli.period_s, 1e-6)
     perception = Perception(
@@ -113,8 +127,10 @@ def main() -> None:
     )
     perception.run_thread()
     # perception.run()
+    if args_cli.realsense_env:
+        vis.run()
+        sys.exit(0)
     vis.run_thread()
-    # vis.run()
 
     # Low-level policies
     ik_ee_pose_policy = PoseAbsIKEEPolicy(ikee_spec, low_action_spec)

@@ -22,6 +22,7 @@ from skillet.policy.ik_ee import PoseAbsIKEEPolicy
 from skillet.skill.high_level.pick import PickSkill
 from skillet.skill.specs import SELECT_OPTIONS_SPEC_BATCHED, XYZ_YAW_Params
 from skillet_tasks.ros2_tasks.gen3.gen3_ros2 import Gen3ROS2Env, Gen3ROS2EnvCfg
+from skillet_tasks.ros2_tasks.gen3_lite.gen3lite_ros2 import Gen3LiteROS2Env, Gen3LiteROS2EnvCfg
 
 if TYPE_CHECKING:
     from skillet.core import BatchedSkill
@@ -52,7 +53,18 @@ if args_cli.ros2_ws is None:
 def main() -> None:
     """Run the ROS2 pick example."""
     # create environment
-    env_cfg = Gen3ROS2EnvCfg(
+    # env_cfg = Gen3ROS2EnvCfg(
+    #     robot_ip=args_cli.robot_ip,
+    #     use_fake_hardware=args_cli.use_fake_hardware,
+    #     launch_ros=args_cli.launch_ros,
+    #     device=args_cli.device,
+    #     num_envs=args_cli.num_envs,
+    #     ros2_workspace=args_cli.ros2_ws,
+    #     episode_length_s=30.0,
+    # )
+
+    # env = Gen3ROS2Env(cfg=env_cfg, ros=setup_ros())
+    env_cfg = Gen3LiteROS2EnvCfg(
         robot_ip=args_cli.robot_ip,
         use_fake_hardware=args_cli.use_fake_hardware,
         launch_ros=args_cli.launch_ros,
@@ -62,7 +74,7 @@ def main() -> None:
         episode_length_s=30.0,
     )
 
-    env = Gen3ROS2Env(cfg=env_cfg, ros=setup_ros())
+    env = Gen3LiteROS2Env(cfg=env_cfg, ros=setup_ros())
     env = ROS2SkilletEnv(env)
     env.reset()
 

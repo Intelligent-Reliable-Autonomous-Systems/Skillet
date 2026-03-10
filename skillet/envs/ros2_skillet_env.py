@@ -57,6 +57,7 @@ class ROS2SkilletEnv(
             None
 
         """
+        env = env.unwrapped
         self._env = env.unwrapped
         self.observation_space = env.observation_space
         self.action_space = env.action_space
