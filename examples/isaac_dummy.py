@@ -22,7 +22,7 @@ import torch
 from isaaclab.app import AppLauncher
 from jaxtyping import Float, Int
 
-from skillet.agents.policy_over_options import PolicyOverOptionsAgent
+from skillet.agents.policy_over_options import PolicyOverOptionsBatchedAgent
 from skillet.core.spaces import ActionSpec, ObservationSpec
 from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
 from skillet.policy.dummy import RandomPolicy, ZeroPolicy
@@ -102,7 +102,7 @@ def main() -> None:
     )
     policy_over_options = RandomPolicy[BxN_Obs, B_Int_HighLevel](observation_spec, options_spec)
 
-    policy_over_options_agent = PolicyOverOptionsAgent[BxN_Obs, BxM_Action, B_Int_HighLevel, None](
+    policy_over_options_agent = PolicyOverOptionsBatchedAgent[BxN_Obs, BxM_Action, B_Int_HighLevel, None](
         skills=[zero_skill, random_skill],
         high_level_policy=policy_over_options,
         params_policy=None,

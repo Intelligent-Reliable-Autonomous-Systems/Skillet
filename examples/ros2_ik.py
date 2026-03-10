@@ -45,21 +45,13 @@ import torch
 from jaxtyping import Float, Int
 
 import kinova_tasks.ros2_tasks  # noqa: F401
-from skillet.agents.policy_over_options import PolicyOverOptionsAgent
+from skillet.agents.policy_over_options import PolicyOverOptionsBatchedAgent
 from skillet.core.spaces import ActionSpec, ObservationSpec
 from skillet.envs.ros2_env_wrapper import ROS2EnvWrapper
 from skillet.envs.util import parse_ros2_env_cfg, setup_ros
 from skillet.policy.dummy import FixedSequencePolicy, FixedSkillSequencePolicy
 from skillet.policy.ik_ee import PosAbsIKEEPolicy, PoseAbsIKEEPolicy, XYZRPYAbsIKEEPolicy
 from skillet.policy.joint_pos import GripperPolicy, JointPosPolicy
-
-BxN_Obs = Float[torch.Tensor, "b n"]
-"""Environment observation: torch.Tensor[(b, n), float]"""
-BxM_Action = Float[torch.Tensor, "b m"]
-"""Environment action: torch.Tensor[(b, m), float]"""
-B_Int_HighLevel = Int[torch.Tensor, "b"]
-"""Selected skills action: torch.Tensor[(b,), int]"""
-
 
 def main() -> None:
     """Test the executor within the IsaacLab/IsaacSim framework."""
@@ -165,7 +157,7 @@ def main() -> None:
         ),
     )
 
-    policy_over_options_agent = PolicyOverOptionsAgent[BxN_Obs, BxM_Action, B_Int_HighLevel, None](
+    policy_over_options_agent = PolicyOverOptionsBatchedAgent[BxN_Obs, BxM_Action, B_Int_HighLevel, None](
         skills=skills,
         high_level_policy=policy_over_options,
         params_policy=fixed_param_policy,

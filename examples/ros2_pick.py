@@ -12,10 +12,9 @@ from typing import TYPE_CHECKING
 
 import torch
 
-from kinova_tasks.ros2_tasks.kinova.kinova_reach_ros2 import KinovaROS2ReachEnv, KinovaROS2ReachEnvCfg
-from skillet.agents.policy_over_options import PolicyOverOptionsAgent
+from kinova_tasks.ros2_tasks.kinova.kinova_ros2 import KinovaROS2Env, KinovaROS2EnvCfg
+from skillet.agents.policy_over_options import PolicyOverOptionsBatchedAgent
 from skillet.envs.ros2_skillet_env import ROS2SkilletEnv
-from skillet.envs.specs import BxM_Action, BxN_Obs, IKEE_Obs
 from skillet.envs.util import setup_ros
 from skillet.policy.dummy import FixedSequencePolicy, RandomPolicy
 from skillet.policy.ik_ee import PoseAbsIKEEPolicy
@@ -24,6 +23,7 @@ from skillet.skill.specs import SELECT_OPTIONS_SPEC_BATCHED, XYZ_YAW_Params
 
 if TYPE_CHECKING:
     from skillet.core import BatchedSkill
+    from skillet.envs.specs import BxM_Action, IKEE_Obs
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Main ROS2 executor file.")
@@ -49,7 +49,7 @@ if args_cli.ros2_ws is None:
 def main() -> None:
     """Run the ROS2 pick example."""
     # create environment
-    env_cfg = KinovaROS2ReachEnvCfg(
+    env_cfg = KinovaROS2EnvCfg(
         robot_ip=args_cli.robot_ip,
         use_fake_hardware=args_cli.use_fake_hardware,
         launch_ros=args_cli.launch_ros,
@@ -59,7 +59,7 @@ def main() -> None:
         episode_length_s=30.0,
     )
 
-    env = KinovaROS2ReachEnv(cfg=env_cfg, ros=setup_ros())
+    env = KinovaROS2Env(cfg=env_cfg, ros=setup_ros())
     env = ROS2SkilletEnv(env)
     env.reset()
 
@@ -79,7 +79,7 @@ def main() -> None:
     # Parameters policy
     fixed_param_policy = FixedSequencePolicy(
         env.obs_spec,
-        env.action_spec,
+        pick_skill.params_spec,
         torch.as_tensor(
             [
                 [0.6, -0.2, 0.03, 0.0],
@@ -97,7 +97,7 @@ def main() -> None:
         .replace(device=env.device)
     policy_over_options = RandomPolicy(env.obs_spec, options_spec)
 
-    policy_over_options_agent = PolicyOverOptionsAgent(
+    policy_over_options_agent = PolicyOverOptionsBatchedAgent(
         skills=skills,
         high_level_policy=policy_over_options,
         params_policy=fixed_param_policy,

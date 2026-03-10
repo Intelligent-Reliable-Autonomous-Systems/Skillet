@@ -355,7 +355,6 @@ class Perception:
 
     def run(self) -> None:
         """Run the perception pipeline."""
-        print("Running perception pipeline")
         poll_period_s = 1.0 / self.poll_rate
         next_poll_t = time.perf_counter()
 
@@ -363,7 +362,7 @@ class Perception:
             obs = self.env.get_observation(self.obs_spec)
             obs_unbatched = self._apply_far_plane(self._maybe_unbatch(obs))
 
-            self._apriltag_estimator.update(obs_unbatched)
+            self._apriltag_estimator.update_state(obs_unbatched)
 
             masks, segment_ids = self._get_masks(obs_unbatched)
             point_cloud, segment_indices = self._observation_to_point_cloud(obs_unbatched, masks, segment_ids)
@@ -382,7 +381,6 @@ class Perception:
 
             self._ensure_cv2_window()
             self._update_rgbd_window(obs_unbatched, masks, segment_ids)
-            self._debug_depth_range(obs)
 
             next_poll_t += poll_period_s
             sleep_s = max(0.0, next_poll_t - time.perf_counter())

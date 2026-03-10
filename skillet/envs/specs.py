@@ -1,6 +1,7 @@
 """Observation specifications for the environment."""
 
 from collections.abc import Mapping
+from typing import TypeAlias
 
 import gymnasium as gym
 import numpy as np
@@ -10,6 +11,12 @@ from jaxtyping import Float
 from skillet.core import ObservationSpec
 from skillet.core.spaces import BatchedSpaceItem, ParameterizedBox
 
+N_Obs = Float[torch.Tensor, "n"]
+"""Environment observation: torch.Tensor[(n), float]"""
+M_Action = Float[torch.Tensor, "m"]
+"""Environment action: torch.Tensor[(m), float]"""
+SelectedSkill: TypeAlias = int
+"""Selected skill: int"""
 BxN_Obs = Float[torch.Tensor, "b n"]
 """A B-batched N-dim vector observation: torch.Tensor[(b, n), float]"""
 BxM_Action = Float[torch.Tensor, "b m"]

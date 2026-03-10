@@ -8,6 +8,7 @@
 
 import abc
 from typing import Any, Generic, TypeVar, overload
+from typing_extensions import override
 
 import gymnasium as gym
 import torch
@@ -293,3 +294,73 @@ class BasicBatchedEnvironment(BatchedEnvironment[TBObs, TBAction],
     def get_state(self) -> TObs:  # noqa: D102
         return self.get_observation()
 
+class BatchToSingleWrapper(Environment[TObs, TAction], Generic[TObs, TAction]):
+    """A wrapper that converts a batched environment to a single environment."""
+
+    def __init__(self, env: BatchedEnvironment[Any, Any]) -> None:
+        """Initialize a batch to single environment wrapper.
+
+        Args:
+            env: The batched environment to wrap
+
+        """
+        self.batched_env = env
+        """The wrapped batched environment."""
+
+    @property
+    @override
+    def obs_spec(self) -> ObservationSpec[TObs]:
+        return self.batched_env.obs_spec.unbatched()
+
+    @property
+    @override
+    def action_spec(self) -> ActionSpec[TAction]:
+        return self.batched_env.action_spec.unbatched()
+
+    @override
+    def supports_observation_spec(self, obs_spec: ObservationSpec[Any]) -> bool:
+        return self.batched_env.supports_observation_spec(obs_spec.replace(is_batched=False))
+
+    @override
+    def supports_action_spec(self, action_spec: ActionSpec[Any]) -> bool:
+        return self.batched_env.supports_action_spec(action_spec.replace(is_batched=True))
+
+    @override
+    def coerce_obs_spec(self, obs_spec: str | ObservationSpec[Any]) -> ObservationSpec[Any]:
+        if isinstance(obs_spec, ObservationSpec):
+            obs_spec = obs_spec.replace(is_batched=True)
+        return self.batched_env.coerce_obs_spec(obs_spec).unbatched()
+
+    @override
+    def coerce_action_spec(self, action_spec: str | ActionSpec[Any]) -> ActionSpec[Any]:
+        if isinstance(action_spec, ActionSpec):
+            action_spec = action_spec.replace(is_batched=True)
+        return self.batched_env.coerce_action_spec(action_spec).unbatched()
+
+    @override
+    def get_observation(self, obs_spec: ObservationSpec[Any] | None = None) -> Any:
+        if obs_spec is not None:
+            obs_spec = obs_spec.replace(is_batched=True)
+        batched_obs = self.batched_env.get_observation(obs_spec)
+        return self.obs_spec.cast(batched_obs)
+
+    @override
+    def get_state(self) -> State:
+        batched_state = self.batched_env.get_state()
+        return self.obs_spec.cast(batched_state)
+
+    @override
+    def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None) -> tuple[TObs, dict]:
+        batched_obs, info = self.batched_env.reset(seed=seed, options=options)
+        return self.obs_spec.cast(batched_obs), self._unbatch_info(info)
+
+    @override
+    def step(self, action: TAction, action_spec: ActionSpec[Any] | None = None) -> tuple[TObs, float, bool, bool, dict]:
+        if action_spec is not None:
+            action = action_spec.replace(is_batched=True)
+        batched_obs, reward, term, trunc, info = self.batched_env.step(action)
+        return self.obs_spec.cast(batched_obs), reward[0], term[0], trunc[0], self._unbatch_info(info)
+
+    def _unbatch_info(self, batched_info: dict) -> dict:
+        """Unbatch the info dictionary."""
+        return {k: v[0] for k, v in batched_info.items()}

@@ -39,7 +39,7 @@ from typing import TYPE_CHECKING
 import torch
 
 from kinova_tasks.isaac_tasks.factory import create_isaac_env
-from skillet.agents.policy_over_options import PolicyOverOptionsAgent
+from skillet.agents.policy_over_options import PolicyOverOptionsBatchedAgent
 from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
 from skillet.policy.dummy import FixedSequencePolicy, RandomPolicy
 from skillet.policy.ik_ee import PoseAbsIKEEPolicy
@@ -97,7 +97,7 @@ def main() -> None:
         .replace(device=env.device)
     policy_over_options = RandomPolicy(env.obs_spec, options_spec)
 
-    policy_over_options_agent = PolicyOverOptionsAgent(
+    policy_over_options_agent = PolicyOverOptionsBatchedAgent(
         skills=skills,
         high_level_policy=policy_over_options,
         params_policy=fixed_param_policy,

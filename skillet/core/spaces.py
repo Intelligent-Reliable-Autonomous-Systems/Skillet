@@ -404,6 +404,12 @@ class SpaceSpecification(Generic[TSpace]):
             return next(iter(value.values())).shape[0]
         return value.shape[0]
 
+    def batched(self) -> SpaceSpecification[Any]:
+        """Return a new space specification with the batch dimension added."""
+        if self.is_batched:
+            return self
+        return replace(self, is_batched=True)
+
     def unbatched(self) -> SpaceSpecification[Any]:
         """Return a new space specification with the batch dimension removed."""
         if not self.is_batched:

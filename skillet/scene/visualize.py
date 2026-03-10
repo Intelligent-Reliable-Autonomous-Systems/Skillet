@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from typing import Any
 
 import numpy as np
@@ -452,6 +453,21 @@ class Open3DVisualizer:
             )
         self._setup()
         self._app.run()
+
+    def run_thread(self) -> None:
+        """Run the visualizer in a thread."""
+        if self._thread is not None and self._thread.is_alive():
+            return
+        self._stop_event.clear()
+        self._thread = threading.Thread(target=self.run, name="VisualizerThread", daemon=True)
+        self._thread.start()
+
+    def stop_thread(self) -> None:
+        """Stop the visualizer thread."""
+        if self._thread is not None and self._thread.is_alive():
+            self._stop_event.set()
+            self._thread.join(timeout=2.0)
+            self._thread = None
 
     def request_close(self) -> None:
         """Request the GUI to shut down (safe to call from any thread)."""

@@ -2,16 +2,28 @@
 
 import argparse
 import os
+from typing import Any
+
+import gymnasium as gym
+import torch
 
 from kinova_tasks.ros2_tasks.kinova.kinova_ros2 import KinovaROS2Env, KinovaROS2EnvCfg
+from skillet.agents.policy_over_options import PolicyOverOptionsAgent, SelectedSkill
+from skillet.core import ActionSpec, ObservationSpec
+from skillet.core.env import BatchToSingleWrapper
 from skillet.envs.ros2_skillet_env import ROS2SkilletEnv
+from skillet.envs.specs import BxM_Action, IKEE_Obs, M_Action, N_Obs
 from skillet.envs.util import setup_ros
 from skillet.perception.perception import Perception
 from skillet.perception.realsense import RealsenseEnv
 from skillet.perception.sam3.sam3 import SAMConcept
+from skillet.policy.dummy import FixedSequencePolicy, FixedSkillSequencePolicy
+from skillet.policy.ik_ee import PoseAbsIKEEPolicy
 from skillet.scene.base import Scene
 from skillet.scene.cube import Cube
 from skillet.scene.visualize import Open3DVisualizer
+from skillet.skill.high_level.pick import PickSkill
+from skillet.skill.high_level.pick_block import PickBlockSkill
 
 parser = argparse.ArgumentParser(description="Visualize latest RGB-D frame from ROS2 service.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
@@ -73,8 +85,11 @@ def main() -> None:
 
         env = KinovaROS2Env(cfg=env_cfg, ros=setup_ros())
         env = ROS2SkilletEnv(env)
+    env = BatchToSingleWrapper[N_Obs, M_Action](env)
     env.reset()
-    rgbd_spec = env.obs_spec_rgbd.unbatched()
+    rgbd_spec = env.coerce_obs_spec("rgb-d")
+    ikee_spec: ObservationSpec[IKEE_Obs] = env.coerce_obs_spec("ikee").batched()
+    low_action_spec: ActionSpec[BxM_Action] = env.coerce_action_spec("policy").batched()
 
     poll_rate_hz = 1.0 / max(args_cli.period_s, 1e-6)
     perception = Perception(
@@ -96,15 +111,61 @@ def main() -> None:
         segment_rgb="rgb" in args_cli.viz, segment_depth="depth" in args_cli.viz,
     )
     perception.run_thread()
+    vis.run_thread()
 
-    print("[INFO] Running perception loop. Close the Open3D window or press Ctrl+C to quit.")
-    try:
-        vis.run()
-    except KeyboardInterrupt:
-        print("[INFO] Stopping perception loop.")
-    finally:
-        perception.stop()
-        env.close()
+    # Low-level policies
+    ik_ee_pose_policy = PoseAbsIKEEPolicy(ikee_spec, low_action_spec)
+    # Skills
+    skill_length = 200
+    pick_skill = PickSkill(
+        reach_policy=ik_ee_pose_policy, gripper_policy=None, lift_height=0.23, length=skill_length
+    )
+    pick_block_skill = PickBlockSkill(pick_skill)
+    skills = [pick_block_skill]
+
+
+    # High-level policy
+    options_spec = ActionSpec[SelectedSkill](
+        space=gym.spaces.MultiDiscrete([len(skills)] * args_cli.num_envs),
+        name="options",
+        is_torch=True,
+        is_batched=False,
+    )
+    policy_over_options = FixedSequencePolicy[Any, SelectedSkill](
+        env.obs_spec,
+        options_spec,
+        torch.as_tensor(
+            [0],
+            device=env.device,
+            dtype=torch.int32,
+        ),
+    )
+    fixed_param_policy = FixedSequencePolicy(
+        env.obs_spec,
+        env.action_spec,
+        torch.as_tensor(
+            [0],
+            device=env.device,
+        ),
+    )
+
+    policy_over_options_agent = PolicyOverOptionsAgent(
+        skills=skills,
+        high_level_policy=policy_over_options,
+        params_policy=fixed_param_policy,
+    )
+
+    # simulate environment
+    while True:
+        with torch.inference_mode():
+            env.reset()
+            policy_over_options_agent.execute(env)
+            # skill_executor.execute()
+            print("[INFO][Main] finished run of skill executor, resetting")
+
+
+    perception.stop()
+    env.close()
 
 
 if __name__ == "__main__":

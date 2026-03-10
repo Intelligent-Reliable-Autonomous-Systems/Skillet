@@ -134,7 +134,7 @@ class UPolicy(Policy[TPolicyObs, TAction, Unparameterized], abc.ABC, Generic[TPo
 
 
 class BatchedUPolicy(
-    Policy[TBPolicyObs, TBAction, BUnparameterized],
+    UPolicy[TBPolicyObs, TBAction],
     abc.ABC,
     Generic[TBPolicyObs, TBAction],
 ):

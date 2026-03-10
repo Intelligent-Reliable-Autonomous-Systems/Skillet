@@ -22,7 +22,7 @@ class ApriltagStateEstimator:
         self._scene = scene
         self._detector = apriltags.Detector()
 
-    def update(self, obs: dict[str, torch.Tensor]) -> None:
+    def update_state(self, obs: dict[str, torch.Tensor]) -> None:
         """Update the state estimator with a new observation.
 
         Args:
@@ -70,4 +70,3 @@ class ApriltagStateEstimator:
 
                         cube = id_to_cube[detection.tag_id]
                         cube.pose = cube_pose
-                        print(f"Updated {cube.identifier} pose to {cube.pose}")

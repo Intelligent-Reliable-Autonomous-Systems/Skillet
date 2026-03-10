@@ -16,9 +16,9 @@ from skillet.core.skill import (
     TBSkillObs,
     TBSkillParams,
 )
-from skillet.core.spaces import ArrayLike
+from skillet.core.spaces import ArrayLike, SkillParamsSpec
 from skillet.envs.specs import IKEE_Obs
-from skillet.skill.specs import XYZ_YAW_Params
+from skillet.skill.specs import XYZ_YAW_Params, XYZ_YAW_Params_Spec
 
 
 class PickStatusCodes(IntEnum):
@@ -81,6 +81,10 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
     @property
     def param_dim(self) -> int:
         return 4
+
+    @property
+    def params_spec(self) -> SkillParamsSpec[XYZ_YAW_Params]:
+        return XYZ_YAW_Params_Spec
 
     @property
     def name(self) -> str:  # noqa: D102
