@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 
+
 def depth_to_colormap_np(depth_mm: np.ndarray) -> np.ndarray:
     valid = depth_mm > 0
     if not valid.any():

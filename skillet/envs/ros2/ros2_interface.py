@@ -12,8 +12,6 @@ from typing import Any
 
 from roslibpy import Ros, Service, Topic
 
-# from kinova_tasks.envs import ROS2RLEnvCfg
-
 
 def launch_robot_hardware(cfg, workspace_path: str, pkg: str, launch_file: str, default_joint_positions: list) -> None:
     """Launch the robot hardware in separate terminal using system ROS2 installation.
@@ -82,9 +80,11 @@ def wait_for_topic_publish(ros: Ros, topic_name: str, topic_type: str, timeout: 
         try:
             topic.publish({})  # attempt a dummy publish
             print(f"[INFO][ROS2] Topic {topic_name} is now publishable")
-            return
+            # TODO check that moving the return to else works
         except Exception:
             pass
+        else:
+            return
 
         if time.time() - start > timeout:
             raise TimeoutError(f"Timeout waiting for topic {topic_name} to be publishable")

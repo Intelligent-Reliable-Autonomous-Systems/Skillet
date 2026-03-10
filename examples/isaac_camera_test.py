@@ -46,15 +46,15 @@ if args_cli.ros2_bridge:
 
 import torch
 
-from kinova_tasks.isaac_tasks.direct.kinova_camera import (
-    KinovaGenCameraEnv,
-    KinovaGenCameraEnvCfg,
+from skillet_tasks.isaac_tasks.direct.gen3_camera import (
+    Gen3GenCameraEnv,
+    Gen3GenCameraEnvCfg,
 )
 
 
 def main():
     # --- Build config with a custom camera pose ---
-    cfg = KinovaGenCameraEnvCfg()
+    cfg = Gen3GenCameraEnvCfg()
     cfg.scene.num_envs = args_cli.num_envs
     cfg.scene.replicate_physics = args_cli.num_envs > 1
 
@@ -65,7 +65,7 @@ def main():
     cfg.camera_cfg.height = 480
 
     # --- Instantiate env ---
-    env = KinovaGenCameraEnv(cfg, render_mode="rgb_array")
+    env = Gen3GenCameraEnv(cfg, render_mode="rgb_array")
 
     # --- Reset ---
     obs, _ = env.reset()

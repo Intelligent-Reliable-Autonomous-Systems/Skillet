@@ -11,7 +11,6 @@ from skillet.core.spaces import (
     BatchedAction,
     BatchedArrayEmpty,
     BatchedObservation,
-    BatchedParamDC,
     BatchedSkillParams,
     CommonSpecs,
     Observation,
@@ -78,7 +77,7 @@ class Policy(abc.ABC, Generic[TPolicyObs, TAction, TPolicyParams]):
 
     def reset(self, obs: TPolicyObs, params: TPolicyParams, env_ids: BatchedArrayEmpty = None) -> None:
         """Reset the policy. Useful if policy is stateful."""
-        pass
+        ...
 
 
 class BatchedPolicy(
@@ -88,7 +87,7 @@ class BatchedPolicy(
 ):
     """A batched policy that takes a batched observation and outputs a batched action."""
 
-    pass
+    ...
 
 
 class BatchedPPolicy(

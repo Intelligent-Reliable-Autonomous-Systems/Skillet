@@ -166,4 +166,4 @@ class PushSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSki
 
     def reward(self, obs: TBSkillObs) -> Float[ArrayLike, "b"]:  # noqa: F821
         """Compute the reward of the skill."""
-        pass
+        ...

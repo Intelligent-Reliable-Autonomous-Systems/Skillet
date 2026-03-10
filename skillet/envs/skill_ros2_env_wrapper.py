@@ -12,11 +12,11 @@ import gymnasium as gym
 import torch
 from jaxtyping import Bool, Float
 
-from skillet.core.skill_controller import SkillController
-from skillet.envs.ros2_env_wrapper import ROS2EnvWrapper
+from skillet.envs.ros2_skillet_env import ROS2SkilletEnv
+from skillet.skill.skill_controller import SkillController
 
 if TYPE_CHECKING:
-    from skillet.envs.ros2.ros2_rl_env import ROS2RLEnv
+    from skillet.envs.ros2.ros2_env import ROS2Env
 
 TBatchedObsTorch = TypeVar(
     "TBatchedObsTorch", bound=Float[torch.Tensor, "b ..."] | Mapping[str, Float[torch.Tensor, "b ..."]]
@@ -34,14 +34,14 @@ torch.Tensor[(b, n), float]
 
 
 class SkillROS2EnvWrapper(
-    ROS2EnvWrapper[TBatchedObsTorch, TBatchedActionTorch],
+    ROS2SkilletEnv[TBatchedObsTorch, TBatchedActionTorch],
 ):
     """Wrapper for IsaacLab Environments.
 
-    This assumes that the environment is a ROS2RLEnv.
+    This assumes that the environment is a ROS2Env.
     """
 
-    def __init__(self, env: "ROS2RLEnv") -> None:
+    def __init__(self, env: "ROS2Env") -> None:
         """Initialize the environment.
 
         Args:

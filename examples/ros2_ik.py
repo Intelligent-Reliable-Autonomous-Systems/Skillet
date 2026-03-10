@@ -6,29 +6,38 @@ Written by Will Solow and Jeff Jewett, 2026
 
 """
 
-"""Script to an environment with random action agent."""
-
 import argparse
 import os
+from typing import TYPE_CHECKING
 
-from skillet.skill.low_level import (
-    GripperGraspSkill,
-    GripperOpenSkill,
-    JointPosSkill,
-    OrientRPYSkill,
-    OrientYSkill,
-    ReachXYZRPYSkill,
-    ReachXYZSkill,
-)
+import gymnasium as gym
+import torch
+
+if TYPE_CHECKING:
+    from skillet.core import BatchedSkill
+    from skillet.envs.specs import BxM_Action, IKEE_Obs
+
+import skillet_tasks.ros2_tasks  # noqa: F401
+from skillet.agents.policy_over_options import PolicyOverOptionsBatchedAgent
+from skillet.envs.ros2_skillet_env import ROS2SkilletEnv
+from skillet.envs.util import parse_ros2_env_cfg, setup_ros
+from skillet.policy.dummy import FixedSequencePolicy, RandomPolicy
+from skillet.policy.ik_ee import PoseAbsIKEEPolicy
+from skillet.skill import ReachPoseSkill
+from skillet.skill.specs import SELECT_OPTIONS_SPEC_BATCHED, XYZ_QUAT_Params
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Main ROS2 executor file.")
-parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="ROS2-Reach-Kinova-v0", help="Name of the task.")
+parser.add_argument("--num_envs", type=int, default=1, required=True, help="Number of environments to simulate.")
+parser.add_argument("--task", type=str, default="ROS2-Reach-Gen3-v0", required=True, help="Name of the task.")
 parser.add_argument("--device", type=str, default="cuda", help="Device to use")
 parser.add_argument(
     "--ros2_ws", type=str, default=None, required=False, help="Absolute path to ROS2 workspace containing bringup files"
 )
+parser.add_argument("--robot_ip", default="192.168.8.10", type=str, help="IP of the robot.")
+parser.add_argument("--launch_ros", action="store_true", help="If to launch robot bringup files.")
+parser.add_argument("--use_fake_hardware", default="false", type=str, help="If to use fake hardware (RViz) or not.")
+
 
 # parse the arguments
 args_cli = parser.parse_args()
@@ -38,141 +47,64 @@ if args_cli.ros2_ws is None:
         raise ValueError("ROS2 workspace path must be provided via --ros2_ws argument or ROS2_WS environment variable.")
 
 
-"""Rest everything follows."""
-
-import gymnasium as gym
-import torch
-from jaxtyping import Float, Int
-
-import kinova_tasks.ros2_tasks  # noqa: F401
-from skillet.agents.policy_over_options import PolicyOverOptionsBatchedAgent
-from skillet.core.spaces import ActionSpec, ObservationSpec
-from skillet.envs.ros2_env_wrapper import ROS2EnvWrapper
-from skillet.envs.util import parse_ros2_env_cfg, setup_ros
-from skillet.policy.dummy import FixedSequencePolicy, FixedSkillSequencePolicy
-from skillet.policy.ik_ee import PosAbsIKEEPolicy, PoseAbsIKEEPolicy, XYZRPYAbsIKEEPolicy
-from skillet.policy.joint_pos import GripperPolicy, JointPosPolicy
-
 def main() -> None:
     """Test the executor within the IsaacLab/IsaacSim framework."""
     # create environment configuration
     env_cfg = parse_ros2_env_cfg(
         args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs, ros2_workspace=args_cli.ros2_ws
     )
-    env_cfg.robot_ip = "192.168.1.10"
-    env_cfg.use_fake_hardware = "true"
-    env_cfg.launch_ros = False
+    env_cfg.robot_ip = args_cli.robot_ip
+    env_cfg.use_fake_hardware = args_cli.use_fake_hardware
+    env_cfg.launch_ros = args_cli.launch_ros
 
-    # create environment
     env = gym.make(args_cli.task, cfg=env_cfg, ros=setup_ros())
+    env = ROS2SkilletEnv(env)
 
     print("[INFO][Main] Testing Executor environment")
     print(f"[INFO][Main] Gym observation space: {env.observation_space}")
     print(f"[INFO][Main] Gym action space: {env.action_space}")
 
-    # Set up Skill executor and environment in framework
-    env = ROS2EnvWrapper[BxN_Obs, BxM_Action](env)
-
-    action_spec: ActionSpec[BxM_Action] = env.action_spec
-    observation_spec: ObservationSpec[BxN_Obs] = env.obs_spec
-
     # Low-level policies
-    _obs_spec_ik = ObservationSpec[Float[torch.Tensor, "b ..."]](
-        space=gym.spaces.Dict(),
-        name="ik_ee",
-        is_torch=True,
-        is_batched=True,
-        n_envs=-1,
-        device=env.device,
-    )
+    ik_ee_pose_policy = PoseAbsIKEEPolicy(env.obs_spec_ikee, env.action_spec)
 
-    ik_ee_xyzrpy_policy = XYZRPYAbsIKEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
-    ik_ee_pos_policy = PosAbsIKEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
-    ik_ee_pose_policy = PoseAbsIKEEPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
-    gripper_policy = GripperPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
-    joint_pos_policy = JointPosPolicy[BxN_Obs, BxM_Action](_obs_spec_ik, action_spec)
-
-    print(gripper_policy.action_spec)
     # Skills
-    skill_length = 40
-    reach_xyzrpy_skill = ReachXYZRPYSkill[BxN_Obs, BxM_Action, None](
-        name="reach_xyzrpy_skill", policy=ik_ee_pose_policy, length=skill_length
-    )
-    reach_xyz_skill = ReachXYZSkill[BxN_Obs, BxM_Action, None](
-        name="reach_xyz_skill", policy=ik_ee_pos_policy, length=skill_length
-    )
-    orient_rpy_skill = OrientRPYSkill[BxN_Obs, BxM_Action, None](
-        name="orient_rpy_skill", policy=ik_ee_pose_policy, length=skill_length
-    )
-    orient_y_skill = OrientYSkill[BxN_Obs, BxM_Action, None](
-        name="orient_rpy_skill", policy=ik_ee_pose_policy, length=skill_length
-    )
-    gripper_grasp_skill = GripperGraspSkill[BxN_Obs, BxM_Action, None](
-        name="gripper_c_skill", policy=gripper_policy, length=4
-    )
-    gripper_open_skill = GripperOpenSkill[BxN_Obs, BxM_Action, None](
-        name="gripper_o_skill", policy=gripper_policy, length=4
-    )
-    joint_pos_skill = JointPosSkill[BxN_Obs, BxM_Action, None](name="joint_skill", policy=joint_pos_policy, length=10)
-    skills = [
-        reach_xyzrpy_skill,
-        reach_xyz_skill,
-        orient_rpy_skill,
-        orient_y_skill,
-        gripper_grasp_skill,
-        gripper_open_skill,
-        joint_pos_skill,
-    ]
+    skill_length = 100
+    reach_pose_skill = ReachPoseSkill(name="reach_pose_skill", policy=ik_ee_pose_policy, length=skill_length)
+    skills: list[BatchedSkill[IKEE_Obs, BxM_Action, XYZ_QUAT_Params]] = [reach_pose_skill]
 
     # Parameters policy
-    fixed_param_policy = FixedSequencePolicy[BxN_Obs, BxM_Action](
-        observation_spec,
-        action_spec,
+    fixed_param_policy = FixedSequencePolicy(
+        env.obs_spec_policy,
+        reach_pose_skill.params_spec,
         torch.as_tensor(
             [
-                [1.57, 0.2, 0.3, 0.0, 0.1, 0.0, 0.0, 0.6],
-                # [0.5, 0.1, 0.3, 0.0, 0.0, 0.0],
-                # [0.0, 1.57, 0.0, 0.0, 0.0, 0.0],
-                # [1.0, 1.57, 0.0, 0.0, 0.0, 0.0],
-                # [0.0, 1.57, 0.0, 0.0, 0.0, 0.0],
+                [0.5, 0.5, 0.7, 0.707, 0, 0.707, 0],
+                [0.5, -0.4, 0.6, 0.707, 0.707, 0.0, 0.0],
+                [0.5, 0, 0.5, 0.0, 1.0, 0.0, 0.0],
             ],
             device=env.device,
         ),
     )
 
     # High-level policy
-    options_spec = ActionSpec[B_Int_HighLevel](
-        space=gym.spaces.MultiDiscrete([len(skills)] * args_cli.num_envs),
-        name="options",
-        is_torch=True,
-        is_batched=True,
+    options_spec = (
+        SELECT_OPTIONS_SPEC_BATCHED.bind(n_options=len(skills))
+        .with_n_envs(args_cli.num_envs)
+        .replace(device=env.device)
     )
-    policy_over_options = FixedSkillSequencePolicy[BxN_Obs, B_Int_HighLevel](
-        observation_spec,
-        options_spec,
-        torch.as_tensor(
-            [6],
-            device=env.device,
-            dtype=torch.int32,
-        ),
-    )
+    policy_over_options = RandomPolicy(env.obs_spec, options_spec)
 
-    policy_over_options_agent = PolicyOverOptionsBatchedAgent[BxN_Obs, BxM_Action, B_Int_HighLevel, None](
+    policy_over_options_agent = PolicyOverOptionsBatchedAgent(
         skills=skills,
         high_level_policy=policy_over_options,
         params_policy=fixed_param_policy,
     )
 
-    # simulate environment
     while True:
         with torch.inference_mode():
             env.reset()
             policy_over_options_agent.execute(env)
-            # skill_executor.execute()
             print("[INFO][Main] finished run of skill executor, resetting")
-
-    # close the simulator
-    env.close()
 
 
 if __name__ == "__main__":

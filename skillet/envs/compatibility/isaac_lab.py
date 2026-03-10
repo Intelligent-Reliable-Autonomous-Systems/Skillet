@@ -226,6 +226,7 @@ class DirectRlInterface(IsaacLabInterface):
         """
         ...
 
+
 class ManagerBasedRlInterface(IsaacLabInterface):
     """An abstract interface for the Isaac Lab ManagerBasedRLEnv.
 

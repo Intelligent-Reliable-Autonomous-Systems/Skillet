@@ -12,7 +12,6 @@ import logging
 import math
 from typing import Literal
 
-import numpy as np
 import torch
 import torch.nn.functional
 
@@ -200,7 +199,8 @@ def matrix_from_quat(quaternions: torch.Tensor) -> torch.Tensor:
     return o.reshape(quaternions.shape[:-1] + (3, 3))
 
 
-def convert_quat(quat: torch.Tensor | np.ndarray, to: Literal["xyzw", "wxyz"] = "xyzw") -> torch.Tensor | np.ndarray:
+@torch.jit.script
+def convert_quat(quat: torch.Tensor, to: str = "xyzw") -> torch.Tensor:
     """Convert quaternion from one convention to another.
 
     The convention to convert TO is specified as an optional argument. If to == 'xyzw',
@@ -225,17 +225,6 @@ def convert_quat(quat: torch.Tensor | np.ndarray, to: Literal["xyzw", "wxyz"] = 
     if to not in ["xyzw", "wxyz"]:
         msg = f"Expected input argument `to` to be 'xyzw' or 'wxyz'. Received: {to}."
         raise ValueError(msg)
-    # check if input is numpy array (we support this backend since some classes use numpy)
-    if isinstance(quat, np.ndarray):
-        # use numpy functions
-        if to == "xyzw":
-            # wxyz -> xyzw
-            return np.roll(quat, -1, axis=-1)
-        # xyzw -> wxyz
-        return np.roll(quat, 1, axis=-1)
-    # convert to torch (sanity check)
-    if not isinstance(quat, torch.Tensor):
-        quat = torch.tensor(quat, dtype=float)
     # convert to specified quaternion type
     if to == "xyzw":
         # wxyz -> xyzw
@@ -1999,3 +1988,165 @@ def generate_random_transformation_matrix(pos_boundary: float = 1, rot_boundary:
     t[:3, 3] = translation
 
     return t
+
+
+@torch.jit.script
+def euler_xyz_to_rotvec(euler: torch.Tensor) -> torch.Tensor:
+    """Convert XYZ extrinsic Euler angles to rotation vector.
+
+    Args:
+        euler: tensor of shape (N, 3) in radians [rx, ry, rz].
+
+    Returns:
+        Torch tensor rotation vectors of shape (N, 3).
+
+    """
+    rx = euler[:, 0]
+    ry = euler[:, 1]
+    rz = euler[:, 2]
+
+    zeros = torch.zeros_like(rx)
+    ones = torch.ones_like(rx)
+
+    # Each rotation matrix: stack into (N, 3, 3)
+    # Rotation about X
+    Rx = torch.stack(
+        [
+            torch.stack([ones, zeros, zeros], dim=1),
+            torch.stack([zeros, torch.cos(rx), -torch.sin(rx)], dim=1),
+            torch.stack([zeros, torch.sin(rx), torch.cos(rx)], dim=1),
+        ],
+        dim=1,
+    )  # (N, 3, 3)
+
+    # Rotation about Y
+    Ry = torch.stack(
+        [
+            torch.stack([torch.cos(ry), zeros, torch.sin(ry)], dim=1),
+            torch.stack([zeros, ones, zeros], dim=1),
+            torch.stack([-torch.sin(ry), zeros, torch.cos(ry)], dim=1),
+        ],
+        dim=1,
+    )
+
+    # Rotation about Z
+    Rz = torch.stack(
+        [
+            torch.stack([torch.cos(rz), -torch.sin(rz), zeros], dim=1),
+            torch.stack([torch.sin(rz), torch.cos(rz), zeros], dim=1),
+            torch.stack([zeros, zeros, ones], dim=1),
+        ],
+        dim=1,
+    )
+
+    # Combined: XYZ extrinsic = Z @ Y @ X, shape (N, 3, 3)
+    R = torch.bmm(Rz, torch.bmm(Ry, Rx))
+
+    # Trace of each matrix: (N,)
+    trace = R[:, 0, 0] + R[:, 1, 1] + R[:, 2, 2]
+    angle = torch.acos(((trace - 1) / 2).clamp(-1, 1))
+
+    # Axis from skew-symmetric part: (N, 3)
+    axis = torch.stack(
+        [
+            R[:, 2, 1] - R[:, 1, 2],
+            R[:, 0, 2] - R[:, 2, 0],
+            R[:, 1, 0] - R[:, 0, 1],
+        ],
+        dim=1,
+    )
+
+    # Normalize axis, guarding near-zero angles
+    sin_angle = torch.sin(angle).unsqueeze(1)
+    axis = axis / (2 * sin_angle + 1e-8)
+
+    rotvec = axis * angle.unsqueeze(1)
+
+    # Zero out near-singularity cases (angle ~ 0)
+    near_zero = angle.abs() < 1e-6
+    rotvec[near_zero] = 0.0
+
+    return rotvec
+
+
+@torch.jit.script
+def euler_xyz_to_rotvec_unbatched(euler: torch.Tensor) -> torch.Tensor:
+    """Convert XYZ extrinsic Euler angles to rotation vector. Assumes input is NOT batched.
+
+    Args:
+        euler: tensor of shape (3,) in radians [rx, ry, rz].
+
+    Returns:
+        Torch tensor rotation matrix.
+
+    """
+    # Build individual rotation matrices
+    rx, ry, rz = euler[0], euler[1], euler[2]
+
+    # Rotation about X
+    Rx = torch.stack(
+        [
+            torch.stack([torch.ones_like(rx), torch.zeros_like(rx), torch.zeros_like(rx)]),
+            torch.stack([torch.zeros_like(rx), torch.cos(rx), -torch.sin(rx)]),
+            torch.stack([torch.zeros_like(rx), torch.sin(rx), torch.cos(rx)]),
+        ]
+    )
+
+    # Rotation about Y
+    Ry = torch.stack(
+        [
+            torch.stack([torch.cos(ry), torch.zeros_like(ry), torch.sin(ry)]),
+            torch.stack([torch.zeros_like(ry), torch.ones_like(ry), torch.zeros_like(ry)]),
+            torch.stack([-torch.sin(ry), torch.zeros_like(ry), torch.cos(ry)]),
+        ]
+    )
+
+    # Rotation about Z
+    Rz = torch.stack(
+        [
+            torch.stack([torch.cos(rz), -torch.sin(rz), torch.zeros_like(rz)]),
+            torch.stack([torch.sin(rz), torch.cos(rz), torch.zeros_like(rz)]),
+            torch.stack([torch.zeros_like(rz), torch.zeros_like(rz), torch.ones_like(rz)]),
+        ]
+    )
+
+    # Combined rotation matrix XYZ extrinsic = Z @ Y @ X intrinsic
+    R = Rz @ Ry @ Rx
+
+    # Convert rotation matrix to rotation vector (axis-angle)
+    angle = torch.acos(((R.trace() - 1) / 2).clamp(-1, 1))
+
+    if angle.abs() < 1e-6:
+        return torch.zeros(3, dtype=euler.dtype)
+
+    axis = torch.stack([R[2, 1] - R[1, 2], R[0, 2] - R[2, 0], R[1, 0] - R[0, 1]]) / (2 * torch.sin(angle))
+
+    return axis * angle
+
+
+@torch.jit.script
+def base_to_tcp_twist(
+    linear_vel: torch.Tensor,
+    angular_vel: torch.Tensor,
+    tcp_quat: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Transform a twist from base frame to TCP frame.
+
+    Skillet quaternions are [w, x, y, z] following IsaacLab convention.
+
+    Args:
+        linear_vel: linear velocity in XYZ (m/s)
+        angular_vel: angular velocity in RPY (rad/s)
+        tcp_quat: The current orientation of the TCP frame
+
+    Returns:
+        Linear and angular velocity tensors in base frame.
+
+    """
+    tcp_quat_inv = quat_inv(tcp_quat)
+
+    # Rotate linear and angular velocities into TCP frame
+    linear_vel_tcp = quat_apply(tcp_quat_inv, linear_vel)
+    angular_vel_tcp = quat_apply(tcp_quat_inv, angular_vel)
+
+    return linear_vel_tcp, angular_vel_tcp

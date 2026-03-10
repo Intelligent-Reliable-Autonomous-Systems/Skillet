@@ -126,7 +126,7 @@ class Skill(abc.ABC, Generic[TSkillObs, TAction, TSkillParams]):
 
     def initiate(self, obs: TSkillObs, params: TSkillParams) -> None:
         """Initiate the skill with the given observation."""
-        pass
+        ...
 
     def can_initiate(self, obs: TSkillObs) -> bool | Bool[ArrayLike, "b"]:  # noqa: F821
         """Check if the skill can be initiated with the given observation."""
@@ -343,4 +343,4 @@ class CompositeSkill(
 
     def reward(self, obs: TBSkillObs) -> Float[ArrayLike, "b"]:  # noqa: F821
         """Compute the reward of the skill."""
-        pass
+        ...

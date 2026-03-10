@@ -120,7 +120,7 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         self._params = params
         self._n_steps = 0
 
-        self._pos_threshold = 0.02
+        self._pos_threshold = 0.05  # NOTE updated for Gen3Lite
         self._quat_threshold = 0.08
 
         ee_pose_b = obs["tcp_pose_b"]
@@ -156,7 +156,6 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
             self._reach_policy.reset(obs, self._current_target_poses, env_ids=env_ids)
 
     def get_action(self, obs: TBSkillObs) -> TBAction:  # noqa: D102
-
         # prev_pick_status = self._pick_status.clone()
 
         ee_pose_b = obs["tcp_pose_b"]
@@ -165,19 +164,21 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
             < self._pos_threshold
         )
         reached_height = self._pick_status == PickStatusCodes.ASCEND & (
-            ee_pose_b[:, 2] >= self._current_target_poses[:, 2]
+            ee_pose_b[:, 2] >= self._current_target_poses[:, 2] - self._pos_threshold  # NOTE added for Gen3Lite
         )
         reached_quat = (
             quat_error_magnitude(ee_pose_b[:, 3:7], self._current_target_poses[:, 3:7]) < self._quat_threshold
         )
-        reached_pose = (reached_pos & reached_quat) | reached_height
+        reached_pose = (reached_pos) | reached_height  # & reached_quat
 
         if reached_pose.any():
             idx = torch.arange(self.n_envs, device=reached_pose.device)
             valid_idx = (self._status == SkillStatusCodes.RUNNING) & (reached_pose)
             self._pick_status[valid_idx] += 1
             valid_idx = valid_idx & (self._pick_status < PickStatusCodes.DONE)
-            print(f"[INFO][PICK STATUS UPDATE]: {PickStatusCodes(self._pick_status.cpu().numpy()[0]).name} | reached_pose: {reached_pose}")
+            # print(
+            #     f"[INFO][PICK STATUS UPDATE]: {PickStatusCodes(self._pick_status.cpu().numpy()[0]).name} | reached_pose: {reached_pose}"
+            # )
             # Update the target pose based on the new pick status
             self._current_target_poses[valid_idx] = self._target_poses[idx[valid_idx], self._pick_status[valid_idx]]
 
@@ -205,4 +206,4 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
 
     def reward(self, obs: TBSkillObs) -> Float[ArrayLike, "b"]:  # noqa: F821
         """Compute the reward of the skill."""
-        pass
+        ...

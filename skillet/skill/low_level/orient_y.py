@@ -100,4 +100,4 @@ class OrientYSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TB
 
     def reward(self, obs: TBSkillObs) -> Float[ArrayLike, "b"]:  # noqa: F821
         """Compute the reward of the skill."""
-        pass
+        ...

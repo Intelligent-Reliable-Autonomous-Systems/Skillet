@@ -2,6 +2,7 @@
 
 This class polls the environment for RGB-D observations and localizes objects in the scene.
 """
+
 from __future__ import annotations
 
 import threading
@@ -287,8 +288,14 @@ class Perception:
                 ty = y1 + th + 6
             cv2.rectangle(out, (tx - 1, ty - th - 4), (tx + tw + 5, ty + 4), color, cv2.FILLED)
             cv2.putText(
-                out, label, (tx + 2, ty), _FONT, _FONT_SCALE,
-                (255, 255, 255), _FONT_THICKNESS, cv2.LINE_AA,
+                out,
+                label,
+                (tx + 2, ty),
+                _FONT,
+                _FONT_SCALE,
+                (255, 255, 255),
+                _FONT_THICKNESS,
+                cv2.LINE_AA,
             )
 
         return out
@@ -387,7 +394,8 @@ class Perception:
             if sleep_s > 0:
                 time.sleep(sleep_s)
 
-        self._stop_cv2()
+        self.stop_visualization()
+
 
 if __name__ == "__main__":
     from skillet.perception.visualize import Open3DVisualizer

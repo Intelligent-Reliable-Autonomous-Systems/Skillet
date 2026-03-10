@@ -11,6 +11,7 @@ import os
 from typing import TYPE_CHECKING
 
 import torch
+import gymnasium as gym
 
 from kinova_tasks.ros2_tasks.kinova.kinova_ros2 import KinovaROS2Env, KinovaROS2EnvCfg
 from skillet.agents.policy_over_options import PolicyOverOptionsBatchedAgent
@@ -20,6 +21,7 @@ from skillet.policy.dummy import FixedSequencePolicy, RandomPolicy
 from skillet.policy.ik_ee import PoseAbsIKEEPolicy
 from skillet.skill.high_level.pick import PickSkill
 from skillet.skill.specs import SELECT_OPTIONS_SPEC_BATCHED, XYZ_YAW_Params
+import skillet_tasks.ros2_tasks  # noqa: F401
 
 if TYPE_CHECKING:
     from skillet.core import BatchedSkill
@@ -28,14 +30,16 @@ if TYPE_CHECKING:
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Main ROS2 executor file.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="ROS2-Kinova-Reach-v0", help="Name of the task.")
+parser.add_argument("--task", type=str, default="ROS2-Gen3Lite-v0", help="Name of the task.")
 parser.add_argument("--device", type=str, default="cuda", help="Device to use")
 parser.add_argument(
     "--ros2_ws", type=str, default=None, help="Absolute path to ROS2 workspace containing bringup files"
 )
 parser.add_argument("--robot_ip", type=str, default="192.168.1.10", help="Robot IP.")
 parser.add_argument("--use_fake_hardware", type=str, default="true", help="'true' or 'false'.")
-parser.add_argument("--launch_ros", action=argparse.BooleanOptionalAction, default=True, help="Launch ROS from env startup.")
+parser.add_argument(
+    "--launch_ros", action=argparse.BooleanOptionalAction, default=False, help="Launch ROS from env startup."
+)
 
 # parse the arguments
 args_cli = parser.parse_args()
@@ -43,7 +47,6 @@ if args_cli.ros2_ws is None:
     args_cli.ros2_ws = os.getenv("ROS2_WS", None)
     if args_cli.ros2_ws is None:
         raise ValueError("ROS2 workspace path must be provided via --ros2_ws argument or ROS2_WS environment variable.")
-
 
 
 def main() -> None:
@@ -71,9 +74,7 @@ def main() -> None:
     ik_ee_pose_policy = PoseAbsIKEEPolicy(env.obs_spec_ikee, env.action_spec)
     # Skills
     skill_length = 200
-    pick_skill = PickSkill(
-        reach_policy=ik_ee_pose_policy, gripper_policy=None, lift_height=0.23, length=skill_length
-    )
+    pick_skill = PickSkill(reach_policy=ik_ee_pose_policy, gripper_policy=None, lift_height=0.23, length=skill_length)
     skills: list[BatchedSkill[IKEE_Obs, BxM_Action, XYZ_YAW_Params]] = [pick_skill]
 
     # Parameters policy
@@ -82,7 +83,7 @@ def main() -> None:
         pick_skill.params_spec,
         torch.as_tensor(
             [
-                [0.6, -0.2, 0.03, 0.0],
+                [0.5, -0.2, 0.03, 0.0],
                 [0.3, 0.2, 0.05, 0.0],
                 [0.2, 0.4, 0.05, 0.0],
             ],
@@ -91,10 +92,11 @@ def main() -> None:
     )
 
     # High-level policy
-    options_spec = SELECT_OPTIONS_SPEC_BATCHED \
-        .bind(n_options=len(skills)) \
-        .with_n_envs(args_cli.num_envs) \
+    options_spec = (
+        SELECT_OPTIONS_SPEC_BATCHED.bind(n_options=len(skills))
+        .with_n_envs(args_cli.num_envs)
         .replace(device=env.device)
+    )
     policy_over_options = RandomPolicy(env.obs_spec, options_spec)
 
     policy_over_options_agent = PolicyOverOptionsBatchedAgent(

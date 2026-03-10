@@ -6,7 +6,7 @@ Written by Will Solow and Jeff Jewett, 2026
 """
 
 from collections.abc import Mapping
-from typing import Any, Generic, TypeVar, overload
+from typing import Any, overload
 
 import gymnasium as gym
 import numpy as np
@@ -27,8 +27,15 @@ from skillet.core.math import (
 )
 from skillet.core.spaces import ActionSpec
 from skillet.envs.compatibility.isaac_lab import DirectRlInterface
-from skillet.envs.ros2 import ROS2RLEnv
-from skillet.envs.specs import IK_EE_SPEC_BATCHED, OSC_SPEC_BATCHED, RGBD_SPEC_BATCHED, BxM_Action, BxN_Obs
+from skillet.envs.ros2 import ROS2Env
+from skillet.envs.specs import (
+    IK_EE_SPEC_BATCHED,
+    OSC_SPEC_BATCHED,
+    RGBD_SPEC_BATCHED,
+    TWIST_SPEC_BATCHED,
+    BxM_Action,
+    BxN_Obs,
+)
 
 
 class ROS2SkilletEnv(
@@ -40,21 +47,21 @@ class ROS2SkilletEnv(
     The environment is batched.
     """
 
-    def __init__(self, env: ROS2RLEnv) -> None:
+    def __init__(self, env: ROS2Env) -> None:
         """Initialize the environment.
 
         Args:
-            env: ROS2RLEnv environment or a wrapped ROS2RLEnv environment
+            env: ROS2Env environment or a wrapped ROS2Env environment
 
         Returns:
             None
 
         """
-        self._env = env
+        self._env = env.unwrapped
         self.observation_space = env.observation_space
         self.action_space = env.action_space
-        self.single_observation_space = env.single_observation_space
-        self.single_action_space = env.single_action_space
+        self.single_observation_space = env.unwrapped.single_observation_space
+        self.single_action_space = env.unwrapped.single_action_space
 
         # Robot specific information
         self._joint_ids = self.cfg.joint_ids
@@ -89,14 +96,35 @@ class ROS2SkilletEnv(
         self.obs_spec_rgbd = RGBD_SPEC_BATCHED.bind(height=480, width=640).replace(device=self.device)
         """Specification of RGB-D observations and metadata. Bound to the height and width of the RGB-D camera."""
         self.obs_spec_ikee = IK_EE_SPEC_BATCHED.bind(
-            n_joints=len(self._joint_ids), n_arm_joints=len(self._joint_ids[:-1])).replace(device=self.device)
+            n_joints=len(self._joint_ids),
+            n_arm_joints=len(self._joint_ids[:-1]),
+            n_gripper_joints=len(self._gripper_joint_names),
+        ).replace(device=self.device)
         """Specification of IK-EE observations."""
         self.obs_spec_osc = OSC_SPEC_BATCHED.bind(
-            n_joints=len(self._joint_ids), n_arm_joints=len(self._joint_ids[:-1])).replace(device=self.device)
+            n_joints=len(self._joint_ids),
+            n_arm_joints=len(self._joint_ids[:-1]),
+            n_gripper_joints=len(self._gripper_joint_names),
+        ).replace(device=self.device)
         """Specification of OSC observations."""
-        self._action_spec = ActionSpec[BxM_Action](
-            name="action",
-            space=env.single_action_space,
+        self.obs_spec_twist_tcp = TWIST_SPEC_BATCHED.replace(device=self.device)
+        """Specification of Twist TCP observations."""
+
+        self.action_spec_joints = ActionSpec[BxM_Action](
+            name="joints",
+            space=env.unwrapped.single_action_space,
+        ).replace(**spec_args)
+        self.action_spec_twist_tcp = ActionSpec[BxM_Action](
+            name="twist_tcp",
+            space=gym.spaces.Box(-float("inf"), float("inf"), shape=(6 + len(self._env.cfg.gripper_joint_names),)),
+        ).replace(**spec_args)
+        self.action_spec_moveit_joint = ActionSpec[BxM_Action](
+            name="moveit_joint",
+            space=gym.spaces.Box(-float("inf"), float("inf"), shape=(len(self._env.cfg.joint_ids),)),
+        ).replace(**spec_args)
+        self.action_spec_moveit_tcp_quat = ActionSpec[BxM_Action](
+            name="moveit_tcp_quat",
+            space=gym.spaces.Box(-float("inf"), float("inf"), shape=(7 + len(self._env.cfg.gripper_joint_names),)),
         ).replace(**spec_args)
 
     # ==================== DirectRlInterface ====================
@@ -135,7 +163,7 @@ class ROS2SkilletEnv(
 
     @override
     def _reset_idx(self, env_ids: torch.Tensor | None = None) -> None:
-        # ROS2RLEnv only supports one environment
+        # ROS2Env only supports one environment
         _ = env_ids
         self._env._reset_idx()
         self._last_obs = None
@@ -155,7 +183,7 @@ class ROS2SkilletEnv(
     @property
     @override
     def action_spec(self) -> ActionSpec[BxM_Action]:
-        return self._action_spec
+        return self.action_spec_joints
 
     @override
     def supports_observation_spec(self, obs_spec: ObservationSpec) -> bool:
@@ -169,7 +197,12 @@ class ROS2SkilletEnv(
 
     @override
     def supports_action_spec(self, action_spec: ActionSpec) -> bool:
-        return action_spec.name == self.action_spec.name
+        return action_spec.name in [
+            self.action_spec_joints.name,
+            self.action_spec_twist_tcp.name,
+            self.action_spec_moveit_joint.name,
+            self.action_spec_moveit_tcp_quat.name,
+        ]
 
     @override
     def coerce_obs_spec(self, obs_spec: str | ObservationSpec[Any]) -> ObservationSpec[Any]:
@@ -286,6 +319,15 @@ class ROS2SkilletEnv(
                     "joint_centers": self._get_joint_centers(arm_joint_ids=self._joint_ids[:7]),
                 }
             )
+        if obs_spec.name == "twist_tcp":
+            return obs_spec.cast(
+                {
+                    "tcp_pose_b": self._get_tcp_pose_b(ee_link=self._ee_link_name),
+                    "gripper_lim": self._get_gripper_lims(gripper_joints=self._gripper_joint_names),
+                    "gripper": self._get_gripper_state(gripper_joints=self._gripper_joint_names),
+                    "dt": self._env.step_dt,
+                }
+            )
         raise ValueError(f"Observation spec {obs_spec} not supported by environment.")
 
     @override
@@ -293,9 +335,7 @@ class ROS2SkilletEnv(
         return self.get_observation(self.obs_spec_state)
 
     @override
-    def step(
-        self, action: BxM_Action
-    ) -> tuple[
+    def step(self, action: BxM_Action, action_spec: ActionSpec[Any] | None = None) -> tuple[
         BxN_Obs,
         Float[torch.Tensor, "b"],  # noqa: F821
         Bool[torch.Tensor, "b"],  # noqa: F821
@@ -306,13 +346,14 @@ class ROS2SkilletEnv(
 
         Args:
             action: The action tensor of shape (num_envs, num_actions)
+            action_spec: Skillet Action spec of the action: TODO: currently assumes all actions on batchhave same spec
 
         Returns:
             A tuple containing the observation of observations tensor (num_envs, obs_dim) and info dictionary
 
         """
         action = action.to(self.device)
-        obs_dict, reward, term, trunc, info = self.env.step(action)
+        obs_dict, reward, term, trunc, info = self._env.step(action, action_spec=action_spec)
         self.last_obs = obs_dict
         for k, v in obs_dict.items():
             obs_dict[k] = torch.as_tensor(v, device=self.device).unsqueeze(0)
@@ -370,7 +411,7 @@ class ROS2SkilletEnv(
     def _get_jacobians(
         self,
         env_ids: torch.Tensor | None = None,
-        ee_link: str = "robotiq_85_base_link",
+        ee_link: str = "end_effector_link",
         base_link: str = "base_link",
         arm_joint_ids: list | None = None,
     ) -> torch.Tensor:
@@ -412,7 +453,7 @@ class ROS2SkilletEnv(
     def _get_tcp_pose_b(
         self,
         env_ids: torch.Tensor | None = None,
-        ee_link: str = "robotiq_85_base_link",
+        ee_link: str = "end_effector_link",
     ) -> torch.Tensor:
         """Get the TCP pose of the robot in the robot base frame.
 
@@ -464,7 +505,7 @@ class ROS2SkilletEnv(
     def _get_ee_pose_b(
         self,
         env_ids: torch.Tensor | None = None,
-        ee_link: str = "robotiq_85_base_link",
+        ee_link: str = "end_effector_link",
         base_link: str = "base_link",
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Compute and return the end effector pose of the robot in the robot's base frame.

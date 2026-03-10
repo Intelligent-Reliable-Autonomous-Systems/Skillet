@@ -29,7 +29,7 @@ class RealsenseEnv(_EnvironmentBase):
     """Environment that streams RGB-D observations from an Intel RealSense camera.
 
     The raw RGB-D snapshot matches `_get_latest_rgbd` in
-    `kinova_reach_ros2.py` (RGB HxWx3, depth HxW, intrinsics, pose, timestamp).
+    `gen3_ros2.py` (RGB HxWx3, depth HxW, intrinsics, pose, timestamp).
     The public observation returned by `get_observation()` also mirrors the
     post-processing done in `ROS2EnvWrapper` for the `"rgb-d"` observation:
 
@@ -236,7 +236,9 @@ class RealsenseEnv(_EnvironmentBase):
             raise ValueError(f"Observation spec {obs_spec} not supported by RealsenseEnv.")
         return obs_spec.cast(obs)
 
-    def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
+    def reset(
+        self, *, seed: int | None = None, options: dict[str, Any] | None = None
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
         return self.get_observation(), {}
 
     def step(self, action: Any) -> tuple[dict[str, Any], float, bool, bool, dict[str, Any]]:

@@ -10,7 +10,16 @@ from skillet.core.math import quat_apply, quat_from_euler_xyz, quat_inv, quat_mu
 from skillet.core.policy import BatchedPPolicy, TBAction, TBPolicyParams
 from skillet.core.spaces import ActionSpec, ObservationSpec
 from skillet.envs.specs import IKEE_Obs
-from skillet.skill.specs import ROLL_PITCH_YAW_Params, ROLL_PITCH_YAW_Params_Spec, XYZ_Params, XYZ_Params_Spec, XYZ_QUAT_Params, XYZ_QUAT_Params_Spec, XYZ_RPY_Params, XYZ_RPY_Params_Spec
+from skillet.skill.specs import (
+    ROLL_PITCH_YAW_Params,
+    ROLL_PITCH_YAW_Params_Spec,
+    XYZ_Params,
+    XYZ_Params_Spec,
+    XYZ_QUAT_Params,
+    XYZ_QUAT_Params_Spec,
+    XYZ_RPY_Params,
+    XYZ_RPY_Params_Spec,
+)
 
 
 class IKEEPolicy(BatchedPPolicy[IKEE_Obs, TBAction, TBPolicyParams], Generic[TBAction, TBPolicyParams]):
@@ -51,7 +60,7 @@ class IKEEPolicy(BatchedPPolicy[IKEE_Obs, TBAction, TBPolicyParams], Generic[TBA
         """Get the next joint positions by computing differential inverse kinematics."""
         ee_pose_b = obs["ee_pose_b"]
         jacobians = obs["jacobians"]
-        joint_pos = obs["joint_pos"][:, :7]  # Ignore gripper
+        joint_pos = obs["joint_pos"][:, : jacobians.shape[-1]]  # Ignore gripper
         arm_joint_pos = self.diff_ik.compute(ee_pose_b[:, 0:3], ee_pose_b[:, 3:7], jacobians, joint_pos)
         return torch.cat(
             (arm_joint_pos, self.start_gripper_pos),
@@ -65,10 +74,7 @@ class IKEEPolicy(BatchedPPolicy[IKEE_Obs, TBAction, TBPolicyParams], Generic[TBA
         self.diff_ik.reset(n_envs, env_ids=env_ids)
         self.tcp_offset = obs["tcp_offset"]
         gripper_lim = obs["gripper_lim"]
-        gripper_dim = obs["gripper"].shape[-1]
-        self.start_gripper_pos = (obs["gripper"] - gripper_lim[:, 0:gripper_dim]) / (
-            gripper_lim[:, gripper_dim:] - gripper_lim[:, 0:gripper_dim]
-        )
+        self.start_gripper_pos = (obs["gripper"] - gripper_lim[:, :1]) / (gripper_lim[:, 1:] - gripper_lim[:, :1])
 
     def _compute_goal_ee_pose_b_from_goal_tcp_b(
         self, tcp_pose_b: torch.Tensor, tcp_offset: torch.Tensor

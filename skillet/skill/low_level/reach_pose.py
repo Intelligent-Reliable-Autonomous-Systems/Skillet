@@ -111,4 +111,4 @@ class ReachPoseSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_QUAT_Params], Generic[
 
     def reward(self, obs: IKEE_Obs) -> Float[ArrayLike, "b"]:  # noqa: F821
         """Compute the reward of the skill."""
-        pass
+        ...

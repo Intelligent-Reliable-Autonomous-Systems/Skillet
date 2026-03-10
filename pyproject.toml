@@ -33,6 +33,8 @@ dependencies = [
     "typing-extensions",
     "pynput",
     "tensordict",
+    "zmq",
+    "scipy",
 ]
 
 [project.optional-dependencies]
@@ -49,6 +51,14 @@ dev = [
 ]
 
 [project.scripts]
+mj_train = "skillet.scripts.rl.mj_train:main"
+isaac_train = "skillet.scripts.rl.isaac_train:main"
+ros2_train = "skillet.scripts.rl.ros2_train:main"
+mj_play = "skillet.scripts.rl.mj_play:main"
+isaac_play = "skillet.scripts.rl.isaac_play:main"
+ros2_play = "skillet.scripts.rl.ros2_play:main"
+ros2_teleop = "skillet.scripts.teleop.ros2_teleop:main"
+
 
 #[project.entry-points."gymnasium.envs"]
 

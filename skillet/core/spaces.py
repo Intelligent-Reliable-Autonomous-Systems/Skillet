@@ -71,6 +71,7 @@ class ArrayLike(Protocol):
 
     def __add__(self, other: object) -> ArrayLike: ...  # noqa: D105
     def __mul__(self, other: object) -> ArrayLike: ...  # noqa: D105
+
     # def astype(self, dtype: object) -> ArrayLike: ...
     def __iter__(self) -> Iterator[ArrayLike]: ...  # noqa: D105
     def __or__(self, other: ArrayLike) -> ArrayLike: ...  # noqa: D105
@@ -134,15 +135,11 @@ class SpaceSpecification(Generic[TSpace]):
                     space = next(iter(self.space.spaces.values()))
                     space_shape = space.shape
                 if space_shape is None:
-                    raise ValueError(
-                        f"Cannot infer batch size from dict space {self.space} because the shape of the \
-                            first subspace is unknown."
-                    )
+                    raise ValueError(f"Cannot infer batch size from dict space {self.space} because the shape of the \
+                            first subspace is unknown.")
             if len(space_shape) == 0:
-                raise ValueError(
-                    f"Cannot infer batch size from space {self.space} because the shape is empty. \
-                        The space is not batched."
-                )
+                raise ValueError(f"Cannot infer batch size from space {self.space} because the shape is empty. \
+                        The space is not batched.")
             if space_shape[0] == -1 or isinstance(space_shape[0], str):
                 raise ValueError(f"Cannot infer batch size from space {self.space}. shape[0]={space_shape[0]}")
             object.__setattr__(self, "n_envs", space_shape[0])
@@ -214,10 +211,8 @@ class SpaceSpecification(Generic[TSpace]):
             dtype = dtype or self.space.dtype
             if shape[0] == -1:
                 if self.n_envs == -1:
-                    raise ValueError(
-                        "n_envs not specified. Cannot infer shape with first dimension -1. \
-                            Use with_n_envs() to set the batch size."
-                    )
+                    raise ValueError("n_envs not specified. Cannot infer shape with first dimension -1. \
+                            Use with_n_envs() to set the batch size.")
                 shape = (self.n_envs, *shape[1:])
             if self.is_torch:
                 return torch.zeros(shape, dtype=as_torch_dtype(dtype), device=self.device)
@@ -273,10 +268,8 @@ class SpaceSpecification(Generic[TSpace]):
             dtype = dtype or self.space.dtype
             if shape[0] == -1:
                 if self.n_envs == -1:
-                    raise ValueError(
-                        "n_envs not specified. Cannot infer shape with first dimension -1. \
-                            Use with_n_envs() to set the batch size."
-                    )
+                    raise ValueError("n_envs not specified. Cannot infer shape with first dimension -1. \
+                            Use with_n_envs() to set the batch size.")
                 shape = (self.n_envs, *shape[1:])
             if self.is_torch:
                 return torch.ones(shape, dtype=as_torch_dtype(dtype), device=self.device)
@@ -337,10 +330,8 @@ class SpaceSpecification(Generic[TSpace]):
                     elif self.n_envs == -1 and arr.shape[1:] == expected_shape:
                         pass  # arr is already batched
                     else:
-                        raise ValueError(
-                            f"Expected shape {expected_shape} (n_envs={self.n_envs}) but got {arr.shape} \
-                            for value {key}."
-                        )
+                        raise ValueError(f"Expected shape {expected_shape} (n_envs={self.n_envs}) but got {arr.shape} \
+                            for value {key}.")
                 return arr
             # numpy case
             arr = np.asarray(v, dtype=dtype)
@@ -351,10 +342,8 @@ class SpaceSpecification(Generic[TSpace]):
                 elif self.n_envs == -1 and arr.shape[1:] == expected_shape:
                     pass  # arr is already batched
                 else:
-                    raise ValueError(
-                        f"Expected shape {expected_shape} (n_envs={self.n_envs}) but got {arr.shape} \
-                        for value {key}."
-                    )
+                    raise ValueError(f"Expected shape {expected_shape} (n_envs={self.n_envs}) but got {arr.shape} \
+                        for value {key}.")
             return arr
 
         if isinstance(self.space, gym.spaces.Dict):
@@ -458,7 +447,6 @@ TAction = TypeVar("TAction", bound=Action | BatchedAction)
 # class ActionSpec(SpaceSpecification[TAction], Generic[TAction]):
 #     """The specification of an action space."""
 
-#     pass
 
 ActionSpec: TypeAlias = SpaceSpecification[TAction]
 
@@ -478,7 +466,6 @@ TObs = TypeVar("TObs", bound=Observation | BatchedObservation)
 # class ObservationSpec(SpaceSpecification[TObs], Generic[TObs]):
 #     """The specification of an observation space."""
 
-#     pass
 
 ObservationSpec: TypeAlias = SpaceSpecification[TObs]
 
@@ -502,7 +489,7 @@ TSkillParams = TypeVar("TSkillParams", bound=SkillParams)
 class SkillParamsSpec(SpaceSpecification[TSkillParams], Generic[TSkillParams]):
     """The specification of a skill parameter space."""
 
-    pass
+    ...
 
 
 TBSkillParams = TypeVar("TBSkillParams", bound=BatchedSkillParams)
@@ -511,7 +498,7 @@ TBSkillParams = TypeVar("TBSkillParams", bound=BatchedSkillParams)
 class BatchedSkillParamsSpec(SpaceSpecification[TBSkillParams], Generic[TBSkillParams]):
     """The specification of a batched skill parameter space."""
 
-    pass
+    ...
 
 
 # Brainstorming parameter examples:
@@ -628,7 +615,9 @@ class ParameterizedSpace(gym.spaces.Space, ABC):
         If the parameterized space is not fully bound, return a new parameterized space with the parameters bound.
         Otherwise, return a non-parameterized space.
         """
-        raise NotImplementedError(f"bind_partial() is not available for this parameterized space {self.__class__.__name__}.")
+        raise NotImplementedError(
+            f"bind_partial() is not available for this parameterized space {self.__class__.__name__}."
+        )
 
     def bind(self, **params: int) -> gym.spaces.Space:
         """Bind the parameterized space to the given parameters.
@@ -658,7 +647,9 @@ class ParameterizedSpace(gym.spaces.Space, ABC):
 
     @override
     def contains(self, x: Any) -> bool:
-        raise NotImplementedError(f"contains() is not available for this parameterized space {self.__class__.__name__}.")
+        raise NotImplementedError(
+            f"contains() is not available for this parameterized space {self.__class__.__name__}."
+        )
 
     @override
     def to_jsonable(self, sample_n: Any) -> Any:
@@ -667,6 +658,7 @@ class ParameterizedSpace(gym.spaces.Space, ABC):
     @override
     def from_jsonable(self, sample_n: Any) -> Any:
         raise ValueError(f"from_jsonable() is not available for this parameterized space {self.__class__.__name__}.")
+
 
 class ParameterizedBox(gym.spaces.Box, ParameterizedSpace):
     """A parameterized box space."""
@@ -707,7 +699,9 @@ class ParameterizedBox(gym.spaces.Box, ParameterizedSpace):
         """
         low = params.get(self._low, self._low) if isinstance(self._low, str) else self._low
         high = params.get(self._high, self._high) if isinstance(self._high, str) else self._high
-        shape = [params[v] if v in params else self._shape_with_params[i] for i, v in enumerate(self._shape_with_params)]
+        shape = [
+            params[v] if v in params else self._shape_with_params[i] for i, v in enumerate(self._shape_with_params)
+        ]
         vars_left = [v for v in shape if isinstance(v, str)]
         if isinstance(low, str):
             vars_left.append(low)
@@ -721,9 +715,9 @@ class ParameterizedBox(gym.spaces.Box, ParameterizedSpace):
                 dtype=self._dtype,
                 seed=self._seed,
             )
-        low = cast('SupportsFloat | NDArray[Any]', low)
-        high = cast('SupportsFloat | NDArray[Any]', high)
-        shape = cast('Sequence[int]', shape)
+        low = cast("SupportsFloat | NDArray[Any]", low)
+        high = cast("SupportsFloat | NDArray[Any]", high)
+        shape = cast("Sequence[int]", shape)
         return gym.spaces.Box(
             low=low,
             high=high,
@@ -783,6 +777,7 @@ class ParameterizedBox(gym.spaces.Box, ParameterizedSpace):
 
         raise ValueError(f"Cannot establish containment for parameterized box with shape {self.shape}.")
 
+
 class ParameterizedDiscrete(gym.spaces.Discrete, ParameterizedSpace):
     """A parameterized discrete space.
 
@@ -816,9 +811,10 @@ class ParameterizedDiscrete(gym.spaces.Discrete, ParameterizedSpace):
             vars_left.append(start)
         if len(vars_left) > 0:
             return ParameterizedDiscrete(n=n, start=start)
-        n = cast('int', n)
-        start = cast('int', start) if start is not None else 0
+        n = cast("int", n)
+        start = cast("int", start) if start is not None else 0
         return gym.spaces.Discrete(n=n, start=start)
+
 
 if __name__ == "__main__":
     space = ParameterizedDiscrete(n="n_options", start=0)
