@@ -1,4 +1,4 @@
-"""Run the perception pipeline on RGB-D observations from ROS2."""
+"""Run a tabletop block stacking task."""
 
 import argparse
 import os
@@ -9,6 +9,8 @@ from skillet.envs.util import setup_ros
 from skillet.perception.perception import Perception
 from skillet.perception.realsense import RealsenseEnv
 from skillet.perception.sam3.sam3 import SAMConcept
+from skillet.scene.base import Scene
+from skillet.scene.cube import Cube
 from skillet.scene.visualize import Open3DVisualizer
 
 parser = argparse.ArgumentParser(description="Visualize latest RGB-D frame from ROS2 service.")
@@ -32,30 +34,33 @@ if args_cli.ros2_ws is None:
     if args_cli.ros2_ws is None:
         raise ValueError("ROS2 workspace path must be provided via --ros2_ws argument or ROS2_WS environment variable.")
 
-# Table bounds (same as perception.py __main__)
 TABLE_X0 = -0.0889
 TABLE_Y0 = -0.577
 TABLE_DX = 0.762
 TABLE_DY = 1.2446
-WORLD_BOUNDS = (TABLE_X0, TABLE_Y0, 0, TABLE_X0 + TABLE_DX, TABLE_Y0 + TABLE_DY, 1) # min_x, min_y, min_z, max_x, max_y, max_z
-
-# PROMPTS = {
-#     "wooden_block": "a light brown wooden block",
-#     "purple_block": "a solid purple block without any writing or markings",
-#     "yellow_block": "a solid yellow block without any writing or markings",
-#     "green_block": "a solid green block without any writing or markings",
-# }
-PROMPTS = [
-    SAMConcept(name="block_8", prompt="wooden block with number 8 on it"),
-    SAMConcept(name="block_7", prompt="wooden block with number 7 on it"),
-    SAMConcept(name="mouse", prompt="a computer mouse"),
-]
-
 
 def main() -> None:
     """Visualize RGB + depth color map from _get_latest_rgbd()."""
+    cube_0 = Cube(size=0.04, face_apriltags=[{"face": "top", "size": 0.036, "id": 0}])
+    cube_1 = Cube(size=0.04, face_apriltags=[{"face": "front", "size": 0.036, "id": 3}])
+
+    world_bounds = (TABLE_X0, TABLE_Y0, 0, TABLE_X0 + TABLE_DX, TABLE_Y0 + TABLE_DY, 1) # min_x, min_y, min_z, max_x, max_y, max_z
+    scene = Scene(objects=[cube_0, cube_1], closed_set=True, bounds=world_bounds)
+
+    # PROMPTS = {
+    #     "wooden_block": "a light brown wooden block",
+    #     "purple_block": "a solid purple block without any writing or markings",
+    #     "yellow_block": "a solid yellow block without any writing or markings",
+    #     "green_block": "a solid green block without any writing or markings",
+    # }
+    sam3_prompts = [
+        SAMConcept(name="block_8", prompt="wooden block with number 8 on it", exemplar_images=["/home/iras/skillet/data/images/wooden_block_8.png"]),
+        SAMConcept(name="block_7", prompt="wooden block with number 7 on it", exemplar_images=["/home/iras/skillet/data/images/wooden_block_7.png"]),
+        SAMConcept(name="mouse", prompt="a computer mouse", exemplar_images=["/home/iras/skillet/data/images/computer_mouse.jpeg"]),
+    ]
+
     if args_cli.realsense_env:
-        env = RealsenseEnv()
+        env = RealsenseEnv(apriltag_size_m=0.036, apriltag_id=0)
     else:
         env_cfg = KinovaROS2EnvCfg(
             robot_ip=args_cli.robot_ip,
@@ -75,15 +80,15 @@ def main() -> None:
     perception = Perception(
         env=env,
         obs_spec=rgbd_spec,
+        scene=scene,
         segmentation=args_cli.segmentation,
         poll_rate=poll_rate_hz,
         device=args_cli.device,
         max_depth_m=args_cli.max_depth_m,
-        prompts=PROMPTS,
-        world_bounds=WORLD_BOUNDS,
+        prompts=sam3_prompts,
     )
 
-    vis = Open3DVisualizer(world_bounds=WORLD_BOUNDS)
+    vis = Open3DVisualizer(scene)
     if "pointcloud" in args_cli.viz:
         perception.set_visualizer(vis, segment_point_cloud=True)
     perception.start_cv2_visualization(

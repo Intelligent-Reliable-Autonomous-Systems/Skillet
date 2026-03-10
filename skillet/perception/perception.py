@@ -8,16 +8,18 @@ import threading
 import time
 from contextlib import suppress
 from dataclasses import replace
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import cv2
 import numpy as np
 import torch
 
+from skillet.perception.apriltag import ApriltagStateEstimator
 from skillet.perception.object_localization import segmented_rgbd_to_point_cloud
 from skillet.perception.realsense import RealsenseEnv
 from skillet.perception.sam3.sam3 import SAM3, SAMConcept
 from skillet.perception.utils import depth_to_colormap_np
+from skillet.scene.base import Scene
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -25,7 +27,7 @@ if TYPE_CHECKING:
     from skillet.core import BatchedEnvironment
     from skillet.core.env import Environment
     from skillet.core.spaces import ObservationSpec
-    from skillet.perception.visualize import PointCloudVisualizer
+    from skillet.scene.visualize import Open3DVisualizer
 
 _PALETTE_BGR: list[tuple[int, int, int]] = [
     (44, 44, 220),
@@ -56,12 +58,12 @@ class Perception:
         self,
         env: Environment | BatchedEnvironment,
         obs_spec: ObservationSpec,
+        scene: Scene,
         segmentation: bool = True,
         poll_rate: float = 8,
-        device: str = "cuda",
+        device: str | torch.device | None = None,
         max_depth_m: float | None = None,
         prompts: list[SAMConcept] | None = None,
-        world_bounds: tuple[float, float, float, float, float, float] | None = None,
         sam3_model_path: str | None = None,
         segmentation_fn: Callable[[Mapping[str, Any]], torch.Tensor] | None = None,
     ) -> None:
@@ -69,14 +71,19 @@ class Perception:
         self.env = env
         if isinstance(device, str):
             device = torch.device(device)
-        self.device = device
-        self.obs_spec = replace(obs_spec, device=device, is_torch=True)
+        self.device = device or obs_spec.device
+        self.obs_spec = replace(obs_spec, device=self.device, is_torch=True)
         self.poll_rate = poll_rate
         self.max_depth_m = max_depth_m
+
+        # AprilTag estimation
+        self._apriltag_estimator = ApriltagStateEstimator(scene)
+
+        # Segmentation
         self.prompts = prompts or []
         self._prompt_names = [prompt.name for prompt in self.prompts]
         self._sam_prompts = self.prompts
-        self.world_bounds = world_bounds
+        self.scene = scene
         self.segmentation_fn = segmentation_fn
         self.sam3: SAM3 | None = None
         if segmentation and self._sam_prompts:
@@ -90,7 +97,7 @@ class Perception:
         self.latest_point_cloud: torch.Tensor | None = None
         self.latest_segment_indices: torch.Tensor | None = None
 
-        self._pc_vis: PointCloudVisualizer | None = None
+        self._pc_vis: Open3DVisualizer | None = None
         self._segment_point_cloud = False
 
         self._display_rgb = False
@@ -209,7 +216,7 @@ class Perception:
 
     def set_visualizer(
         self,
-        vis: PointCloudVisualizer,
+        vis: Open3DVisualizer,
         segment_point_cloud: bool = False,
     ) -> None:
         """Attach an external :class:`PointCloudVisualizer` for 3-D rendering.
@@ -355,6 +362,9 @@ class Perception:
         while not self._stop_event.is_set():
             obs = self.env.get_observation(self.obs_spec)
             obs_unbatched = self._apply_far_plane(self._maybe_unbatch(obs))
+
+            self._apriltag_estimator.update(obs_unbatched)
+
             masks, segment_ids = self._get_masks(obs_unbatched)
             point_cloud, segment_indices = self._observation_to_point_cloud(obs_unbatched, masks, segment_ids)
 
@@ -382,7 +392,7 @@ class Perception:
         self._stop_cv2()
 
 if __name__ == "__main__":
-    from skillet.perception.visualize import PointCloudVisualizer
+    from skillet.perception.visualize import Open3DVisualizer
 
     env = RealsenseEnv()
     TABLE_X0 = -0.0889
@@ -390,18 +400,19 @@ if __name__ == "__main__":
     TABLE_DX = 0.762
     TABLE_DY = 1.2446
     bounds = (TABLE_X0, TABLE_Y0, 0, TABLE_X0 + TABLE_DX, TABLE_Y0 + TABLE_DY, 1)
-    perception = Perception(env, env.obs_spec, 8, prompts={
-        "wooden_block": "a light brown wooden block",
-        "purple_block": "a solid purple block without any writing or markings",
-        "yellow_block": "a solid yellow block without any writing or markings",
-        "green_block": "a solid green block without any writing or markings",
-        }, world_bounds=bounds)
+    prompts = [
+        SAMConcept(name="wooden_block", prompt="a light brown wooden block"),
+        SAMConcept(name="purple_block", prompt="a solid purple block"),
+        SAMConcept(name="yellow_block", prompt="a solid yellow block"),
+        SAMConcept(name="green_block", prompt="a solid green block"),
+    ]
+    perception = Perception(env, env.obs_spec, Scene(), 8, prompts=prompts)
 
-    vis = PointCloudVisualizer(world_bounds=bounds)
-    perception.set_visualizer(vis, segment_point_cloud=True)
-    perception.start_cv2_visualization(
-        display_rgb=True, display_depth=True,
-        segment_rgb=True, segment_depth=True,
-    )
-    perception.run_thread()
-    vis.run()
+    # vis = PointCloudVisualizer(world_bounds=bounds)
+    # perception.set_visualizer(vis, segment_point_cloud=True)
+    # perception.start_cv2_visualization(
+    #     display_rgb=True, display_depth=True,
+    #     segment_rgb=True, segment_depth=True,
+    # )
+    perception.run()
+    # vis.run()
