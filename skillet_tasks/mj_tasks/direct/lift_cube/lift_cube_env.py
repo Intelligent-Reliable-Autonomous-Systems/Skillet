@@ -71,16 +71,25 @@ class LiftCubeEnv(DirectRLEnv):
         self.actions = actions.clone().clamp(-5.0, 5.0)
         targets = self.default_joint_pos + self.actions * self.cfg.action_scale
         self.robot_dof_targets = torch.clamp(targets, self.robot_dof_lower_limits, self.robot_dof_upper_limits)
+        self.robot_dof_targets[:, -1] = (
+            self.robot_dof_targets[:, -1] / (self.robot_dof_upper_limits[-1:] - self.robot_dof_lower_limits[-1:])
+            + self.robot_dof_lower_limits[-1:]
+        ) * 255  # Rescale gripper position to control range
 
     def _apply_action(self):
-        self.robot.set_joint_position_target(self.robot_dof_targets, joint_ids=self.cfg.joint_ids)
+        self.robot.set_joint_position_target(self.robot_dof_targets[:, :-1], joint_ids=self.cfg.joint_ids[:-1])
+        self.robot.set_tendon_len_target(
+            self.robot_dof_targets[:, -1:], tendon_ids=[0]
+        )  # Only one tendon in articulation
 
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
         """Terminate if max length is reached or cube goes below minimum height"""
         truncated = self.episode_length_buf >= self.max_episode_length - 1
         terminated_pos = torch.zeros(size=(self.num_envs,), device=self.device, dtype=torch.bool)
 
-        terminated_pos = self.cube_pose_w[:, 2] < -0.05
+        terminated_pos = (self.cube_pose_w[:, 2] < -0.05).to(torch.bool) | torch.isnan(
+            self.robot.data.body_link_pose_w
+        ).any(dim=(1, 2)).to(torch.bool)
         """| torch.any(
             self.scene["ee_ground_collision"].data.found, dim=-1
         )"""
@@ -91,25 +100,28 @@ class LiftCubeEnv(DirectRLEnv):
         # Refresh the intermediate values after the physics steps
         self._compute_intermediate_values()
 
-        return compute_rewards(
-            self.actions,
-            self.prev_actions,
-            self.robot.data.joint_pos[:, self.cfg.joint_ids],
-            self.robot.data.joint_vel[:, self.cfg.joint_ids],
-            self.robot_tcp_pose_w[:, 0:3],
-            self.cube_pose_w[:, 0:3],
-            self.cube_goal_pose_w[:, 0:3],
-            self.cfg.min_height,
-            self.cfg.cube_reach_reward_scale,
-            self.cfg.cube_reach_reward_std,
-            self.cfg.cube_lift_reward_scale,
-            self.cfg.cube_goal_reward_scale,
-            self.cfg.cube_goal_reward_std,
-            self.cfg.cube_goal_fine_grained_scale,
-            self.cfg.cube_goal_fine_grained_std,
-            self.cfg.action_rate_reward_scale,
-            self.cfg.joint_vel_reward_scale,
-        )
+        return torch.nan_to_num(
+            compute_rewards(
+                self.actions,
+                self.prev_actions,
+                self.robot.data.joint_pos[:, self.cfg.joint_ids],
+                self.robot.data.joint_vel[:, self.cfg.joint_ids],
+                self.robot_tcp_pose_w[:, 0:3],
+                self.cube_pose_w[:, 0:3],
+                self.cube_goal_pose_w[:, 0:3],
+                self.cfg.min_height,
+                self.cfg.cube_reach_reward_scale,
+                self.cfg.cube_reach_reward_std,
+                self.cfg.cube_lift_reward_scale,
+                self.cfg.cube_goal_reward_scale,
+                self.cfg.cube_goal_reward_std,
+                self.cfg.cube_goal_fine_grained_scale,
+                self.cfg.cube_goal_fine_grained_std,
+                self.cfg.action_rate_reward_scale,
+                self.cfg.joint_vel_reward_scale,
+            ),
+            nan=0.0,
+        )  # NOTE we cast nans to zero and reset the environment
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
         super()._reset_idx(env_ids)
@@ -140,17 +152,20 @@ class LiftCubeEnv(DirectRLEnv):
         self._compute_intermediate_values(env_ids)
 
     def _get_observations(self) -> dict:
-        obs = torch.cat(
-            (
-                self.robot.data.joint_pos[:, self.cfg.joint_ids]
-                - self.robot.data.default_joint_pos[:, self.cfg.joint_ids],
-                self.robot.data.joint_vel[:, self.cfg.joint_ids],
-                self.cube_pose_b[:, 0:3],
-                self.cube_goal_xyz_b[:, 0:3],
-                self.prev_actions,
+        obs = torch.nan_to_num(
+            torch.cat(
+                (
+                    self.robot.data.joint_pos[:, self.cfg.joint_ids]
+                    - self.robot.data.default_joint_pos[:, self.cfg.joint_ids],
+                    self.robot.data.joint_vel[:, self.cfg.joint_ids],
+                    self.cube_pose_b[:, 0:3],
+                    self.cube_goal_xyz_b[:, 0:3],
+                    self.prev_actions,
+                ),
+                dim=-1,
             ),
-            dim=-1,
-        )
+            nan=0.0,
+        )  # NOTE we cast nans to zero and call doens
         return {"policy": torch.clamp(obs, -5.0, 5.0)}
 
     # auxiliary methods
@@ -250,7 +265,9 @@ def compute_rewards(
     cube_tcp_distance = torch.norm(cube_pos_w - tcp_pos_w, dim=1)
     cube_tcp_distance_reward = cube_reach_reward_scale * (1 - torch.tanh(cube_tcp_distance / cube_reach_reward_std))
 
-    cube_lifted_reward = cube_lift_reward_scale * torch.where(cube_pos_w[:, 2] > min_height, 1.0, 0.0)
+    cube_lifted_reward = (
+        cube_lift_reward_scale * torch.where(cube_pos_w[:, 2] > min_height, 1.0, 0.0) * (cube_tcp_distance < 0.1)
+    )  # Make sure that the arm doesn't throw the cube really high
 
     cube_distance = torch.norm(cube_goal_pos_w - cube_pos_w, dim=1)
 

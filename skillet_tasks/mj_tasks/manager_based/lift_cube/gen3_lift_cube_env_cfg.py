@@ -5,9 +5,9 @@ from mjlab.entity import EntityCfg
 from mjlab.envs.mdp.actions import JointPositionActionCfg
 from mjlab.sensor import ContactSensorCfg
 
-from skillet_tasks.assets.mujoco.kinova_gen3 import KINOVA_GEN3_ACTION_SCALE, get_gen3_robot_cfg
-from skillet_tasks.mj_tasks.manager_based.actions import HomeRelativeIKActionCfg
 from skillet.envs.util import configclass
+from skillet_tasks.assets.mujoco.kinova_gen3 import get_gen3_robot_cfg
+from skillet_tasks.mj_tasks.manager_based.actions import HomeRelativeIKActionCfg
 
 from .lift_cube_base_env_cfg import LiftCubeEnvCfg
 
@@ -61,7 +61,7 @@ class Gen3LiftCubeEnvCfg(LiftCubeEnvCfg):
         self.observations["critic"].terms["ee_to_cube"].params["asset_cfg"].site_names = ("pinch_site",)
         self.rewards["lift"].params["asset_cfg"].site_names = ("pinch_site",)
 
-        self.actions["joint_pos"].scale = KINOVA_GEN3_ACTION_SCALE
+        self.actions["joint_pos"].scale = 0.04
 
         # Fingertip friction randomization (Robotiq 2F-85 pads)
         fingertip_geoms = r"(left|right)_pad[12]"

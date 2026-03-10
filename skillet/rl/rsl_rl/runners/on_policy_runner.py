@@ -15,8 +15,8 @@ import torch
 from tensordict import TensorDict
 
 import skillet.rl.rsl_rl
-from skillet.rl.rsl_rl.algorithms import PPO
 from skillet.envs.compatibility.rsl_rl import RslRlVecEnv as VecEnv
+from skillet.rl.rsl_rl.algorithms import PPO
 from skillet.rl.rsl_rl.modules import ActorCritic, ActorCriticRecurrent, resolve_rnd_config, resolve_symmetry_config
 from skillet.rl.rsl_rl.utils import resolve_obs_groups, store_code_state
 

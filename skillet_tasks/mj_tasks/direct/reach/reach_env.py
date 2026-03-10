@@ -76,6 +76,7 @@ class ReachEnv(DirectRLEnv):
 
     def _apply_action(self):
         self.robot.set_joint_position_target(self.robot_dof_targets, joint_ids=self.cfg.joint_ids)
+        self.robot.set_tendon_len_target(self.robot_dof_targets[:, -1:], tendon_ids=self.cfg.joint_ids[-1:])
 
     # post-physics step calls
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:

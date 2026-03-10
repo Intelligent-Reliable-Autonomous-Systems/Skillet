@@ -251,7 +251,7 @@
   </contact>
 
   <tendon>
-    <fixed name="split">
+    <fixed name="fingers_actuator">
       <joint joint="right_driver_joint" coef="0.5"/>
       <joint joint="left_driver_joint" coef="0.5"/>
     </fixed>
@@ -275,7 +275,7 @@
     <!-- Gripper: single tendon-based actuator (matches mujoco_menagerie/robotiq_2f85).
          ctrl=0 → open (driver joints at 0), ctrl=255 → closed (driver joints at 0.8).
          gainprm[0] = 0.8 * 100 / 255 ≈ 0.3137255, kp=100 via biasprm. -->
-    <general class="2f85" name="fingers_actuator" tendon="split" forcerange="-5 5" ctrlrange="0 255"
+    <general class="2f85" name="fingers_actuator" tendon="fingers_actuator" forcerange="-5 5" ctrlrange="0 255"
       gainprm="0.3137255 0 0" biasprm="0 -100 -10"/>
   </actuator>
 
