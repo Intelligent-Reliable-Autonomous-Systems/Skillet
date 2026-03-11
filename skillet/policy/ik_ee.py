@@ -7,7 +7,7 @@ import torch
 from skillet.controllers import DifferentialIKController
 from skillet.core import SkillParamsSpec
 from skillet.core.math import quat_apply, quat_from_euler_xyz, quat_inv, quat_mul
-from skillet.core.policy import BatchedPPolicy, TBAction, TBPolicyParams
+from skillet.core.policy import BatchedPolicy, TBAction, TBPolicyParams
 from skillet.core.spaces import ActionSpec, ObservationSpec
 from skillet.envs.specs import IKEE_Obs
 from skillet.skill.specs import (
@@ -22,7 +22,7 @@ from skillet.skill.specs import (
 )
 
 
-class IKEEPolicy(BatchedPPolicy[IKEE_Obs, TBAction, TBPolicyParams], Generic[TBAction, TBPolicyParams]):
+class IKEEPolicy(BatchedPolicy[IKEE_Obs, TBAction, TBPolicyParams], Generic[TBAction, TBPolicyParams]):
     """Abstract base class for Inverse Kinematics End Effector Policy.
 
     Generic Args:

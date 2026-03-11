@@ -3,7 +3,7 @@
 import argparse
 import os
 import sys
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import gymnasium as gym
 import torch
@@ -12,20 +12,21 @@ from skillet.agents.policy_over_options import PolicyOverOptionsAgent, SelectedS
 from skillet.core import ActionSpec, ObservationSpec
 from skillet.core.env import BatchToSingleWrapper
 from skillet.envs.ros2_skillet_env import ROS2SkilletEnv
-from skillet.envs.specs import BxM_Action, IKEE_Obs, M_Action, N_Obs
-from skillet.envs.util import setup_ros
 from skillet.perception.perception import Perception
 from skillet.perception.realsense import RealsenseEnv
 from skillet.perception.sam3.sam3 import SAMConcept
 from skillet.policy.dummy import FixedSequencePolicy
 from skillet.policy.ik_ee import PoseAbsIKEEPolicy
+from skillet.policy.moveit import MoveItTcpQuatPolicy
 from skillet.scene.base import Scene
 from skillet.scene.cube import Cube
 from skillet.scene.visualize import Open3DVisualizer
 from skillet.skill.high_level.pick import PickSkill
 from skillet.skill.high_level.pick_block import PickBlockSkill
-from skillet_tasks.ros2_tasks.gen3.gen3_ros2 import Gen3ROS2Env, Gen3ROS2EnvCfg
-from skillet_tasks.ros2_tasks.gen3_lite.gen3lite_ros2 import Gen3LiteROS2Env, Gen3LiteROS2EnvCfg
+from skillet_tasks.ros2_tasks.factory import create_ros2_env
+
+if TYPE_CHECKING:
+    from skillet.envs.specs import BxM_Action, IKEE_Obs, RGBD_Obs
 
 parser = argparse.ArgumentParser(description="Visualize latest RGB-D frame from ROS2 service.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
@@ -33,6 +34,7 @@ parser.add_argument("--device", type=str, default="cuda", help="Device to use")
 parser.add_argument(
     "--ros2_ws", type=str, default=None, help="Absolute path to ROS2 workspace containing bringup files"
 )
+parser.add_argument("--use_moveit", action=argparse.BooleanOptionalAction, default=True, help="Use MoveIt for motion planning.")
 parser.add_argument("--segmentation", action=argparse.BooleanOptionalAction, default=False, help="Use segmentation.")
 parser.add_argument("--realsense_env", action="store_true", help="Use RealSense camera environment.")
 parser.add_argument("--viz", type=str, default="rgb,depth,pointcloud", help="Visualization modes to display, as comma-separated string.")
@@ -59,52 +61,33 @@ def main() -> None:
     cube_1 = Cube(size=0.041, face_apriltags=[{"face": "front", "size": 0.036, "id": 2}])
     cube_2 = Cube(size=0.041, face_apriltags=[{"face": "front", "size": 0.036, "id": 4}])
 
-    world_bounds = (TABLE_X0, TABLE_Y0, 0, TABLE_X0 + TABLE_DX, TABLE_Y0 + TABLE_DY, 1) # min_x, min_y, min_z, max_x, max_y, max_z
+    world_bounds = (TABLE_X0, TABLE_Y0, 0, TABLE_X0 + TABLE_DX, TABLE_Y0 + TABLE_DY, 1)
     scene = Scene(objects=[cube_0, cube_1, cube_2], closed_set=True, bounds=world_bounds)
 
-    # PROMPTS = {
-    #     "wooden_block": "a light brown wooden block",
-    #     "purple_block": "a solid purple block without any writing or markings",
-    #     "yellow_block": "a solid yellow block without any writing or markings",
-    #     "green_block": "a solid green block without any writing or markings",
-    # }
     sam3_prompts = [
-        SAMConcept(name="block_8", prompt="wooden block with number 8 on it", exemplar_images=["/home/iras/skillet/data/images/wooden_block_8.png"]),
-        SAMConcept(name="block_7", prompt="wooden block with number 7 on it", exemplar_images=["/home/iras/skillet/data/images/wooden_block_7.png"]),
-        SAMConcept(name="mouse", prompt="a computer mouse", exemplar_images=["/home/iras/skillet/data/images/computer_mouse.jpeg"]),
+        SAMConcept(name="wooden_block", prompt="a wooden block"),
+        SAMConcept(name="plastic_block", prompt="a plastic block"),
     ]
 
     if args_cli.realsense_env:
         env = RealsenseEnv(apriltag_size_m=0.1, apriltag_id=0)
     else:
-        # env_cfg = Gen3ROS2EnvCfg(
-        #     robot_ip=args_cli.robot_ip,
-        #     use_fake_hardware=args_cli.use_fake_hardware,
-        #     launch_ros=args_cli.launch_ros,
-        #     device=args_cli.device,
-        #     num_envs=args_cli.num_envs,
-        #     ros2_workspace=args_cli.ros2_ws,
-        #     episode_length_s=30.0,
-        # )
+        env_cfg = {
+            "robot_ip": args_cli.robot_ip,
+            "use_fake_hardware": args_cli.use_fake_hardware,
+            "launch_ros": args_cli.launch_ros,
+            "device": args_cli.device,
+            "num_envs": args_cli.num_envs,
+            "ros2_workspace": args_cli.ros2_ws
+        }
 
-        # env = Gen3ROS2Env(cfg=env_cfg, ros=setup_ros())
-        env_cfg = Gen3LiteROS2EnvCfg(
-            robot_ip=args_cli.robot_ip,
-            use_fake_hardware=args_cli.use_fake_hardware,
-            launch_ros=args_cli.launch_ros,
-            device=args_cli.device,
-            num_envs=args_cli.num_envs,
-            ros2_workspace=args_cli.ros2_ws,
-            episode_length_s=30.0,
-        )
-
-        env = Gen3LiteROS2Env(cfg=env_cfg, ros=setup_ros())
+        env = create_ros2_env(args_cli.task, env_cfg)
         env = ROS2SkilletEnv(env)
         ikee_spec: ObservationSpec[IKEE_Obs] = env.coerce_obs_spec("ik_ee").batched()
         low_action_spec: ActionSpec[BxM_Action] = env.coerce_action_spec("joints").batched()
-        env = BatchToSingleWrapper[N_Obs, M_Action](env)
+        env = BatchToSingleWrapper(env)
         env.reset()
-    rgbd_spec = env.coerce_obs_spec("rgb-d")
+    rgbd_spec: ObservationSpec[RGBD_Obs] = env.coerce_obs_spec("rgb-d")
 
     poll_rate_hz = 1.0 / max(args_cli.period_s, 1e-6)
     perception = Perception(
@@ -133,11 +116,14 @@ def main() -> None:
     vis.run_thread()
 
     # Low-level policies
-    ik_ee_pose_policy = PoseAbsIKEEPolicy(ikee_spec, low_action_spec)
+    if args_cli.use_moveit:
+        arm_policy = MoveItTcpQuatPolicy(env.batched_env.obs_spec_ikee, env.batched_env.action_spec_moveit_tcp_quat)
+    else:
+        arm_policy = PoseAbsIKEEPolicy(ikee_spec, low_action_spec)
     # Skills
     skill_length = 200
     pick_skill = PickSkill(
-        reach_policy=ik_ee_pose_policy, gripper_policy=None, lift_height=0.23, length=skill_length
+        reach_policy=arm_policy, gripper_policy=None, lift_height=0.23, length=skill_length
     )
     pick_block_skill = PickBlockSkill(scene, pick_skill)
     skills = [pick_block_skill]
@@ -163,7 +149,7 @@ def main() -> None:
         rgbd_spec,
         pick_block_skill.params_spec,
         torch.as_tensor(
-            [1, 0],
+            [1, 0, 2, 0],
             device=rgbd_spec.device,
             dtype=torch.int32,
         ),
@@ -174,6 +160,9 @@ def main() -> None:
         high_level_policy=policy_over_options,
         params_policy=fixed_param_policy,
     )
+
+    if not args_cli.realsense_env or args_cli.use_fake_hardware:
+        input("Press Enter to start the skill execution...")
 
     # simulate environment
     while True:

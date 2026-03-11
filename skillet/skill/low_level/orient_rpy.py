@@ -7,7 +7,7 @@ import torch
 from jaxtyping import Float, Int
 
 from skillet.core.math import quat_error_magnitude, quat_from_euler_xyz
-from skillet.core.policy import BatchedPPolicy
+from skillet.core.policy import BatchedPolicy
 from skillet.core.skill import (
     BatchedSkill,
     SkillStatusCodes,
@@ -22,7 +22,7 @@ class OrientRPYSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[
     """A skill that orients the end effector."""
 
     def __init__(
-        self, name: str, policy: BatchedPPolicy[TBSkillObs, TBAction, TBSkillParams], length: int, clip: bool = False
+        self, name: str, policy: BatchedPolicy[TBSkillObs, TBAction, TBSkillParams], length: int, clip: bool = False
     ) -> None:
         """Initialize the fixed length skill.
 
@@ -49,7 +49,7 @@ class OrientRPYSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[
         return self._name
 
     @property
-    def policy(self) -> BatchedPPolicy[TBSkillObs, TBAction, TBSkillParams]:
+    def policy(self) -> BatchedPolicy[TBSkillObs, TBAction, TBSkillParams]:
         """The policy for the skill."""
         return self._policy
 

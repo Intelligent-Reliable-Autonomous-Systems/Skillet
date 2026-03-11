@@ -17,6 +17,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
+import re
 from typing import (
     Any,
     ClassVar,
@@ -32,6 +33,7 @@ from typing import (
 )
 
 import gymnasium as gym
+from gymnasium.spaces.box import array_short_repr
 import numpy as np
 import torch
 from jaxtyping import Bool, Float, Int, Shaped
@@ -683,17 +685,32 @@ class ParameterizedBox(gym.spaces.Box, ParameterizedSpace):
         dtype: type[np.floating[Any]] | type[np.integer[Any]] = np.float32,
         seed: int | np.random.Generator | None = None,
     ):
+        """Initialize the parameterized box space with some variables in low, high, or shape.
+
+        Replace numbers in low, high, or shape with string variables.
+        Variables must be valid Python variables names.
+        A string may contain an equation with multiple variables and constants, with +-*/ characters.
+        Variables can be bound later using the bind() method.
+
+        Args:
+            low: The low bound of the box space.
+            high: The high bound of the box space.
+            shape: The shape of the box space.
+            dtype: The dtype of the box space.
+            seed: The seed for the random number generator.
+
+        """
         self._low = low
         self._high = high
         self._shape_with_params = shape
         self._dtype = dtype
         self._seed = seed
 
-        self._variables = {v for v in shape if isinstance(v, str)}
-        if isinstance(low, str):
-            self._variables.add(low)
-        if isinstance(high, str):
-            self._variables.add(high)
+        self.low_repr = array_short_repr(low) if isinstance(low, np.ndarray) else str(low)
+        self.high_repr = array_short_repr(high) if isinstance(high, np.ndarray) else str(high)
+        self.dtype = dtype
+
+        self._variables = self._get_variables(low, high, shape)
         if len(self.variables) == 0:
             raise ValueError("No parameters found in shape or bounds. Use gym.spaces.Box instead.")
 
@@ -709,16 +726,42 @@ class ParameterizedBox(gym.spaces.Box, ParameterizedSpace):
         If the parameterized box space is not fully bound, return a new parameterized box space with the parameters bound.
         Otherwise, return a gym.spaces.Box.
         """
-        low = params.get(self._low, self._low) if isinstance(self._low, str) else self._low
-        high = params.get(self._high, self._high) if isinstance(self._high, str) else self._high
+        def _eval(value: str | Any) -> Any:
+            if not isinstance(value, str):
+                return value
+            tokens = re.split(r"([+-\\*])",value)
+            simplified = []
+            for token in tokens:
+                token = token.strip()
+                if len(token) == 0:
+                    continue
+                if token.isidentifier():
+                    val = params.get(token, token)
+                elif token.isnumeric():
+                    try:
+                        val = int(token)
+                    except ValueError:
+                        try:
+                            val = float(token)
+                        except ValueError:
+                            raise ValueError(f"Invalid token {token} in shape {shape}. Must be a valid Python variable name or number.")
+                else:
+                    val = token
+                simplified.append(val)
+            for token in simplified:
+                if isinstance(token, str) and token not in ["+", "-", "*", "/"]:
+                    return "".join([str(s) for s in simplified]) # cannot evaluate yet
+            try:
+                return eval("".join([str(s) for s in simplified]))
+            except Exception as e:
+                raise ValueError(f"Error evaluating expression {value}: {e}")
+
+        low = _eval(self._low)
+        high = _eval(self._high)
         shape = [
-            params[v] if v in params else self._shape_with_params[i] for i, v in enumerate(self._shape_with_params)
+            _eval(self._shape_with_params[i]) for i, v in enumerate(self._shape_with_params)
         ]
-        vars_left = [v for v in shape if isinstance(v, str)]
-        if isinstance(low, str):
-            vars_left.append(low)
-        if isinstance(high, str):
-            vars_left.append(high)
+        vars_left = self._get_variables(low, high, shape)
         if len(vars_left) > 0:
             return ParameterizedBox(
                 low=low,
@@ -762,7 +805,7 @@ class ParameterizedBox(gym.spaces.Box, ParameterizedSpace):
 
     @property
     def shape(self) -> tuple[int, ...]:  # noqa: D102
-        return self._shape
+        return self._shape_with_params
 
     @override
     def contains(self, x: Any) -> bool:
@@ -788,6 +831,17 @@ class ParameterizedBox(gym.spaces.Box, ParameterizedSpace):
             return False
 
         raise ValueError(f"Cannot establish containment for parameterized box with shape {self.shape}.")
+
+    def _get_variables(self, low, high, shape) -> set[str]:
+        variables = set[str]()
+        for v in (*shape, low, high):
+            if not isinstance(v, str):
+                continue
+            for token in re.split(r"[+*/-]", v):
+                token = token.strip()
+                if token.isidentifier():
+                    variables.add(token)
+        return variables
 
 
 class ParameterizedDiscrete(gym.spaces.Discrete, ParameterizedSpace):
@@ -829,8 +883,9 @@ class ParameterizedDiscrete(gym.spaces.Discrete, ParameterizedSpace):
 
 
 if __name__ == "__main__":
-    space = ParameterizedDiscrete(n="n_options", start=0)
-    bound = space.bind(n_options=10)
+    # space = ParameterizedDiscrete(n="n_options", start=0)
+    space = ParameterizedBox(low=-3, high=3, shape=("n_options",), dtype=np.float32)
+    bound = space.bind(n_options=4)
     print(bound)
     for i in range(10):
         print(bound.sample())

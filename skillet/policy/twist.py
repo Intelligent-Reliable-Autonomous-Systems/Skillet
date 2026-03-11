@@ -8,7 +8,7 @@ from typing import Any, Generic
 import torch
 
 from skillet.core.math import base_to_tcp_twist, euler_xyz_from_quat, euler_xyz_to_rotvec
-from skillet.core.policy import BatchedPPolicy, TBAction, TBPolicyObs
+from skillet.core.policy import BatchedPolicy, TBAction, TBPolicyObs
 from skillet.core.spaces import ActionSpec, ObservationSpec
 from skillet.core import SkillParamsSpec
 from skillet.skill.specs import (
@@ -18,7 +18,7 @@ from skillet.skill.specs import (
 from skillet.envs.specs import MOVEIT_TCP_Obs
 
 
-class TwistTcpFramePolicy(BatchedPPolicy[MOVEIT_TCP_Obs, TBAction, XYZ_RPY_Params], Generic[TBPolicyObs, TBAction]):
+class TwistTcpFramePolicy(BatchedPolicy[MOVEIT_TCP_Obs, TBAction, XYZ_RPY_Params], Generic[TBPolicyObs, TBAction]):
     """Policy for twist velocities of the end effector in the end effector frame."""
 
     _params: torch.Tensor
@@ -58,7 +58,7 @@ class TwistTcpFramePolicy(BatchedPPolicy[MOVEIT_TCP_Obs, TBAction, XYZ_RPY_Param
         self.start_gripper_pos = (obs["gripper"] - gripper_lim[:, :1]) / (gripper_lim[:, 1:] - gripper_lim[:, :1])
 
 
-class TwistTcpBasePolicy(BatchedPPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[TBPolicyObs, TBAction]):
+class TwistTcpBasePolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[TBPolicyObs, TBAction]):
     """Policy for twist velocities of the end effector in the base (world) frame."""
 
     _params: torch.Tensor
@@ -95,7 +95,7 @@ class TwistTcpBasePolicy(BatchedPPolicy[TBPolicyObs, torch.Tensor, TBAction], Ge
         self.start_gripper_pos = (obs["gripper"] - gripper_lim[:, :1]) / (gripper_lim[:, 1:] - gripper_lim[:, :1])
 
 
-class TwistPIDPosePolicy(BatchedPPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[TBPolicyObs, TBAction]):
+class TwistPIDPosePolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[TBPolicyObs, TBAction]):
     """Policy for end effector position and orientation using PID control."""
 
     _params: torch.Tensor

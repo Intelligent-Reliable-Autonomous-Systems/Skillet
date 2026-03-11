@@ -310,7 +310,7 @@ class BasicBatchedEnvironment(BatchedEnvironment[TBObs, TBAction], gym.vector.Ve
 class BatchToSingleWrapper(Environment[TObs, TAction], Generic[TObs, TAction]):
     """A wrapper that converts a batched environment to a single environment."""
 
-    def __init__(self, env: BatchedEnvironment[Any, Any]) -> None:
+    def __init__(self, env: BatchedEnvironment[TObs, TAction]) -> None:
         """Initialize a batch to single environment wrapper.
 
         Args:
@@ -374,8 +374,8 @@ class BatchToSingleWrapper(Environment[TObs, TAction], Generic[TObs, TAction]):
     @override
     def step(self, action: TAction, action_spec: ActionSpec[Any] | None = None) -> tuple[TObs, float, bool, bool, dict]:
         if action_spec is not None:
-            action = action_spec.batched()
-        batched_obs, reward, term, trunc, info = self.batched_env.step(action)
+            action_spec = action_spec.batched()
+        batched_obs, reward, term, trunc, info = self.batched_env.step(action, action_spec=action_spec)
         return self.obs_spec.cast(batched_obs), reward[0], term[0], trunc[0], self._unbatch_info(info)
 
     def _unbatch_info(self, batched_info: dict) -> dict:

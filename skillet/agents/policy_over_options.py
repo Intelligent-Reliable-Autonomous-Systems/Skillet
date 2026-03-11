@@ -93,7 +93,7 @@ class PolicyOverOptionsAgent(Generic[THighLevelObs, TLowLevelObs, TAction, TSkil
                 # print("Taking action", action)
                 # action[:, -1] = override_grip
                 # 4b. Take a step in the environment
-                _, r, term, trunc, _ = env.step(action)
+                _, r, term, trunc, _ = env.step(action, action_spec=selected_skill.action_spec)
                 terminated = terminated | term | trunc
                 # 4c. Check if the composite skill is terminated
                 skill_done = selected_skill.is_terminated(env.get_observation(selected_skill.obs_spec))

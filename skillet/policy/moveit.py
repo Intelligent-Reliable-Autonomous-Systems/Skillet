@@ -1,4 +1,4 @@
-"""Define MoveIt policies (ie just parameter pass throughs) for sending commands via moveit
+"""Define MoveIt policies (ie just parameter pass throughs) for sending commands via moveit.
 
 Written by Will Solow, 2026.
 """
@@ -7,19 +7,19 @@ from typing import Any, Generic
 
 import torch
 
-from skillet.core.policy import BatchedPPolicy, TBAction, TBPolicyObs
-from skillet.core.spaces import ActionSpec, ObservationSpec
-from skillet.skill.specs import XYZ_QUAT_Params, XYZ_QUAT_Params_Spec
-from skillet.envs.specs import MOVEIT_TCP_Obs
 from skillet.core import SkillParamsSpec
+from skillet.core.policy import BatchedPolicy, TBAction, TBPolicyObs
+from skillet.core.spaces import ActionSpec, ObservationSpec
+from skillet.envs.specs import MOVEIT_TCP_Obs, TCP_QUAT_Action
+from skillet.skill.specs import XYZ_QUAT_Params, XYZ_QUAT_Params_Spec
 
 
-class MoveItTcpQuatPolicy(BatchedPPolicy[MOVEIT_TCP_Obs, TBAction, XYZ_QUAT_Params], Generic[TBPolicyObs, TBAction]):
-    """Policy for tcp positions via MoveIt"""
+class MoveItTcpQuatPolicy(BatchedPolicy[MOVEIT_TCP_Obs, TCP_QUAT_Action, XYZ_QUAT_Params]):
+    """Policy for tcp positions via MoveIt."""
 
     _params: torch.Tensor
 
-    def __init__(self, obs_spec: MOVEIT_TCP_Obs, action_spec: ActionSpec[TBAction]) -> None:
+    def __init__(self, obs_spec: ObservationSpec[MOVEIT_TCP_Obs], action_spec: ActionSpec[TCP_QUAT_Action]) -> None:
         """Initialize the policy.
 
         Args:
@@ -43,11 +43,11 @@ class MoveItTcpQuatPolicy(BatchedPPolicy[MOVEIT_TCP_Obs, TBAction, XYZ_QUAT_Para
         """The parameter specification for XYZ + Quat target poses."""
         return XYZ_QUAT_Params_Spec
 
-    def get_action(self, obs: TBPolicyObs, params: Any = None) -> TBAction:
+    def get_action(self, obs: TBPolicyObs, params: XYZ_QUAT_Params) -> TBAction:
         """Get the next gripper position."""
         return torch.cat((self._params[:, :7], self.start_gripper_pos), dim=-1)
 
-    def reset(self, obs: TBPolicyObs, params: Any = None, env_ids: torch.Tensor = None) -> None:
+    def reset(self, obs: TBPolicyObs, params: XYZ_QUAT_Params, env_ids: torch.Tensor = None) -> None:
         """Reset the policy. Useful if policy is stateful."""
         self._params = params
         gripper_lim = obs["gripper_lim"]
