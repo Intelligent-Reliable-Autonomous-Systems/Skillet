@@ -17,6 +17,7 @@ from skillet.perception.realsense import RealsenseEnv
 from skillet.perception.sam3.sam3 import SAMConcept
 from skillet.policy.dummy import FixedSequencePolicy
 from skillet.policy.ik_ee import PoseAbsIKEEPolicy
+from skillet.policy.twist import TwistPIDPolicy
 from skillet.policy.moveit import MoveItTcpQuatPolicy
 from skillet.scene.base import Scene
 from skillet.scene.cube import Cube
@@ -35,6 +36,7 @@ parser.add_argument(
     "--ros2_ws", type=str, default=None, help="Absolute path to ROS2 workspace containing bringup files"
 )
 parser.add_argument("--use_moveit", action=argparse.BooleanOptionalAction, default=True, help="Use MoveIt for motion planning.")
+parser.add_argument("--use_twist", action=argparse.BooleanOptionalAction, default=False, help="Use cartesian servoing.")
 parser.add_argument("--segmentation", action=argparse.BooleanOptionalAction, default=False, help="Use segmentation.")
 parser.add_argument("--realsense_env", action="store_true", help="Use RealSense camera environment.")
 parser.add_argument("--viz", type=str, default="rgb,depth,pointcloud", help="Visualization modes to display, as comma-separated string.")
@@ -43,7 +45,7 @@ parser.add_argument("--use_fake_hardware", type=str, default="true", help="'true
 parser.add_argument("--launch_ros", action="store_true", help="Launch ROS from env startup.")
 parser.add_argument("--period_s", type=float, default=1.0, help="Seconds between service requests.")
 parser.add_argument("--max_depth_m", type=float, default=None, help="Optional far-plane clipping depth in meters.")
-parser.add_argument("--task", type=str, default="ROS2-Gen3-v0", help="ROS2 Environment")
+parser.add_argument("--task", type=str, default="ROS2-Gen3Lite-v0", help="ROS2 Environment")
 
 args_cli = parser.parse_args()
 if args_cli.ros2_ws is None:
@@ -110,7 +112,6 @@ def main() -> None:
         segment_rgb="rgb" in args_cli.viz, segment_depth="depth" in args_cli.viz,
     )
     perception.run_thread()
-    # perception.run()
     if args_cli.realsense_env:
         vis.run()
         sys.exit(0)
@@ -119,10 +120,12 @@ def main() -> None:
     # Low-level policies
     if args_cli.use_moveit:
         arm_policy = MoveItTcpQuatPolicy(env.batched_env.obs_spec_ikee, env.batched_env.action_spec_moveit_tcp_quat)
+    elif args_cli.use_twist:
+        arm_policy = TwistPIDPolicy(env.batched_env.obs_spec_twist_tcp, env.batched_env.action_spec_twist_tcp)
     else:
         arm_policy = PoseAbsIKEEPolicy(ikee_spec, low_action_spec)
     # Skills
-    skill_length = 200
+    skill_length = 2000
     pick_skill = PickSkill(
         reach_policy=arm_policy, gripper_policy=None, lift_height=0.23, length=skill_length
     )

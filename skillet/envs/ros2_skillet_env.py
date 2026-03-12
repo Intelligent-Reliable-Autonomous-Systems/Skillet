@@ -119,7 +119,7 @@ class ROS2SkilletEnv(
             n_gripper_joints=len(self._gripper_joint_names),
         ).replace(device=self.device)
         """Specification of OSC observations."""
-        self.obs_spec_twist_tcp = TWIST_SPEC_BATCHED.replace(device=self.device)
+        self.obs_spec_twist_tcp = TWIST_SPEC_BATCHED.bind(n_gripper_joints=len(self._gripper_joint_names)).replace(device=self.device)
         """Specification of Twist TCP observations."""
 
         self.action_spec_joints = ActionSpec[BxM_Action](
@@ -323,7 +323,7 @@ class ROS2SkilletEnv(
                     "tcp_pose_b": self._get_tcp_pose_b(ee_link=self._ee_link_name),
                     "gripper_lim": self._get_gripper_lims(gripper_joints=self._gripper_joint_names),
                     "gripper": self._get_gripper_state(gripper_joints=self._gripper_joint_names),
-                    "dt": self._env.step_dt,
+                    "dt": torch.tensor([self._env.step_dt]).expand(self.num_envs),
                 }
             )
         raise ValueError(f"Observation spec {obs_spec} not supported by environment.")

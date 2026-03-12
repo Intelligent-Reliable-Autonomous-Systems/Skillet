@@ -139,7 +139,7 @@ class Gen3ROS2Env(ROS2Env):
             ).replace(device=self.device),
             ActionSpec(
                 name="twist_tcp",
-                space=gym.spaces.Box(low=-float("inf"), high=float("inf"), shape=(len(self.cfg.arm_joint_names),)),
+                space=gym.spaces.Box(low=-float("inf"), high=float("inf"), shape=(6 + len(self.cfg.gripper_joint_names),)),
                 is_torch=True,
                 is_batched=True,
                 n_envs=-1,

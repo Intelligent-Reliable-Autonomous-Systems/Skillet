@@ -120,7 +120,7 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         self._params = params
         self._n_steps = 0
 
-        self._pos_threshold = 0.05  # NOTE updated for Gen3Lite
+        self._pos_threshold = 0.01  # NOTE updated for Gen3Lite
         self._quat_threshold = 0.08
 
         ee_pose_b = obs["tcp_pose_b"]
@@ -176,9 +176,9 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
             valid_idx = (self._status == SkillStatusCodes.RUNNING) & (reached_pose)
             self._pick_status[valid_idx] += 1
             valid_idx = valid_idx & (self._pick_status < PickStatusCodes.DONE)
-            # print(
-            #     f"[INFO][PICK STATUS UPDATE]: {PickStatusCodes(self._pick_status.cpu().numpy()[0]).name} | reached_pose: {reached_pose}"
-            # )
+            print(
+                f"[INFO][PICK STATUS UPDATE]: {PickStatusCodes(self._pick_status.cpu().numpy()[0]).name} | reached_pose: {reached_pose}"
+            )
             # Update the target pose based on the new pick status
             self._current_target_poses[valid_idx] = self._target_poses[idx[valid_idx], self._pick_status[valid_idx]]
 
@@ -194,9 +194,9 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         )
 
         np.set_printoptions(precision=3, suppress=True)
-        print(
-            f"[INFO][PICK STATUS]: {PickStatusCodes(self._pick_status.cpu().numpy()[0]).name} | target pose: {self._current_target_poses.cpu().numpy()[0, :3]} | obs tcp pose: {obs['tcp_pose_b'].cpu().numpy()[0, :3]}"
-        )
+        # print(
+        #     f"[INFO][PICK STATUS]: {PickStatusCodes(self._pick_status.cpu().numpy()[0]).name} | target pose: {self._current_target_poses.cpu().numpy()[0, :3]} | obs tcp pose: {obs['tcp_pose_b'].cpu().numpy()[0, :3]}"
+        # )
         self._n_steps += 1
         self._status[self._pick_status == PickStatusCodes.DONE] = SkillStatusCodes.SUCCESS
         if self._n_steps >= self._length:
