@@ -135,6 +135,10 @@ class ROS2SkilletEnv(
             name="moveit_tcp_quat",
             space=gym.spaces.Box(-float("inf"), float("inf"), shape=(7 + len(self._env.cfg.gripper_joint_names),)),
         ).replace(**spec_args)
+        self.action_spec_moveit_tcp_vel = ActionSpec[BxM_Action](
+            name="moveit_tcp_vel",
+            space=gym.spaces.Box(-float("inf"), float("inf"), shape=(6 + len(self._env.cfg.gripper_joint_names),)),
+        ).replace(**spec_args)
 
     # ==================== DirectRlInterface ====================
     @property
@@ -211,6 +215,7 @@ class ROS2SkilletEnv(
             self.action_spec_twist_tcp.name,
             self.action_spec_moveit_joint.name,
             self.action_spec_moveit_tcp_quat.name,
+            self.action_spec_moveit_tcp_vel.name
         ]
 
     @override

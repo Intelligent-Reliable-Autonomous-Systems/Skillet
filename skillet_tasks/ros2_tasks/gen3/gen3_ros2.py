@@ -155,6 +155,16 @@ class Gen3ROS2Env(ROS2Env):
                 n_envs=-1,
                 device=self.device,
             ),
+            ActionSpec(
+                name="moveit_tcp_vel",
+                space=gym.spaces.Box(
+                    low=-float("inf"), high=float("inf"), shape=(7 + len(self.cfg.gripper_joint_names),)
+                ),
+                is_torch=True,
+                is_batched=True,
+                n_envs=-1,
+                device=self.device,
+            ),
             # TWIST_TCP_SPEC.replace(device=self.device),
             # MOVEIT_TCP_SPEC.replace(device=self.device),
         ]
