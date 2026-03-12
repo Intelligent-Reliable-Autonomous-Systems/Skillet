@@ -43,6 +43,7 @@ parser.add_argument("--use_fake_hardware", type=str, default="true", help="'true
 parser.add_argument("--launch_ros", action="store_true", help="Launch ROS from env startup.")
 parser.add_argument("--period_s", type=float, default=1.0, help="Seconds between service requests.")
 parser.add_argument("--max_depth_m", type=float, default=None, help="Optional far-plane clipping depth in meters.")
+parser.add_argument("--task", type=str, default="ROS2-Gen3-v0", help="ROS2 Environment")
 
 args_cli = parser.parse_args()
 if args_cli.ros2_ws is None:

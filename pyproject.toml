@@ -35,6 +35,10 @@ dependencies = [
     "tensordict",
     "zmq",
     "scipy",
+    "pupil_apriltags",
+    "pyrealsense2",
+    "ultralytics",
+    "open3d",
 ]
 
 [project.optional-dependencies]

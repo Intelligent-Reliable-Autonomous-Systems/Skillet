@@ -124,7 +124,7 @@ MOVEIT_SPEC_BATCHED = ObservationSpec[MOVEIT_TCP_Obs](
 TWIST_TCP_Action = Float[torch.Tensor, "b 6+n_gripper_joints"]
 """Action type for Twist TCP commands."""
 TWIST_TCP_SPEC = ActionSpec[TWIST_TCP_Action](
-    space=ParameterizedBox(low=-float("inf"), high=float("inf"), shape=(6 + "n_gripper_joints",)),
+    space=ParameterizedBox(low=-float("inf"), high=float("inf"), shape=("6 + n_gripper_joints",)),
     name="twist_tcp",
     is_torch=True,
     is_batched=True,
