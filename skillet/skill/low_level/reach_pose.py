@@ -8,7 +8,7 @@ from jaxtyping import Float, Int
 from typing_extensions import override
 
 from skillet.core.math import quat_error_magnitude
-from skillet.core.policy import BatchedPPolicy
+from skillet.core.policy import BatchedPolicy
 from skillet.core.skill import (
     BatchedSkill,
     SkillStatusCodes,
@@ -26,7 +26,7 @@ class ReachPoseSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_QUAT_Params], Generic[
         - (B, 7): batched pose position xyz + orientation quat (wxyz)
     """
 
-    def __init__(self, name: str, policy: BatchedPPolicy[IKEE_Obs, TBAction, XYZ_QUAT_Params], length: int) -> None:
+    def __init__(self, name: str, policy: BatchedPolicy[IKEE_Obs, TBAction, XYZ_QUAT_Params], length: int) -> None:
         """Initialize the fixed length skill.
 
         Args:
@@ -50,7 +50,7 @@ class ReachPoseSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_QUAT_Params], Generic[
         return self._name
 
     @property
-    def policy(self) -> BatchedPPolicy[IKEE_Obs, TBAction, XYZ_QUAT_Params]:
+    def policy(self) -> BatchedPolicy[IKEE_Obs, TBAction, XYZ_QUAT_Params]:
         """The policy for the skill."""
         return self._policy
 

@@ -9,7 +9,7 @@ import torch
 from jaxtyping import Float
 
 from skillet.core import ObservationSpec
-from skillet.core.spaces import BatchedSpaceItem, ParameterizedBox
+from skillet.core.spaces import ActionSpec, BatchedSpaceItem, ParameterizedBox
 
 N_Obs = Float[torch.Tensor, "n"]
 """Environment observation: torch.Tensor[(n), float]"""
@@ -22,7 +22,9 @@ BxN_Obs = Float[torch.Tensor, "b n"]
 BxM_Action = Float[torch.Tensor, "b m"]
 """A B-batched M-dim vector action: torch.Tensor[(b, m), float]"""
 
-RGBD_SPEC_BATCHED = ObservationSpec[dict[str, BatchedSpaceItem]](
+RGBD_Obs = dict[str, BatchedSpaceItem]
+"""Type of RGB-D observation."""
+RGBD_SPEC_BATCHED = ObservationSpec[RGBD_Obs](
     space=gym.spaces.Dict(
         {
             "rgb": ParameterizedBox(low=0, high=255, shape=(3, "height", "width"), dtype=np.uint8),
@@ -112,6 +114,38 @@ MOVEIT_SPEC_BATCHED = ObservationSpec[MOVEIT_TCP_Obs](
         }
     ),
     name="twist_tcp",
+    is_torch=True,
+    is_batched=True,
+    n_envs=-1,
+)
+
+# ========= Action specifications =========
+
+TWIST_TCP_Action = Float[torch.Tensor, "b 6+n_gripper_joints"]
+"""Action type for Twist TCP commands."""
+TWIST_TCP_SPEC = ActionSpec[TWIST_TCP_Action](
+    space=ParameterizedBox(low=-float("inf"), high=float("inf"), shape=("6 + n_gripper_joints",)),
+    name="twist_tcp",
+    is_torch=True,
+    is_batched=True,
+    n_envs=-1,
+)
+
+MOVEIT_Joint_Action = Float[torch.Tensor, "b n_joints"]
+"""Action type for MoveIt joint commands."""
+MOVEIT_Joint_SPEC = ActionSpec[MOVEIT_Joint_Action](
+    space=ParameterizedBox(low=-float("inf"), high=float("inf"), shape=("n_joints",)),
+    name="moveit_joint",
+    is_torch=True,
+    is_batched=True,
+    n_envs=-1,
+)
+
+TCP_QUAT_Action = Float[torch.Tensor, "b 7+n_gripper_joints"]
+"""Action type for MoveIt TCP + Quat commands."""
+MOVEIT_TCP_QUAT_SPEC = ActionSpec[TCP_QUAT_Action](
+    space=ParameterizedBox(low=-float("inf"), high=float("inf"), shape=("7 + n_gripper_joints",)),
+    name="moveit_tcp_quat",
     is_torch=True,
     is_batched=True,
     n_envs=-1,

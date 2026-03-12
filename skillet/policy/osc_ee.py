@@ -6,11 +6,11 @@ import torch
 
 from skillet.controllers import OperationalSpaceController
 from skillet.core.math import quat_apply, quat_inv, quat_mul, subtract_frame_transforms
-from skillet.core.policy import BatchedPPolicy, TBAction, TBPolicyObs
+from skillet.core.policy import BatchedPolicy, TBAction, TBPolicyObs
 from skillet.core.spaces import ActionSpec, ObservationSpec
 
 
-class OSCEEPolicy(BatchedPPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[TBPolicyObs, TBAction]):
+class OSCEEPolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[TBPolicyObs, TBAction]):
     """Base class for Operational Space Control End Effector Policy."""
 
     osc: OperationalSpaceController

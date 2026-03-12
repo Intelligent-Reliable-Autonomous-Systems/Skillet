@@ -11,20 +11,18 @@ import os
 from typing import TYPE_CHECKING
 
 import torch
-import gymnasium as gym
 
-from skillet.agents.policy_over_options import PolicyOverOptionsAgent
+from skillet.agents.policy_over_options import PolicyOverOptionsBatchedAgent
 from skillet.envs.ros2_skillet_env import ROS2SkilletEnv
-from skillet.envs.specs import BxM_Action, MOVEIT_TCP_Obs
-from skillet.envs.util import parse_ros2_env_cfg, setup_ros
 from skillet.policy.dummy import FixedSequencePolicy, RandomPolicy
 from skillet.policy.moveit import MoveItTcpQuatPolicy
 from skillet.skill.high_level.pick import PickSkill
 from skillet.skill.specs import SELECT_OPTIONS_SPEC_BATCHED, XYZ_YAW_Params
-import skillet_tasks.ros2_tasks  # noqa: F401
+from skillet_tasks.ros2_tasks.factory import create_ros2_env
 
 if TYPE_CHECKING:
     from skillet.core import BatchedSkill
+    from skillet.envs.specs import MOVEIT_TCP_Obs, TCP_QUAT_Action
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Main ROS2 executor file.")
@@ -50,15 +48,16 @@ if args_cli.ros2_ws is None:
 
 def main() -> None:
     """Run the ROS2 pick example."""
-    # create environment
-    env_cfg = parse_ros2_env_cfg(
-        args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs, ros2_workspace=args_cli.ros2_ws
-    )
-    env_cfg.robot_ip = args_cli.robot_ip
-    env_cfg.use_fake_hardware = args_cli.use_fake_hardware
-    env_cfg.launch_ros = args_cli.launch_ros
+    env_cfg = {
+        "robot_ip": args_cli.robot_ip,
+        "use_fake_hardware": args_cli.use_fake_hardware,
+        "launch_ros": args_cli.launch_ros,
+        "device": args_cli.device,
+        "num_envs": args_cli.num_envs,
+        "ros2_workspace": args_cli.ros2_ws
+    }
 
-    env = gym.make(args_cli.task, cfg=env_cfg, ros=setup_ros())
+    env = create_ros2_env(args_cli.task, env_cfg)
     env = ROS2SkilletEnv(env)
     env.reset()
 
@@ -71,7 +70,7 @@ def main() -> None:
     # Skills
     skill_length = 200
     pick_skill = PickSkill(reach_policy=moveit_tcp_policy, gripper_policy=None, lift_height=0.23, length=skill_length)
-    skills: list[BatchedSkill[MOVEIT_TCP_Obs, BxM_Action, XYZ_YAW_Params]] = [pick_skill]
+    skills: list[BatchedSkill[MOVEIT_TCP_Obs, TCP_QUAT_Action, XYZ_YAW_Params]] = [pick_skill]
 
     # Parameters policy
     fixed_param_policy = FixedSequencePolicy(
@@ -95,7 +94,7 @@ def main() -> None:
     )
     policy_over_options = RandomPolicy(env.obs_spec, options_spec)
 
-    policy_over_options_agent = PolicyOverOptionsAgent(
+    policy_over_options_agent = PolicyOverOptionsBatchedAgent(
         skills=skills,
         high_level_policy=policy_over_options,
         params_policy=fixed_param_policy,

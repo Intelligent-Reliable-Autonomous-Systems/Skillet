@@ -8,7 +8,7 @@ import torch
 from jaxtyping import Float, Int
 
 from skillet.core.math import quat_error_magnitude
-from skillet.core.policy import BatchedPPolicy
+from skillet.core.policy import BatchedPolicy
 from skillet.core.skill import (
     BatchedSkill,
     SkillStatusCodes,
@@ -40,8 +40,8 @@ class PushSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSki
 
     def __init__(
         self,
-        reach_policy: BatchedPPolicy[TBSkillObs, TBAction, TBSkillParams],
-        gripper_policy: BatchedPPolicy[TBSkillObs, TBAction, TBSkillParams],
+        reach_policy: BatchedPolicy[TBSkillObs, TBAction, TBSkillParams],
+        gripper_policy: BatchedPolicy[TBSkillObs, TBAction, TBSkillParams],
         length: int,
     ) -> None:
         """Initialize the push skill.
@@ -71,7 +71,7 @@ class PushSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSki
         return self._name
 
     @property
-    def policy(self) -> BatchedPPolicy[TBSkillObs, TBAction, TBSkillParams]:
+    def policy(self) -> BatchedPolicy[TBSkillObs, TBAction, TBSkillParams]:
         """The policy for the skill."""
         return self._reach_policy
 

@@ -8,7 +8,7 @@ import torch
 from jaxtyping import Float, Int
 
 from skillet.core.math import quat_error_magnitude, quat_from_euler_xyz
-from skillet.core.policy import BatchedPPolicy
+from skillet.core.policy import BatchedPolicy
 from skillet.core.skill import (
     BatchedSkill,
     SkillStatusCodes,
@@ -51,8 +51,8 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
 
     def __init__(
         self,
-        reach_policy: BatchedPPolicy[IKEE_Obs, TBAction, XYZ_YAW_Params],
-        gripper_policy: BatchedPPolicy[IKEE_Obs, TBAction, XYZ_YAW_Params] | None,
+        reach_policy: BatchedPolicy[IKEE_Obs, TBAction, XYZ_YAW_Params],
+        gripper_policy: BatchedPolicy[IKEE_Obs, TBAction, XYZ_YAW_Params] | None,
         lift_height: float,
         length: int,
     ) -> None:
@@ -91,7 +91,7 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         return self._name
 
     @property
-    def policy(self) -> BatchedPPolicy[TBSkillObs, TBAction, TBSkillParams]:
+    def policy(self) -> BatchedPolicy[TBSkillObs, TBAction, TBSkillParams]:
         """The policy for the skill."""
         return self._reach_policy
 

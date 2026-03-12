@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from jaxtyping import Float, Int
 
-from skillet.core.policy import BatchedPPolicy
+from skillet.core.policy import BatchedPolicy
 from skillet.core.skill import (
     BatchedSkill,
     SkillStatusCodes,
@@ -20,7 +20,7 @@ from skillet.core.spaces import ArrayLike
 class JointPosSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSkillObs, TBAction, TBSkillParams]):
     """A skill that handles atomic joint positions."""
 
-    def __init__(self, name: str, policy: BatchedPPolicy[TBSkillObs, TBAction, TBSkillParams], length: int) -> None:
+    def __init__(self, name: str, policy: BatchedPolicy[TBSkillObs, TBAction, TBSkillParams], length: int) -> None:
         """Initialize the fixed length skill.
 
         Args:
@@ -44,7 +44,7 @@ class JointPosSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[T
         return self._name
 
     @property
-    def policy(self) -> BatchedPPolicy[TBSkillObs, TBAction, TBSkillParams]:
+    def policy(self) -> BatchedPolicy[TBSkillObs, TBAction, TBSkillParams]:
         """The policy for the skill."""
         return self._policy
 

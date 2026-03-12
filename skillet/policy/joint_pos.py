@@ -4,11 +4,11 @@ from typing import Any, Generic
 
 import torch
 
-from skillet.core.policy import BatchedPPolicy, TBAction, TBPolicyObs
+from skillet.core.policy import BatchedPolicy, TBAction, TBPolicyObs
 from skillet.core.spaces import ActionSpec, ObservationSpec
 
 
-class GripperPolicy(BatchedPPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[TBPolicyObs, TBAction]):
+class GripperPolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[TBPolicyObs, TBAction]):
     """Policy for controlling gripper motion."""
 
     _params: torch.Tensor
@@ -44,7 +44,7 @@ class GripperPolicy(BatchedPPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic
         self._goal_gripper_pos = params[:, :1]
 
 
-class JointPosPolicy(BatchedPPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[TBPolicyObs, TBAction]):
+class JointPosPolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[TBPolicyObs, TBAction]):
     """Policy for controlling joint motion."""
 
     _params: torch.Tensor

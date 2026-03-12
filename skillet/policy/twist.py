@@ -8,7 +8,7 @@ from typing import Any, Generic
 import torch
 
 from skillet.core.math import base_to_tcp_twist, euler_xyz_from_quat, euler_xyz_to_rotvec
-from skillet.core.policy import BatchedPPolicy, TBAction, TBPolicyObs
+from skillet.core.policy import BatchedPolicy, TBAction, TBPolicyObs
 from skillet.core.spaces import ActionSpec, ObservationSpec
 from skillet.core import SkillParamsSpec
 from skillet.skill.specs import (
@@ -18,8 +18,8 @@ from skillet.skill.specs import (
 from skillet.envs.specs import MOVEIT_TCP_Obs
 
 
-class TwistTcpFramePolicy(BatchedPPolicy[MOVEIT_TCP_Obs, TBAction, XYZ_RPY_Params], Generic[TBPolicyObs, TBAction]):
-    """Policy for twist velocities in a given frame relative to the end effector."""
+class TwistTcpFramePolicy(BatchedPolicy[MOVEIT_TCP_Obs, TBAction, XYZ_RPY_Params], Generic[TBPolicyObs, TBAction]):
+    """Policy for twist velocities of the end effector in the end effector frame."""
 
     _params: torch.Tensor
 
@@ -55,16 +55,48 @@ class TwistTcpFramePolicy(BatchedPPolicy[MOVEIT_TCP_Obs, TBAction, XYZ_RPY_Param
     def reset(self, obs: TBPolicyObs, params: Any = None, env_ids: torch.Tensor = None) -> None:
         """Reset the policy. Useful if policy is stateful."""
         self._params = params
-        if self._frame == "base":
-            lin_vel_b, ang_vel_b = base_to_tcp_twist(params[:, 0:3], params[:, 3:6], obs["tcp_pose_b"][:, 3:7])
-            self._twist_cmd = torch.cat((lin_vel_b, ang_vel_b), dim=-1)
-        else:
-            self._twist_cmd = self._params[:, :6]
         gripper_lim = obs["gripper_lim"]
         self.start_gripper_pos = (obs["gripper"] - gripper_lim[:, :1]) / (gripper_lim[:, 1:] - gripper_lim[:, :1])
 
 
-class TwistPIDPolicy(BatchedPPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[TBPolicyObs, TBAction]):
+class TwistTcpBasePolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[TBPolicyObs, TBAction]):
+    """Policy for twist velocities of the end effector in the base (world) frame."""
+
+    _params: torch.Tensor
+
+    def __init__(self, obs_spec: ObservationSpec[TBPolicyObs], action_spec: ActionSpec[TBAction]) -> None:
+        """Initialize the policy.
+
+        Args:
+            obs_spec: The observation specification.
+            action_spec: The action specification.
+
+        """
+        self._obs_spec = obs_spec
+        self._action_spec = action_spec
+
+    @property
+    def obs_spec(self) -> ObservationSpec[TBPolicyObs]:  # noqa: D102
+        return self._obs_spec
+
+    @property
+    def action_spec(self) -> ActionSpec[TBAction]:  # noqa: D102
+        return self._action_spec
+
+    def get_action(self, obs: TBPolicyObs, params: Any = None) -> TBAction:
+        """Get the next gripper position."""
+        return torch.cat(self.twist_cmd, self.start_gripper_pos)
+
+    def reset(self, obs: TBPolicyObs, params: Any = None, env_ids: torch.Tensor = None) -> None:
+        """Reset the policy. Useful if policy is stateful."""
+        self._params = params
+        lin_vel_b, ang_vel_b = base_to_tcp_twist(params[:, 0:3], params[:, 3:6], obs["tcp_pose_b"][:, 3:7])
+        self.twist_cmd = torch.cat((lin_vel_b, ang_vel_b), dim=-1)
+        gripper_lim = obs["gripper_lim"]
+        self.start_gripper_pos = (obs["gripper"] - gripper_lim[:, :1]) / (gripper_lim[:, 1:] - gripper_lim[:, :1])
+
+
+class TwistPIDPosePolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[TBPolicyObs, TBAction]):
     """Policy for end effector position and orientation using PID control."""
 
     _params: torch.Tensor

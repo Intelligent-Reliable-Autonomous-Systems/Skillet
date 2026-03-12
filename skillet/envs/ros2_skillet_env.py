@@ -30,11 +30,14 @@ from skillet.envs.compatibility.isaac_lab import DirectRlInterface
 from skillet.envs.ros2 import ROS2Env
 from skillet.envs.specs import (
     IK_EE_SPEC_BATCHED,
+    MOVEIT_TCP_QUAT_SPEC,
     OSC_SPEC_BATCHED,
     RGBD_SPEC_BATCHED,
     TWIST_SPEC_BATCHED,
+    TWIST_TCP_SPEC,
     BxM_Action,
     BxN_Obs,
+    MOVEIT_Joint_SPEC,
 )
 
 
@@ -123,22 +126,12 @@ class ROS2SkilletEnv(
             name="joints",
             space=action_space,
         ).replace(**spec_args)
-        self.action_spec_twist_tcp = ActionSpec[BxM_Action](
-            name="twist_tcp",
-            space=gym.spaces.Box(-float("inf"), float("inf"), shape=(6 + len(self._env.cfg.gripper_joint_names),)),
-        ).replace(**spec_args)
-        self.action_spec_moveit_joint = ActionSpec[BxM_Action](
-            name="moveit_joint",
-            space=gym.spaces.Box(-float("inf"), float("inf"), shape=(len(self._env.cfg.joint_ids),)),
-        ).replace(**spec_args)
-        self.action_spec_moveit_tcp_quat = ActionSpec[BxM_Action](
-            name="moveit_tcp_quat",
-            space=gym.spaces.Box(-float("inf"), float("inf"), shape=(7 + len(self._env.cfg.gripper_joint_names),)),
-        ).replace(**spec_args)
-        self.action_spec_moveit_tcp_vel = ActionSpec[BxM_Action](
-            name="moveit_tcp_vel",
-            space=gym.spaces.Box(-float("inf"), float("inf"), shape=(6 + len(self._env.cfg.gripper_joint_names),)),
-        ).replace(**spec_args)
+        self.action_spec_twist_tcp = TWIST_TCP_SPEC.replace(**spec_args) \
+            .bind(n_gripper_joints=len(self._env.cfg.gripper_joint_names))
+        self.action_spec_moveit_joint = MOVEIT_Joint_SPEC.replace(**spec_args) \
+            .bind(n_joints=len(self._env.cfg.joint_ids))
+        self.action_spec_moveit_tcp_quat = MOVEIT_TCP_QUAT_SPEC.replace(**spec_args) \
+            .bind(n_gripper_joints=len(self._env.cfg.gripper_joint_names))
 
     # ==================== DirectRlInterface ====================
     @property

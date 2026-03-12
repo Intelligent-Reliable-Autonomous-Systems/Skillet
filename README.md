@@ -47,14 +47,14 @@ To run:
 ### Hardware Experiment 1
 Launch Gen3
 ```bash
-ros2 launch gen3_py gen3.launch.py robot_ip:=192.168.8.10 use_fake_hardware:=false gripper:=robotiq_2f_85 use_table_camera:=true
+ros2 launch gen3_py gen3.launch.py robot_ip:=192.168.8.10 use_fake_hardware:=false gripper:=robotiq_2f_85
 ```
 
 OR 
 
 Launch Gen3Lite
 ```bash
-ros2 launch gen3lite_py gen3_lite.launch.py robot_ip:=192.168.1.10 use_fake_hardware:=false use_table_camera:=true
+ros2 launch gen3lite_py gen3_lite.launch.py robot_ip:=192.168.1.10 use_fake_hardware:=false
 ```
 
 Launch rosbridge
