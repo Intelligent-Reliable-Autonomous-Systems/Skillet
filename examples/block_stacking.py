@@ -135,8 +135,8 @@ def main() -> None:
     skill_length = 2000
     place_skill = PlaceSkill(reach_policy=arm_policy, gripper_policy=None, lift_height=0.23, length=skill_length)
     pick_skill = PickSkill(reach_policy=arm_policy, gripper_policy=None, lift_height=0.23, length=skill_length)
-    pick_block_skill = PickBlockSkill(scene, pick_skill)
-    place_block_skill = PlaceBlockSkill(scene, place_skill)
+    pick_block_skill = PickBlockSkill(scene, pick_skill, vis_target_pos=vis.set_target_pos)
+    place_block_skill = PlaceBlockSkill(scene, place_skill, vis_target_pos=vis.set_target_pos)
     skills = [pick_block_skill, place_block_skill]
 
     # High-level policy

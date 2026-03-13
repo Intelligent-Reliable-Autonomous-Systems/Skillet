@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import threading
-from typing import Any
+from typing import Any, Sequence
 
 import numpy as np
 import torch
 
 from skillet.scene.base import Scene, SceneObject
-from skillet.scene.cube import Cube  # noqa: TC002 - used at runtime for tensor ops
+from skillet.scene.cube import Cube
 
 try:
     import open3d as o3d
@@ -305,6 +305,8 @@ class Open3DVisualizer:
         self._added_geometries: set[str] = set()
         self._needs_camera_setup = True
         self._closed = False
+        self._target_pos: np.ndarray | None = None
+        self._target_size: float = 0.007
 
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
@@ -465,6 +467,13 @@ class Open3DVisualizer:
                 else:
                     self._remove_geometry(obj.identifier)
 
+            # Target position sphere
+            if self._target_pos is not None:
+                sphere = make_point_marker(self._target_pos, radius=self._target_size, color=(1, 0.5, 0))
+                self._add_geometry("target_pos", sphere, self._mat_lit)
+            else:
+                self._remove_geometry("target_pos")
+
             # HUD
             if hud_text:
                 self._hud_label.text = hud_text
@@ -506,6 +515,17 @@ class Open3DVisualizer:
         self._closed = True
         if self._app is not None:
             self._app.quit()
+
+    def set_target_pos(self, xyz: Sequence[float] | None,
+            size: float = 0.007) -> None:
+        """Set the target position sphere marker. Pass None to clear."""
+        if isinstance(xyz, torch.Tensor):
+            xyz = xyz.detach().cpu().numpy().astype(np.float64)
+        self._target_pos = np.array(xyz, dtype=np.float64) if xyz is not None else None
+        if self._target_pos is not None:
+            if self._target_pos.ndim > 1:
+                self._target_pos = self._target_pos[0]
+        self._target_size = size
 
 
 def get_object_geometry(obj: SceneObject) -> list[object]:

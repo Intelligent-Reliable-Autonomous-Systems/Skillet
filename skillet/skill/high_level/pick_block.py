@@ -1,4 +1,4 @@
-from typing import TypeAlias
+from typing import Callable, Sequence, TypeAlias
 import gymnasium as gym
 import torch
 from typing_extensions import override
@@ -19,7 +19,8 @@ class PickBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
     Is is discretely parameterized by the id of the block to pick.
     """
 
-    def __init__(self, scene: Scene, pick_skill: PickSkill[BxM_Action]) -> None:
+    def __init__(self, scene: Scene, pick_skill: PickSkill[BxM_Action],
+            vis_target_pos: Callable[[Sequence[float]], None] | None = None) -> None:
         """Initialize the pick block skill."""
         self._scene = scene
         self._pick_skill = pick_skill
@@ -29,6 +30,8 @@ class PickBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
         )
         self._status = None
         self._offset = torch.tensor([0, 0.02, 0],device=self.obs_spec.device)
+
+        self._vis_target_pos = vis_target_pos
 
     @property
     def name(self) -> str:
@@ -67,6 +70,8 @@ class PickBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
             self._status = SkillStatusCodes.FAILED.value
             return
         target_xyz = self._target_block.pose[:3] + self._offset # NOTE added offset (Will)
+        if self._vis_target_pos is not None:
+            self._vis_target_pos(target_xyz)
         yaw = 0  # TODO: get yaw from target block
         target_pose = torch.tensor([target_xyz[0], target_xyz[1], target_xyz[2], yaw])
         target_pose = self._pick_skill.params_spec.with_n_envs(1).cast(target_pose)

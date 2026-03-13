@@ -3,7 +3,8 @@
 import argparse
 import os
 
-from kinova_tasks.ros2_tasks.kinova.kinova_ros2 import KinovaROS2Env, KinovaROS2EnvCfg
+from skillet_tasks.ros2_tasks.factory import create_ros2_env
+
 from skillet.envs.ros2_skillet_env import ROS2SkilletEnv
 from skillet.envs.util import setup_ros
 from skillet.perception.perception import Perception
@@ -26,6 +27,7 @@ parser.add_argument("--robot_ip", type=str, default="192.168.1.10", help="Robot 
 parser.add_argument("--launch_ros", action="store_true", help="Launch ROS from env startup.")
 parser.add_argument("--period_s", type=float, default=1.0, help="Seconds between service requests.")
 parser.add_argument("--max_depth_m", type=float, default=None, help="Optional far-plane clipping depth in meters.")
+parser.add_argument("--task", type=str, default="ROS2-Gen3Lite-v0", help="ROS2 Environment")
 
 args_cli = parser.parse_args()
 if args_cli.ros2_ws is None:
@@ -65,15 +67,15 @@ def main() -> None:
     if args_cli.realsense_env:
         env = RealsenseEnv()
     else:
-        env_cfg = KinovaROS2EnvCfg(
-            robot_ip=args_cli.robot_ip,
-            launch_ros=args_cli.launch_ros,
-            device=args_cli.device,
-            num_envs=args_cli.num_envs,
-            ros2_workspace=args_cli.ros2_ws,
-        )
+        env_cfg = {
+            "robot_ip": args_cli.robot_ip,
+            "launch_ros": args_cli.launch_ros,
+            "device": args_cli.device,
+            "num_envs": args_cli.num_envs,
+            "ros2_workspace": args_cli.ros2_ws,
+        }
 
-        env = KinovaROS2Env(cfg=env_cfg, ros=setup_ros())
+        env = create_ros2_env(args_cli.task, env_cfg)
         env = ROS2SkilletEnv(env)
     env.reset()
     rgbd_spec = env.obs_spec_rgbd.unbatched()
