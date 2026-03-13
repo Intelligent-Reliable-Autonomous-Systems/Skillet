@@ -113,7 +113,7 @@ class PlaceSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAct
         self._params = params
         self._n_steps = 0
 
-        self._pos_threshold = 0.005
+        self._pos_threshold = 0.01
         self._quat_threshold = 0.08
         self._vel_threshold = 0.001  #
         self._joint_threshold = 0.001
@@ -188,8 +188,8 @@ class PlaceSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAct
         reach_actions = self._reach_policy.get_action(obs)
         reach_actions[:, -1] = torch.where(
             self._place_status >= PlaceStatusCodes.RELEASE,
-            torch.zeros_like(reach_actions[:, -1]),  # Open gripper
-            torch.ones_like(reach_actions[:, -1]),  # Close gripper
+            torch.zeros_like(reach_actions[:, -1])+0.2,  # Open gripper
+            torch.ones_like(reach_actions[:, -1])*0.8,  # Close gripper
         )
 
         self._prev_gripper_pos = obs["joint_pos"][:, -1]
