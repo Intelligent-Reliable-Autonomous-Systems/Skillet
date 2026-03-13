@@ -382,7 +382,8 @@ class Perception:
             if self._pc_vis is not None:
                 vis_seg = segment_indices if self._segment_point_cloud else None
                 self._pc_vis.update(
-                    point_cloud, segment_indices=vis_seg,
+                    point_cloud,
+                    segment_indices=vis_seg,
                     camera_pose=obs_unbatched["camera_pose"],
                 )
 
@@ -401,17 +402,20 @@ if __name__ == "__main__":
     from skillet.perception.visualize import Open3DVisualizer
 
     env = RealsenseEnv()
-    perception = Perception(env, env.obs_spec, 8, prompts={
-        "wooden_block": "a light brown wooden block",
-        "purple_block": "a solid purple block without any writing or markings",
-        "yellow_block": "a solid yellow block without any writing or markings",
-        "green_block": "a solid green block without any writing or markings",
-        # "plastic_block": "a bright, solid colored plastic block, not brown wood"
-        })
+    perception = Perception(
+        env,
+        env.obs_spec,
+        8,
+        prompts={
+            "wooden_block": "a light brown wooden block",
+            "purple_block": "a solid purple block without any writing or markings",
+            "yellow_block": "a solid yellow block without any writing or markings",
+            "green_block": "a solid green block without any writing or markings",
+            # "plastic_block": "a bright, solid colored plastic block, not brown wood"
+        },
+    )
     perception.start_visualization(
-        display_rgb=True, display_depth=True,
-        segment_rgb=True, segment_depth=True,
-        segment_point_cloud=True
+        display_rgb=True, display_depth=True, segment_rgb=True, segment_depth=True, segment_point_cloud=True
     )
     perception.run_thread()
     while True:

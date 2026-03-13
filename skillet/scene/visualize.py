@@ -98,6 +98,7 @@ def point_cloud_to_open3d(
 
     return pcd
 
+
 def make_point_marker(pos, radius=0.01, color=(1, 0, 0)):
     sphere = o3d.geometry.TriangleMesh.create_sphere(radius=radius)
     sphere.translate(pos)
@@ -121,18 +122,22 @@ def create_aabb_lineset(
 
     x0, y0, z0, x1, y1, z1 = bounds
     # 8 corners ordered so bit pattern (z_bit, y_bit, x_bit) maps to index.
-    corners = np.array([
-        [x0, y0, z0],  # 0
-        [x1, y0, z0],  # 1
-        [x0, y1, z0],  # 2
-        [x1, y1, z0],  # 3
-        [x0, y0, z1],  # 4
-        [x1, y0, z1],  # 5
-        [x0, y1, z1],  # 6
-        [x1, y1, z1],  # 7
-    ], dtype=np.float64)
+    corners = np.array(
+        [
+            [x0, y0, z0],  # 0
+            [x1, y0, z0],  # 1
+            [x0, y1, z0],  # 2
+            [x1, y1, z0],  # 3
+            [x0, y0, z1],  # 4
+            [x1, y0, z1],  # 5
+            [x0, y1, z1],  # 6
+            [x1, y1, z1],  # 7
+        ],
+        dtype=np.float64,
+    )
 
     return create_box_lineset(corners)
+
 
 def create_box_lineset(
     corners: np.ndarray,
@@ -156,11 +161,20 @@ def create_box_lineset(
     # (edge_start, edge_end, color) grouped by the axis the edge is parallel to.
     edges_and_colors: list[tuple[list[int], list[float]]] = [
         # X-axis edges (differ only in x)
-        ([0, 1], RED), ([2, 3], RED), ([4, 5], RED), ([6, 7], RED),
+        ([0, 1], RED),
+        ([2, 3], RED),
+        ([4, 5], RED),
+        ([6, 7], RED),
         # Y-axis edges (differ only in y)
-        ([0, 2], GREEN), ([1, 3], GREEN), ([4, 6], GREEN), ([5, 7], GREEN),
+        ([0, 2], GREEN),
+        ([1, 3], GREEN),
+        ([4, 6], GREEN),
+        ([5, 7], GREEN),
         # Z-axis edges (differ only in z)
-        ([0, 4], BLUE), ([1, 5], BLUE), ([2, 6], BLUE), ([3, 7], BLUE),
+        ([0, 4], BLUE),
+        ([1, 5], BLUE),
+        ([2, 6], BLUE),
+        ([3, 7], BLUE),
         ([7, 8], PURPLE),
     ]
     lines = [e for e, _ in edges_and_colors]
@@ -219,7 +233,9 @@ def create_camera_model(
     T[:3, 3] = pos
 
     def _make_box(
-        w: float, h: float, d: float,
+        w: float,
+        h: float,
+        d: float,
         offset: np.ndarray,
         color: tuple[float, float, float],
     ) -> object:
@@ -232,20 +248,25 @@ def create_camera_model(
         return mesh
 
     # Face plate: centered at local origin (front of camera).
-    face = _make_box(face_width, face_height, face_depth,
-                     np.array([0.0, 0.0, 0.0]), (0.7, 0.7, 0.7))
+    face = _make_box(face_width, face_height, face_depth, np.array([0.0, 0.0, 0.0]), (0.7, 0.7, 0.7))
 
     # Body: behind the face along -Z.
-    body = _make_box(body_width, body_height, body_depth,
-                     np.array([0.0, 0.0, -(face_depth / 2 + body_depth / 2)]),
-                     (0.35, 0.35, 0.35))
+    body = _make_box(
+        body_width,
+        body_height,
+        body_depth,
+        np.array([0.0, 0.0, -(face_depth / 2 + body_depth / 2)]),
+        (0.35, 0.35, 0.35),
+    )
 
     # Top marker: on top of the body (-Y in camera frame).
-    marker = _make_box(marker_width, marker_height, marker_depth,
-                       np.array([0.0,
-                                 -(body_height / 2 + marker_height / 2),
-                                 -(face_depth / 2 + body_depth / 2)]),
-                       (0.9, 0.1, 0.1))
+    marker = _make_box(
+        marker_width,
+        marker_height,
+        marker_depth,
+        np.array([0.0, -(body_height / 2 + marker_height / 2), -(face_depth / 2 + body_depth / 2)]),
+        (0.9, 0.1, 0.1),
+    )
 
     return [face, body, marker]
 
@@ -298,7 +319,9 @@ class Open3DVisualizer:
         self._app.initialize()
 
         self._window = self._app.create_window(
-            self._window_name, self._width, self._height,
+            self._window_name,
+            self._width,
+            self._height,
         )
         self._window.set_on_layout(self._on_layout)
         self._window.set_on_close(self._on_close)
@@ -360,10 +383,14 @@ class Open3DVisualizer:
         r = self._window.content_rect
         self._scene_widget.frame = r
         pref = self._hud_label.calc_preferred_size(
-            layout_context, _gui.Widget.Constraints(),
+            layout_context,
+            _gui.Widget.Constraints(),
         )
         self._hud_label.frame = _gui.Rect(
-            r.x + 10, r.y + 10, pref.width, pref.height,
+            r.x + 10,
+            r.y + 10,
+            pref.width,
+            pref.height,
         )
 
     def _on_close(self) -> bool:
@@ -386,8 +413,10 @@ class Open3DVisualizer:
 
         # Prepare heavy geometry conversion on the calling (perception) thread.
         pcd = point_cloud_to_open3d(
-            point_cloud, segment_indices=segment_indices,
-            filter_zero=True, world_bounds=self.scene.bounds,
+            point_cloud,
+            segment_indices=segment_indices,
+            filter_zero=True,
+            world_bounds=self.scene.bounds,
         )
 
         cam_meshes: list[Any] | None = None
@@ -420,7 +449,9 @@ class Open3DVisualizer:
             # Camera model (3 meshes)
             if cam_meshes is not None:
                 for name, mesh in zip(
-                    self._CAM_GEOMETRY_NAMES, cam_meshes, strict=True,
+                    self._CAM_GEOMETRY_NAMES,
+                    cam_meshes,
+                    strict=True,
                 ):
                     self._add_geometry(name, mesh, self._mat_lit)
             else:
@@ -451,9 +482,7 @@ class Open3DVisualizer:
     def run(self) -> None:
         """Set up the window and block on the GUI event loop (call on main thread)."""
         if o3d is None:
-            raise ImportError(
-                "Open3D is required for visualization. Install with: pip install open3d"
-            )
+            raise ImportError("Open3D is required for visualization. Install with: pip install open3d")
         self._setup()
         self._app.run()
 
@@ -478,6 +507,7 @@ class Open3DVisualizer:
         if self._app is not None:
             self._app.quit()
 
+
 def get_object_geometry(obj: SceneObject) -> list[object]:
     """Get the geometry of an object in the scene.
 
@@ -491,6 +521,7 @@ def get_object_geometry(obj: SceneObject) -> list[object]:
         return [create_box_lineset(corners)]
     aabb = obj.aabb.cpu().numpy()
     return [create_aabb_lineset(aabb)]
+
 
 def quat_to_roll_pitch_yaw(quat: np.ndarray) -> tuple[float, float, float]:
     """Convert a quaternion to roll, pitch, yaw.
@@ -506,11 +537,12 @@ def quat_to_roll_pitch_yaw(quat: np.ndarray) -> tuple[float, float, float]:
     yaw = np.arctan2(2 * (quat[0] * quat[3] + quat[1] * quat[2]), 1 - 2 * (quat[2] * quat[2] + quat[3] * quat[3]))
     return roll, pitch, yaw
 
+
 def tilt_from_quat_wxyz(q):
     w, x, y, z = q
 
     # right vector z-component from rotation matrix
-    right_z = 2 * (x*z - y*w)
+    right_z = 2 * (x * z - y * w)
 
     # tilt angle
     tilt = np.arcsin(np.clip(right_z, -1.0, 1.0))

@@ -23,7 +23,9 @@ class TwistFramePolicy(BatchedPolicy[MOVEIT_TCP_Obs, TBAction, XYZ_RPY_Params], 
 
     _params: torch.Tensor
 
-    def __init__(self, obs_spec: ObservationSpec[TBPolicyObs], action_spec: ActionSpec[TBAction], frame:str="base") -> None:
+    def __init__(
+        self, obs_spec: ObservationSpec[TBPolicyObs], action_spec: ActionSpec[TBAction], frame: str = "base"
+    ) -> None:
         """Initialize the policy.
 
         Args:
@@ -59,17 +61,19 @@ class TwistFramePolicy(BatchedPolicy[MOVEIT_TCP_Obs, TBAction, XYZ_RPY_Params], 
             lin_vel_b, ang_vel_b = base_to_tcp_twist(params[:, 0:3], params[:, 3:6], obs["tcp_pose_b"][:, 3:7])
             self._twist_cmd = torch.cat((lin_vel_b, ang_vel_b), dim=-1)
         else:
-            self._twist_cmd = self._params[:,:6]
+            self._twist_cmd = self._params[:, :6]
         gripper_lim = obs["gripper_lim"]
         self.start_gripper_pos = (obs["gripper"] - gripper_lim[:, :1]) / (gripper_lim[:, 1:] - gripper_lim[:, :1])
 
 
-class TwistPIDPolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[TBPolicyObs, TBAction]):
+class TwistPIDXYZPolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[TBPolicyObs, TBAction]):
     """Policy for end effector position and orientation using PID control."""
 
     _params: torch.Tensor
 
-    def __init__(self, obs_spec: ObservationSpec[TBPolicyObs], action_spec: ActionSpec[TBAction], frame:str="base") -> None:
+    def __init__(
+        self, obs_spec: ObservationSpec[TBPolicyObs], action_spec: ActionSpec[TBAction], frame: str = "base"
+    ) -> None:
         """Initialize the policy.
 
         Args:
@@ -79,7 +83,7 @@ class TwistPIDPolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic
         """
         self._obs_spec = obs_spec
         self._action_spec = action_spec
-        self.num_envs = obs_spec.n_envs if obs_spec.n_envs > 0 else 1 # NOTE this won't work for batched envs
+        self.num_envs = obs_spec.n_envs if obs_spec.n_envs > 0 else 1  # NOTE this won't work for batched envs
         self._device = obs_spec.device
         self._frame = frame
 
@@ -123,7 +127,7 @@ class TwistPIDPolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic
     @property
     def action_spec(self) -> ActionSpec[TBAction]:  # noqa: D102
         return self._action_spec
-    
+
     @property
     def params_spec(self) -> SkillParamsSpec[XYZ_RPY_Params]:
         """The parameter specification for XYZ + Quat target poses."""
@@ -135,6 +139,9 @@ class TwistPIDPolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic
         dt = obs["dt"]
         r, p, y = euler_xyz_from_quat(tcp_pose_b[:, 3:7])
         robot_xyz_b = torch.cat((tcp_pose_b[:, 0:3], r.unsqueeze(0), p.unsqueeze(0), y.unsqueeze(0)), dim=-1)
+        print(f"########")
+        print(tcp_pose_b.squeeze()[0:3])
+        print(self._tcp_xyz_des_b.squeeze()[0:3])
 
         # Compute errors
         error_pos = robot_xyz_b[:, 0:3] - self._tcp_xyz_des_b[:, 0:3]
@@ -160,7 +167,7 @@ class TwistPIDPolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic
 
         # Combine translation + rotation for twist command
         command = torch.cat((self._delta_pos, rot_vec), dim=1)
-        command[:,3:6] = 0
+        command[:, 3:6] = 0
 
         # Save last errors
         self.last_error_pos = error_pos

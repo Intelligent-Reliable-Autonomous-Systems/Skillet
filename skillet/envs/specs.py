@@ -96,6 +96,10 @@ TWIST_SPEC_BATCHED = ObservationSpec[TWIST_TCP_Obs](
             "gripper_lim": gym.spaces.Box(low=0.0, high=1.0, shape=(2,)),
             "gripper": ParameterizedBox(low=0.0, high=1.0, shape=("n_gripper_joints",)),
             "dt": gym.spaces.Box(low=0.0, high=1.0, shape=(1,)),
+            "ee_vel_b": gym.spaces.Box(low=-10, high=10, shape=(6,)),
+            "joint_vel": ParameterizedBox(low=-10, high=10, shape=("n_joints",)),
+            "joint_pos": ParameterizedBox(low=-np.pi, high=np.pi, shape=("n_joints",)),
+            "joint_eff": ParameterizedBox(low=-np.pi, high=np.pi, shape=("n_joints",)),
         }
     ),
     name="twist_tcp",

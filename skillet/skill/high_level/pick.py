@@ -116,14 +116,17 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         self._pick_status = spec.zeros(shape=(self.n_envs,), dtype=int)
         self._status[:] = SkillStatusCodes.RUNNING
         self._pick_status[:] = PickStatusCodes.ASCEND
-        # self._gripper_policy.reset(obs, params)
         self._params = params
         self._n_steps = 0
 
-        self._pos_threshold = 0.02  # NOTE updated for Gen3Lite
+        self._pos_threshold = 0.01  # NOTE updated for Gen3Lite
         self._quat_threshold = 0.08
+        self._vel_threshold = 0.001  #
+        self._joint_threshold = 0.001
+        self._prev_gripper_pos = None
 
         ee_pose_b = obs["tcp_pose_b"]
+        joint_efforts = obs["joint_eff"]
 
         # Define the target poses for each stage of the pick skill, indexed by PickStatusCodes
         # (n_envs, num_pick_stages, 7)
@@ -156,9 +159,9 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
             self._reach_policy.reset(obs, self._current_target_poses, env_ids=env_ids)
 
     def get_action(self, obs: TBSkillObs) -> TBAction:  # noqa: D102
-        # prev_pick_status = self._pick_status.clone()
 
         ee_pose_b = obs["tcp_pose_b"]
+
         reached_pos = (
             torch.linalg.vector_norm(ee_pose_b[:, 0:3] - self._current_target_poses[:, 0:3], dim=1)
             < self._pos_threshold
@@ -170,8 +173,10 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
             quat_error_magnitude(ee_pose_b[:, 3:7], self._current_target_poses[:, 3:7]) < self._quat_threshold
         )
         reached_pose = (reached_pos) | reached_height  # & reached_quat
+        ee_vel = (obs["ee_vel_b"][:, 0:3] < self._vel_threshold).any(dim=-1)
+        next_pose = reached_pose & ee_vel
 
-        if reached_pose.any():
+        if next_pose.any():
             idx = torch.arange(self.n_envs, device=reached_pose.device)
             valid_idx = (self._status == SkillStatusCodes.RUNNING) & (reached_pose)
             self._pick_status[valid_idx] += 1
@@ -193,10 +198,7 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
             torch.zeros_like(reach_actions[:, -1]),  # Open gripper
         )
 
-        np.set_printoptions(precision=3, suppress=True)
-        # print(
-        #     f"[INFO][PICK STATUS]: {PickStatusCodes(self._pick_status.cpu().numpy()[0]).name} | target pose: {self._current_target_poses.cpu().numpy()[0, :3]} | obs tcp pose: {obs['tcp_pose_b'].cpu().numpy()[0, :3]}"
-        # )
+        self._prev_gripper_pos = obs["joint_pos"][:, -1]
         self._n_steps += 1
         self._status[self._pick_status == PickStatusCodes.DONE] = SkillStatusCodes.SUCCESS
         if self._n_steps >= self._length:

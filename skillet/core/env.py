@@ -307,6 +307,7 @@ class BasicBatchedEnvironment(BatchedEnvironment[TBObs, TBAction], gym.vector.Ve
     def get_state(self) -> TObs:  # noqa: D102
         return self.get_observation()
 
+
 class BatchToSingleWrapper(Environment[TObs, TAction], Generic[TObs, TAction]):
     """A wrapper that converts a batched environment to a single environment."""
 

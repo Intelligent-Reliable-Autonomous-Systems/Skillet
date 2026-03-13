@@ -31,6 +31,7 @@ SelectedSkill: TypeAlias = int
 SelectedSkills = Int[torch.Tensor, "b"]
 """The indices of the selected skills for each environment according to the order of the skills."""
 
+
 class PolicyOverOptionsAgent(Generic[THighLevelObs, TLowLevelObs, TAction, TSkillParams]):
     """A high level model-free agent that selects options/skills to execute in parallel.
 
@@ -108,6 +109,7 @@ TBAction = TypeVar("TBAction", bound=BatchedAction)
 TBSkillParams = TypeVar("TBSkillParams", bound=BatchedSkillParams)
 """The type of the skill parameters, batched."""
 
+
 class PolicyOverOptionsBatchedAgent(Generic[TBHighLevelObs, TBLowLevelObs, TBAction, TBSkillParams]):
     """A high level model-free agent that selects options/skills to execute in parallel.
 
@@ -145,8 +147,9 @@ class PolicyOverOptionsBatchedAgent(Generic[TBHighLevelObs, TBLowLevelObs, TBAct
     def execute(self, env: BatchedEnvironment[Any, TBAction]) -> None:
         """Execute the policy over the options configured."""
         n_envs = env.num_envs
-        terminated = cast('Bool[torch.Tensor, "n_envs"]',
-            env.obs_spec.with_n_envs(n_envs).zeros(shape=(n_envs,), dtype=torch.bool))
+        terminated = cast(
+            'Bool[torch.Tensor, "n_envs"]', env.obs_spec.with_n_envs(n_envs).zeros(shape=(n_envs,), dtype=torch.bool)
+        )
         composite_skill = CompositeSkill[TBLowLevelObs, TBAction, TBSkillParams](self.skills)
 
         while not terminated.all():

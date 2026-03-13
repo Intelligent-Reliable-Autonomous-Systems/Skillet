@@ -27,6 +27,7 @@ except ImportError:
     print("  pip install ultralytics", file=sys.stderr)
     raise
 
+
 @dataclass
 class SAMConcept:
     name: str
@@ -36,6 +37,7 @@ class SAMConcept:
     def __post_init__(self):
         if self.exemplar_images:
             self.exemplar_images = [cv2.imread(img) for img in self.exemplar_images]
+
 
 class SAM3:
     """SAM3 model for image segmentation with concept-based prompting.
@@ -136,10 +138,10 @@ class SAM3:
             for exemplar_image in all_exemplars:
                 pad_width = int(image_np.shape[1] * pad_height / image_np.shape[0])
                 resized = cv2.resize(exemplar_image, (pad_width, pad_height))
-                example_bbox = (col, image_np.shape[0], col+pad_width, image_np.shape[0]+pad_height)
+                example_bbox = (col, image_np.shape[0], col + pad_width, image_np.shape[0] + pad_height)
                 example_bboxes.append(example_bbox)
                 col += pad_width
-                padded_img[example_bbox[1]:example_bbox[3], example_bbox[0]:example_bbox[2]] = resized
+                padded_img[example_bbox[1] : example_bbox[3], example_bbox[0] : example_bbox[2]] = resized
             self._image_np = padded_img
             #     cv2.rectangle(padded_img, example_bbox[:2], example_bbox[2:], (0, 0, 255), 2)
             # cv2.imshow("test", padded_img)
@@ -222,10 +224,10 @@ class SAM3:
                 features,
                 src_shape=self._image_np.shape,
                 text=[prompt.prompt],
-                bboxes=self._example_bboxes, 
+                bboxes=self._example_bboxes,
                 labels=labels,
             )
-            print(prompt_idx, 'labels', labels, boxes[:, 4:6])
+            print(prompt_idx, "labels", labels, boxes[:, 4:6])
             if masks is not None and masks.shape[0] > 0:
                 all_results.append(masks)
                 for _ in range(masks.shape[0]):
@@ -245,7 +247,7 @@ class SAM3:
                 torch.zeros((0, h, w), dtype=torch.uint8, device=device),
                 torch.zeros((0,), dtype=torch.int64, device=device),
             )
-        
+
         prompt_indices = torch.as_tensor(prompt_indices, dtype=torch.int64, device=masks.device)
 
         if result.shape[1] != h + self._pad_height or result.shape[2] != w:
@@ -278,6 +280,7 @@ class SAM3:
         result_indices = [int(result.boxes.cls[i].item()) for i in range(num_masks)]
 
         return np.array(result_indices, dtype=np.int64)
+
     def _resize_masks_torch(
         self,
         masks: torch.Tensor,

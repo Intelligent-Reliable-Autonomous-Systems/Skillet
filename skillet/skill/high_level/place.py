@@ -16,7 +16,9 @@ from skillet.core.skill import (
     TBSkillObs,
     TBSkillParams,
 )
-from skillet.core.spaces import ArrayLike
+from skillet.core.spaces import ArrayLike, SkillParamsSpec
+from skillet.envs.specs import IKEE_Obs
+from skillet.skill.specs import XYZ_YAW_Params, XYZ_YAW_Params_Spec
 
 
 class PlaceStatusCodes(IntEnum):
@@ -38,7 +40,7 @@ class PlaceStatusCodes(IntEnum):
     """The skill has lifted the ojbect."""
 
 
-class PlaceSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSkillObs, TBAction, TBSkillParams]):
+class PlaceSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAction]):
     """A place skill for placing an object down at a location and height after lifting to specified height.
 
     Parameterized by [x,y,z, yaw] the x y z location to perform the place action and orientation
@@ -75,6 +77,10 @@ class PlaceSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSk
         return 4
 
     @property
+    def params_spec(self) -> SkillParamsSpec[XYZ_YAW_Params]:
+        return XYZ_YAW_Params_Spec
+
+    @property
     def name(self) -> str:  # noqa: D102
         return self._name
 
@@ -107,8 +113,11 @@ class PlaceSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSk
         self._params = params
         self._n_steps = 0
 
-        self._pos_threshold = 0.02
+        self._pos_threshold = 0.005
         self._quat_threshold = 0.08
+        self._vel_threshold = 0.001  #
+        self._joint_threshold = 0.001
+        self._prev_gripper_pos = None
 
         ee_pose_b = obs["tcp_pose_b"]
 
@@ -143,14 +152,10 @@ class PlaceSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSk
             self._reach_policy.reset(obs, self._current_target_poses, env_ids=env_ids)
 
     def get_action(self, obs: TBSkillObs) -> TBAction:  # noqa: D102
-        np.set_printoptions(precision=3, suppress=True)
-        print(
-            f"[INFO][PLACE STATUS]: {self._place_status.cpu().numpy()[0]} | target pose: {self._current_target_poses.cpu().numpy()[0]} | obs tcp pose: {obs['tcp_pose_b'].cpu().numpy()[0]}"
-        )
-
-        # prev_place_status = self._place_status.clone()
 
         ee_pose_b = obs["tcp_pose_b"]
+        joint_efforts = obs["joint_eff"]
+
         reached_pos = (
             torch.linalg.vector_norm(ee_pose_b[:, 0:3] - self._current_target_poses[:, 0:3], dim=1)
             < self._pos_threshold
@@ -161,14 +166,18 @@ class PlaceSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSk
         reached_quat = (
             quat_error_magnitude(ee_pose_b[:, 3:7], self._current_target_poses[:, 3:7]) < self._quat_threshold
         )
-        reached_pose = (reached_pos & reached_quat) | reached_height
+        reached_pose = (reached_pos) | reached_height  # & reached_quat
+        ee_vel = (obs["ee_vel_b"][:, 0:3] < self._vel_threshold).any(dim=-1)
+        next_pose = (reached_pose & ee_vel) | (
+            (torch.abs(joint_efforts) > 10).any(dim=-1) & self._place_status == PlaceStatusCodes.LOWER
+        )
 
-        if reached_pose.any():
-            idx = torch.arange(self.n_envs, device=reached_pose.device)
-            valid_idx = (self._status == SkillStatusCodes.RUNNING) & (reached_pose)
+        if next_pose.any():
+            idx = torch.arange(self.n_envs, device=next_pose.device)
+            valid_idx = (self._status == SkillStatusCodes.RUNNING) & (next_pose)
             self._place_status[valid_idx] += 1
             valid_idx = valid_idx & (self._place_status < PlaceStatusCodes.DONE)
-            print(f"[INFO][PLACE STATUS UPDATE]: {self._place_status.cpu().numpy()[0]} | reached_pose: {reached_pose}")
+            print(f"[INFO][PLACE STATUS UPDATE]: {self._place_status.cpu().numpy()[0]} | reached_pose: {next_pose}")
             # Update the target pose based on the new place status
             self._current_target_poses[valid_idx] = self._target_poses[idx[valid_idx], self._place_status[valid_idx]]
 
@@ -183,6 +192,7 @@ class PlaceSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[TBSk
             torch.ones_like(reach_actions[:, -1]),  # Close gripper
         )
 
+        self._prev_gripper_pos = obs["joint_pos"][:, -1]
         self._n_steps += 1
         self._status[self._place_status == PlaceStatusCodes.DONE] = SkillStatusCodes.SUCCESS
         if self._n_steps >= self._length:

@@ -1,5 +1,3 @@
-
-
 from abc import abstractmethod
 from collections import defaultdict
 
@@ -65,14 +63,15 @@ class SceneObject:
         """Whether the pose of the object is known."""
         raise NotImplementedError
 
+
 class Scene:
     """A scene is a collection of objects in a 3D space."""
 
-    def __init__(self,
+    def __init__(
+        self,
         objects: list[SceneObject] | None = None,
         closed_set: bool = True,
         bounds: tuple[float, float, float, float, float, float] | None = None,
-
     ) -> None:
         """Initialize the scene.
 

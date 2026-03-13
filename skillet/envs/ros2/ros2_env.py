@@ -232,7 +232,7 @@ class ROS2Env(gym.Env):
         assert self._supports_action_spec(
             action_spec
         ), f"Action specification `{action_spec.name}: {action_spec}` not supported by environment {self}."
-        if self._next_step_time is None: # TODO check for right behavior
+        if self._next_step_time is None:  # TODO check for right behavior
             self._next_step_time = time.monotonic()
 
         # Pre process the robot action
@@ -245,7 +245,7 @@ class ROS2Env(gym.Env):
         if sleep_time > 0:
             time.sleep(sleep_time)
         else:
-            print(f"[WARN] full loop overran by {-sleep_time * 1000:.1f}ms")
+            # print(f"[WARN] full loop overran by {-sleep_time * 1000:.1f}ms")
             ...
 
         self.episode_length_buf += 1

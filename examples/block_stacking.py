@@ -17,13 +17,15 @@ from skillet.perception.realsense import RealsenseEnv
 from skillet.perception.sam3.sam3 import SAMConcept
 from skillet.policy.dummy import FixedSequencePolicy
 from skillet.policy.ik_ee import PoseAbsIKEEPolicy
-from skillet.policy.twist import TwistPIDPolicy
+from skillet.policy.twist import TwistPIDXYZPolicy
 from skillet.policy.moveit import MoveItTcpQuatPolicy
 from skillet.scene.base import Scene
 from skillet.scene.cube import Cube
 from skillet.scene.visualize import Open3DVisualizer
 from skillet.skill.high_level.pick import PickSkill
+from skillet.skill.high_level.place import PlaceSkill
 from skillet.skill.high_level.pick_block import PickBlockSkill
+from skillet.skill.high_level.place_block import PlaceBlockSkill
 from skillet_tasks.ros2_tasks.factory import create_ros2_env
 
 if TYPE_CHECKING:
@@ -35,11 +37,15 @@ parser.add_argument("--device", type=str, default="cuda", help="Device to use")
 parser.add_argument(
     "--ros2_ws", type=str, default=None, help="Absolute path to ROS2 workspace containing bringup files"
 )
-parser.add_argument("--use_moveit", action=argparse.BooleanOptionalAction, default=True, help="Use MoveIt for motion planning.")
+parser.add_argument(
+    "--use_moveit", action=argparse.BooleanOptionalAction, default=True, help="Use MoveIt for motion planning."
+)
 parser.add_argument("--use_twist", action=argparse.BooleanOptionalAction, default=False, help="Use cartesian servoing.")
 parser.add_argument("--segmentation", action=argparse.BooleanOptionalAction, default=False, help="Use segmentation.")
 parser.add_argument("--realsense_env", action="store_true", help="Use RealSense camera environment.")
-parser.add_argument("--viz", type=str, default="rgb,depth,pointcloud", help="Visualization modes to display, as comma-separated string.")
+parser.add_argument(
+    "--viz", type=str, default="rgb,depth,pointcloud", help="Visualization modes to display, as comma-separated string."
+)
 parser.add_argument("--robot_ip", type=str, default="192.168.1.10", help="Robot IP.")
 parser.add_argument("--launch_ros", action="store_true", help="Launch ROS from env startup.")
 parser.add_argument("--period_s", type=float, default=1.0, help="Seconds between service requests.")
@@ -56,6 +62,7 @@ TABLE_X0 = -0.0889
 TABLE_Y0 = -0.577
 TABLE_DX = 0.762
 TABLE_DY = 1.2446
+
 
 def main() -> None:
     """Visualize RGB + depth color map from _get_latest_rgbd()."""
@@ -79,7 +86,7 @@ def main() -> None:
             "launch_ros": args_cli.launch_ros,
             "device": args_cli.device,
             "num_envs": args_cli.num_envs,
-            "ros2_workspace": args_cli.ros2_ws
+            "ros2_workspace": args_cli.ros2_ws,
         }
 
         env = create_ros2_env(args_cli.task, env_cfg)
@@ -106,8 +113,10 @@ def main() -> None:
     if "pointcloud" in args_cli.viz:
         perception.set_visualizer(vis, segment_point_cloud=True)
     perception.start_cv2_visualization(
-        display_rgb="rgb" in args_cli.viz, display_depth="depth" in args_cli.viz,
-        segment_rgb="rgb" in args_cli.viz, segment_depth="depth" in args_cli.viz,
+        display_rgb="rgb" in args_cli.viz,
+        display_depth="depth" in args_cli.viz,
+        segment_rgb="rgb" in args_cli.viz,
+        segment_depth="depth" in args_cli.viz,
     )
     perception.run_thread()
     if args_cli.realsense_env:
@@ -119,17 +128,16 @@ def main() -> None:
     if args_cli.use_moveit:
         arm_policy = MoveItTcpQuatPolicy(env.batched_env.obs_spec_ikee, env.batched_env.action_spec_moveit_tcp_quat)
     elif args_cli.use_twist:
-        arm_policy = TwistPIDPolicy(env.batched_env.obs_spec_twist_tcp, env.batched_env.action_spec_twist_tcp)
+        arm_policy = TwistPIDXYZPolicy(env.batched_env.obs_spec_twist_tcp, env.batched_env.action_spec_twist_tcp)
     else:
         arm_policy = PoseAbsIKEEPolicy(ikee_spec, low_action_spec)
     # Skills
     skill_length = 2000
-    pick_skill = PickSkill(
-        reach_policy=arm_policy, gripper_policy=None, lift_height=0.23, length=skill_length
-    )
+    place_skill = PlaceSkill(reach_policy=arm_policy, gripper_policy=None, lift_height=0.23, length=skill_length)
+    pick_skill = PickSkill(reach_policy=arm_policy, gripper_policy=None, lift_height=0.23, length=skill_length)
     pick_block_skill = PickBlockSkill(scene, pick_skill)
-    skills = [pick_block_skill]
-
+    place_block_skill = PlaceBlockSkill(scene, place_skill)
+    skills = [pick_block_skill, place_block_skill]
 
     # High-level policy
     options_spec = ActionSpec[SelectedSkill](
@@ -142,7 +150,7 @@ def main() -> None:
         rgbd_spec,
         options_spec,
         torch.as_tensor(
-            [0],
+            [0, 1, 0, 1],
             device=rgbd_spec.device,
             dtype=torch.int32,
         ),
@@ -151,7 +159,7 @@ def main() -> None:
         rgbd_spec,
         pick_block_skill.params_spec,
         torch.as_tensor(
-            [1, 0, 2, 0],
+            [1, 0, 2, 1],
             device=rgbd_spec.device,
             dtype=torch.int32,
         ),
@@ -163,7 +171,9 @@ def main() -> None:
         params_policy=fixed_param_policy,
     )
 
-    if not args_cli.realsense_env or True: # args_cli.use_fake_hardware: NOTE this is a string so always evaluates to true, thus blocking
+    if (
+        not args_cli.realsense_env or True
+    ):  # args_cli.use_fake_hardware: NOTE this is a string so always evaluates to true, thus blocking
         input("Press Enter to start the skill execution...")
 
     # simulate environment
@@ -173,7 +183,6 @@ def main() -> None:
             policy_over_options_agent.execute(env)
             # skill_executor.execute()
             print("[INFO][Main] finished run of skill executor, resetting")
-
 
     perception.stop()
     env.close()

@@ -12,12 +12,15 @@ from typing import Union
 
 import numpy as np
 import torch
-try: 
+
+try:
     import warp as wp
 except ImportError:
+
     class wp:
         array = None
         torch = torch
+
 
 TensorData = Union[np.ndarray, torch.Tensor, wp.array]
 """Type definition for a tensor data.

@@ -52,7 +52,7 @@ def main() -> None:
         "launch_ros": args_cli.launch_ros,
         "device": args_cli.device,
         "num_envs": args_cli.num_envs,
-        "ros2_workspace": args_cli.ros2_ws
+        "ros2_workspace": args_cli.ros2_ws,
     }
 
     env = create_ros2_env(args_cli.task, env_cfg)

@@ -332,7 +332,7 @@ class SpaceSpecification(Generic[TSpace]):
                     elif self.is_batched and self.n_envs == -1 and arr.shape[1:] == expected_shape:
                         pass  # arr is already batched
                     elif not self.is_batched and arr.shape[0] == 1 and arr.shape[1:] == expected_shape:
-                        arr = arr.squeeze(0) # can remove a singleton dimension
+                        arr = arr.squeeze(0)  # can remove a singleton dimension
                     else:
                         raise ValueError(f"Expected shape {expected_shape} (n_envs={self.n_envs}) but got {arr.shape} \
                             for value {key}.")
@@ -351,7 +351,7 @@ class SpaceSpecification(Generic[TSpace]):
                 elif self.is_batched and self.n_envs == -1 and arr.shape[1:] == expected_shape:
                     pass  # arr is already batched
                 elif not self.is_batched and arr.shape[0] == 1 and arr.shape[1:] == expected_shape:
-                        arr = np.squeeze(arr, 0) # can remove a singleton dimension
+                    arr = np.squeeze(arr, 0)  # can remove a singleton dimension
                 else:
                     raise ValueError(f"Expected shape {expected_shape} (n_envs={self.n_envs}) but got {arr.shape} \
                         for value {key}.")
@@ -726,10 +726,11 @@ class ParameterizedBox(gym.spaces.Box, ParameterizedSpace):
         If the parameterized box space is not fully bound, return a new parameterized box space with the parameters bound.
         Otherwise, return a gym.spaces.Box.
         """
+
         def _eval(value: str | Any) -> Any:
             if not isinstance(value, str):
                 return value
-            tokens = re.split(r"([+-\\*])",value)
+            tokens = re.split(r"([+-\\*])", value)
             simplified = []
             for token in tokens:
                 token = token.strip()
@@ -744,13 +745,15 @@ class ParameterizedBox(gym.spaces.Box, ParameterizedSpace):
                         try:
                             val = float(token)
                         except ValueError:
-                            raise ValueError(f"Invalid token {token} in shape {shape}. Must be a valid Python variable name or number.")
+                            raise ValueError(
+                                f"Invalid token {token} in shape {shape}. Must be a valid Python variable name or number."
+                            )
                 else:
                     val = token
                 simplified.append(val)
             for token in simplified:
                 if isinstance(token, str) and token not in ["+", "-", "*", "/"]:
-                    return "".join([str(s) for s in simplified]) # cannot evaluate yet
+                    return "".join([str(s) for s in simplified])  # cannot evaluate yet
             try:
                 return eval("".join([str(s) for s in simplified]))
             except Exception as e:
@@ -758,9 +761,7 @@ class ParameterizedBox(gym.spaces.Box, ParameterizedSpace):
 
         low = _eval(self._low)
         high = _eval(self._high)
-        shape = [
-            _eval(self._shape_with_params[i]) for i, v in enumerate(self._shape_with_params)
-        ]
+        shape = [_eval(self._shape_with_params[i]) for i, v in enumerate(self._shape_with_params)]
         vars_left = self._get_variables(low, high, shape)
         if len(vars_left) > 0:
             return ParameterizedBox(

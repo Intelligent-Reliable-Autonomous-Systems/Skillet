@@ -42,9 +42,15 @@ class RealsenseEnv(_EnvironmentBase):
     position (0, 0, 0), quaternion (0, 0, 0, 1) in ROS xyzw order.
     """
 
-    def __init__(self, width: int = 640, height: int = 480, fps: int = 30, 
-            apriltag_pose: np.ndarray = np.array([0.13, 0.0, 0.0, 0.0, 0.0, 0.7071068, 0.7071068]),
-            apriltag_size_m: float = 0.100, apriltag_id: int = 0) -> None:
+    def __init__(
+        self,
+        width: int = 640,
+        height: int = 480,
+        fps: int = 30,
+        apriltag_pose: np.ndarray = np.array([0.13, 0.0, 0.0, 0.0, 0.0, 0.7071068, 0.7071068]),
+        apriltag_size_m: float = 0.100,
+        apriltag_id: int = 0,
+    ) -> None:
         """Initialize the RealSense pipeline and RGB-D observation space."""
         self.width = width
         self.height = height
@@ -57,21 +63,17 @@ class RealsenseEnv(_EnvironmentBase):
         self._config.enable_stream(rs.stream.depth, self.width, self.height, rs.format.z16, self.fps)
 
         self._tag_detector = AprilTagDetector()
-        self._T_base_to_tag = make_T(
-            quat_xyzw_to_R(*list(apriltag_pose[3:7])),
-            list(apriltag_pose[:3])
-        )
-        self._roll_180 = make_T(
-            quat_xyzw_to_R(1.0, 0.0, 0.0, 0.0),
-            [0.0, 0.0, 0.0]
-        )
+        self._T_base_to_tag = make_T(quat_xyzw_to_R(*list(apriltag_pose[3:7])), list(apriltag_pose[:3]))
+        self._roll_180 = make_T(quat_xyzw_to_R(1.0, 0.0, 0.0, 0.0), [0.0, 0.0, 0.0])
         self._T_base_to_tag = self._T_base_to_tag @ self._roll_180
         # self._latest_camera_pose = np.array([0.33, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0], dtype=np.float64) # in ROS xyzw format
         self._latest_camera_pose = T_to_xyz_quat_xyzw(self._T_base_to_tag)
         self._apriltag_size_m = apriltag_size_m
         self._apriltag_id = apriltag_id
 
-        self._camera_localizer = CameraLocalizer(apriltag_pose=apriltag_pose, apriltag_size_m=apriltag_size_m, apriltag_id=apriltag_id)
+        self._camera_localizer = CameraLocalizer(
+            apriltag_pose=apriltag_pose, apriltag_size_m=apriltag_size_m, apriltag_id=apriltag_id
+        )
 
         self._profile = self._pipeline.start(self._config)
 
@@ -136,7 +138,9 @@ class RealsenseEnv(_EnvironmentBase):
             is_torch=False,
             is_batched=False,
         )
-        self.obs_spec_rgbd = RGBD_SPEC_BATCHED.bind(height=self.height, width=self.width).replace(is_torch=False).unbatched()
+        self.obs_spec_rgbd = (
+            RGBD_SPEC_BATCHED.bind(height=self.height, width=self.width).replace(is_torch=False).unbatched()
+        )
 
         self._closed = False
 
@@ -265,17 +269,22 @@ class RealsenseEnv(_EnvironmentBase):
 def quat_xyzw_to_R(qx, qy, qz, qw):
     # assumes unit quaternion
     x, y, z, w = qx, qy, qz, qw
-    return np.array([
-        [1 - 2*(y*y + z*z),     2*(x*y - z*w),     2*(x*z + y*w)],
-        [    2*(x*y + z*w), 1 - 2*(x*x + z*z),     2*(y*z - x*w)],
-        [    2*(x*z - y*w),     2*(y*z + x*w), 1 - 2*(x*x + y*y)],
-    ], dtype=float)
+    return np.array(
+        [
+            [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+            [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+            [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+        ],
+        dtype=float,
+    )
+
 
 def make_T(R, t_xyz):
     T = np.eye(4)
-    T[:3,:3] = R
+    T[:3, :3] = R
     T[:3, 3] = np.array(t_xyz, dtype=float)
     return T
+
 
 def _inv_T(T):
     """Invert a 4x4 homogeneous transform."""
@@ -285,10 +294,12 @@ def _inv_T(T):
     t_inv = -R_inv @ t
     return make_T(R_inv, t_inv)
 
+
 def T_to_xyz_quat_xyzw(T):
     xyz = T[:3, 3]
     quat = rot_to_quat_xyzw(T[:3, :3])
     return np.concatenate((xyz, quat), axis=0)
+
 
 def rot_to_quat_xyzw(R):
     q = np.empty(4)
@@ -297,31 +308,32 @@ def rot_to_quat_xyzw(R):
     if trace > 0:
         s = np.sqrt(trace + 1.0) * 2
         q[3] = 0.25 * s
-        q[0] = (R[2,1] - R[1,2]) / s
-        q[1] = (R[0,2] - R[2,0]) / s
-        q[2] = (R[1,0] - R[0,1]) / s
+        q[0] = (R[2, 1] - R[1, 2]) / s
+        q[1] = (R[0, 2] - R[2, 0]) / s
+        q[2] = (R[1, 0] - R[0, 1]) / s
     else:
-        i = np.argmax([R[0,0], R[1,1], R[2,2]])
+        i = np.argmax([R[0, 0], R[1, 1], R[2, 2]])
         if i == 0:
-            s = np.sqrt(1 + R[0,0] - R[1,1] - R[2,2]) * 2
-            q[3] = (R[2,1] - R[1,2]) / s
+            s = np.sqrt(1 + R[0, 0] - R[1, 1] - R[2, 2]) * 2
+            q[3] = (R[2, 1] - R[1, 2]) / s
             q[0] = 0.25 * s
-            q[1] = (R[0,1] + R[1,0]) / s
-            q[2] = (R[0,2] + R[2,0]) / s
+            q[1] = (R[0, 1] + R[1, 0]) / s
+            q[2] = (R[0, 2] + R[2, 0]) / s
         elif i == 1:
-            s = np.sqrt(1 + R[1,1] - R[0,0] - R[2,2]) * 2
-            q[3] = (R[0,2] - R[2,0]) / s
-            q[0] = (R[0,1] + R[1,0]) / s
+            s = np.sqrt(1 + R[1, 1] - R[0, 0] - R[2, 2]) * 2
+            q[3] = (R[0, 2] - R[2, 0]) / s
+            q[0] = (R[0, 1] + R[1, 0]) / s
             q[1] = 0.25 * s
-            q[2] = (R[1,2] + R[2,1]) / s
+            q[2] = (R[1, 2] + R[2, 1]) / s
         else:
-            s = np.sqrt(1 + R[2,2] - R[0,0] - R[1,1]) * 2
-            q[3] = (R[1,0] - R[0,1]) / s
-            q[0] = (R[0,2] + R[2,0]) / s
-            q[1] = (R[1,2] + R[2,1]) / s
+            s = np.sqrt(1 + R[2, 2] - R[0, 0] - R[1, 1]) * 2
+            q[3] = (R[1, 0] - R[0, 1]) / s
+            q[0] = (R[0, 2] + R[2, 0]) / s
+            q[1] = (R[1, 2] + R[2, 1]) / s
             q[2] = 0.25 * s
 
     return q
+
 
 if __name__ == "__main__":
     env = RealsenseEnv()

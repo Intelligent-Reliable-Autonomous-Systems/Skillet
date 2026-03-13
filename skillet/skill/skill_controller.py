@@ -28,12 +28,14 @@ class SkillController(BatchedSkill):
         self.device = device
         self.num_envs = num_envs
         self.env_ids = torch.arange(self.num_envs, device=self.device)
+
         def get_param_dim(param_spec: SpaceSpecification) -> int:
             if isinstance(param_spec.space, gym.spaces.Dict):
                 raise TypeError("Cannot get param dimension for a dictionary space.")
             if param_spec.is_batched and param_spec.n_envs >= 0:
                 return np.math.prod(param_spec.space.shape[1:])
-            return np.math.prod(param_spec.space.shape) # space is single-env
+            return np.math.prod(param_spec.space.shape)  # space is single-env
+
         self.sk_param_dim = int(np.max([get_param_dim(skill.params_spec) for skill in self.skills]))
         self.num_skills = len(self.skills)
         self.action_dim = self.num_skills + self.sk_param_dim

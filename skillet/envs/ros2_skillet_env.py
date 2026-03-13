@@ -119,19 +119,24 @@ class ROS2SkilletEnv(
             n_gripper_joints=len(self._gripper_joint_names),
         ).replace(device=self.device)
         """Specification of OSC observations."""
-        self.obs_spec_twist_tcp = TWIST_SPEC_BATCHED.bind(n_gripper_joints=len(self._gripper_joint_names)).replace(device=self.device)
+        self.obs_spec_twist_tcp = TWIST_SPEC_BATCHED.bind(
+            n_gripper_joints=len(self._gripper_joint_names), n_joints=len(self._joint_ids)
+        ).replace(device=self.device)
         """Specification of Twist TCP observations."""
 
         self.action_spec_joints = ActionSpec[BxM_Action](
             name="joints",
             space=action_space,
         ).replace(**spec_args)
-        self.action_spec_twist_tcp = TWIST_TCP_SPEC.replace(**spec_args) \
-            .bind(n_gripper_joints=len(self._env.cfg.gripper_joint_names))
-        self.action_spec_moveit_joint = MOVEIT_Joint_SPEC.replace(**spec_args) \
-            .bind(n_joints=len(self._env.cfg.joint_ids))
-        self.action_spec_moveit_tcp_quat = MOVEIT_TCP_QUAT_SPEC.replace(**spec_args) \
-            .bind(n_gripper_joints=len(self._env.cfg.gripper_joint_names))
+        self.action_spec_twist_tcp = TWIST_TCP_SPEC.replace(**spec_args).bind(
+            n_gripper_joints=len(self._env.cfg.gripper_joint_names)
+        )
+        self.action_spec_moveit_joint = MOVEIT_Joint_SPEC.replace(**spec_args).bind(
+            n_joints=len(self._env.cfg.joint_ids)
+        )
+        self.action_spec_moveit_tcp_quat = MOVEIT_TCP_QUAT_SPEC.replace(**spec_args).bind(
+            n_gripper_joints=len(self._env.cfg.gripper_joint_names)
+        )
 
     # ==================== DirectRlInterface ====================
     @property
@@ -208,7 +213,6 @@ class ROS2SkilletEnv(
             self.action_spec_twist_tcp.name,
             self.action_spec_moveit_joint.name,
             self.action_spec_moveit_tcp_quat.name,
-            self.action_spec_moveit_tcp_vel.name
         ]
 
     @override
@@ -302,6 +306,7 @@ class ROS2SkilletEnv(
                 {
                     "joint_pos": self._get_joint_positions(joint_ids=self._joint_ids),
                     "joint_vel": self._get_joint_velocities(joint_ids=self._joint_ids),
+                    "ee_vel_b": self._get_ee_vel_b(ee_link=self._ee_link_name, base_link=self._base_link_name),
                     "tcp_offset": self._tcp_offset,
                     "jacobians": self._get_jacobians(
                         ee_link=self._ee_link_name, base_link=self._base_link_name, arm_joint_ids=self._joint_ids[:7]
@@ -324,6 +329,10 @@ class ROS2SkilletEnv(
                     "gripper_lim": self._get_gripper_lims(gripper_joints=self._gripper_joint_names),
                     "gripper": self._get_gripper_state(gripper_joints=self._gripper_joint_names),
                     "dt": torch.tensor([self._env.step_dt]).expand(self.num_envs),
+                    "ee_vel_b": self._get_ee_vel_b(ee_link=self._ee_link_name, base_link=self._base_link_name),
+                    "joint_vel": self._get_joint_velocities(joint_ids=self._joint_ids),
+                    "joint_pos": self._get_joint_positions(joint_ids=self._joint_ids),
+                    "joint_eff": self._get_joint_efforts(joint_ids=self._joint_ids),
                 }
             )
         raise ValueError(f"Observation spec {obs_spec} not supported by environment.")
@@ -380,7 +389,7 @@ class ROS2SkilletEnv(
         if joint_ids is None:
             joint_ids = self._joint_ids
         return (
-            torch.as_tensor(self._env._current_joint_positions, device=self.device)
+            torch.as_tensor(self._env._joint_positions, device=self.device)
             .unsqueeze(0)[:, joint_ids][env_ids]
             .to(torch.float32)
         )
@@ -401,7 +410,27 @@ class ROS2SkilletEnv(
             joint_ids = self._joint_ids
 
         return (
-            torch.as_tensor(self._env._current_joint_velocities, device=self.device)
+            torch.as_tensor(self._env._joint_velocities, device=self.device)
+            .unsqueeze(0)[:, joint_ids][env_ids]
+            .to(torch.float32)
+        )
+
+    def _get_joint_efforts(self, env_ids: torch.Tensor | None = None, joint_ids: list | None = None) -> torch.Tensor:
+        """Return the joint efforts.
+
+        Args:
+            env_ids: environment ids from which to get the joint ids
+            joint_ids: the list of joint ids to retrieve
+        Returns:
+            torch tensor of jacobians of shape (num_envs, num_joints, 3)
+
+        """
+        if env_ids is None:
+            env_ids = torch.arange(self.num_envs, device=self.device)
+        if joint_ids is None:
+            joint_ids = self._joint_ids
+        return (
+            torch.as_tensor(self._env._joint_efforts, device=self.device)
             .unsqueeze(0)[:, joint_ids][env_ids]
             .to(torch.float32)
         )
@@ -662,16 +691,28 @@ class ROS2SkilletEnv(
         ee_link_idx = self._env._find_link_idx(ee_link)
         base_link_idx = self._env._find_link_idx(base_link)
 
-        ee_vel_w = self._env._robot_body_vel_w[
-            env_ids, ee_link_idx, :
+        ee_vel_w = torch.as_tensor(
+            self._env._robot_body_vel_w[ee_link_idx, :], device=self.device, dtype=torch.float32
+        ).unsqueeze(0)[
+            env_ids
         ]  # Extract end-effector velocity in the world frame
-        root_vel_w = self._env._robot_body_vel_w[env_ids, base_link_idx, :]  # Extract root velocity in the world frame
+        root_vel_w = torch.as_tensor(
+            self._env._robot_body_vel_w[base_link_idx, :], device=self.device, dtype=torch.float32
+        ).unsqueeze(0)[
+            env_ids
+        ]  # Extract root velocity in the world frame
         relative_vel_w = ee_vel_w - root_vel_w  # Compute the relative velocity in the world frame
         ee_lin_vel_b = quat_apply_inverse(
-            self._env._robot_body_pose_w[env_ids, base_link_idx][:, 3:7], relative_vel_w[:, 0:3]
+            torch.as_tensor(
+                self._env._robot_body_pose_w[base_link_idx], device=self.device, dtype=torch.float32
+            ).unsqueeze(0)[env_ids][:, 3:7],
+            relative_vel_w[:, 0:3],
         )  # From world to root frame
         ee_ang_vel_b = quat_apply_inverse(
-            self._env._robot_body_pose_w[env_ids, base_link_idx][:, 3:7], relative_vel_w[:, 3:6]
+            torch.as_tensor(
+                self._env._robot_body_pose_w[base_link_idx], device=self.device, dtype=torch.float32
+            ).unsqueeze(0)[env_ids][:, 3:7],
+            relative_vel_w[:, 3:6],
         )
         return torch.cat([ee_lin_vel_b, ee_ang_vel_b], dim=-1)
 

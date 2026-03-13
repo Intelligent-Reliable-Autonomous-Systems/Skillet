@@ -53,7 +53,9 @@ if __name__ == "__main__":
     )
     policy_over_options = RandomPolicy[CartPoleObservation, B_Int_HighLevel](env.obs_spec, options_spec)
 
-    policy_over_options_agent = PolicyOverOptionsBatchedAgent[CartPoleObservation, CartPoleObservation, CartPoleAction, None](
+    policy_over_options_agent = PolicyOverOptionsBatchedAgent[
+        CartPoleObservation, CartPoleObservation, CartPoleAction, None
+    ](
         skills=[zero_skill, random_skill],
         high_level_policy=policy_over_options,
         params_policy=None,

@@ -19,7 +19,9 @@ parser.add_argument(
 )
 parser.add_argument("--segmentation", action=argparse.BooleanOptionalAction, default=True, help="Use segmentation.")
 parser.add_argument("--realsense_env", action="store_true", help="Use RealSense camera environment.")
-parser.add_argument("--viz", type=str, default="rgb,depth,pointcloud", help="Visualization modes to display, as comma-separated string.")
+parser.add_argument(
+    "--viz", type=str, default="rgb,depth,pointcloud", help="Visualization modes to display, as comma-separated string."
+)
 parser.add_argument("--robot_ip", type=str, default="192.168.1.10", help="Robot IP.")
 parser.add_argument("--launch_ros", action="store_true", help="Launch ROS from env startup.")
 parser.add_argument("--period_s", type=float, default=1.0, help="Seconds between service requests.")
@@ -36,7 +38,14 @@ TABLE_X0 = -0.0889
 TABLE_Y0 = -0.577
 TABLE_DX = 0.762
 TABLE_DY = 1.2446
-WORLD_BOUNDS = (TABLE_X0, TABLE_Y0, 0, TABLE_X0 + TABLE_DX, TABLE_Y0 + TABLE_DY, 1) # min_x, min_y, min_z, max_x, max_y, max_z
+WORLD_BOUNDS = (
+    TABLE_X0,
+    TABLE_Y0,
+    0,
+    TABLE_X0 + TABLE_DX,
+    TABLE_Y0 + TABLE_DY,
+    1,
+)  # min_x, min_y, min_z, max_x, max_y, max_z
 
 # PROMPTS = {
 #     "wooden_block": "a light brown wooden block",
@@ -85,8 +94,10 @@ def main() -> None:
     if "pointcloud" in args_cli.viz:
         perception.set_visualizer(vis, segment_point_cloud=True)
     perception.start_cv2_visualization(
-        display_rgb="rgb" in args_cli.viz, display_depth="depth" in args_cli.viz,
-        segment_rgb="rgb" in args_cli.viz, segment_depth="depth" in args_cli.viz,
+        display_rgb="rgb" in args_cli.viz,
+        display_depth="depth" in args_cli.viz,
+        segment_rgb="rgb" in args_cli.viz,
+        segment_depth="depth" in args_cli.viz,
     )
     perception.run_thread()
 

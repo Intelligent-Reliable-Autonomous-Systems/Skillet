@@ -24,27 +24,29 @@ class Cube(SceneObject):
 
     # Canonical outward face normals in the cube's local frame, indexed by FACE_INDICES.
     FACE_NORMALS: ClassVar[list[list[float]]] = [
-        torch.tensor([-1.,  0.,  0.]),  # front
-        torch.tensor([ 1.,  0.,  0.]),  # back
-        torch.tensor([ 0.,  1.,  0.]),  # left
-        torch.tensor([ 0., -1.,  0.]),  # right
-        torch.tensor([ 0.,  0.,  1.]),  # top
-        torch.tensor([ 0.,  0., -1.]),  # bottom
+        torch.tensor([-1.0, 0.0, 0.0]),  # front
+        torch.tensor([1.0, 0.0, 0.0]),  # back
+        torch.tensor([0.0, 1.0, 0.0]),  # left
+        torch.tensor([0.0, -1.0, 0.0]),  # right
+        torch.tensor([0.0, 0.0, 1.0]),  # top
+        torch.tensor([0.0, 0.0, -1.0]),  # bottom
     ]
 
     FACE_UPS: ClassVar[list[Float[torch.Tensor, "3"]]] = [
-        torch.tensor([0.,  0.,  1.]),  # toward top face
-        torch.tensor([0.,  0.,  1.]),  # toward top face
-        torch.tensor([0.,  0.,  1.]),  # toward top face
-        torch.tensor([0.,  0.,  1.]),  # toward top face
-        torch.tensor([ 1., 0.,  0.]),  # toward back face
-        torch.tensor([-1., 0.,  0.]),  # toward front face
+        torch.tensor([0.0, 0.0, 1.0]),  # toward top face
+        torch.tensor([0.0, 0.0, 1.0]),  # toward top face
+        torch.tensor([0.0, 0.0, 1.0]),  # toward top face
+        torch.tensor([0.0, 0.0, 1.0]),  # toward top face
+        torch.tensor([1.0, 0.0, 0.0]),  # toward back face
+        torch.tensor([-1.0, 0.0, 0.0]),  # toward front face
     ]
 
-    def __init__(self,
-            size: float,
-            init_pose: torch.Tensor | None = None, # (x, y, z, w, x, y, z)
-            face_apriltags: list[dict[str, Any]] | None = None,) -> None:
+    def __init__(
+        self,
+        size: float,
+        init_pose: torch.Tensor | None = None,  # (x, y, z, w, x, y, z)
+        face_apriltags: list[dict[str, Any]] | None = None,
+    ) -> None:
         """Initialize the cube.
 
         Args:
@@ -85,6 +87,11 @@ class Cube(SceneObject):
         """The type of the cube."""
         return "block"
 
+    @property
+    def size(self) -> float:
+        """The size of the cube."""
+        return self._size
+    
     @override
     def is_pose_known(self) -> bool:
         return self._pose is not None
@@ -98,19 +105,26 @@ class Cube(SceneObject):
         """
         # 8 corners in local frame, at ±size/2 along each axis
         half = self._size / 2
-        offsets = torch.tensor([
-            [-1, -1, -1],  # 0: front-right-bottom
-            [+1, -1, -1],  # 1: back-right-bottom
-            [-1, +1, -1],  # 2: front-left-bottom
-            [+1, +1, -1],  # 3: back-left-bottom
-            [-1, -1, +1],  # 4: front-right-top
-            [+1, -1, +1],  # 5: back-right-top
-            [-1, +1, +1],  # 6: front-left-top
-            [+1, +1, +1],  # 7: back-left-top
-        ], dtype=self._pose.dtype, device=self._pose.device) * half  # (8, 3)
+        offsets = (
+            torch.tensor(
+                [
+                    [-1, -1, -1],  # 0: front-right-bottom
+                    [+1, -1, -1],  # 1: back-right-bottom
+                    [-1, +1, -1],  # 2: front-left-bottom
+                    [+1, +1, -1],  # 3: back-left-bottom
+                    [-1, -1, +1],  # 4: front-right-top
+                    [+1, -1, +1],  # 5: back-right-top
+                    [-1, +1, +1],  # 6: front-left-top
+                    [+1, +1, +1],  # 7: back-left-top
+                ],
+                dtype=self._pose.dtype,
+                device=self._pose.device,
+            )
+            * half
+        )  # (8, 3)
 
-        pos  = self._pose[:3]    # (3,)
-        quat = self._pose[3:]    # (4,) (w, x, y, z)
+        pos = self._pose[:3]  # (3,)
+        quat = self._pose[3:]  # (4,) (w, x, y, z)
 
         # Rotate each corner offset into world frame, then translate
         return pos + quat_apply(quat.unsqueeze(0).expand(8, -1), offsets)  # (8, 3)
@@ -120,12 +134,14 @@ class Cube(SceneObject):
         return self._face_apriltags
 
     @classmethod
-    def pose_from_face_center(cls,
+    def pose_from_face_center(
+        cls,
         face: Literal["front", "back", "left", "right", "top", "bottom"] | int,
-        center_pos: torch.Tensor, # (x, y, z)
-        normal: torch.Tensor, # (x, y, z)
-        up: torch.Tensor, # (x, y, z)
-        size: float) -> torch.Tensor:
+        center_pos: torch.Tensor,  # (x, y, z)
+        normal: torch.Tensor,  # (x, y, z)
+        up: torch.Tensor,  # (x, y, z)
+        size: float,
+    ) -> torch.Tensor:
         """Get a cube pose from the center of a face and the normal vector in the world frame.
 
         The pose is computed under the convention that with identity rotation:
@@ -167,8 +183,8 @@ class Cube(SceneObject):
     def _look_rotation(normal: torch.Tensor, up: torch.Tensor) -> torch.Tensor:
         """Build a quaternion (w,x,y,z) from a normal (+Z) and up (+Y) vector."""
         z = normalize(normal)
-        x = normalize(torch.cross(up, z))
-        y = torch.cross(z, x)
+        x = normalize(torch.cross(up, z, dim=-1))
+        y = torch.cross(z, x, dim=-1)
 
-        R = torch.stack([x, y, z], dim=1) # noqa: N806
+        R = torch.stack([x, y, z], dim=1)  # noqa: N806
         return quat_from_matrix(R)

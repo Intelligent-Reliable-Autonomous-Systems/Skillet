@@ -13,9 +13,7 @@ from skillet.envs.util import configclass
 from .rnd_cfg import RslRlRndCfg
 from .symmetry_cfg import RslRlSymmetryCfg
 
-#########################
 # Policy configurations #
-#########################
 
 
 @configclass
@@ -96,9 +94,7 @@ class RslRlPpoActorCriticRecurrentCfg(RslRlPpoPolicyCfg):
     """The number of RNN layers."""
 
 
-############################
 # Algorithm configurations #
-############################
 
 
 @configclass
@@ -158,9 +154,7 @@ class RslRlPpoAlgorithmCfg:
     """The symmetry configuration. Default is None, in which case symmetry is not used."""
 
 
-#########################
 # Runner configurations #
-#########################
 
 
 @configclass

@@ -417,10 +417,8 @@ def get_tracker_data_fixed_arm(data, h_pose_raw: np.ndarray = None) -> tuple[np.
     rc_pose_raw = np.array(data["right_controller"]["pose"], dtype=np.float64)
     rc_pose = convert_unity_to_world_coordinates(rc_pose_raw)
 
-    #####################################################################################
     # Get Elbow Positions
     # Raw elbow positions are relative to headset position.
-    #####################################################################################
     # Make elbow X/Y relative to head X/Y
     left_elbow_pos = lc_pose[:3] - np.array([h_pose[0], h_pose[1], 0])
     right_elbow_pos = rc_pose[:3] - np.array([h_pose[0], h_pose[1], 0])
