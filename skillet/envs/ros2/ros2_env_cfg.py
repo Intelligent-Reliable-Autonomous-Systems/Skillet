@@ -20,9 +20,6 @@ class ROS2EnvCfg:
     ros2_workspace: str = MISSING
     """Workspace which bringup configuration is defined"""
 
-    use_fake_hardware: str = "true"
-    """Whether to spin up real robot or not"""
-
     launch_ros: bool = True
     """If to launch robot software in gen3_py ROS2 package"""
 
@@ -48,7 +45,7 @@ class ROS2EnvCfg:
     decimation: float = MISSING
     """Decimation (steps through physics)"""
 
-    episode_length_s: float = 5.0
+    episode_length_s: float = 1e9
     """Episode length in seconds"""
 
     skills: list[str] | None = None

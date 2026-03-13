@@ -33,7 +33,6 @@ parser.add_argument(
     "--ros2_ws", type=str, default=None, help="Absolute path to ROS2 workspace containing bringup files"
 )
 parser.add_argument("--robot_ip", type=str, default="192.168.1.10", help="Robot IP.")
-parser.add_argument("--use_fake_hardware", type=str, default="true", help="'true' or 'false'.")
 parser.add_argument(
     "--launch_ros", action=argparse.BooleanOptionalAction, default=False, help="Launch ROS from env startup."
 )
@@ -50,7 +49,6 @@ def main() -> None:
     """Run the ROS2 pick example."""
     env_cfg = {
         "robot_ip": args_cli.robot_ip,
-        "use_fake_hardware": args_cli.use_fake_hardware,
         "launch_ros": args_cli.launch_ros,
         "device": args_cli.device,
         "num_envs": args_cli.num_envs,

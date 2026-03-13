@@ -114,6 +114,7 @@ class TwistPIDPolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic
             (self.num_envs, 3),
             device=self._device,
         )
+        self.i = 0
 
     @property
     def obs_spec(self) -> ObservationSpec[TBPolicyObs]:  # noqa: D102
@@ -144,8 +145,8 @@ class TwistPIDPolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic
         self.integral_rot += error_rot * dt
 
         # Compute derivative terms
-        derivative_pos = (error_pos - self.last_error_pos) / dt
-        derivative_rot = (error_rot - self.last_error_rot) / dt
+        derivative_pos = (error_pos - self.last_error_pos) * dt
+        derivative_rot = (error_rot - self.last_error_rot) * dt
 
         # PID control for translation
         delta_pos = self.Kp_pos * error_pos + self.Ki_pos * self.integral_pos + self.Kd_pos * derivative_pos
@@ -159,6 +160,7 @@ class TwistPIDPolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic
 
         # Combine translation + rotation for twist command
         command = torch.cat((self._delta_pos, rot_vec), dim=1)
+        command[:,3:6] = 0
 
         # Save last errors
         self.last_error_pos = error_pos

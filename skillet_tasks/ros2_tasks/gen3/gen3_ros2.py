@@ -39,8 +39,6 @@ class Gen3ROS2EnvCfg(ROS2EnvCfg):
 
     """Robot configuration"""
 
-    # Whether to spin up real robot or not
-    use_fake_hardware = "true"
 
     # IP of the robot
     robot_ip = "www.xxx.yyy.zzz"
@@ -60,7 +58,7 @@ class Gen3ROS2EnvCfg(ROS2EnvCfg):
 
     decimation = 1.0
 
-    episode_length_s = 5.0
+    episode_length_s = 1e9
 
     skills = ["reach_xyz"]
 
@@ -100,10 +98,8 @@ class Gen3ROS2Env(ROS2Env):
         self.robot_description_topic = "/robot_info"
         self.body_pose_topic = "/robot_body_pose_w"
         self.body_vel_topic = "/robot_body_vel_w"
-        if self.cfg.use_fake_hardware == "true":
-            self.gripper_topic_type = "control_msgs/action/GripperCommand"
-        else:
-            self.gripper_topic_type = "control_msgs/action/ParallelGripperCommand"  # TODO this won't work in fake hardware control_msgs/action/GripperCommand"
+        # self.gripper_topic_type = "control_msgs/action/GripperCommand" NOTE: Uncomment if you want gripper in fake hardware
+        self.gripper_topic_type = "control_msgs/action/ParallelGripperCommand" 
         self.moveit_cmd_topic = "/move_action"
         self.moveit_cmd_topic_type = "moveit_msgs/action/MoveGroup"
         self.realsense_snapshot_service = "/table_camera/realsense/get_latest_frame"
@@ -265,15 +261,13 @@ class Gen3ROS2Env(ROS2Env):
             duration: Duration of trajectory
 
         """
-        # TODO undo this
-        # action_spec = action_spec.replace(name="moveit_tcp")
-        # Send the gripper command first as this will be non-blocking FOR NOW
+        # Publish BLOCKING gripper command. To keep the gripper stationary 
+        # we publish commands accordingly
+        #self._publish_gripper(action, action_spec) # TODO fix this (Will)
         gripper_val = float(action[-1])
         gripper_val = max(0, min(gripper_val, 1)) * 0.8
-        if self.cfg.use_fake_hardware == "true":
-            gripper_goal = {"command": {"position": gripper_val, "max_effort": 100.0}}
-        else:
-            gripper_goal = {"command": {"name": self.cfg.gripper_joint_names, "position": [gripper_val]}}
+        # gripper_goal = {"command": {"position": gripper_val, "max_effort": 100.0}} # NOTE uncomment if you want gripper in fake hardware
+        gripper_goal = {"command": {"name": self.cfg.gripper_joint_names, "position": [gripper_val], "effort": [0.0]}}
 
         if gripper_goal != self.curr_gripper_goal:
             _ = self.gripper_client.send_goal(
@@ -378,6 +372,52 @@ class Gen3ROS2Env(ROS2Env):
             "camera_pose": camera_pos_quat,
             "timestamp": timestamp,
         }
+    
+    def _publish_gripper(self, joint_pos: np.ndarray, action_spec: ActionSpec, timeout: int = 30, duration:int=3) -> None:
+        """Publish a joint position to the joint trajectory controller.
+
+        Args:
+            joint_pos: Joint positions of the robot.
+            action_spec: what stationary action to specify
+            timeout: Duration before timeout
+            duration: what duration to specify
+
+        """
+        result_container = {}
+        done_event = threading.Event()
+
+        def on_result(result: dict[str, Any]) -> None:
+            result_container["result"] = result
+            done_event.set()
+
+        def on_feedback(feedback: dict[str, Any]) -> None:
+            self._gripper_feedback_cb(feedback)
+
+        def on_error(error: dict[str, Any]) -> None:
+            result_container["error"] = error
+            done_event.set()
+
+        gripper_val = float(joint_pos[-1])
+        gripper_val = max(0, min(gripper_val, 1)) * 0.8
+        # gripper_goal = {"command": {"position": gripper_val, "max_effort": 100.0}} # NOTE uncomment if you want gripper in fake hardware
+        gripper_goal = {"command": {"name": self.cfg.gripper_joint_names, "position": [gripper_val], "effort": [0.0]}}
+
+        if gripper_goal != self.curr_gripper_goal:
+            if action_spec is None or action_spec.name == "joints":
+                self._publish_joint_spec(joint_pos, duration)
+            elif action_spec.name == "twist_tcp":
+                self._publish_twist_tcp_spec(np.zeros_like(joint_pos))
+            _ = self.gripper_client.send_goal(
+                gripper_goal, on_result, on_feedback, on_error
+            )
+            self.curr_gripper_goal = gripper_goal
+        finished = done_event.wait(timeout=timeout)
+
+        if not finished:
+            raise TimeoutError(f"MoveIt goal timed out after {timeout}s")
+
+        if "error" in result_container:
+            raise RuntimeError(f"MoveIt action error: {result_container['error']}")
 
     def _publish_joint_spec(self, joint_pos: np.ndarray, duration: float = 3) -> None:
         """Publish a joint position to the joint trajectory controller.
@@ -486,7 +526,6 @@ class Gen3ROS2Env(ROS2Env):
         if "error" in result_container:
             raise RuntimeError(f"MoveIt action error: {result_container['error']}")
 
-        # print(f"[INFO] Executed MoveIt trajectory successfully. {result_container['result']}")
 
     @staticmethod
     def _decode_uint8_payload(payload: Any, field_name: str) -> np.ndarray:

@@ -156,8 +156,8 @@ class VRHeadset(DeviceBase):
         self.integral_rot += error_rot * dt
 
         # Compute derivative terms
-        derivative_pos = (error_pos - self.last_error_pos) / dt
-        derivative_rot = (error_rot - self.last_error_rot) / dt
+        derivative_pos = (error_pos - self.last_error_pos) * dt
+        derivative_rot = (error_rot - self.last_error_rot) * dt
 
         # PID control for translation
         delta_pos = self.Kp_pos * error_pos + self.Ki_pos * self.integral_pos + self.Kd_pos * derivative_pos

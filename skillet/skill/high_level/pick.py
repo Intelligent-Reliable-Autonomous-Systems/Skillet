@@ -120,7 +120,7 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         self._params = params
         self._n_steps = 0
 
-        self._pos_threshold = 0.01  # NOTE updated for Gen3Lite
+        self._pos_threshold = 0.02  # NOTE updated for Gen3Lite
         self._quat_threshold = 0.08
 
         ee_pose_b = obs["tcp_pose_b"]

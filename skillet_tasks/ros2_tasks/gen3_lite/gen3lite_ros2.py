@@ -40,9 +40,6 @@ class Gen3LiteROS2EnvCfg(ROS2EnvCfg):
 
     """Robot configuration"""
 
-    # Whether to spin up real robot or not
-    use_fake_hardware = "true"
-
     # IP of the robot
     robot_ip = "192.168.1.10"
 
@@ -61,7 +58,7 @@ class Gen3LiteROS2EnvCfg(ROS2EnvCfg):
 
     decimation = 1
 
-    episode_length_s = 5.0
+    episode_length_s = 1e9
 
     skills = ["reach_xyz"]
 

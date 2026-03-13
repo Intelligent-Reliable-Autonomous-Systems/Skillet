@@ -21,7 +21,6 @@ parser.add_argument("--segmentation", action=argparse.BooleanOptionalAction, def
 parser.add_argument("--realsense_env", action="store_true", help="Use RealSense camera environment.")
 parser.add_argument("--viz", type=str, default="rgb,depth,pointcloud", help="Visualization modes to display, as comma-separated string.")
 parser.add_argument("--robot_ip", type=str, default="192.168.1.10", help="Robot IP.")
-parser.add_argument("--use_fake_hardware", type=str, default="true", help="'true' or 'false'.")
 parser.add_argument("--launch_ros", action="store_true", help="Launch ROS from env startup.")
 parser.add_argument("--period_s", type=float, default=1.0, help="Seconds between service requests.")
 parser.add_argument("--max_depth_m", type=float, default=None, help="Optional far-plane clipping depth in meters.")
@@ -59,7 +58,6 @@ def main() -> None:
     else:
         env_cfg = KinovaROS2EnvCfg(
             robot_ip=args_cli.robot_ip,
-            use_fake_hardware=args_cli.use_fake_hardware,
             launch_ros=args_cli.launch_ros,
             device=args_cli.device,
             num_envs=args_cli.num_envs,
