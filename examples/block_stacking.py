@@ -3,7 +3,7 @@
 import argparse
 import os
 import sys
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Sequence
 
 import gymnasium as gym
 import torch
@@ -109,7 +109,9 @@ def main() -> None:
         prompts=sam3_prompts,
     )
 
-    vis = Open3DVisualizer(scene)
+    def get_tcp_pos() -> Sequence[float]:
+        return env.get_observation(ikee_spec.unbatched())["tcp_pose_b"][:3].detach().cpu().numpy()
+    vis = Open3DVisualizer(scene, get_tcp_pos=get_tcp_pos)
     if "pointcloud" in args_cli.viz:
         perception.set_visualizer(vis, segment_point_cloud=True)
     perception.start_cv2_visualization(

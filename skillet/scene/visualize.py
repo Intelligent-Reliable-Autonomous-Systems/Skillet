@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import threading
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 
 import numpy as np
 import torch
@@ -288,6 +288,7 @@ class Open3DVisualizer:
         window_name: str = "Table Scene",
         width: int = 1024,
         height: int = 768,
+        get_tcp_pos: Callable[[], Sequence[float]] | None = None,
     ) -> None:
         self.scene = scene
         self._window_name = window_name
@@ -307,6 +308,8 @@ class Open3DVisualizer:
         self._closed = False
         self._target_pos: np.ndarray | None = None
         self._target_size: float = 0.007
+        self._tcp_pos: np.ndarray | None = None
+        self._get_tcp_pos = get_tcp_pos
 
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
@@ -473,6 +476,21 @@ class Open3DVisualizer:
                 self._add_geometry("target_pos", sphere, self._mat_lit)
             else:
                 self._remove_geometry("target_pos")
+
+            # TCP position sphere
+            if self._get_tcp_pos is not None:
+                xyz = self._get_tcp_pos()
+                if isinstance(xyz, torch.Tensor):
+                    xyz = xyz.detach().cpu().numpy().astype(np.float64)
+                if xyz is not None:
+                    self._tcp_pos = np.array(xyz, dtype=np.float64)
+                    if self._tcp_pos.ndim > 1:
+                        self._tcp_pos = self._tcp_pos[0]
+            if self._tcp_pos is not None:
+                sphere = make_point_marker(self._tcp_pos, radius=0.007, color=(1, 0, 1))
+                self._add_geometry("tcp_pos", sphere, self._mat_lit)
+            else:
+                self._remove_geometry("tcp_pos")
 
             # HUD
             if hud_text:
