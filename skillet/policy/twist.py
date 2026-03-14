@@ -7,7 +7,17 @@ from typing import Any, Generic
 
 import torch
 
-from skillet.core.math import base_to_tcp_twist, euler_xyz_from_quat, euler_xyz_to_rotvec
+from skillet.core.math import (
+    base_to_tcp_twist,
+    euler_xyz_from_quat,
+    euler_xyz_to_rotvec,
+    quat_mul,
+    quat_inv,
+    quat_apply,
+    axis_angle_from_quat,
+    quat_from_euler_xyz,
+    convert_quat,
+)
 from skillet.core.policy import BatchedPolicy, TBAction, TBPolicyObs
 from skillet.core.spaces import ActionSpec, ObservationSpec
 from skillet.core import SkillParamsSpec
@@ -144,9 +154,11 @@ class TwistPIDXYZPolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Gene
         print(self._tcp_xyz_des_b.squeeze()[0:3])
 
         # Compute errors
-        error_pos = robot_xyz_b[:, 0:3] - self._tcp_xyz_des_b[:, 0:3]
-        error_rot = robot_xyz_b[:, 3:6] - self._tcp_xyz_des_b[:, 3:6]
+        error_pos = self._tcp_xyz_des_b[:, 0:3] - robot_xyz_b[:, 0:3]
+        error_rot = self._tcp_xyz_des_b[:, 3:6] - robot_xyz_b[:, 3:6]
 
+        error_pos[:, 2] = -error_pos[:, 2]
+        error_pos[:, 0] = -error_pos[:, 0]
         # Update integral terms
         self.integral_pos += error_pos * dt
         self.integral_rot += error_rot * dt
@@ -158,15 +170,13 @@ class TwistPIDXYZPolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Gene
         # PID control for translation
         delta_pos = self.Kp_pos * error_pos + self.Ki_pos * self.integral_pos + self.Kd_pos * derivative_pos
         self._delta_pos = torch.clip(delta_pos, -self.pos_sensitivity, self.pos_sensitivity)
-        self._delta_pos[:, 1] = -self._delta_pos[:, 1]
-
-        # PID control for rotation (Euler -> rotation vector)
         delta_rot = self.Kp_rot * error_rot + self.Ki_rot * self.integral_rot + self.Kd_rot * derivative_rot
         self._delta_rot = torch.clip(delta_rot, -self.rot_sensitivity, self.rot_sensitivity)
-        rot_vec = euler_xyz_to_rotvec(self._delta_rot)
+
+        tcp_ang_vel = euler_xyz_to_rotvec(self._delta_rot)
 
         # Combine translation + rotation for twist command
-        command = torch.cat((self._delta_pos, rot_vec), dim=1)
+        command = torch.cat((self._delta_pos, tcp_ang_vel), dim=1)
         command[:, 3:6] = 0
 
         # Save last errors

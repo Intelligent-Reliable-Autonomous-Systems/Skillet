@@ -33,7 +33,7 @@ class PickBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
             space=gym.spaces.Discrete(n=max_objects), name="block_id", is_torch=False, is_batched=False
         )
         self._status = None
-        self._offset = torch.tensor([0, 0.02, 0], device=self.obs_spec.device)
+        self._offset = torch.tensor([0, 0.00, 0], device=self.obs_spec.device)
 
         self._vis_target_pos = vis_target_pos
 

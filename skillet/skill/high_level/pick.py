@@ -110,9 +110,6 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
             params: The pick parameters, (x, y, z, yaw) as shape (b, 4)
 
         """
-        # params[:,0] = .35
-        # params[:,1] = 0
-        # params[:,2] = 0.02
         self.n_envs = self.obs_spec.n_envs_from(obs)
         spec = self.policy.obs_spec.with_n_envs(self.n_envs)
         self._status = spec.zeros(shape=(self.n_envs,), dtype=int)
@@ -197,8 +194,8 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         reach_actions = self._reach_policy.get_action(obs)
         reach_actions[:, -1] = torch.where(
             self._pick_status >= PickStatusCodes.GRASP,
-            torch.ones_like(reach_actions[:, -1]),  # Close gripper
-            torch.zeros_like(reach_actions[:, -1]),  # Open gripper
+            torch.ones_like(reach_actions[:, -1]) * 0.8,  # Close gripper
+            torch.zeros_like(reach_actions[:, -1]) + 0.2,  # Open gripper
         )
 
         self._prev_gripper_pos = obs["joint_pos"][:, -1]
