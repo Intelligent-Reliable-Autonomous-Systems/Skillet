@@ -351,6 +351,7 @@ class Gen3ROS2Env(ROS2Env):
         # wrapper must convert to wxyz format
         quat_xyzw = np.asarray([q["x"], q["y"], q["z"], q["w"]], dtype=np.float64)
         camera_pos_quat = np.concatenate((translation, quat_xyzw), axis=0)
+        # TODO I feel like we should localize the camera on the skillet side, not ROS side
         if q["x"] == 0.0 and q["y"] == 0.0 and q["z"] == 0.0:
             # TODO: This is a hack for fake hardware
             if not hasattr(self, "_camera_localizer"):

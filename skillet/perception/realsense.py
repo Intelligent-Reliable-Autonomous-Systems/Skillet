@@ -66,7 +66,6 @@ class RealsenseEnv(_EnvironmentBase):
         self._T_base_to_tag = make_T(quat_xyzw_to_R(*list(apriltag_pose[3:7])), list(apriltag_pose[:3]))
         self._roll_180 = make_T(quat_xyzw_to_R(1.0, 0.0, 0.0, 0.0), [0.0, 0.0, 0.0])
         self._T_base_to_tag = self._T_base_to_tag @ self._roll_180
-        # self._latest_camera_pose = np.array([0.33, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0], dtype=np.float64) # in ROS xyzw format
         self._latest_camera_pose = T_to_xyz_quat_xyzw(self._T_base_to_tag)
         self._apriltag_size_m = apriltag_size_m
         self._apriltag_id = apriltag_id

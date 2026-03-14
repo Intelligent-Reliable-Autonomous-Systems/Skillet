@@ -19,8 +19,12 @@ class PickBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
     Is is discretely parameterized by the id of the block to pick.
     """
 
-    def __init__(self, scene: Scene, pick_skill: PickSkill[BxM_Action],
-            vis_target_pos: Callable[[Sequence[float]], None] | None = None) -> None:
+    def __init__(
+        self,
+        scene: Scene,
+        pick_skill: PickSkill[BxM_Action],
+        vis_target_pos: Callable[[Sequence[float]], None] | None = None,
+    ) -> None:
         """Initialize the pick block skill."""
         self._scene = scene
         self._pick_skill = pick_skill
@@ -29,7 +33,7 @@ class PickBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
             space=gym.spaces.Discrete(n=max_objects), name="block_id", is_torch=False, is_batched=False
         )
         self._status = None
-        self._offset = torch.tensor([0, 0.02, 0],device=self.obs_spec.device)
+        self._offset = torch.tensor([0, 0.02, 0], device=self.obs_spec.device)
 
         self._vis_target_pos = vis_target_pos
 
@@ -69,7 +73,7 @@ class PickBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
         if not self._target_block.is_pose_known():
             self._status = SkillStatusCodes.FAILED.value
             return
-        target_xyz = self._target_block.pose[:3] + self._offset # NOTE added offset (Will)
+        target_xyz = self._target_block.pose[:3] + self._offset  # NOTE added offset (Will)
         if self._vis_target_pos is not None:
             self._vis_target_pos(target_xyz)
         yaw = 0  # TODO: get yaw from target block

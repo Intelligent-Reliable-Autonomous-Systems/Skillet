@@ -68,7 +68,7 @@ def main() -> None:
     """Visualize RGB + depth color map from _get_latest_rgbd()."""
     cube_0 = Cube(size=0.041, face_apriltags=[{"face": "top", "size": 0.036, "id": 1}])
     cube_1 = Cube(size=0.041, face_apriltags=[{"face": "front", "size": 0.036, "id": 2}])
-    cube_2 = Cube(size=0.041, face_apriltags=[{"face": "front", "size": 0.036, "id": 4}])
+    cube_2 = Cube(size=0.041, face_apriltags=[{"face": "front", "size": 0.036, "id": 5}])
 
     world_bounds = (TABLE_X0, TABLE_Y0, 0, TABLE_X0 + TABLE_DX, TABLE_Y0 + TABLE_DY, 1)
     scene = Scene(objects=[cube_0, cube_1, cube_2], closed_set=True, bounds=world_bounds)
@@ -79,7 +79,7 @@ def main() -> None:
     ]
 
     if args_cli.realsense_env:
-        env = RealsenseEnv(apriltag_size_m=0.1, apriltag_id=0)
+        env = RealsenseEnv(apriltag_size_m=0.1, apriltag_id=3)
     else:
         env_cfg = {
             "robot_ip": args_cli.robot_ip,
@@ -111,6 +111,7 @@ def main() -> None:
 
     def get_tcp_pos() -> Sequence[float]:
         return env.get_observation(ikee_spec.unbatched())["tcp_pose_b"][:3].detach().cpu().numpy()
+
     vis = Open3DVisualizer(scene, get_tcp_pos=get_tcp_pos)
     if "pointcloud" in args_cli.viz:
         perception.set_visualizer(vis, segment_point_cloud=True)

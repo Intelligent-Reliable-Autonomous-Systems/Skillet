@@ -7,7 +7,7 @@ from skillet.core.skill import SingleSkill, SkillStatus, SkillStatusCodes
 from skillet.envs.specs import BxM_Action, IKEE_Obs, M_Action
 from skillet.scene.base import Scene
 from skillet.skill.high_level.place import PlaceSkill
-import numpy as np 
+import numpy as np
 
 Object_Params: TypeAlias = int
 """The parameters for selecting an object in the scene."""
@@ -19,8 +19,12 @@ class PlaceBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
     Is is discretely parameterized by the id of the block to place.
     """
 
-    def __init__(self, scene: Scene, place_skill: PlaceSkill[BxM_Action],
-            vis_target_pos: Callable[[Sequence[float]], None] | None = None) -> None:
+    def __init__(
+        self,
+        scene: Scene,
+        place_skill: PlaceSkill[BxM_Action],
+        vis_target_pos: Callable[[Sequence[float]], None] | None = None,
+    ) -> None:
         """Initialize the place block skill."""
         self._scene = scene
         self._place_skill = place_skill
@@ -29,7 +33,7 @@ class PlaceBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
             space=gym.spaces.Discrete(n=max_objects), name="block_id", is_torch=False, is_batched=False
         )
         self._status = None
-        self._offset = torch.tensor([0, 0.01, 0.04],device=self.obs_spec.device)
+        self._offset = torch.tensor([0, 0.01, 0.04], device=self.obs_spec.device)
 
         self._vis_target_pos = vis_target_pos
 

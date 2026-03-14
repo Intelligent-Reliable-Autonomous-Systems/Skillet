@@ -110,6 +110,9 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
             params: The pick parameters, (x, y, z, yaw) as shape (b, 4)
 
         """
+        # params[:,0] = .35
+        # params[:,1] = 0
+        # params[:,2] = 0.02
         self.n_envs = self.obs_spec.n_envs_from(obs)
         spec = self.policy.obs_spec.with_n_envs(self.n_envs)
         self._status = spec.zeros(shape=(self.n_envs,), dtype=int)

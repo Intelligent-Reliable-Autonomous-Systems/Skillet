@@ -487,7 +487,7 @@ class Open3DVisualizer:
                     if self._tcp_pos.ndim > 1:
                         self._tcp_pos = self._tcp_pos[0]
             if self._tcp_pos is not None:
-                sphere = make_point_marker(self._tcp_pos, radius=0.007, color=(1, 0, 1))
+                sphere = make_point_marker(self._tcp_pos[:3], radius=0.007, color=(1, 0, 1))
                 self._add_geometry("tcp_pos", sphere, self._mat_lit)
             else:
                 self._remove_geometry("tcp_pos")
@@ -534,8 +534,7 @@ class Open3DVisualizer:
         if self._app is not None:
             self._app.quit()
 
-    def set_target_pos(self, xyz: Sequence[float] | None,
-            size: float = 0.007) -> None:
+    def set_target_pos(self, xyz: Sequence[float] | None, size: float = 0.007) -> None:
         """Set the target position sphere marker. Pass None to clear."""
         if isinstance(xyz, torch.Tensor):
             xyz = xyz.detach().cpu().numpy().astype(np.float64)

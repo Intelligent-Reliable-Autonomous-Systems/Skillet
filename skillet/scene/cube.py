@@ -91,7 +91,7 @@ class Cube(SceneObject):
     def size(self) -> float:
         """The size of the cube."""
         return self._size
-    
+
     @override
     def is_pose_known(self) -> bool:
         return self._pose is not None
