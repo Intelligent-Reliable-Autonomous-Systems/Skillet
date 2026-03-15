@@ -112,7 +112,7 @@ def main() -> None:
     def get_tcp_pos() -> Sequence[float]:
         return env.get_observation(ikee_spec.unbatched())["tcp_pose_b"][:3].detach().cpu().numpy()
 
-    vis = Open3DVisualizer(scene, get_tcp_pos=get_tcp_pos)
+    vis = Open3DVisualizer(scene, get_tcp_pos=get_tcp_pos) if not args_cli.realsense_env else Open3DVisualizer(scene)
     if "pointcloud" in args_cli.viz:
         perception.set_visualizer(vis, segment_point_cloud=True)
     perception.start_cv2_visualization(

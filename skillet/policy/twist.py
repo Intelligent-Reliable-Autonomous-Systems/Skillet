@@ -17,6 +17,9 @@ from skillet.core.math import (
     axis_angle_from_quat,
     quat_from_euler_xyz,
     convert_quat,
+    compute_pose_error,
+    quat_apply_yaw,
+    yaw_quat,
 )
 from skillet.core.policy import BatchedPolicy, TBAction, TBPolicyObs
 from skillet.core.spaces import ActionSpec, ObservationSpec
@@ -98,7 +101,7 @@ class TwistPIDXYZPolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Gene
         self._frame = frame
 
         # Max velocities
-        self.rot_sensitivity = 0.1
+        self.rot_sensitivity = 10.0
         self.pos_sensitivity = 0.06
 
         # PID gains
@@ -147,19 +150,26 @@ class TwistPIDXYZPolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Gene
         """Get the next gripper position."""
         tcp_pose_b = obs["tcp_pose_b"]
         dt = obs["dt"]
-        r, p, y = euler_xyz_from_quat(tcp_pose_b[:, 3:7])
-        robot_xyz_b = torch.cat((tcp_pose_b[:, 0:3], r.unsqueeze(0), p.unsqueeze(0), y.unsqueeze(0)), dim=-1)
+
+        tcp_quat_des_b = quat_from_euler_xyz(
+            self._tcp_xyz_des_b[:, 3], self._tcp_xyz_des_b[:, 4], self._tcp_xyz_des_b[:, 5]
+        )
+        tcp_quat_des_b = torch.as_tensor([[0.0, -0.707, 0.707, 0.0]], device="cuda")
+        error_pos, error_rot = compute_pose_error(
+            tcp_pose_b[:, 0:3], tcp_pose_b[:, 3:7], self._tcp_xyz_des_b[:, 0:3], tcp_quat_des_b
+        )
+
+        # Required offset rotation about yaw for the twist controller
+        twist_rot = torch.tensor([[0.7071, 0.0, 0.0, -0.7071]], device="cuda")
+        # Rotate position and rotation error into the frame the twist controller expects
+        curr_new = quat_mul(twist_rot, tcp_pose_b[:, 3:7])
+        error_pos = quat_apply(quat_inv(curr_new), error_pos)
+        error_rot = quat_apply(quat_inv(curr_new), error_rot) * 10  # Scale rotation error to make it move faster
+
         print(f"########")
         print(tcp_pose_b.squeeze()[0:3])
         print(self._tcp_xyz_des_b.squeeze()[0:3])
 
-        # Compute errors
-        error_pos = self._tcp_xyz_des_b[:, 0:3] - robot_xyz_b[:, 0:3]
-        error_rot = self._tcp_xyz_des_b[:, 3:6] - robot_xyz_b[:, 3:6]
-
-        error_pos[:, 2] = -error_pos[:, 2]
-        error_pos[:, 0] = -error_pos[:, 0]
-        # Update integral terms
         self.integral_pos += error_pos * dt
         self.integral_rot += error_rot * dt
 
@@ -173,11 +183,8 @@ class TwistPIDXYZPolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Gene
         delta_rot = self.Kp_rot * error_rot + self.Ki_rot * self.integral_rot + self.Kd_rot * derivative_rot
         self._delta_rot = torch.clip(delta_rot, -self.rot_sensitivity, self.rot_sensitivity)
 
-        tcp_ang_vel = euler_xyz_to_rotvec(self._delta_rot)
-
         # Combine translation + rotation for twist command
-        command = torch.cat((self._delta_pos, tcp_ang_vel), dim=1)
-        command[:, 3:6] = 0
+        command = torch.cat((self._delta_pos, self._delta_rot), dim=1)
 
         # Save last errors
         self.last_error_pos = error_pos
