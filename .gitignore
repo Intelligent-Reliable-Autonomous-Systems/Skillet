@@ -11,6 +11,7 @@ __pycache__/
 **/build*/
 **/*.so
 **/*.log*
+*.txt
 
 # Distribution / packaging
 .Python
