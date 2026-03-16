@@ -1,13 +1,15 @@
-from typing import Callable, Sequence, TypeAlias
+from collections.abc import Callable, Sequence
+from typing import TypeAlias
+
 import gymnasium as gym
 import torch
 from typing_extensions import override
+
 from skillet.core import SkillParamsSpec
 from skillet.core.skill import SingleSkill, SkillStatus, SkillStatusCodes
 from skillet.envs.specs import BxM_Action, IKEE_Obs, M_Action
 from skillet.scene.base import Scene
 from skillet.skill.high_level.pick import PickSkill
-import numpy as np
 
 Object_Params: TypeAlias = int
 """The parameters for selecting an object in the scene."""
@@ -33,7 +35,7 @@ class PickBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
             space=gym.spaces.Discrete(n=max_objects), name="block_id", is_torch=False, is_batched=False
         )
         self._status = None
-        self._offset = torch.tensor([0, 0.00, 0], device=self.obs_spec.device)
+        self._offset = torch.tensor([0, 0.0, 0], device=self.obs_spec.device)
 
         self._vis_target_pos = vis_target_pos
 
@@ -73,7 +75,7 @@ class PickBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
         if not self._target_block.is_pose_known():
             self._status = SkillStatusCodes.FAILED.value
             return
-        target_xyz = self._target_block.pose[:3] + self._offset  # NOTE added offset (Will)
+        target_xyz = self._target_block.pose[:3] + self._offset
         if self._vis_target_pos is not None:
             self._vis_target_pos(target_xyz)
         yaw = 0  # TODO: get yaw from target block

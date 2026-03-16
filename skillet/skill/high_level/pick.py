@@ -3,11 +3,10 @@
 from enum import IntEnum
 from typing import Generic
 
-import numpy as np
 import torch
 from jaxtyping import Float, Int
 
-from skillet.core.math import quat_error_magnitude, quat_from_euler_xyz
+from skillet.core.math import quat_error_magnitude, quat_from_yaw, quat_mul
 from skillet.core.policy import BatchedPolicy
 from skillet.core.skill import (
     BatchedSkill,
@@ -78,6 +77,9 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         self._pick_status = None
         self._params = None
 
+        # 180 degree rotation about X axis
+        self._default_quat = torch.as_tensor([[0.0, 1.0, 0.0, 0.0]])
+
     @property
     def param_dim(self) -> int:
         return 4
@@ -118,6 +120,8 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         self._pick_status[:] = PickStatusCodes.ASCEND
         self._params = params
         self._n_steps = 0
+        self._default_quat = self._default_quat.to(self.obs_spec.device)
+        goal_quat = quat_mul(quat_from_yaw(params[:, 3]), self._default_quat.repeat(self.n_envs, 1))
 
         self._pos_threshold = 0.01  # NOTE updated for Gen3Lite
         self._quat_threshold = 0.08
@@ -138,9 +142,7 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         # HOVER[2]: Go over to the target x,y position, oriented downward (gripper open)
         target_poses[:, PickStatusCodes.HOVER, :2] = params[:, :2]  # (x,y) from params
         target_poses[:, PickStatusCodes.HOVER, 2] = self._lift_height
-        zero_vec = spec.zeros(shape=(self.n_envs,), dtype=float)
-        pi_vec = torch.full_like(zero_vec, fill_value=torch.pi)
-        target_poses[:, PickStatusCodes.HOVER, 3:7] = quat_from_euler_xyz(pi_vec, zero_vec, params[:, 3])
+        target_poses[:, PickStatusCodes.HOVER, 3:7] = goal_quat
         # LOWER[3]: Go down to the target z position (gripper open)
         target_poses[:, PickStatusCodes.LOWER, :7] = target_poses[:, PickStatusCodes.HOVER, :7]
         target_poses[:, PickStatusCodes.LOWER, 2] = params[:, 2]
@@ -159,7 +161,6 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
             self._reach_policy.reset(obs, self._current_target_poses, env_ids=env_ids)
 
     def get_action(self, obs: TBSkillObs) -> TBAction:  # noqa: D102
-
         ee_pose_b = obs["tcp_pose_b"]
 
         reached_pos = (
@@ -172,7 +173,7 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         reached_quat = (
             quat_error_magnitude(ee_pose_b[:, 3:7], self._current_target_poses[:, 3:7]) < self._quat_threshold
         )
-        reached_pose = (reached_pos) | reached_height  # & reached_quat
+        reached_pose = (reached_pos & reached_quat) | reached_height
         ee_vel = (obs["ee_vel_b"][:, 0:3] < self._vel_threshold).any(dim=-1)
         next_pose = reached_pose & ee_vel
 

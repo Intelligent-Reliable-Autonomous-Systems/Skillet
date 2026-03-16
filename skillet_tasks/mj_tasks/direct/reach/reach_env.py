@@ -75,7 +75,7 @@ class ReachEnv(DirectRLEnv):
         self.robot_dof_targets = torch.clamp(targets, self.robot_dof_lower_limits, self.robot_dof_upper_limits)
 
     def _apply_action(self):
-        self.robot.set_joint_position_target(self.robot_dof_targets, joint_ids=self.cfg.joint_ids)
+        self.robot.set_joint_position_target(self.robot_dof_targets[:, :-1], joint_ids=self.cfg.joint_ids[:-1])
         self.robot.set_tendon_len_target(self.robot_dof_targets[:, -1:], tendon_ids=self.cfg.joint_ids[-1:])
 
     # post-physics step calls

@@ -690,6 +690,27 @@ def quat_apply_yaw(quat: torch.Tensor, vec: torch.Tensor) -> torch.Tensor:
 
 
 @torch.jit.script
+def quat_from_yaw(yaw: torch.Tensor) -> torch.Tensor:
+    """Construct a quaternion from yaw.
+
+    Args:
+        yaw: (...,) yaw angles in radians
+
+    Returns:
+        (...,4) quaternion in (w,x,y,z)
+
+    """
+    half_yaw = yaw * 0.5
+
+    qw = torch.cos(half_yaw)
+    qx = torch.zeros_like(qw)
+    qy = torch.zeros_like(qw)
+    qz = torch.sin(half_yaw)
+
+    return torch.stack((qw, qx, qy, qz), dim=-1)
+
+
+@torch.jit.script
 def quat_error_magnitude(q1: torch.Tensor, q2: torch.Tensor) -> torch.Tensor:
     """Compute the rotation difference between two quaternions.
 
