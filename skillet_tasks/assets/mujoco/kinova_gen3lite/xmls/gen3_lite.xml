@@ -1,0 +1,211 @@
+<mujoco model="gen3_lite_gripper_position">
+  <compiler angle="radian" meshdir="assets"/>
+  <option integrator="implicitfast"/>
+
+  <default>
+    <default class="visual">
+        <geom type="mesh" contype="0" conaffinity="0" group="2" material="kinova_dark"/>
+      </default>
+      <default class="collision">
+        <geom type="mesh" group="3" contype="1" conaffinity="1"/>
+      </default>
+      <default class="large_actuator">
+        <position kp="2000" kv="50" forcerange="-32 32"/>
+      </default>
+      <default class="small_actuator">
+        <position kp="1000" kv="30" forcerange="-9 9"/>
+      </default>
+      <!-- Arm joint classes -->why 
+      <default class="arm_joint">
+        <joint armature="0.1" frictionloss="1.0"/>
+      </default>
+    <!-- Gen3Lite 2F gripper classes (matches mujoco_menagerie exactly) -->
+    <default class="gen3lite_2f">
+      <mesh />
+      <general biastype="affine"/>
+
+      <!--TODO(Will) adjust these values as needed-->
+      <joint axis="1 0 0"/>
+      <default class="driver">
+        <joint range="0.0 0.85" limited="true" armature="1e-5" solimplimit="0.95 0.99 0.001" solreflimit="0.005 1"/>
+      </default>
+      <default class="follower">
+        <joint range="-0.50 0.21" limited="true" armature="1e-5" solimplimit="0.95 0.99 0.001" solreflimit="0.005 1"/>
+      </default>
+
+      <default class="gripper_visual">
+        <geom type="mesh" contype="0" conaffinity="0" group="2"/>
+      </default>
+      <default class="gripper_collision">
+        <geom type="mesh" group="3"/>
+      </default>
+    </default>
+    <site size="0.001" rgba="0.5 0.5 0.5 0.3" group="4"/>
+  </default>
+
+  <asset>
+    <material name="kinova_dark" rgba="0.75294 0.75294 0.75294 1"/>
+    <material name="kinova_gray" rgba="0.4 0.4 0.4 1"/>
+    <material name="metal" rgba="0.58 0.58 0.58 1"/>
+    <material name="silicone" rgba="0.1882 0.1882 0.1882 1"/>
+    <material name="gray" rgba="0.4627 0.4627 0.4627 1"/>
+    <material name="black" rgba="0.149 0.149 0.149 1"/>
+
+    <!-- Kinova Gen3Lite arm meshes -->
+    <mesh name="base_link" file="base_link.stl"/>
+    <mesh name="shoulder_link" file="shoulder_link.stl"/>
+    <mesh name="arm_link" file="arm_link.stl"/>
+    <mesh name="forearm_link" file="forearm_link.stl"/>
+    <mesh name="lower_wrist_link" file="lower_wrist_link.stl"/>
+    <mesh name="upper_wrist_link" file="upper_wrist_link.stl"/>
+
+    <!-- Gen3Lite 2F Gripper Meshes -->
+    <mesh name="gripper_base_link" file="gripper_base_link.stl"/>
+    <mesh name="right_finger_prox_link" file="right_finger_prox_link.stl"/>
+    <mesh name="left_finger_prox_link" file="left_finger_prox_link.stl"/>
+    <mesh name="right_finger_dist_link" file="right_finger_dist_link.stl"/>
+    <mesh name="left_finger_dist_link" file="left_finger_dist_link.stl"/>
+  </asset>
+
+  <worldbody>
+    <body name="base_link">
+      <inertial pos="0.00244324 0.00015573 0.08616742" mass="1.14608471"
+      fullinertia="0.00335854 0.003311 0.00077158 3.9e-07 0.00010989 1.91e-06"/>
+      <geom class="visual" mesh="base_link"/>
+      <geom class="collision" mesh="base_link"/>
+
+      <body name="shoulder_link" pos="0 0 0.12825" quat="1 0 0 0">
+        <inertial pos="2.477e-05 0.02213531 0.09937686" mass="0.95974404"
+        fullinertia="0.00165947 0.00140355 0.00089493 2e-08 3.6e-07 0.00034927"/>
+        <joint name="joint_1" class="arm_joint" range="-2.69 2.69"/>
+        <geom class="visual" mesh="shoulder_link"/>
+        <geom class="collision" mesh="shoulder_link"/>
+
+        <body name="arm_link" pos="0 -0.03 0.115" quat="0.7071 0.7071 0 0">
+          <inertial pos="0.02998299 0.21154808 0.0453031" mass="1.17756164"
+          fullinertia="0.01149277 0.00102851 0.01133492 1e-06 1.6e-07 0.00140765"/>
+          <joint name="joint_2" class="arm_joint" range="-2.69 2.69"/>
+          <geom class="visual" mesh="arm_link"/>
+          <geom class="collision" mesh="arm_link"/>
+
+          <body name="forearm_link" pos="0 0.28 0" quat="0 -1 0 0">
+            <inertial pos="0.0301559 0.09502206 0.0073555" mass="0.59767669"
+            fullinertia="0.00163256 0.00029798 0.00169091 7.11e-06 1.54e-06 9.587e-05"/>
+            <joint name="joint_3" class="arm_joint" range="-2.69 2.69"/>
+            <geom class="visual" mesh="forearm_link"/>
+            <geom class="collision" mesh="forearm_link"/>
+
+            <body name="lower_wrist_link" pos="0 -0.14 0.02" quat="0.7071 0.7071 0 0">
+              <inertial pos="0.00575149 0.01000443 0.08719207" mass="0.52693412"
+              fullinertia="0.00069098 0.00078519 0.00034115 2.4e-07 0.00016483 7.4e-07"/>
+              <joint name="joint_4" class="arm_joint" range="-2.59 2.59"/>
+              <geom class="visual" mesh="lower_wrist_link"/>
+              <geom class="collision" mesh="lower_wrist_link"/>
+
+              <body name="upper_wrist_link" pos="0.0285 0 0.105" quat="0.7071 0 0.7071 0">
+                <inertial pos="0.08056517 0.00980409 0.01872799" mass="0.58097325"
+                fullinertia="0.00021268 0.00106371 0.00108465 5.21e-06 2.91e-06 1.1e-07"/>
+                <joint name="joint_5" class="arm_joint" range="-2.57 2.57"/>
+                <geom class="visual" mesh="upper_wrist_link"/>
+                <geom class="collision" mesh="upper_wrist_link"/>   
+
+                <!-- End effector link (180 deg rotation around X to match URDF) -->
+                <body name="end_effector_link" pos="-0.105 0 0.0285" quat="0.7071 0 -0.7071 0">
+                    <inertial pos="0 0 0" mass="0.0001" diaginertia="1e-6 1e-6 1e-6"/>
+                    <joint name="joint_6" class="arm_joint" range="-2.59 2.59"/>
+
+                  
+                  <body name="gripper_base_link" pos="0 0 0" quat="1 0 0 0" childclass="gen3lite_2f">
+                    <inertial pos="4.03e-06 1.08e-05 0.041397" mass="0.1395"
+                    fullinertia="0.00011614 0.00010327 9.707e-05 1e-08 4e-08 0"/>
+                    <geom class="gripper_visual" mesh="gripper_base_link"/>
+                    <geom class="gripper_collision" mesh="gripper_base_link" material="gray"/> 
+
+                    <body name="right_finger_prox_link" pos="0 -0.030501 0.070003" quat="0.4984 0.4715 0.5262 0.5025">
+                      <inertial pos="0.020257 0.0063483 6.991e-05" mass="0.018385"
+                      fullinertia="2.29e-06 4.56e-06 4.77e-06 1.43e-06 0 0"/>
+                      <joint name="right_finger_bottom_joint"  axis="0 0 -1" class="driver"/>
+                      <geom class="gripper_visual" mesh="right_finger_prox_link"/>
+                      <geom class="gripper_collision" mesh="right_finger_prox_link" material="gray"/> 
+
+                      <body name="right_finger_dist_link" pos="-0.045636 0.020423 6.9901e-05" quat="1 0 0 0">
+                        <inertial pos="0.018488 0.0011091 0" mass="0.010748"
+                        fullinertia="6.3e-07 1.83e-06 1.61e-06 3.2e-07 0 0"/>
+                        <joint name="right_finger_tip_joint"  axis="0 0 1" class="follower"/>
+                        <geom class="gripper_visual" mesh="right_finger_dist_link"/>
+                        <geom class="gripper_collision" mesh="right_finger_dist_link" material="gray"/>   
+                        <!--TODO(Will) need to add friction from pad_box2-->
+                      </body>
+                    </body>
+
+                    <body name="left_finger_prox_link" pos="0 0.0305 0.070003" quat="0.4984 -0.4715 0.5262 -0.5025">
+                      <inertial pos="0.020257 0.0063483 6.99e-05" mass="0.018385"
+                      fullinertia="2.29e-06 4.56e-06 4.77e-06 1.43e-06 0 0"/>
+                      <joint name="left_finger_bottom_joint" axis="0 0 1" class="driver"/>
+                      <geom class="gripper_visual" mesh="left_finger_prox_link"/>
+                      <geom class="gripper_collision" mesh="left_finger_prox_link" material="gray"/>
+
+                      <body name="left_finger_dist_link" pos="-0.045636 -0.020423 6.9901e-05" quat="1 0 0 0">
+                        <inertial pos="-0.018488 0.0011091 0" mass="0.010748"
+                        fullinertia="6.3e-07 1.83e-06 1.61e-06 3.2e-07 0 0"/>
+                        <joint name="left_finger_tip_joint" axis="0 0 -1" class="follower"/>
+                        <geom class="gripper_visual" mesh="left_finger_dist_link"/>
+                        <geom class="gripper_collision" mesh="left_finger_dist_link" material="gray"/>   
+                        <!--TODO(Will) need to add friction from pad_box2-->
+                      </body>
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  
+  <contact>
+    <exclude body1="gripper_base_link" body2="right_finger_prox_link"/>
+    <exclude body1="gripper_base_link" body2="left_finger_prox_link"/>
+    <exclude body1="right_finger_prox_link" body2="right_finger_dist_link"/>
+    <exclude body1="left_finger_dist_link" body2="left_finger_dist_link"/>
+  </contact>
+  
+
+  <tendon>
+    <fixed name="fingers_actuator">
+      <joint joint="right_finger_bottom_joint" coef="0.5"/>
+      <joint joint="left_finger_bottom_joint" coef="0.5"/>
+    </fixed>
+  </tendon>   
+
+  <equality>
+    <joint joint1="right_finger_bottom_joint" joint2="left_finger_bottom_joint" polycoef="0 1 0 0 0" solimp="0.95 0.99 0.001" solref="0.005 1"/>
+    <joint joint1="right_finger_bottom_joint" joint2="right_finger_tip_joint" polycoef="0.149 -0.676 0 0" solimp="0.95 0.99 0.001" solref="0.005 1"/>
+    <joint joint1="right_finger_bottom_joint" joint2="left_finger_tip_joint" polycoef="0.149 -0.676 0 0" solimp="0.95 0.99 0.001" solref="0.005 1"/>
+  </equality>  
+
+  <actuator>
+    <!-- Arm position actuators -->
+    <!-- TODO(Will) see about adding control range-->
+    <position class="large_actuator" name="joint_1" joint="joint_1"/>
+    <position class="large_actuator" name="joint_2" joint="joint_2"/>
+    <position class="large_actuator" name="joint_3" joint="joint_3"/>
+    <position class="small_actuator" name="joint_4" joint="joint_4"/>
+    <position class="small_actuator" name="joint_5" joint="joint_5"/>
+    <position class="small_actuator" name="joint_6" joint="joint_6"/>
+
+    <!-- Gripper: single tendon-based actuator
+         ctrl=0 → open (driver joints at 0), ctrl=255 → closed (driver joints at 0.8).
+         gainprm[0] = 0.8 * 100 / 255 ≈ 0.3137255, kp=100 via biasprm. -->
+     <general class="gen3lite_2f" name="fingers_actuator" tendon="fingers_actuator" forcerange="-100 100" ctrlrange="0 255"
+      gainprm="0.313 0 0" biasprm="0 -50 -10"/>
+  </actuator>   
+
+  <keyframe>
+    <!-- 6 arm joints + 4 gripper joints-->
+    <key name="home" qpos="0 0.26179939 3.14159265 -2.26892803 0 0.95993109 0 0 0 0"/>
+    <key name="retract" qpos="0 -0.34906585 3.14159265 -2.54818071 0 -0.87266463 0 0 0 0"/>
+  </keyframe>
+                
+</mujoco>
