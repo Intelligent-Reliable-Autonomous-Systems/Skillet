@@ -1,6 +1,5 @@
 <mujoco model="gen3_gripper_position">
   <compiler angle="radian" meshdir="assets"/>
-
   <option integrator="implicitfast"/>
 
   <default>
