@@ -1,4 +1,4 @@
-from skillet.envs.isaac import SkillsDirectRLEnvCfg
+from skillet.envs.isaac import SkillsDirectRlEnvCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
 import isaaclab.sim as sim_utils
@@ -7,7 +7,7 @@ from dataclasses import MISSING
 from skillet_tasks.assets.isaac.kinova_gen3_2f85 import KINOVA_GEN3_2F85_CFG
 
 
-class Gen3BaseCfg(SkillsDirectRLEnvCfg):
+class Gen3BaseCfg(SkillsDirectRlEnvCfg):
     # env
     episode_length_s = 6.0  # 500 timesteps
     decimation = 2

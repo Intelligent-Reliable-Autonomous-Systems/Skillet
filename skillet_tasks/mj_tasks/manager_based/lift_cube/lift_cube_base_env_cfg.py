@@ -17,7 +17,7 @@ from mjlab.terrains import TerrainImporterCfg
 from mjlab.utils.noise import UniformNoiseCfg as Unoise
 from mjlab.viewer import ViewerConfig
 
-from skillet.envs.mujoco import ManagerBasedRLEnvCfg
+from skillet.envs.mujoco import ManagerBasedRlEnvCfg
 from skillet.envs.util import configclass
 
 
@@ -254,7 +254,7 @@ class ObservationsCfg:
 
 
 @configclass
-class LiftCubeEnvCfg(ManagerBasedRLEnvCfg):
+class LiftCubeEnvCfg(ManagerBasedRlEnvCfg):
     """Base configuration for Lift Cube environments."""
 
     scene: LiftSceneCfg = LiftSceneCfg()

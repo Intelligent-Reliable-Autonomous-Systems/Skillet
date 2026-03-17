@@ -1,5 +1,5 @@
-from .mj_direct_rl_env import DirectRLEnv as DirectRLEnv
-from .mj_direct_rl_env import DirectRLEnvCfg as DirectRLEnvCfg
-from .mj_manager_based_rl_env import ManagerBasedRLEnv as ManagerBasedRLEnv
-from .mj_manager_based_rl_env import ManagerBasedRLEnvCfg as ManagerBasedRLEnvCfg
-from .mj_rl_env_cfg import SkillsDirectRLEnvCfg as SkillsDirectRLEnvCfg
+from .mj_direct_rl_env import MjDirectRlEnv as MjDirectRlEnv
+from .mj_direct_rl_env import MjDirectRlEnvCfg as MjDirectRlEnvCfg
+from .mj_manager_based_rl_env import MjManagerBasedRlEnv as MjManagerBasedRlEnv
+from .mj_manager_based_rl_env import MjManagerBasedRlEnvCfg as MjManagerBasedRlEnvCfg
+from .mj_rl_env_cfg import SkillsDirectRlEnvCfg as SkillsDirectRlEnvCfg

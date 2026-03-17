@@ -1,4 +1,4 @@
-from skillet.envs.mujoco import SkillsDirectRLEnvCfg
+from skillet.envs.mujoco import SkillsDirectRlEnvCfg
 from mjlab.scene import SceneCfg
 
 from mjlab.sim import MujocoCfg, SimulationCfg
@@ -15,7 +15,7 @@ class BaseSceneCfg(SceneCfg):
     env_spacing = 2.5
 
 
-class Gen3BaseCfg(SkillsDirectRLEnvCfg):
+class Gen3BaseCfg(SkillsDirectRlEnvCfg):
     # env
     episode_length_s = 6.0  # 500 timesteps
     decimation = 2

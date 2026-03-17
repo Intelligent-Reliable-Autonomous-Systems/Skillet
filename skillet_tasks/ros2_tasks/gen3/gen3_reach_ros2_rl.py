@@ -18,7 +18,7 @@ from skillet.envs.ros2 import (
 from .gen3_ros2 import Gen3ROS2Env
 
 
-class Gen3ROS2ReachRLEnv(Gen3ROS2Env):
+class Gen3ROS2ReachRlEnv(Gen3ROS2Env):
     def __init__(self, cfg: ROS2EnvCfg, ros: Ros, render_mode: str | None = None, **kwargs: dict[str, Any]) -> None:
         super().__init__(cfg, ros, render_mode=render_mode, **kwargs)
 

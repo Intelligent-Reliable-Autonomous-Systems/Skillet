@@ -26,7 +26,7 @@ from skillet.envs.util import configclass
 
 
 @configclass
-class DirectRLEnvCfg:
+class MjDirectRlEnvCfg:
     """Configuration for a manager-based RL environment.
 
     This config defines all aspects of an RL environment: the physical scene,
@@ -91,7 +91,7 @@ class DirectRLEnvCfg:
   """
 
 
-class DirectRLEnv(gym.Env):
+class MjDirectRlEnv(gym.Env):
     """Manager-based RL environment."""
 
     is_vector_env = True
@@ -100,11 +100,11 @@ class DirectRLEnv(gym.Env):
         "mujoco_version": mujoco.__version__,
         "warp_version": wp.config.version,
     }
-    cfg: DirectRLEnvCfg
+    cfg: MjDirectRlEnvCfg
 
     def __init__(
         self,
-        cfg: DirectRLEnvCfg,
+        cfg: MjDirectRlEnvCfg,
         render_mode: str | None = None,
         **kwargs,
     ) -> None:
@@ -201,7 +201,7 @@ class DirectRLEnv(gym.Env):
         return math.ceil(self.max_episode_length_s / self.step_dt)
 
     @property
-    def unwrapped(self) -> "DirectRLEnv":
+    def unwrapped(self) -> "MjDirectRlEnv":
         """Get the unwrapped environment (base case for wrapper chains)."""
         return self
 

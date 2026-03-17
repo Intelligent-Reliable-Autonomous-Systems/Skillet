@@ -12,11 +12,11 @@ import gymnasium as gym
 import torch
 from jaxtyping import Bool, Float
 
-from skillet.envs.mj_env_wrapper import MJEnvWrapper
+from skillet.envs.mj_env_wrapper import MjEnvWrapper
 from skillet.skill.skill_controller import SkillController
 
 if TYPE_CHECKING:
-    from skillet.envs.mujoco.mj_manager_based_rl_env import ManagerBasedRLEnv
+    from skillet.envs.mujoco.mj_manager_based_rl_env import MjManagerBasedRlEnv
 
 TBatchedObsTorch = TypeVar(
     "TBatchedObsTorch", bound=Float[torch.Tensor, "b ..."] | Mapping[str, Float[torch.Tensor, "b ..."]]
@@ -33,15 +33,15 @@ torch.Tensor[(b, n), float]
 """
 
 
-class SkillMJEnvWrapper(
-    MJEnvWrapper,
+class SkillMjEnvWrapper(
+    MjEnvWrapper,
 ):
     """Wrapper for Mujoco Environments.
 
-    This assumes that the environment is either a DirectRLEnv or ManagerBasedRLEnv.
+    This assumes that the environment is either a DirectRlEnv or ManagerBasedRlEnv.
     """
 
-    def __init__(self, env: "ManagerBasedRLEnv") -> None:
+    def __init__(self, env: "MjManagerBasedRlEnv") -> None:
         """Initialize the environment.
 
         Args:
@@ -53,9 +53,9 @@ class SkillMJEnvWrapper(
         """
         super().__init__(env)
         if hasattr(env.unwrapped.cfg, "skills"):
-            assert (
-                env.unwrapped.cfg.skills is not None
-            ), "`env.cfg.skills` must not be None. Configure to list of skills."
+            assert env.unwrapped.cfg.skills is not None, (
+                "`env.cfg.skills` must not be None. Configure to list of skills."
+            )
         else:
             raise ValueError(
                 f"Cannot use `SkillIsaacWrapper` when `{type(env.unwrapped.cfg)}` does not contain the `skills` attribute."
@@ -78,7 +78,9 @@ class SkillMJEnvWrapper(
             ),
         )
 
-    def step(self, action: TBatchedActionTorch) -> tuple[
+    def step(
+        self, action: TBatchedActionTorch
+    ) -> tuple[
         TBatchedObsTorch,
         Float[torch.Tensor, "b"],  # noqa: F821
         Bool[torch.Tensor, "b"],  # noqa: F821

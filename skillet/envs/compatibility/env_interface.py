@@ -1,14 +1,14 @@
-"""A module specifying the abstract interface for the Isaac Lab DirectRLEnv.
+"""A module specifying the abstract interface for the Isaac Lab DirectRlEnv.
 
-Isaac Lab has two environment APIs: DirectRLEnv and ManagerBasedRLEnv.
-This module specifies the abstract interface for the DirectRLEnv, without any implementation details.
+Isaac Lab has two environment APIs: DirectRlEnv and ManagerBasedRlEnv.
+This module specifies the abstract interface for the DirectRlEnv, without any implementation details.
 
 Many properties are marked as deprecated, because they are not required for skillet.
 If we need to use them, we will need to implement them (e.g. in ROS2SkilletEnv).
 """
 
 from collections.abc import Sequence
-from typing import Any, Protocol
+from typing import Any
 
 import torch
 from typing_extensions import deprecated
@@ -20,7 +20,7 @@ from skillet.envs.compatibility.gymnasium import GymVectorInterface
 class IsaacLabInterface(GymVectorInterface):
     """An abstract interface for the Isaac Lab environment.
 
-    The properties and methods are the intersection of the DirectRLEnv and ManagerBasedRLEnv interfaces.
+    The properties and methods are the intersection of the DirectRlEnv and ManagerBasedRlEnv interfaces.
 
     This interface is used to specify the abstract interface for the Isaac Lab environment, without any implementation.
     It should behave as a vectorized environment
@@ -70,11 +70,6 @@ class IsaacLabInterface(GymVectorInterface):
         """Maximum episode length in seconds."""
         ...
 
-    # @property
-    # def num_envs(self) -> int:
-    #     """The number of instances of the environment that are running."""
-    #     ...
-
     @property
     @deprecated("physics_dt is not currently supported across all environments.")
     def physics_dt(self) -> float:
@@ -113,9 +108,9 @@ class IsaacLabInterface(GymVectorInterface):
 
 
 class DirectRlInterface(IsaacLabInterface):
-    """An abstract interface for the Isaac Lab DirectRLEnv.
+    """An abstract interface for the Isaac Lab DirectRlEnv.
 
-    This interface is used to specify the abstract interface for the DirectRLEnv, without any implementation details.
+    This interface is used to specify the abstract interface for the DirectRlEnv, without any implementation details.
     It should behave as a vectorized environment
 
     At minimum, the environment should implement the following properties and methods:
@@ -196,7 +191,7 @@ class DirectRlInterface(IsaacLabInterface):
         """Compute and return the states for the environment.
 
         The state-space is used for asymmetric actor-critic architectures. It is configured
-        using the :attr:`DirectRLEnvCfg.state_space` parameter.
+        using the :attr:`DirectRlEnvCfg.state_space` parameter.
 
         Returns:
             The states for the environment. If the environment does not have a state-space, the function
@@ -228,9 +223,9 @@ class DirectRlInterface(IsaacLabInterface):
 
 
 class ManagerBasedRlInterface(IsaacLabInterface):
-    """An abstract interface for the Isaac Lab ManagerBasedRLEnv.
+    """An abstract interface for the Isaac Lab ManagerBasedRlEnv.
 
-    This interface is used to specify the abstract interface for the ManagerBasedRLEnv, without any implementation.
+    This interface is used to specify the abstract interface for the ManagerBasedRlEnv, without any implementation.
     It should behave as a vectorized environment
 
     At minimum, the environment should implement the following properties and methods:

@@ -19,7 +19,7 @@ from . import agents
 
 gym.register(
     id="Gen3-Lift-Cube-IK-Rel-v0",
-    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    entry_point="skillet.envs.isaac:IsaacManagerBasedRlEnv",
     kwargs={
         "env_cfg_entry_point": f"{__name__}.gen3_lift_env_cfg:TeleOpGen3LiftCubeEnvCfg",
     },
@@ -28,7 +28,7 @@ gym.register(
 
 gym.register(
     id="Gen3-Lift-Cube-v0",
-    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    entry_point="skillet.envs.isaac:IsaacManagerBasedRlEnv",
     kwargs={
         "env_cfg_entry_point": f"{__name__}.gen3_lift_env_cfg:Gen3LiftCubeEnvCfg",
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:Gen3LiftCubePPORunnerCfg",

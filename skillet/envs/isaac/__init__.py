@@ -1,2 +1,4 @@
-from .isaac_rl_env_cfg import SkillsDirectRLEnvCfg as SkillsDirectRLEnvCfg
 from .camera_cfg import RGBDCameraCfg as RGBDCameraCfg
+from .isaac_direct_rl_env import IsaacDirectRlEnv as IsaacDirectRlEnv
+from .isaac_manager_based_rl_env import IsaacManagerBasedRlEnv as IsaacManagerBasedRlEnv
+from .isaac_rl_env_cfg import SkillsDirectRlEnvCfg as SkillsDirectRlEnvCfg

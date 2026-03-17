@@ -8,7 +8,7 @@ from dataclasses import MISSING
 from isaaclab.envs import DirectRLEnvCfg
 
 
-class SkillsDirectRLEnvCfg(DirectRLEnvCfg):
+class SkillsDirectRlEnvCfg(DirectRLEnvCfg):
     skills: list[str] | None = None
     """List of behavior primitives available"""
 

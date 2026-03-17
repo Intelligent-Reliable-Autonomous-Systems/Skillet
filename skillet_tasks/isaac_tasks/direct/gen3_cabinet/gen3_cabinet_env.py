@@ -4,7 +4,6 @@ import isaaclab.sim as sim_utils
 import torch
 from isaaclab.actuators.actuator_cfg import ImplicitActuatorCfg
 from isaaclab.assets import Articulation, ArticulationCfg
-from isaaclab.envs import DirectRLEnv
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 from isaaclab.utils.math import sample_uniform
@@ -12,6 +11,7 @@ from isaacsim.core.utils.stage import get_current_stage
 from isaacsim.core.utils.torch.transformations import tf_combine, tf_inverse, tf_vector
 from pxr import UsdGeom
 
+from skillet.envs.isaac import IsaacDirectRlEnv
 from skillet.envs.util import configclass
 from skillet_tasks.isaac_tasks.direct.cfg import Gen3BaseCfg
 
@@ -78,7 +78,7 @@ class Gen3CabinetEnvCfg(Gen3BaseCfg):
     finger_reward_scale = 2.0
 
 
-class Gen3CabinetEnv(DirectRLEnv):
+class Gen3CabinetEnv(IsaacDirectRlEnv):
     # pre-physics step calls
     #   |-- _pre_physics_step(action)
     #   |-- _apply_action()
@@ -317,25 +317,25 @@ class Gen3CabinetEnv(DirectRLEnv):
 
     def _compute_rewards(
         self,
-        actions,
-        cabinet_dof_pos,
-        gen3_grasp_pos,
-        drawer_grasp_pos,
-        gen3_grasp_rot,
-        drawer_grasp_rot,
-        gen3_lfinger_pos,
-        gen3_rfinger_pos,
-        gripper_forward_axis,
-        drawer_inward_axis,
-        gripper_up_axis,
-        drawer_up_axis,
-        num_envs,
-        dist_reward_scale,
-        rot_reward_scale,
-        open_reward_scale,
-        action_penalty_scale,
-        finger_reward_scale,
-        joint_positions,
+        actions: torch.Tensor,
+        cabinet_dof_pos: torch.Tensor,
+        gen3_grasp_pos: torch.Tensor,
+        drawer_grasp_pos: torch.Tensor,
+        gen3_grasp_rot: torch.Tensor,
+        drawer_grasp_rot: torch.Tensor,
+        gen3_lfinger_pos: torch.Tensor,
+        gen3_rfinger_pos: torch.Tensor,
+        gripper_forward_axis: torch.Tensor,
+        drawer_inward_axis: torch.Tensor,
+        gripper_up_axis: torch.Tensor,
+        drawer_up_axis: torch.Tensor,
+        num_envs: torch.Tensor,
+        dist_reward_scale: torch.Tensor,
+        rot_reward_scale: torch.Tensor,
+        open_reward_scale: torch.Tensor,
+        action_penalty_scale: torch.Tensor,
+        finger_reward_scale: torch.Tensor,
+        joint_positions: torch.Tensor,
     ):
         # distance from hand to the drawer
         d = torch.norm(gen3_grasp_pos - drawer_grasp_pos, p=2, dim=-1)
@@ -397,14 +397,14 @@ class Gen3CabinetEnv(DirectRLEnv):
 
     def _compute_grasp_transforms(
         self,
-        hand_rot,
-        hand_pos,
-        gen3_local_grasp_rot,
-        gen3_local_grasp_pos,
-        drawer_rot,
-        drawer_pos,
-        drawer_local_grasp_rot,
-        drawer_local_grasp_pos,
+        hand_rot: torch.Tensor,
+        hand_pos: torch.Tensor,
+        gen3_local_grasp_rot: torch.Tensor,
+        gen3_local_grasp_pos: torch.Tensor,
+        drawer_rot: torch.Tensor,
+        drawer_pos: torch.Tensor,
+        drawer_local_grasp_rot: torch.Tensor,
+        drawer_local_grasp_pos: torch.Tensor,
     ):
         global_gen3_rot, global_gen3_pos = tf_combine(hand_rot, hand_pos, gen3_local_grasp_rot, gen3_local_grasp_pos)
         global_drawer_rot, global_drawer_pos = tf_combine(

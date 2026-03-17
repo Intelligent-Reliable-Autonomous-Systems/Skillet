@@ -16,7 +16,6 @@ import numpy as np
 import torch
 from roslibpy import Ros
 
-from skillet.core.math import quat_apply, quat_inv, quat_mul
 from skillet.core.spaces import ActionSpec
 from skillet.envs.util import configure_seed
 
@@ -211,8 +210,8 @@ class ROS2Env(gym.Env):
 
         The environment steps forward at a fixed time-step, while the physics simulation is decimated at a
         lower time-step. This is to ensure that the simulation is stable. These two time-steps can be configured
-        independently using the :attr:`DirectRLEnvCfg.decimation` (number of simulation steps per environment step)
-        and the :attr:`DirectRLEnvCfg.sim.physics_dt` (physics time-step). Based on these parameters, the environment
+        independently using the :attr:`DirectRlEnvCfg.decimation` (number of simulation steps per environment step)
+        and the :attr:`DirectRlEnvCfg.sim.physics_dt` (physics time-step). Based on these parameters, the environment
         time-step is computed as the product of the two.
 
         This function performs the following steps:
@@ -229,9 +228,9 @@ class ROS2Env(gym.Env):
             A tuple containing the observations, rewards, resets (terminated and truncated) and extras.
 
         """
-        assert self._supports_action_spec(
-            action_spec
-        ), f"Action specification `{action_spec.name}: {action_spec}` not supported by environment {self}."
+        assert self._supports_action_spec(action_spec), (
+            f"Action specification `{action_spec.name}: {action_spec}` not supported by environment {self}."
+        )
         if self._next_step_time is None:  # TODO check for right behavior
             self._next_step_time = time.monotonic()
 
@@ -478,30 +477,3 @@ class ROS2Env(gym.Env):
         result = self.controller_client.call(request)
 
         return result["ok"]
-
-    def _compute_goal_ee_pose_b_from_goal_tcp_b(
-        self, tcp_pose_b: torch.Tensor, tcp_offset: torch.Tensor
-    ) -> torch.Tensor:
-        """Compute the goal end effector pose (xyz, quat) from the goal TCP pose in XYZ Quat.
-
-        Args:
-            tcp_pose_b: The goal TCP pose in the shape (N,7) relative to the robot base frame
-            tcp_offset: The offset of the tcp frame from the end effector
-
-
-        Returns:
-            The goal end effector pose in shape (N,7)
-
-        """
-        goal_tcp_pos_b = tcp_pose_b[:, 0:3]
-        goal_tcp_quat_b = tcp_pose_b[:, 3:7]
-
-        # invert offset
-        q_te = quat_inv(tcp_offset[:, 3:7])
-        p_te = -quat_apply(q_te, tcp_offset[:, 0:3])
-
-        # compose
-        q_be = quat_mul(goal_tcp_quat_b, q_te)
-        p_be = goal_tcp_pos_b + quat_apply(goal_tcp_quat_b, p_te)
-
-        return torch.cat((p_be, q_be), dim=1)

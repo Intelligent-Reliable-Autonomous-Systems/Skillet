@@ -29,18 +29,17 @@ from skillet.core.math import (
     subtract_frame_transforms,
 )
 from skillet.core.spaces import ActionSpec
-from skillet.envs.compatibility.gymnasium import AsGymVectorEnv
-from skillet.envs.compatibility.isaac_lab import DirectRlInterface, ManagerBasedRlInterface
+from skillet.envs.compatibility import AsGymVectorEnv, DirectRlInterface, ManagerBasedRlInterface
 from skillet.envs.specs import IK_EE_SPEC_BATCHED, OSC_SPEC_BATCHED, RGBD_SPEC_BATCHED, BxM_Action, BxN_Obs
 
 
-class MJEnvWrapper(
+class MjEnvWrapper(
     BatchedEnvironment[BxN_Obs, BxM_Action],
     gym.vector.VectorWrapper,
 ):
     """Wrapper for Mujoco Environments.
 
-    This assumes that the environment is either a DirectRLEnv or ManagerBasedRLEnv.
+    This assumes that the environment is either a DirectRlEnv or ManagerBasedRlEnv.
     """
 
     def __init__(self, env: DirectRlInterface | ManagerBasedRlInterface) -> None:
@@ -60,7 +59,7 @@ class MJEnvWrapper(
         super().__init__(vector_env)
         self._device = self._env.device
 
-        #  Convert MJ observation spaces to Gym observation spaces
+        #  Convert Mj observation spaces to Gym observation spaces
         vector_env.single_observation_space = self._convert_mj_space(vector_env.single_observation_space)
         vector_env.observation_space = self._convert_mj_space(vector_env.observation_space)
         vector_env.action_space = self._convert_mj_space(vector_env.action_space)
@@ -287,7 +286,9 @@ class MJEnvWrapper(
         return obs_dict, info
 
     @override
-    def step(self, action: BxM_Action) -> tuple[
+    def step(
+        self, action: BxM_Action
+    ) -> tuple[
         BxN_Obs,
         Float[torch.Tensor, "b"],  # noqa: F821
         Bool[torch.Tensor, "b"],  # noqa: F821

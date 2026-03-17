@@ -3,7 +3,6 @@ from __future__ import annotations
 import isaaclab.sim as sim_utils
 import torch
 from isaaclab.assets import Articulation
-from isaaclab.envs import DirectRLEnv
 from isaaclab.markers import VisualizationMarkers
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
@@ -19,8 +18,10 @@ from isaaclab.utils.math import (
 )
 from isaacsim.core.utils.torch.transformations import tf_combine
 
+from skillet.envs.isaac import IsaacDirectRlEnv
 
-class ReachEnv(DirectRLEnv):
+
+class ReachEnv(IsaacDirectRlEnv):
     # pre-physics step calls
     #   |-- _pre_physics_step(action)
     #   |-- _apply_action()

@@ -1,4 +1,4 @@
-from skillet.envs.isaac import SkillsDirectRLEnvCfg
+from skillet.envs.isaac import SkillsDirectRlEnvCfg
 from isaaclab.actuators.actuator_cfg import ImplicitActuatorCfg
 from isaaclab.assets import ArticulationCfg
 from isaaclab.scene import InteractiveSceneCfg
@@ -8,7 +8,7 @@ from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR
 from isaaclab_assets.robots.franka import FRANKA_PANDA_CFG
 
 
-class FrankaBaseCfg(SkillsDirectRLEnvCfg):
+class FrankaBaseCfg(SkillsDirectRlEnvCfg):
     # env
     episode_length_s = 6.0  # 500 timesteps
     decimation = 2

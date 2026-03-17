@@ -27,7 +27,7 @@ gym.register(
 
 gym.register(
     id="ROS2-Gen3-Reach-RL-v0",
-    entry_point=f"{__name__}.gen3_ros2:Gen3ROS2ReachRLEnv",
+    entry_point=f"{__name__}.gen3_ros2:Gen3ROS2ReachRlEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.gen3_ros2:Gen3ROS2EnvCfg",

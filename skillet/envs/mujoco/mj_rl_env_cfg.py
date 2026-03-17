@@ -5,10 +5,10 @@ Written by Will Solow, 2026
 
 from dataclasses import MISSING
 
-from skillet.envs.mujoco import DirectRLEnvCfg
+from skillet.envs.mujoco.mj_direct_rl_env import MjDirectRlEnvCfg
 
 
-class SkillsDirectRLEnvCfg(DirectRLEnvCfg):
+class SkillsDirectRlEnvCfg(MjDirectRlEnvCfg):
     skills: list[str] | None = None
     """List of behavior primitives available"""
 

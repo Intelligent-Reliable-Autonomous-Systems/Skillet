@@ -9,7 +9,7 @@ from jaxtyping import Float
 
 from skillet.core.skill import Skill
 from skillet.core.spaces import ObservationSpec
-from skillet.envs.compatibility.gymnasium import GymVectorInterface
+from skillet.envs.compatibility import GymVectorInterface
 from skillet.envs.specs import BxM_Action, BxN_Obs
 from skillet.policy.ik_ee import IKEEPolicy, PosAbsIKEEPolicy, PoseAbsIKEEPolicy, PoseRelIKEEPolicy, XYZRPYAbsIKEEPolicy
 from skillet.policy.joint_pos import GripperPolicy, JointPosPolicy

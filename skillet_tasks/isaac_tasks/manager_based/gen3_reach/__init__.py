@@ -9,7 +9,7 @@ from . import agents
 
 gym.register(
     id="Gen3-Reach-v0",
-    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    entry_point="skillet.envs.isaac:IsaacManagerBasedRlEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.gen3_reach_env_cfg:Gen3ReachEnvCfg",
@@ -20,7 +20,7 @@ gym.register(
 
 gym.register(
     id="Gen3-Reach-IK-Rel-v0",
-    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    entry_point="skillet.envs.isaac:IsaacManagerBasedRlEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.gen3_reach_env_cfg:TeleOpGen3ReachEnvCfg",

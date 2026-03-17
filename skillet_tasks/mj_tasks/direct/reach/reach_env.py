@@ -13,10 +13,10 @@ from skillet.core.math import (
     subtract_frame_transforms,
     tf_combine,
 )
-from skillet.envs.mujoco import DirectRLEnv
+from skillet.envs.mujoco import MjDirectRlEnv
 
 
-class ReachEnv(DirectRLEnv):
+class ReachEnv(MjDirectRlEnv):
     # pre-physics step calls
     #   |-- _pre_physics_step(action)
     #   |-- _apply_action()

@@ -8,10 +8,10 @@ from skillet.core.math import (
     subtract_frame_transforms,
     tf_combine,
 )
-from skillet.envs.mujoco import DirectRLEnv
+from skillet.envs.mujoco import MjDirectRlEnv
 
 
-class LiftCubeEnv(DirectRLEnv):
+class LiftCubeEnv(MjDirectRlEnv):
     """Base clase for lift cube environments."""
 
     # pre-physics step calls

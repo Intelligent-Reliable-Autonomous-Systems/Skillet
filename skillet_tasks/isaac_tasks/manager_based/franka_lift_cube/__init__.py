@@ -16,7 +16,7 @@ from . import agents
 
 gym.register(
     id="Franka-Lift-Cube-v0",
-    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    entry_point="skillet.envs.isaac:IsaacManagerBasedRlEnv",
     kwargs={
         "env_cfg_entry_point": f"{__name__}.franka_lift_env_cfg:FrankaCubeLiftEnvCfg",
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:LiftCubePPORunnerCfg",
@@ -26,7 +26,7 @@ gym.register(
 
 gym.register(
     id="Franka-2F85-Lift-Cube-v0",
-    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    entry_point="skillet.envs.isaac:IsaacManagerBasedRlEnv",
     kwargs={
         "env_cfg_entry_point": f"{__name__}.franka_lift_env_cfg:FrankaRobotIQCubeLiftEnvCfg",
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:LiftCubePPORunnerCfg",

@@ -10,7 +10,7 @@ import torch
 from skillet.core.policy import TBAction, TBPolicyObs
 from skillet.core.skill import BatchedSkill
 from skillet.core.spaces import SpaceSpecification
-from skillet.envs.compatibility.gymnasium import GymVectorInterface
+from skillet.envs.compatibility import GymVectorInterface
 from skillet.skill.skill_lib import SKILL_LIB
 
 
@@ -33,8 +33,8 @@ class SkillController(BatchedSkill):
             if isinstance(param_spec.space, gym.spaces.Dict):
                 raise TypeError("Cannot get param dimension for a dictionary space.")
             if param_spec.is_batched and param_spec.n_envs >= 0:
-                return np.math.prod(param_spec.space.shape[1:])
-            return np.math.prod(param_spec.space.shape)  # space is single-env
+                return np.prod(param_spec.space.shape[1:])
+            return np.prod(param_spec.space.shape)  # space is single-env
 
         self.sk_param_dim = int(np.max([get_param_dim(skill.params_spec) for skill in self.skills]))
         self.num_skills = len(self.skills)
@@ -96,9 +96,9 @@ class SkillController(BatchedSkill):
             action: A torch Tensor of shape (num_envs, num_skills+max_param_dim).
 
         """
-        assert (
-            action.shape[-1] == self.action_dim
-        ), f"Action dimension {action.shape[-1]} does not match expected skill dimension {self.action_dim}"
+        assert action.shape[-1] == self.action_dim, (
+            f"Action dimension {action.shape[-1]} does not match expected skill dimension {self.action_dim}"
+        )
         self._skills_idx = self.get_skill_from_action(action)
         self._skills_params = self.get_params_from_action(action)
 

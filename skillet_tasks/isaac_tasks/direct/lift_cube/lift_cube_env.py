@@ -3,15 +3,16 @@ from __future__ import annotations
 import isaaclab.sim as sim_utils
 import torch
 from isaaclab.assets import Articulation, RigidObject
-from isaaclab.envs import DirectRLEnv
 from isaaclab.markers import VisualizationMarkers
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 from isaaclab.utils.math import quat_from_euler_xyz, sample_uniform, subtract_frame_transforms
 from isaacsim.core.utils.torch.transformations import tf_combine
 
+from skillet.envs.isaac import IsaacDirectRlEnv
 
-class LiftCubeEnv(DirectRLEnv):
+
+class LiftCubeEnv(IsaacDirectRlEnv):
     """Base clase for lift cube environments."""
 
     # pre-physics step calls

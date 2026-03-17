@@ -46,7 +46,7 @@ from skillet.envs.util import configclass
 
 
 @configclass
-class ManagerBasedRLEnvCfg:
+class MjManagerBasedRlEnvCfg:
     """Configuration for a manager-based RL environment.
 
     This config defines all aspects of an RL environment: the physical scene,
@@ -143,7 +143,7 @@ class ManagerBasedRLEnvCfg:
   """
 
 
-class ManagerBasedRLEnv(gym.Env):
+class MjManagerBasedRlEnv(gym.Env):
     """Manager-based RL environment."""
 
     is_vector_env = True
@@ -152,11 +152,11 @@ class ManagerBasedRLEnv(gym.Env):
         "mujoco_version": mujoco.__version__,
         "warp_version": wp.config.version,
     }
-    cfg: ManagerBasedRLEnvCfg
+    cfg: MjManagerBasedRlEnvCfg
 
     def __init__(
         self,
-        cfg: ManagerBasedRLEnvCfg,
+        cfg: MjManagerBasedRlEnvCfg,
         render_mode: str | None = None,
         **kwargs,
     ) -> None:
@@ -250,7 +250,7 @@ class ManagerBasedRLEnv(gym.Env):
         return math.ceil(self.max_episode_length_s / self.step_dt)
 
     @property
-    def unwrapped(self) -> "ManagerBasedRLEnv":
+    def unwrapped(self) -> "MjManagerBasedRlEnv":
         """Get the unwrapped environment (base case for wrapper chains)."""
         return self
 

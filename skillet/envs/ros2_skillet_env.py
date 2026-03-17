@@ -26,7 +26,7 @@ from skillet.core.math import (
     subtract_frame_transforms,
 )
 from skillet.core.spaces import ActionSpec
-from skillet.envs.compatibility.isaac_lab import DirectRlInterface
+from skillet.envs.compatibility import DirectRlInterface
 from skillet.envs.ros2 import ROS2Env
 from skillet.envs.specs import (
     IK_EE_SPEC_BATCHED,
@@ -45,7 +45,7 @@ class ROS2SkilletEnv(
     BatchedEnvironment[BxN_Obs, BxM_Action],
     DirectRlInterface,
 ):
-    """An environment that interfaces with ROS2 and is compatible with skillet and IsaacLab DirectRLEnv.
+    """An environment that interfaces with ROS2 and is compatible with skillet and IsaacLab DirectRlEnv.
 
     The environment is batched.
     """
@@ -342,7 +342,9 @@ class ROS2SkilletEnv(
         return self.get_observation(self.obs_spec_state)
 
     @override
-    def step(self, action: BxM_Action, action_spec: ActionSpec[Any] | None = None) -> tuple[
+    def step(
+        self, action: BxM_Action, action_spec: ActionSpec[Any] | None = None
+    ) -> tuple[
         BxN_Obs,
         Float[torch.Tensor, "b"],  # noqa: F821
         Bool[torch.Tensor, "b"],  # noqa: F821
@@ -693,14 +695,10 @@ class ROS2SkilletEnv(
 
         ee_vel_w = torch.as_tensor(
             self._env._robot_body_vel_w[ee_link_idx, :], device=self.device, dtype=torch.float32
-        ).unsqueeze(0)[
-            env_ids
-        ]  # Extract end-effector velocity in the world frame
+        ).unsqueeze(0)[env_ids]  # Extract end-effector velocity in the world frame
         root_vel_w = torch.as_tensor(
             self._env._robot_body_vel_w[base_link_idx, :], device=self.device, dtype=torch.float32
-        ).unsqueeze(0)[
-            env_ids
-        ]  # Extract root velocity in the world frame
+        ).unsqueeze(0)[env_ids]  # Extract root velocity in the world frame
         relative_vel_w = ee_vel_w - root_vel_w  # Compute the relative velocity in the world frame
         ee_lin_vel_b = quat_apply_inverse(
             torch.as_tensor(

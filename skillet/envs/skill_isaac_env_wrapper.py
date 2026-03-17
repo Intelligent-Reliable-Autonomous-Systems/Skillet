@@ -16,7 +16,7 @@ from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
 from skillet.skill.skill_controller import SkillController
 
 if TYPE_CHECKING:
-    from isaaclab.envs import DirectRLEnv, ManagerBasedRLEnv
+    from isaaclab.envs import DirectRlEnv, ManagerBasedRlEnv
 
 TBatchedObsTorch = TypeVar(
     "TBatchedObsTorch", bound=Float[torch.Tensor, "b ..."] | Mapping[str, Float[torch.Tensor, "b ..."]]
@@ -38,10 +38,10 @@ class SkillIsaacEnvWrapper(
 ):
     """Wrapper for IsaacLab Environments.
 
-    This assumes that the environment is either a DirectRLEnv or ManagerBasedRLEnv.
+    This assumes that the environment is either a DirectRlEnv or ManagerBasedRlEnv.
     """
 
-    def __init__(self, env: "ManagerBasedRLEnv | DirectRLEnv") -> None:
+    def __init__(self, env: "ManagerBasedRlEnv | DirectRlEnv") -> None:
         """Initialize the environment.
 
         Args:
@@ -53,9 +53,9 @@ class SkillIsaacEnvWrapper(
         """
         super().__init__(env)
         if hasattr(env.unwrapped.cfg, "skills"):
-            assert (
-                env.unwrapped.cfg.skills is not None
-            ), "`env.cfg.skills` must not be None. Configure to list of skills."
+            assert env.unwrapped.cfg.skills is not None, (
+                "`env.cfg.skills` must not be None. Configure to list of skills."
+            )
         else:
             raise ValueError(
                 f"Cannot use `SkillIsaacWrapper` when `{type(env.unwrapped.cfg)}` does not contain the `skills` attribute."
@@ -78,7 +78,9 @@ class SkillIsaacEnvWrapper(
             ),
         )
 
-    def step(self, action: TBatchedActionTorch) -> tuple[
+    def step(
+        self, action: TBatchedActionTorch
+    ) -> tuple[
         TBatchedObsTorch,
         Float[torch.Tensor, "b"],  # noqa: F821
         Bool[torch.Tensor, "b"],  # noqa: F821

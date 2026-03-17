@@ -10,20 +10,19 @@ from __future__ import annotations
 import isaaclab.sim as sim_utils
 import torch
 from isaaclab.assets import Articulation, RigidObject, RigidObjectCfg
-from isaaclab.envs import DirectRLEnv
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sensors import Camera
 from isaaclab.sim import SimulationCfg
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 
-from skillet_tasks.assets.isaac.kinova_gen3_2f85 import KINOVA_GEN3_2F85_CFG
-from skillet.envs.isaac import RGBDCameraCfg, SkillsDirectRLEnvCfg
+from skillet.envs.isaac import IsaacDirectRlEnv, RGBDCameraCfg, SkillsDirectRlEnvCfg
 from skillet.envs.util import configclass
+from skillet_tasks.assets.isaac.kinova_gen3_2f85 import KINOVA_GEN3_2F85_CFG
 
 
 @configclass
-class Gen3GenCameraEnvCfg(SkillsDirectRLEnvCfg):
+class Gen3GenCameraEnvCfg(SkillsDirectRlEnvCfg):
     """Env config for the Kinova Gen3 arm with an RGBD camera.
 
     Customize the camera spawn pose by overriding ``camera_cfg``::
@@ -115,7 +114,7 @@ class Gen3GenCameraEnvCfg(SkillsDirectRLEnvCfg):
     )
 
 
-class Gen3GenCameraEnv(DirectRLEnv):
+class Gen3GenCameraEnv(IsaacDirectRlEnv):
     """Kinova Gen3 + RGBD camera environment with a table and two cameras.
 
     Observations returned from ``_get_observations()`` are a nested dict

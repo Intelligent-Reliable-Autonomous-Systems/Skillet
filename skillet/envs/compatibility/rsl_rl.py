@@ -16,14 +16,13 @@ import torch
 from tensordict import TensorDict
 from typing_extensions import override
 
-from skillet.envs.compatibility.isaac_lab import DirectRlInterface
 from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
-from skillet.envs.mj_env_wrapper import MJEnvWrapper
+from skillet.envs.mj_env_wrapper import MjEnvWrapper
 from skillet.envs.ros2_skillet_env import ROS2SkilletEnv
 from skillet.envs.util import configure_seed
 
 if TYPE_CHECKING:
-    from skillet.envs.compatibility.isaac_lab import ManagerBasedRlInterface
+    from skillet.envs.compatibility import DirectRlInterface, ManagerBasedRlInterface
 
 
 class RslRlVecEnv(ABC):
@@ -150,14 +149,14 @@ class RslRlVecEnvWrapper(RslRlVecEnv, gym.vector.VectorWrapper):
             clip_actions: The clipping value for actions. If ``None``, then no clipping is done.
 
         Raises:
-            ValueError: When the environment is not an instance of :class:`ManagerBasedRLEnv` or :class:`DirectRLEnv`.
+            ValueError: When the environment is not an instance of :class:`ManagerBasedRlEnv` or :class:`DirectRlEnv`.
 
         """
         # check that input is valid
         if (
             not isinstance(env, ROS2SkilletEnv)
             and not isinstance(env, IsaacEnvWrapper)
-            and not isinstance(env, MJEnvWrapper)
+            and not isinstance(env, MjEnvWrapper)
         ):
             raise TypeError(
                 "The environment must be inherited from ROS2SkilletEnv or IsaacEnvWrapper. Environment type:"
@@ -260,11 +259,11 @@ class RslRlVecEnvWrapper(RslRlVecEnv, gym.vector.VectorWrapper):
     @override
     def get_observations(self) -> TensorDict:
         """Return the current observations of the environment."""
-        if isinstance(self.env, (IsaacEnvWrapper, ROS2SkilletEnv, MJEnvWrapper)):  # Is a IsaacEnvWrapper
+        if isinstance(self.env, (IsaacEnvWrapper, ROS2SkilletEnv, MjEnvWrapper)):  # Is a IsaacEnvWrapper
             obs_dict = self.env.get_state()
         elif hasattr(self.unwrapped, "observation_manager"):
             obs_dict = self.unwrapped.observation_manager.compute()
-        else:  # DirectRLEnv of ManagerBasedRLEnv
+        else:  # DirectRlEnv of ManagerBasedRlEnv
             obs_dict = self.unwrapped._get_observations()
 
         return TensorDict(obs_dict, batch_size=[self.num_envs])

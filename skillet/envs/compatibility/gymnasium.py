@@ -153,3 +153,11 @@ class AsGymVectorEnv(gym.vector.VectorEnv):
 
     def close(self, **kwargs: Any) -> None:  # noqa: D102
         return self.env.close(**kwargs)
+
+
+class SkilletGymEnv(gym.Env):
+    """The Skillet Gymnasium environment that all Rl environments inherit from.
+
+    In addition to the standard Gym functions, it includes properties that enable interfacing
+    with the SkilletEnvWrapper across IsaacLab, Mujoco, and ROS2 environments.
+    """
