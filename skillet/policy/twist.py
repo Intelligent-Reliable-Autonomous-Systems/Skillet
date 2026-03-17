@@ -25,8 +25,10 @@ from skillet.core.policy import BatchedPolicy, TBAction, TBPolicyObs
 from skillet.core.spaces import ActionSpec, ObservationSpec
 from skillet.core import SkillParamsSpec
 from skillet.skill.specs import (
+    XYZ_QUAT_Params,
+    XYZ_QUAT_Params_Spec,
     XYZ_RPY_Params,
-    XYZ_RPY_Params_Spec,
+    XYZ_RPY_Params_Spec
 )
 from skillet.envs.specs import MOVEIT_TCP_Obs
 
@@ -79,7 +81,7 @@ class TwistFramePolicy(BatchedPolicy[MOVEIT_TCP_Obs, TBAction, XYZ_RPY_Params], 
         self.start_gripper_pos = (obs["gripper"] - gripper_lim[:, :1]) / (gripper_lim[:, 1:] - gripper_lim[:, :1])
 
 
-class TwistPIDXYZPolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[TBPolicyObs, TBAction]):
+class TwistPIDPosePolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[TBPolicyObs, TBAction]):
     """Policy for end effector position and orientation using PID control."""
 
     _params: torch.Tensor
@@ -142,21 +144,17 @@ class TwistPIDXYZPolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Gene
         return self._action_spec
 
     @property
-    def params_spec(self) -> SkillParamsSpec[XYZ_RPY_Params]:
+    def params_spec(self) -> SkillParamsSpec[XYZ_QUAT_Params]:
         """The parameter specification for XYZ + Quat target poses."""
-        return XYZ_RPY_Params_Spec
+        return XYZ_QUAT_Params_Spec
 
     def get_action(self, obs: TBPolicyObs, params: Any = None) -> TBAction:
         """Get the next gripper position."""
         tcp_pose_b = obs["tcp_pose_b"]
         dt = obs["dt"]
 
-        tcp_quat_des_b = quat_from_euler_xyz(
-            self._tcp_xyz_des_b[:, 3], self._tcp_xyz_des_b[:, 4], self._tcp_xyz_des_b[:, 5]
-        )
-        tcp_quat_des_b = torch.as_tensor([[0.0, -0.707, 0.707, 0.0]], device="cuda")
         error_pos, error_rot = compute_pose_error(
-            tcp_pose_b[:, 0:3], tcp_pose_b[:, 3:7], self._tcp_xyz_des_b[:, 0:3], tcp_quat_des_b
+            tcp_pose_b[:, 0:3], tcp_pose_b[:, 3:7], self._tcp_quat_des_b[:, 0:3], self._tcp_quat_des_b[:,3:7]
         )
 
         # Required offset rotation about yaw for the twist controller
@@ -168,7 +166,7 @@ class TwistPIDXYZPolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Gene
 
         print(f"########")
         print(tcp_pose_b.squeeze()[0:3])
-        print(self._tcp_xyz_des_b.squeeze()[0:3])
+        print(self._tcp_quat_des_b.squeeze()[0:3])
 
         self.integral_pos += error_pos * dt
         self.integral_rot += error_rot * dt
@@ -195,7 +193,7 @@ class TwistPIDXYZPolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Gene
     def reset(self, obs: TBPolicyObs, params: Any = None, env_ids: torch.Tensor = None) -> None:
         """Reset the policy. Useful if policy is stateful."""
         self._params = params
-        self._tcp_xyz_des_b = params[:, :6]
+        self._tcp_quat_des_b = params[:, :7]
 
         # PID integrals
         self.integral_pos = torch.zeros(

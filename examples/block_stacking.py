@@ -19,7 +19,7 @@ from skillet.perception.sam3.sam3 import SAMConcept
 from skillet.policy.dummy import FixedSequencePolicy
 from skillet.policy.ik_ee import PoseAbsIKEEPolicy
 from skillet.policy.moveit import MoveItTcpQuatPolicy
-from skillet.policy.twist import TwistPIDXYZPolicy
+from skillet.policy.twist import TwistPIDPosePolicy
 from skillet.scene.base import Scene
 from skillet.scene.cube import Cube
 from skillet.scene.visualize import Open3DVisualizer
@@ -132,7 +132,7 @@ def main() -> None:
     if args_cli.use_moveit:
         arm_policy = MoveItTcpQuatPolicy(env.batched_env.obs_spec_ikee, env.batched_env.action_spec_moveit_tcp_quat)
     elif args_cli.use_twist:
-        arm_policy = TwistPIDXYZPolicy(env.batched_env.obs_spec_twist_tcp, env.batched_env.action_spec_twist_tcp)
+        arm_policy = TwistPIDPosePolicy(env.batched_env.obs_spec_twist_tcp, env.batched_env.action_spec_twist_tcp)
     else:
         arm_policy = PoseAbsIKEEPolicy(ikee_spec, low_action_spec)
     # Skills
