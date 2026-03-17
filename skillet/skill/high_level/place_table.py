@@ -13,8 +13,8 @@ Object_Params: TypeAlias = int
 """The parameters for selecting an object in the scene."""
 
 
-class PlaceBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
-    """A skill for placing a block on another block.
+class PlaceTableSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
+    """A skill for placing a block on a table.
 
     Is is discretely parameterized by the id of the block to place.
     """
@@ -33,7 +33,7 @@ class PlaceBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
             space=gym.spaces.Discrete(n=max_objects), name="block_id", is_torch=False, is_batched=False
         )
         self._status = None
-        self._offset = torch.tensor([0, 0.0, 0.04], device=self.obs_spec.device)
+        self._offset = torch.tensor([0, 0.0, 0.02], device=self.obs_spec.device)
 
         self._vis_target_pos = vis_target_pos
 

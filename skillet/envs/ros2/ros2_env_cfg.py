@@ -89,3 +89,6 @@ class ROS2EnvCfg:
 
     tool_frame_name: str = MISSING
     """Name of tool frame of robot"""
+
+    base_apriltag_id: int = MISSING
+    """April tag id used to localize base"""
