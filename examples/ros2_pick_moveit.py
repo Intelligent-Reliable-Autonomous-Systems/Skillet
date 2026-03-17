@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 import torch
 
 from skillet.agents.policy_over_options import PolicyOverOptionsBatchedAgent
-from skillet.envs.ros2_skillet_env import ROS2SkilletEnv
+from skillet.envs.skillet_env import SkilletEnv
 from skillet.policy.dummy import FixedSequencePolicy, RandomPolicy
 from skillet.policy.moveit import MoveItTcpQuatPolicy
 from skillet.skill.high_level.pick import PickSkill
@@ -56,7 +56,7 @@ def main() -> None:
     }
 
     env = create_ros2_env(args_cli.task, env_cfg)
-    env = ROS2SkilletEnv(env)
+    env = SkilletEnv(env)
     env.reset()
 
     print("[INFO][Main] Testing Executor environment")

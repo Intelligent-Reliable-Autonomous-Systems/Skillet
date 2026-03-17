@@ -10,19 +10,17 @@ import argparse
 import os
 from typing import TYPE_CHECKING
 
-import gymnasium as gym
 import torch
 
 import skillet_tasks.ros2_tasks  # noqa: F401
 from skillet.agents.policy_over_options import PolicyOverOptionsBatchedAgent
-from skillet.envs.ros2_skillet_env import ROS2SkilletEnv
+from skillet.envs.skillet_env import SkilletEnv
 from skillet.envs.util import setup_ros
 from skillet.policy.dummy import FixedSequencePolicy, RandomPolicy
 from skillet.policy.ik_ee import PoseAbsIKEEPolicy
 from skillet.skill.high_level.pick import PickSkill
 from skillet.skill.specs import SELECT_OPTIONS_SPEC_BATCHED, XYZ_YAW_Params
 from skillet_tasks.ros2_tasks.gen3.gen3_ros2 import Gen3ROS2Env, Gen3ROS2EnvCfg
-from skillet_tasks.ros2_tasks.gen3_lite.gen3lite_ros2 import Gen3LiteROS2Env, Gen3LiteROS2EnvCfg
 
 if TYPE_CHECKING:
     from skillet.core import BatchedSkill
@@ -31,7 +29,7 @@ if TYPE_CHECKING:
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Main ROS2 executor file.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="ROS2-Gen3Lite-v0", help="Name of the task.")
+parser.add_argument("--task", type=str, default="ROS2-Gen3-v0", help="Name of the task.")
 parser.add_argument("--device", type=str, default="cuda", help="Device to use")
 parser.add_argument(
     "--ros2_ws", type=str, default=None, help="Absolute path to ROS2 workspace containing bringup files"
@@ -52,17 +50,7 @@ if args_cli.ros2_ws is None:
 def main() -> None:
     """Run the ROS2 pick example."""
     # create environment
-    # env_cfg = Gen3ROS2EnvCfg(
-    #     robot_ip=args_cli.robot_ip,
-    #     launch_ros=args_cli.launch_ros,
-    #     device=args_cli.device,
-    #     num_envs=args_cli.num_envs,
-    #     ros2_workspace=args_cli.ros2_ws,
-    #     episode_length_s=30.0,
-    # )
-
-    # env = Gen3ROS2Env(cfg=env_cfg, ros=setup_ros())
-    env_cfg = Gen3LiteROS2EnvCfg(
+    env_cfg = Gen3ROS2EnvCfg(
         robot_ip=args_cli.robot_ip,
         launch_ros=args_cli.launch_ros,
         device=args_cli.device,
@@ -71,8 +59,18 @@ def main() -> None:
         episode_length_s=30.0,
     )
 
-    env = Gen3LiteROS2Env(cfg=env_cfg, ros=setup_ros())
-    env = ROS2SkilletEnv(env)
+    # env = Gen3ROS2Env(cfg=env_cfg, ros=setup_ros())
+    # env_cfg = Gen3LiteROS2EnvCfg(
+    #     robot_ip=args_cli.robot_ip,
+    #     launch_ros=args_cli.launch_ros,
+    #     device=args_cli.device,
+    #     num_envs=args_cli.num_envs,
+    #     ros2_workspace=args_cli.ros2_ws,
+    #     episode_length_s=30.0,
+    # )
+
+    env = Gen3ROS2Env(cfg=env_cfg, ros=setup_ros())
+    env = SkilletEnv(env)
     env.reset()
 
     print("[INFO][Main] Testing Executor environment")

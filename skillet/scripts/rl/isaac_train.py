@@ -14,9 +14,8 @@ import gymnasium as gym
 import torch
 from isaaclab.app import AppLauncher
 
+from skillet.envs import SkillEnvWrapper, SkilletEnv
 from skillet.envs.compatibility.rsl_rl import RslRlVecEnvWrapper
-from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
-from skillet.envs.skill_isaac_env_wrapper import SkillIsaacEnvWrapper
 from skillet.envs.util import get_checkpoint_path
 from skillet.envs.util.dict import print_dict
 from skillet.envs.util.hydra import hydra_task_config
@@ -108,7 +107,7 @@ def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
         env = gym.wrappers.RecordVideo(env, **video_kwargs)
 
     # Wrap environment for RSL-RL
-    env = SkillIsaacEnvWrapper(env) if args_cli.skill else IsaacEnvWrapper(env)
+    env = SkillEnvWrapper(env) if args_cli.skill else SkilletEnv(env)
     env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
 
     # Create runner from RSL-RL

@@ -6,13 +6,13 @@
 'BasicBatchedEnvironment' class is a minimal batched implementation that supports batched observations and actions.
 """
 
-import abc
+from abc import ABC, abstractmethod
 from typing import Any, Generic, TypeVar, overload
-from typing_extensions import override
 
 import gymnasium as gym
 import torch
 from jaxtyping import Bool, Float
+from typing_extensions import override
 
 from skillet.core.spaces import (
     Action,
@@ -38,7 +38,7 @@ TBAction = TypeVar("TBAction", bound=BatchedAction)
 """A generic type of the batched action returned by the environment."""
 
 
-class _EnvironmentBase(abc.ABC, Generic[TObs, TAction]):
+class _EnvironmentBase(ABC, Generic[TObs, TAction]):
     """An environment interface for the Robot Skills framework.
 
     Generic type parameters:
@@ -56,12 +56,12 @@ class _EnvironmentBase(abc.ABC, Generic[TObs, TAction]):
         """The default action specification for the environment, for actions consumed by step()."""
         raise NotImplementedError
 
-    @abc.abstractmethod
+    @abstractmethod
     def supports_observation_spec(self, obs_spec: ObservationSpec[Any]) -> bool:
         """Check if the environment supports a specific observation type."""
         raise NotImplementedError
 
-    @abc.abstractmethod
+    @abstractmethod
     def supports_action_spec(self, action_spec: ActionSpec[Any]) -> bool:
         """Check if the environment supports a specific action type."""
         raise NotImplementedError
@@ -87,7 +87,7 @@ class _EnvironmentBase(abc.ABC, Generic[TObs, TAction]):
     @overload
     def get_observation(self, obs_spec: ObservationSpec[TSpecObs]) -> TSpecObs: ...
 
-    @abc.abstractmethod
+    @abstractmethod
     def get_observation(self, obs_spec: ObservationSpec[Any] | None = None) -> Any:
         """Get the latest observation from the environment, optionally querying a specific observation type."""
         raise NotImplementedError
@@ -96,12 +96,12 @@ class _EnvironmentBase(abc.ABC, Generic[TObs, TAction]):
         """Get the latest state from the environment."""
         raise NotImplementedError
 
-    @abc.abstractmethod
+    @abstractmethod
     def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None) -> tuple[TObs, dict]:
         """Reset the environment."""
         raise NotImplementedError
 
-    @abc.abstractmethod
+    @abstractmethod
     def step(self, action: TAction, action_spec: ActionSpec[Any] | None = None) -> tuple[TObs, float, bool, bool, dict]:
         """Step the environment.
 
@@ -191,9 +191,7 @@ class BasicEnvironment(Environment[TObs, TAction], gym.Wrapper[TObs, TAction, TO
         self.last_obs = obs
         return obs, info
 
-    def step(
-        self, action: TAction, action_spec: ActionSpec[Any] | None = None
-    ) -> tuple[TObs, float, bool, bool, dict]:  # noqa: D102
+    def step(self, action: TAction, action_spec: ActionSpec[Any] | None = None) -> tuple[TObs, float, bool, bool, dict]:
         if action_spec is not None and not self.supports_action_spec(action_spec):
             raise ValueError(f"Action spec {action_spec} not supported by environment.")
         obs, reward, term, trunc, info = self.env.step(action)

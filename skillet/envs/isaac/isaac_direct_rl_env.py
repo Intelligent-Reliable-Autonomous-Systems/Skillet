@@ -21,6 +21,7 @@ import numpy as np
 import omni.kit.app
 import omni.physx
 import torch
+from isaaclab.assets import Articulation
 from isaaclab.envs.common import VecEnvObs, VecEnvStepReturn
 from isaaclab.envs.direct_rl_env_cfg import DirectRLEnvCfg
 from isaaclab.envs.ui import ViewportCameraController
@@ -35,11 +36,14 @@ from isaaclab.utils.timer import Timer
 from isaaclab.utils.version import get_isaac_sim_version
 from isaacsim.core.simulation_manager import SimulationManager
 
+from skillet.core.spaces import ActionSpec
+from skillet.envs.compatibility import SkilletGymEnv
+
 # import logger
 logger = logging.getLogger(__name__)
 
 
-class IsaacDirectRlEnv(gym.Env):
+class IsaacDirectRlEnv(SkilletGymEnv):
     """The superclass for the direct workflow to design environments.
 
     This class implements the core functionality for reinforcement learning (RL)
@@ -288,7 +292,7 @@ class IsaacDirectRlEnv(gym.Env):
     """
 
     def reset(self, seed: int | None = None, options: dict[str, Any] | None = None) -> tuple[VecEnvObs, dict]:
-        """Resets all the environments and returns observations.
+        """Reset all the environments and returns observations.
 
         This function calls the :meth:`_reset_idx` function to reset all the environments.
         However, certain operations, such as procedural terrain generation, that happened during initialization
@@ -329,7 +333,7 @@ class IsaacDirectRlEnv(gym.Env):
         # return observations
         return self._get_observations(), self.extras
 
-    def step(self, action: torch.Tensor) -> VecEnvStepReturn:
+    def step(self, action: torch.Tensor, action_spec: ActionSpec = None) -> VecEnvStepReturn:
         """Execute one time-step of the environment's dynamics.
 
         The environment steps forward at a fixed time-step, while the physics simulation is decimated at a
@@ -402,9 +406,8 @@ class IsaacDirectRlEnv(gym.Env):
                     self.sim.render()
 
         # post-step: step interval event
-        if self.cfg.events:
-            if "interval" in self.event_manager.available_modes:
-                self.event_manager.apply(mode="interval", dt=self.step_dt)
+        if self.cfg.events and "interval" in self.event_manager.available_modes:
+            self.event_manager.apply(mode="interval", dt=self.step_dt)
 
         # update observations
         self.obs_buf = self._get_observations()
@@ -513,12 +516,11 @@ class IsaacDirectRlEnv(gym.Env):
                 del self.viewport_camera_controller
 
             # clear callbacks and instance
-            if get_isaac_sim_version().major >= 5:
-                if self.cfg.sim.create_stage_in_memory:
-                    # detach physx stage
-                    omni.physx.get_physx_simulation_interface().detach_stage()
-                    self.sim.stop()
-                    self.sim.clear()
+            if get_isaac_sim_version().major >= 5 and self.cfg.sim.create_stage_in_memory:
+                # detach physx stage
+                omni.physx.get_physx_simulation_interface().detach_stage()
+                self.sim.stop()
+                self.sim.clear()
 
             self.sim.clear_all_callbacks()
             self.sim.clear_instance()
@@ -605,7 +607,7 @@ class IsaacDirectRlEnv(gym.Env):
         # instantiate actions (needed for tasks for which the observations computation is dependent on the actions)
         self.actions = sample_space(self.single_action_space, self.sim.device, batch_size=self.num_envs, fill_value=0)
 
-    def _reset_idx(self, env_ids: Sequence[int]):
+    def _reset_idx(self, env_ids: Sequence[int]) -> None:
         """Reset environments based on specified indices.
 
         Args:
@@ -615,10 +617,9 @@ class IsaacDirectRlEnv(gym.Env):
         self.scene.reset(env_ids)
 
         # apply events such as randomization for environments that need a reset
-        if self.cfg.events:
-            if "reset" in self.event_manager.available_modes:
-                env_step_count = self._sim_step_counter // self.cfg.decimation
-                self.event_manager.apply(mode="reset", env_ids=env_ids, global_env_step_count=env_step_count)
+        if self.cfg.events and "reset" in self.event_manager.available_modes:
+            env_step_count = self._sim_step_counter // self.cfg.decimation
+            self.event_manager.apply(mode="reset", env_ids=env_ids, global_env_step_count=env_step_count)
 
         # reset noise models
         if self.cfg.action_noise_model:
@@ -633,8 +634,8 @@ class IsaacDirectRlEnv(gym.Env):
     Implementation-specific functions.
     """
 
-    def _setup_scene(self):
-        """Setup the scene for the environment.
+    def _setup_scene(self) -> None:
+        """Set up the scene for the environment.
 
         This function is responsible for creating the scene objects and setting up the scene for the environment.
         The scene creation can happen through :class:`isaaclab.scene.InteractiveSceneCfg` or through
@@ -643,10 +644,10 @@ class IsaacDirectRlEnv(gym.Env):
         We leave the implementation of this function to the derived classes. If the environment does not require
         any explicit scene setup, the function can be left empty.
         """
-        pass
+        raise NotImplementedError(f"Please implement the '_setup_scene' method for {self.__class__.__name__}.")
 
     @abstractmethod
-    def _pre_physics_step(self, actions: torch.Tensor):
+    def _pre_physics_step(self, actions: torch.Tensor) -> None:
         """Pre-process actions before stepping through the physics.
 
         This function is responsible for pre-processing the actions before stepping through the physics.
@@ -659,7 +660,7 @@ class IsaacDirectRlEnv(gym.Env):
         raise NotImplementedError(f"Please implement the '_pre_physics_step' method for {self.__class__.__name__}.")
 
     @abstractmethod
-    def _apply_action(self):
+    def _apply_action(self) -> None:
         """Apply actions to the simulator.
 
         This function is responsible for applying the actions to the simulator. It is called at each
@@ -711,7 +712,7 @@ class IsaacDirectRlEnv(gym.Env):
         """
         raise NotImplementedError(f"Please implement the '_get_dones' method for {self.__class__.__name__}.")
 
-    def _set_debug_vis_impl(self, debug_vis: bool):
+    def _set_debug_vis_impl(self, debug_vis: bool) -> None:
         """Set debug visualization into visualization objects.
 
         This function is responsible for creating the visualization objects if they don't exist
@@ -719,3 +720,95 @@ class IsaacDirectRlEnv(gym.Env):
         set their visibility into the stage.
         """
         raise NotImplementedError(f"Debug visualization is not implemented for {self.__class__.__name__}.")
+
+    """
+    Skillet Interface properties
+    """
+
+    def _find_link_idx(self, link: str) -> int:
+        """Find the link index of the robot link."""
+        return self.robot.find_bodies(link)[0][0]
+
+    def _find_joint_idx(self, joint: str) -> int:
+        """Find the joint index robot joint."""
+        return self.robot.find_joints(joint)[0][0]
+
+    def _get_latest_rgbd() -> torch.Tensor:
+        """Get the latest RGBD information from the camera in the environment."""
+        raise NotImplementedError
+
+    @property
+    def robot(self) -> Articulation:
+        """Return the underlying robot Articulation in the environment."""
+        if hasattr(self, "_robot"):
+            return self._robot
+        raise ValueError(f"IsaacLab environment `{self}` has no robot attribute `_robot`.")
+
+    @property
+    def _joint_positions(self) -> torch.Tensor:
+        """Return current joint positions."""
+        return self.robot.data.joint_pos
+
+    @property
+    def _joint_velocities(self) -> torch.Tensor:
+        """Return current joint velocities."""
+        return self.robot.data.joint_vel
+
+    @property
+    def _joint_efforts(self) -> torch.Tensor:
+        """Return current joint efforts (torques)."""
+        raise NotImplementedError
+
+    @property
+    def _robot_body_pose_w(self) -> torch.Tensor:
+        """Return the body pose information in XYZ + Quaternion."""
+        return self.robot.data.body_pose_w
+
+    @property
+    def _robot_root_pose_w(self) -> torch.Tensor:
+        """Return the body pose information in XYZ + Quaternion."""
+        return self.robot.data.root_pose_w
+
+    @property
+    def _jacobians(self) -> torch.Tensor:
+        """Return the jacobian frame transforms of the robot."""
+        return self.robot.root_physx_view.get_jacobians()
+
+    @property
+    def _robot_dof_lower_limits(self) -> torch.Tensor:
+        """Return the lower limits of the robot joints."""
+        lower_lim = self.robot.data.soft_joint_pos_limits[0, :, 0]
+        lower_lim[lower_lim == -float("inf")] = -2 * torch.pi
+        return lower_lim
+
+    @property
+    def _robot_dof_upper_limits(self) -> torch.Tensor:
+        """Return the upper limits of the robot joints."""
+        upper_lim = self.robot.data.soft_joint_pos_limits[0, :, 1]
+        upper_lim[upper_lim == float("inf")] = 2 * torch.pi
+        return upper_lim
+
+    @property
+    def _gravity_vector(self) -> torch.Tensor:
+        """Return the gravity compenstation vector."""
+        return self.robot.root_physx_view.get_gravity_compensation_forces()
+
+    @property
+    def _mass_matrices(self) -> torch.Tensor:
+        """Return the mass matrices."""
+        return self.robot.root_physx_view.get_generalized_mass_matrices()
+
+    @property
+    def _robot_body_vel_w(self) -> torch.Tensor:
+        """Return body velocity in XYZ + Quaternion."""
+        return self.robot.data.body_vel_w
+
+    @property
+    def _joint_centers(self) -> torch.Tensor:
+        """Return joint centers."""
+        return torch.nan_to_num(
+            torch.mean(self.robot.data.soft_joint_pos_limits[:, :, :], dim=-1),
+            nan=0.0,
+            posinf=0.0,
+            neginf=0.0,
+        )

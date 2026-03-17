@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from skillet.core import BatchedSkill
     from skillet.envs.specs import BxM_Action, IKEE_Obs
 from skillet.agents.policy_over_options import PolicyOverOptionsBatchedAgent
-from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
+from skillet.envs import SkilletEnv
 from skillet.policy.dummy import FixedSequencePolicy, RandomPolicy
 from skillet.policy.ik_ee import PoseAbsIKEEPolicy
 from skillet.skill import ReachPoseSkill
@@ -43,7 +43,7 @@ def main() -> None:
         "num_envs": args_cli.num_envs,
     }
     env = create_isaac_env(args_cli.task, cfg)
-    env = IsaacEnvWrapper(env)
+    env = SkilletEnv(env)
 
     print("[INFO][Main] Testing Executor environment")
     print(f"[INFO][Main] Gym observation space: {env.observation_space}")

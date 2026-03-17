@@ -4,24 +4,24 @@ from dataclasses import MISSING, field
 from typing import Any
 
 import gymnasium as gym
-import mjlab
 import mujoco
 import numpy as np
 import torch
 import warp as wp
+from mjlab.entity import Entity
 from mjlab.envs import types
 from mjlab.managers.event_manager import EventManager
 from mjlab.scene.scene import SceneCfg
 from mjlab.sim import SimulationCfg
 from mjlab.utils import random as random_utils
 from mjlab.utils.logging import print_info
-from mjlab.utils.spaces import Box
-from mjlab.utils.spaces import Dict as DictSpace
 from mjlab.viewer.debug_visualizer import DebugVisualizer
 from mjlab.viewer.offscreen_renderer import OffscreenRenderer
 from mjlab.viewer.viewer_config import ViewerConfig
 from prettytable import PrettyTable
 
+from skillet.core.spaces import ActionSpec
+from skillet.envs.compatibility import SkilletGymEnv
 from skillet.envs.util import configclass
 
 
@@ -91,7 +91,7 @@ class MjDirectRlEnvCfg:
   """
 
 
-class MjDirectRlEnv(gym.Env):
+class MjDirectRlEnv(SkilletGymEnv):
     """Manager-based RL environment."""
 
     is_vector_env = True
@@ -224,7 +224,7 @@ class MjDirectRlEnv(gym.Env):
         self.obs_buf = self._get_observations()
         return self.obs_buf, self.extras
 
-    def step(self, action: torch.Tensor) -> types.VecEnvStepReturn:
+    def step(self, action: torch.Tensor, action_spec: ActionSpec = None) -> types.VecEnvStepReturn:
         """Run one environment step: apply actions, simulate, compute RL signals.
 
         **Forward-call placement.** MuJoCo's ``mj_step`` runs forward kinematics
@@ -336,15 +336,13 @@ class MjDirectRlEnv(gym.Env):
     # Private methods.
 
     def _configure_gym_env_spaces(self) -> None:
-        from mjlab.utils.spaces import batch_space
-
-        self.single_observation_space = DictSpace()
-        self.single_observation_space.spaces["policy"] = spec_to_mj_space(self.cfg.observation_space)
+        self.single_observation_space = gym.spaces.Dict()
+        self.single_observation_space.spaces["policy"] = spec_to_gym_space(self.cfg.observation_space)
         action_dim = self.cfg.action_space
-        self.single_action_space = Box(shape=(action_dim,), low=-math.inf, high=math.inf)
+        self.single_action_space = gym.spaces.Box(shape=(action_dim,), low=-math.inf, high=math.inf)
 
-        self.observation_space = batch_space(self.single_observation_space, self.num_envs)
-        self.action_space = batch_space(self.single_action_space, self.num_envs)
+        self.observation_space = gym.vector.utils.batch_space(self.single_observation_space, self.num_envs)
+        self.action_space = gym.vector.utils.batch_space(self.single_action_space, self.num_envs)
 
     def _reset_idx(self, env_ids: torch.Tensor | None = None) -> None:
         self.sim.reset(env_ids)
@@ -426,8 +424,125 @@ class MjDirectRlEnv(gym.Env):
         """
         raise NotImplementedError(f"Please implement the '_get_dones' method for {self.__class__.__name__}.")
 
+    """
+    Skillet interface properties
+    """
 
-def spec_to_mj_space(spec) -> mjlab.utils.spaces.Space:
+    def _find_link_idx(self, link: str) -> int:
+        """Find the link index of the robot link."""
+        return self.robot.find_bodies(link)[0][0]
+
+    def _find_joint_idx(self, joint: str) -> int:
+        """Find the joint index robot joint."""
+        return self.robot.find_joints(joint)[0][0]
+
+    def _get_latest_rgbd() -> torch.Tensor:
+        """Get the latest RGBD information from the camera in the environment."""
+        raise NotImplementedError
+
+    @property
+    def robot(self) -> Entity:
+        """Return the robot entity."""
+        if hasattr(self, "scene"):
+            if hasattr(self.scene, "entities") and "robot" in self.scene.entities:
+                return self.scene.entities["robot"]
+        else:
+            raise ValueError(
+                f"Environment `{self}` has no attribute `scene['robot']`. Unable to parse robot Articulation."
+            )
+        return None
+
+    @property
+    def _joint_positions(self) -> torch.Tensor:
+        """Return current joint positions."""
+        return self.robot.data.joint_pos
+
+    @property
+    def _joint_velocities(self) -> torch.Tensor:
+        """Return current joint velocities."""
+        raise self.robot.data.joint_vel
+
+    @property
+    def _joint_efforts(self) -> torch.Tensor:
+        """Return current joint efforts (torques)."""
+        raise NotImplementedError
+
+    @property
+    def _robot_body_pose_w(self) -> torch.Tensor:
+        """Return the body pose information in XYZ + Quaternion."""
+        return self.robot.data.body_link_pose_w
+
+    @property
+    def _robot_root_pose_w(self) -> torch.Tensor:
+        """Return the body pose information in XYZ + Quaternion."""
+        return self.robot.data.root_link_pose_w
+
+    @property
+    def _jacobians(self) -> torch.Tensor:
+        """Return the jacobian frame transforms of the robot."""
+        raise NotImplementedError
+
+    @property
+    def _robot_dof_lower_limits(self) -> torch.Tensor:
+        """Return the lower limits of the robot joints."""
+        lower_lim = self.robot.data.soft_joint_pos_limits[0, :, 0]
+        lower_lim[lower_lim == -float("inf")] = -2 * torch.pi
+        return lower_lim
+
+    @property
+    def _robot_dof_upper_limits(self) -> torch.Tensor:
+        """Return the upper limits of the robot joints."""
+        upper_lim = self.robot.data.soft_joint_pos_limits[0, :, 1]
+        upper_lim[upper_lim == float("inf")] = 2 * torch.pi
+        return upper_lim
+
+    @property
+    def _gravity_vector(self) -> torch.Tensor:
+        """Return the gravity compenstation vector."""
+        raise NotImplementedError
+
+    @property
+    def _mass_matrices(self) -> torch.Tensor:
+        """Return the mass matrices."""
+        raise NotImplementedError
+
+    @property
+    def _robot_body_vel_w(self) -> torch.Tensor:
+        """Return body velocity in XYZ + Quaternion."""
+        return self.robot.data.body_link_vel_w
+
+    @property
+    def _joint_centers(self) -> torch.Tensor:
+        """Return joint centers."""
+        return torch.nan_to_num(
+            torch.mean(self.robot.data.soft_joint_pos_limits[:, :, :], dim=-1),
+            nan=0.0,
+            posinf=0.0,
+            neginf=0.0,
+        )
+
+    def _compute_jacobian(self) -> None:
+        """Compute the frame Jacobian."""
+        return None
+        _jacobians = torch.zeros(
+            size=(self.num_envs, self.sim.mj_model.nv, 6, self.robot.num_joints), device=self.device
+        )
+        for i in range(self.robot.num_joints):
+            self._body_wp.fill_(i)
+            with wp.ScopedDevice(self.sim.wp_device):
+                mjwarp.jac(
+                    self.sim.wp_model,
+                    self.sim.wp_data,
+                    self._jacp_wp,
+                    self._jacr_wp,
+                    self._point_wp,
+                    self._body_wp,
+                )
+            _jacobians[:, :, :, i] = torch.cat((self._jacp_torch, self._jacr_torch), dim=1).permute(0, 2, 1)
+        return _jacobians
+
+
+def spec_to_gym_space(spec) -> gym.spaces.Space:
     """Generate an appropriate Gymnasium space according to the given space specification.
 
     Args:
@@ -440,14 +555,14 @@ def spec_to_mj_space(spec) -> mjlab.utils.spaces.Space:
         ValueError: If the given space specification is not valid/supported.
 
     """
-    if isinstance(spec, mjlab.utils.spaces.Space):
+    if isinstance(spec, gym.spaces.Space):
         return spec
     # fundamental spaces
     # Box
     if isinstance(spec, int):
-        return Box(low=-np.inf, high=np.inf, shape=(spec,))
+        return gym.spaces.Box(low=-np.inf, high=np.inf, shape=(spec,))
     if isinstance(spec, list) and all(isinstance(x, int) for x in spec):
-        return Box(low=-np.inf, high=np.inf, shape=spec)
+        return gym.spaces.Box(low=-np.inf, high=np.inf, shape=spec)
     if isinstance(spec, dict):
-        return DictSpace({k: spec_to_mj_space(v) for k, v in spec.items()})
+        return gym.spaces.Dict({k: spec_to_gym_space(v) for k, v in spec.items()})
     raise ValueError(f"Unsupported space specification: {spec}")

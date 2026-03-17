@@ -18,7 +18,7 @@ from typing_extensions import override
 
 from skillet.envs.isaac_env_wrapper import IsaacEnvWrapper
 from skillet.envs.mj_env_wrapper import MjEnvWrapper
-from skillet.envs.ros2_skillet_env import ROS2SkilletEnv
+from skillet.envs.skillet_env import SkilletEnv
 from skillet.envs.util import configure_seed
 
 if TYPE_CHECKING:
@@ -139,7 +139,7 @@ class RslRlVecEnvWrapper(RslRlVecEnv, gym.vector.VectorWrapper):
         https://github.com/leggedrobotics/rsl_rl/blob/master/rsl_rl/env/vec_env.py
     """
 
-    def __init__(self, env: ROS2SkilletEnv | IsaacEnvWrapper, clip_actions: float | None = None) -> None:
+    def __init__(self, env: SkilletEnv | IsaacEnvWrapper, clip_actions: float | None = None) -> None:
         """Initialize the wrapper.
 
         The wrapper calls :meth:`reset` at the start since the RSL-RL runner does not call reset.
@@ -154,16 +154,15 @@ class RslRlVecEnvWrapper(RslRlVecEnv, gym.vector.VectorWrapper):
         """
         # check that input is valid
         if (
-            not isinstance(env, ROS2SkilletEnv)
+            not isinstance(env, SkilletEnv)
             and not isinstance(env, IsaacEnvWrapper)
             and not isinstance(env, MjEnvWrapper)
         ):
             raise TypeError(
-                "The environment must be inherited from ROS2SkilletEnv or IsaacEnvWrapper. Environment type:"
-                f" {type(env)}"
+                f"The environment must be inherited from SkilletEnv or IsaacEnvWrapper. Environment type: {type(env)}"
             )
         super().__init__(env)
-        self.env: ROS2SkilletEnv | IsaacEnvWrapper
+        self.env: SkilletEnv | IsaacEnvWrapper
 
         self._clip_actions = clip_actions
 
@@ -259,7 +258,7 @@ class RslRlVecEnvWrapper(RslRlVecEnv, gym.vector.VectorWrapper):
     @override
     def get_observations(self) -> TensorDict:
         """Return the current observations of the environment."""
-        if isinstance(self.env, (IsaacEnvWrapper, ROS2SkilletEnv, MjEnvWrapper)):  # Is a IsaacEnvWrapper
+        if isinstance(self.env, (IsaacEnvWrapper, SkilletEnv, MjEnvWrapper)):  # Is a IsaacEnvWrapper
             obs_dict = self.env.get_state()
         elif hasattr(self.unwrapped, "observation_manager"):
             obs_dict = self.unwrapped.observation_manager.compute()

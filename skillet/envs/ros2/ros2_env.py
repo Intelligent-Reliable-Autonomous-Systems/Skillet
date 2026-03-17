@@ -11,18 +11,19 @@ import time
 from abc import abstractmethod
 from typing import Any
 
-import gymnasium as gym
 import numpy as np
 import torch
 from roslibpy import Ros
 
+from skillet.core.math import convert_quat
 from skillet.core.spaces import ActionSpec
+from skillet.envs.compatibility import SkilletGymEnv
 from skillet.envs.util import configure_seed
 
 from .ros2_env_cfg import ROS2EnvCfg
 
 
-class ROS2Env(gym.Env):
+class ROS2Env(SkilletGymEnv):
     """The superclass for the ROS2 workflow to design environments.
 
     This class implements the core functionality for reinforcement learning (RL)
@@ -65,9 +66,9 @@ class ROS2Env(gym.Env):
 
         self._sim_step_counter = 0
         # -- counter for curriculum
-        self.common_step_counter = 0
+        self._common_step_counter = 0
         # -- init buffers
-        self.episode_length_buf = 0
+        self._episode_length_buf = 0
         self.reset_terminated = False
         self.reset_time_outs = False
         self.reset_buf = False
@@ -83,69 +84,85 @@ class ROS2Env(gym.Env):
         """Cleanup for the environment."""
         self.close()
 
+    @property
+    def episode_length_buf(self) -> torch.Tensor:
+        return torch.tensor([self._episode_length_buf], device=self.device)
+
+    @episode_length_buf.setter
+    def episode_length_buf(self, value: torch.Tensor) -> None:
+        self._episode_length_buf = value.squeeze().item()
+
     """
-    Properties.
+    Skillet Gymansium Interface Properties.
     """
 
     @property
-    def _joint_positions(self) -> np.ndarray:
+    def _joint_positions(self) -> torch.Tensor:
         """Return current joint positions."""
-        return self._current_joint_positions
+        return torch.as_tensor(self._current_joint_positions, device=self.device, dtype=torch.float32).unsqueeze(0)
 
     @property
-    def _joint_velocities(self) -> np.ndarray:
+    def _joint_velocities(self) -> torch.Tensor:
         """Return current joint velocities."""
-        return self._current_joint_positions
+        return torch.as_tensor(self._current_joint_positions, device=self.device, dtype=torch.float32).unsqueeze(0)
 
     @property
-    def _joint_efforts(self) -> np.ndarray:
+    def _joint_efforts(self) -> torch.Tensor:
         """Return current joint efforts (torques)."""
-        return self._current_joint_efforts
+        return torch.as_tensor(self._current_joint_efforts, device=self.device, dtype=torch.float32).unsqueeze(0)
 
     @property
-    def _robot_body_pose_w(self) -> np.ndarray:
+    def _robot_body_pose_w(self) -> torch.Tensor:
         """Return the body pose information in XYZ + Quaternion."""
-        return self._current_robot_body_pose_w
+        pose = torch.as_tensor(self._current_robot_body_pose_w, device=self.device, dtype=torch.float32).unsqueeze(0)
+        pose[:, :, 3:7] = convert_quat(pose[:, :, 3:7], to="wxyz")
+        return pose
 
     @property
-    def _robot_root_pose_w(self) -> np.ndarray:
+    def _robot_root_pose_w(self) -> torch.Tensor:
         """Return the body pose information in XYZ + Quaternion."""
-        return self._current_robot_root_pose_w
+        pose = torch.as_tensor(self._current_robot_root_pose_w, device=self.device, dtype=torch.float32).unsqueeze(0)
+        pose[:, 3:7] = convert_quat(pose[:, 3:7], to="wxyz")
+        return pose
 
     @property
-    def _jacobians(self) -> np.ndarray:
+    def _jacobians(self) -> torch.Tensor:
         """Return the jacobian frame transforms of the robot."""
-        return self._current_jacobians
+        return torch.as_tensor(self._current_jacobians, device=self.device, dtype=torch.float32).unsqueeze(0)
 
     @property
-    def _robot_lower_joint_limits(self) -> np.ndarray:
+    def _robot_dof_lower_limits(self) -> torch.Tensor:
         """Return the lower limits of the robot joints."""
-        return self._current_lower_joint_limits
+        lower_lim = torch.as_tensor(self._current_lower_joint_limits, device=self.device, dtype=torch.float32)
+        lower_lim[lower_lim == 0] = -2 * torch.pi
+        return lower_lim
 
     @property
-    def _robot_upper_joint_limits(self) -> np.ndarray:
+    def _robot_dof_upper_limits(self) -> torch.Tensor:
         """Return the upper limits of the robot joints."""
-        return self._current_upper_joint_limits
+        upper_lim = torch.as_tensor(self._current_upper_joint_limits, device=self.device, dtype=torch.float32)
+        upper_lim[upper_lim == 0] = 2 * torch.pi
+        return upper_lim
 
     @property
-    def _gravity_vector(self) -> np.ndarray:
+    def _gravity_vector(self) -> torch.Tensor:
         """Return the gravity compenstation vector."""
-        return self._current_gravity_vector
+        return torch.as_tensor(self._current_gravity_vector, device=self.device, dtype=torch.float32).unsqueeze(0)
 
     @property
-    def _mass_matrices(self) -> np.ndarray:
+    def _mass_matrices(self) -> torch.Tensor:
         """Return the mass matrices."""
-        return self._current_mass_matrices
+        return torch.as_tensor(self._current_mass_matrices, device=self.device, dtype=torch.float32).unsqueeze(0)
 
     @property
-    def _robot_body_vel_w(self) -> np.ndarray:
+    def _robot_body_vel_w(self) -> torch.Tensor:
         """Return body velocity in XYZ + Quaternion."""
-        return self._current_robot_body_vel_w
+        return torch.as_tensor(self._current_robot_body_vel_w, device=self.device, dtype=torch.float32).unsqueeze(0)
 
     @property
-    def _joint_centers(self) -> np.ndarray:
+    def _joint_centers(self) -> torch.Tensor:
         """Return joint centers."""
-        return self._current_joint_centers
+        return torch.as_tensor(self._current_joint_centers, device=self.device, dtype=torch.float32).unsqueeze(0)
 
     @property
     def physics_dt(self) -> float:
@@ -173,6 +190,30 @@ class ROS2Env(gym.Env):
         """The maximum episode length in steps adjusted from s."""
         return math.ceil(self.max_episode_length_s / (self.cfg.dt * self.cfg.decimation))
 
+    def _find_link_idx(self, link: str) -> int:
+        """Find the link index in the robot urdf.
+
+        Args:
+            link: string of link name
+
+        Returns:
+            int of index
+
+        """
+        return self._robot_links.index(link)
+
+    def _find_joint_idx(self, joint: str) -> int:
+        """Find the joint index in the robot urdf.
+
+        Args:
+            joint: string of joint name
+
+        Returns:
+            int of index
+
+        """
+        return self._robot_joints.index(joint)
+
     def reset(
         self, seed: int | None = None, options: dict[str, Any] | None = None
     ) -> tuple[dict[str, np.ndarray], dict]:
@@ -197,15 +238,15 @@ class ROS2Env(gym.Env):
         # reset state of scene
         self._reset_idx()
 
-        self.episode_length_buf += 1  # step in current episode (per env)
-        self.common_step_counter += 1  # total step (common for all envs)
+        self._episode_length_buf += 1  # step in current episode (per env)
+        self._common_step_counter += 1  # total step (common for all envs)
 
         # return observations
         return self._get_observations(), self.extras
 
     def step(
         self, action: torch.Tensor, action_spec: ActionSpec[Any] | None = None
-    ) -> tuple[dict[str, np.ndarray], np.ndarray, bool, bool, dict[str, Any]]:  # type: ignore
+    ) -> tuple[dict[str, torch.Tensor], torch.Tensor, torch.Tensor, torch.Tensor, dict[str, Any]]:  # type: ignore
         """Execute one time-step of the ROS2 robot.
 
         The environment steps forward at a fixed time-step, while the physics simulation is decimated at a
@@ -247,8 +288,8 @@ class ROS2Env(gym.Env):
             # print(f"[WARN] full loop overran by {-sleep_time * 1000:.1f}ms")
             ...
 
-        self.episode_length_buf += 1
-        self.common_step_counter += 1
+        self._episode_length_buf += 1
+        self._common_step_counter += 1
 
         self.reset_terminated, self.reset_time_outs = self._get_dones()
         self.reset_buf = self.reset_terminated | self.reset_time_outs
@@ -259,14 +300,16 @@ class ROS2Env(gym.Env):
             self._reset_idx()
 
         # update observations
-        self.obs_buf = self._get_observations()
-
+        obs = self._get_observations()
+        for k, v in obs.items():
+            obs[k] = torch.as_tensor(v, device=self.device).unsqueeze(0)
+        self.obs_buf = obs
         # return observations, rewards, resets and extras
         return (
             self.obs_buf,
-            self.reward_buf,
-            self.reset_terminated,
-            self.reset_time_outs,
+            torch.as_tensor(self.reward_buf, dtype=torch.float32, device=self.device).unsqueeze(0),
+            torch.as_tensor([self.reset_terminated], dtype=torch.bool, device=self.device),
+            torch.as_tensor([self.reset_time_outs], dtype=torch.bool, device=self.device),
             self.extras,
         )
 
@@ -299,31 +342,7 @@ class ROS2Env(gym.Env):
     def _reset_idx(self) -> None:
         """Reset environments based on specified indices."""
         # reset the episode length buffer
-        self.episode_length_buf = 0
-
-    def _find_link_idx(self, link: str) -> int:
-        """Find the link index in the robot urdf.
-
-        Args:
-            link: string of link name
-
-        Returns:
-            int of index
-
-        """
-        return self._robot_links.index(link)
-
-    def _find_joint_idx(self, joint: str) -> int:
-        """Find the joint index in the robot urdf.
-
-        Args:
-            joint: string of joint name
-
-        Returns:
-            int of index
-
-        """
-        return self._robot_joints.index(joint)
+        self._episode_length_buf = 0
 
     """
     Implementation-specific functions.

@@ -12,9 +12,6 @@ class FrankaBaseCfg(SkillsDirectRlEnvCfg):
     # env
     episode_length_s = 6.0  # 500 timesteps
     decimation = 2
-    action_space = 9
-    observation_space = 31
-    state_space = 0
 
     joint_ids = [0, 1, 2, 3, 4, 5, 6, 7, 8]
     tcp_offset = [0.0, 0.0, 0.1034, 1.0, 0.0, 0.0, 0.0]

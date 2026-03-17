@@ -1,6 +1,6 @@
 """Module for defining and working with policy classes."""
 
-import abc
+from abc import ABC, abstractmethod
 from dataclasses import replace
 from typing import Any, Generic, TypeVar
 
@@ -15,7 +15,6 @@ from skillet.core.spaces import (
     CommonSpecs,
     Observation,
     ObservationSpec,
-    ParamDC,
     SkillParamsSpec,
 )
 
@@ -49,28 +48,28 @@ BUnparameterized = BatchedArrayEmpty
 
 
 ### Policy classes
-class Policy(abc.ABC, Generic[TPolicyObs, TAction, TPolicyParams]):
+class Policy(ABC, Generic[TPolicyObs, TAction, TPolicyParams]):
     """A policy that takes an observation and outputs an action."""
 
     @property
-    @abc.abstractmethod
+    @abstractmethod
     def obs_spec(self) -> ObservationSpec[TPolicyObs]:
         """The specification of the observation space for the policy."""
         raise NotImplementedError
 
     @property
-    @abc.abstractmethod
+    @abstractmethod
     def action_spec(self) -> ActionSpec[TAction]:
         """The specification of the action space for the policy."""
         raise NotImplementedError
 
     @property
-    @abc.abstractmethod
+    @abstractmethod
     def params_spec(self) -> SkillParamsSpec[TPolicyParams]:
         """The specification of the parameters space for the policy."""
         raise NotImplementedError
 
-    @abc.abstractmethod
+    @abstractmethod
     def get_action(self, obs: TPolicyObs, params: TPolicyParams) -> TAction:
         """Get the next low-level action for the robot based on the observation and parameters."""
         raise NotImplementedError
@@ -82,7 +81,7 @@ class Policy(abc.ABC, Generic[TPolicyObs, TAction, TPolicyParams]):
 
 class BatchedPolicy(
     Policy[TBPolicyObs, TBAction, TBPolicyParams],
-    abc.ABC,
+    ABC,
     Generic[TBPolicyObs, TBAction, TBPolicyParams],
 ):
     """A batched policy that takes a batched observation and outputs a batched action."""
@@ -90,7 +89,7 @@ class BatchedPolicy(
     ...
 
 
-class UPolicy(Policy[TPolicyObs, TAction, Unparameterized], abc.ABC, Generic[TPolicyObs, TAction]):
+class UPolicy(Policy[TPolicyObs, TAction, Unparameterized], ABC, Generic[TPolicyObs, TAction]):
     """An unparameterized policy that has an empty parameters space."""
 
     @property
@@ -105,7 +104,7 @@ class UPolicy(Policy[TPolicyObs, TAction, Unparameterized], abc.ABC, Generic[TPo
 
 class BatchedUPolicy(
     UPolicy[TBPolicyObs, TBAction],
-    abc.ABC,
+    ABC,
     Generic[TBPolicyObs, TBAction],
 ):
     """An unparameterized batched policy that takes a batched observation and outputs a batched action."""

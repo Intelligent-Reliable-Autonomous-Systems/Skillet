@@ -13,14 +13,18 @@ from typing import Any, ClassVar
 import gymnasium as gym
 import numpy as np
 import torch
+from isaaclab.assets import Articulation
 from isaaclab.envs.common import VecEnvStepReturn
 from isaaclab.envs.manager_based_env import ManagerBasedEnv
 from isaaclab.envs.manager_based_rl_env_cfg import ManagerBasedRLEnvCfg
 from isaaclab.managers import CommandManager, CurriculumManager, RewardManager, TerminationManager
 from isaaclab.ui.widgets import ManagerLiveVisualizer
 
+from skillet.core.spaces import ActionSpec
+from skillet.envs.compatibility import SkilletGymEnv
 
-class IsaacManagerBasedRlEnv(ManagerBasedEnv, gym.Env):
+
+class IsaacManagerBasedRlEnv(ManagerBasedEnv, SkilletGymEnv):
     """The superclass for the manager-based workflow reinforcement learning-based environments.
 
     This class inherits from :class:`ManagerBasedEnv` and implements the core functionality for
@@ -148,7 +152,7 @@ class IsaacManagerBasedRlEnv(ManagerBasedEnv, gym.Env):
     Operations - MDP
     """
 
-    def step(self, action: torch.Tensor) -> VecEnvStepReturn:
+    def step(self, action: torch.Tensor, action_spec: ActionSpec = None) -> VecEnvStepReturn:
         """Execute one time-step of the environment's dynamics and reset terminated environments.
 
         Unlike the :class:`ManagerBasedEnv.step` class, the function performs the following operations:
@@ -391,3 +395,95 @@ class IsaacManagerBasedRlEnv(ManagerBasedEnv, gym.Env):
 
         # reset the episode length buffer
         self.episode_length_buf[env_ids] = 0
+
+    """
+    Skillet interface properties
+    """
+
+    @property
+    def robot(self) -> Articulation:
+        """Return the robot articulation."""
+        if hasattr(self, "_robot"):
+            return self._robot
+        if hasattr(self, "scene"):
+            if hasattr(self.scene, "_robot"):
+                return self.scene._robot
+            if hasattr(self.scene, "robot"):
+                return self.scene.robot
+            if hasattr(self.scene, "_articulations"):
+                return self.scene._articulations["robot"]
+            raise ValueError(
+                f"IsaacLab Environment `{self} `scene.robot` or `scene._robot`. Unable to parse robot Articulation."
+            )
+        raise ValueError(
+            f"IsaacLab Environment `{self}` has no attribute `_robot` or `scene.robot` or `scene._robot`. Unable to parse robot Articulation."
+        )
+
+    @property
+    def _joint_positions(self) -> torch.Tensor:
+        """Return current joint positions."""
+        return self.robot.data.joint_pos
+
+    @property
+    def _joint_velocities(self) -> torch.Tensor:
+        """Return current joint velocities."""
+        raise self.robot.data.joint_vel
+
+    @property
+    def _joint_efforts(self) -> torch.Tensor:
+        """Return current joint efforts (torques)."""
+        raise NotImplementedError
+
+    @property
+    def _robot_body_pose_w(self) -> torch.Tensor:
+        """Return the body pose information in XYZ + Quaternion."""
+        return self.robot.data.body_pose_w
+
+    @property
+    def _robot_root_pose_w(self) -> torch.Tensor:
+        """Return the body pose information in XYZ + Quaternion."""
+        return self.robot.data.root_pose_w
+
+    @property
+    def _jacobians(self) -> torch.Tensor:
+        """Return the jacobian frame transforms of the robot."""
+        return self.robot.root_physx_view.get_jacobians()
+
+    @property
+    def _robot_dof_lower_limits(self) -> torch.Tensor:
+        """Return the lower limits of the robot joints."""
+        lower_lim = self.robot.data.soft_joint_pos_limits[0, :, 0]
+        lower_lim[lower_lim == -float("inf")] = -2 * torch.pi
+        return lower_lim
+
+    @property
+    def _robot_dof_upper_limits(self) -> torch.Tensor:
+        """Return the upper limits of the robot joints."""
+        upper_lim = self.robot.data.soft_joint_pos_limits[0, :, 1]
+        upper_lim[upper_lim == float("inf")] = 2 * torch.pi
+        return upper_lim
+
+    @property
+    def _gravity_vector(self) -> torch.Tensor:
+        """Return the gravity compenstation vector."""
+        return self.robot.root_physx_view.get_gravity_compensation_forces()
+
+    @property
+    def _mass_matrices(self) -> torch.Tensor:
+        """Return the mass matrices."""
+        return self.robot.root_physx_view.get_generalized_mass_matrices()
+
+    @property
+    def _robot_body_vel_w(self) -> torch.Tensor:
+        """Return body velocity in XYZ + Quaternion."""
+        return self.robot.data.body_vel_w
+
+    @property
+    def _joint_centers(self) -> torch.Tensor:
+        """Return joint centers."""
+        return torch.nan_to_num(
+            torch.mean(self.robot.data.soft_joint_pos_limits[:, :, :], dim=-1),
+            nan=0.0,
+            posinf=0.0,
+            neginf=0.0,
+        )

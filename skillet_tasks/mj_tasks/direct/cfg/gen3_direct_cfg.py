@@ -20,10 +20,10 @@ class Gen3BaseCfg(SkillsDirectRlEnvCfg):
     episode_length_s = 6.0  # 500 timesteps
     decimation = 2
     action_space = 8
-    observation_space = 31
+    observation_space = 30
     state_space = 0
 
-    joint_ids = [0, 1, 2, 3, 4, 5, 6, 7]
+    joint_ids = [0, 1, 2, 3, 4, 5, 6, 0]
     tcp_offset = [0.0, 0.0, 0.120, 1.0, 0.0, 0.0, 0.0]
     ee_link_name = "end_effector_link"
     base_link_name = "base_link"

@@ -3,7 +3,8 @@
 import argparse
 import os
 import sys
-from typing import TYPE_CHECKING, Any, Sequence
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any
 
 import gymnasium as gym
 import torch
@@ -11,20 +12,20 @@ import torch
 from skillet.agents.policy_over_options import PolicyOverOptionsAgent, SelectedSkill
 from skillet.core import ActionSpec, ObservationSpec
 from skillet.core.env import BatchToSingleWrapper
-from skillet.envs.ros2_skillet_env import ROS2SkilletEnv
+from skillet.envs.skillet_env import SkilletEnv
 from skillet.perception.perception import Perception
 from skillet.perception.realsense import RealsenseEnv
 from skillet.perception.sam3.sam3 import SAMConcept
 from skillet.policy.dummy import FixedSequencePolicy
 from skillet.policy.ik_ee import PoseAbsIKEEPolicy
-from skillet.policy.twist import TwistPIDXYZPolicy
 from skillet.policy.moveit import MoveItTcpQuatPolicy
+from skillet.policy.twist import TwistPIDXYZPolicy
 from skillet.scene.base import Scene
 from skillet.scene.cube import Cube
 from skillet.scene.visualize import Open3DVisualizer
 from skillet.skill.high_level.pick import PickSkill
-from skillet.skill.high_level.place import PlaceSkill
 from skillet.skill.high_level.pick_block import PickBlockSkill
+from skillet.skill.high_level.place import PlaceSkill
 from skillet.skill.high_level.place_block import PlaceBlockSkill
 from skillet_tasks.ros2_tasks.factory import create_ros2_env
 
@@ -90,7 +91,7 @@ def main() -> None:
         }
 
         env = create_ros2_env(args_cli.task, env_cfg)
-        env = ROS2SkilletEnv(env)
+        env = SkilletEnv(env)
         ikee_spec: ObservationSpec[IKEE_Obs] = env.coerce_obs_spec("ik_ee").batched()
         low_action_spec: ActionSpec[BxM_Action] = env.coerce_action_spec("joints").batched()
         env = BatchToSingleWrapper(env)

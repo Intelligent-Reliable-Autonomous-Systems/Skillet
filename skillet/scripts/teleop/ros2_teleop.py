@@ -13,7 +13,7 @@ import torch
 
 import skillet_tasks.ros2_tasks  # noqa: F401
 from skillet.controllers.devices import Se3Keyboard, Se3KeyboardCfg, VRHeadset, VRHeadsetCfg, VRJoystick, VRJoystickCfg
-from skillet.envs.ros2_skillet_env import ROS2SkilletEnv
+from skillet.envs.skillet_env import SkilletEnv
 from skillet.envs.util import parse_ros2_env_cfg, setup_ros
 
 # add argparse arguments
@@ -61,7 +61,7 @@ def main() -> None:
     env = gym.make(args_cli.task, cfg=env_cfg, ros=setup_ros())
 
     # Wrap environment in Skillet
-    env = ROS2SkilletEnv(env)
+    env = SkilletEnv(env)
 
     # Always active for other devices
     sensitivity = args_cli.sensitivity

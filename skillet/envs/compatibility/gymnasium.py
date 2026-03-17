@@ -1,12 +1,13 @@
 """Define a gymnasium environment interface for compatibility across different environments."""
 
+from abc import abstractmethod
 from typing import Any, Protocol
 
 import gymnasium as gym
 import torch
 from jaxtyping import Bool, Float
 
-from skillet.core.spaces import BatchedAction, BatchedObservation, BatchedSpaceValue
+from skillet.core.spaces import ActionSpec, BatchedAction, BatchedObservation, BatchedSpaceValue
 
 
 class GymVectorInterface(Protocol):
@@ -50,7 +51,7 @@ class GymVectorInterface(Protocol):
         ...
 
     def step(
-        self, actions: BatchedAction
+        self, actions: BatchedAction, action_spec: ActionSpec
     ) -> tuple[
         BatchedObservation, Float[torch.Tensor, "b"], Bool[torch.Tensor, "b"], Bool[torch.Tensor, "b"], dict[str, Any]
     ]:
@@ -58,6 +59,7 @@ class GymVectorInterface(Protocol):
 
         Args:
             actions: Batch of actions with the :attr:`action_space` shape.
+            action_spec: Action specification
 
         Returns:
             Batch of (observations, rewards, terminations, truncations, infos)
@@ -142,11 +144,11 @@ class AsGymVectorEnv(gym.vector.VectorEnv):
         return self.env.reset(seed=seed, options=options)
 
     def step(  # noqa: D102
-        self, actions: BatchedAction
+        self, actions: BatchedAction, action_spec: ActionSpec
     ) -> tuple[
         BatchedObservation, Float[torch.Tensor, "b"], Bool[torch.Tensor, "b"], Bool[torch.Tensor, "b"], dict[str, Any]
     ]:
-        return self.env.step(actions)
+        return self.env.step(actions, action_spec=action_spec)
 
     def render(self):  # noqa: ANN201, D102
         return self.env.render()
@@ -161,3 +163,83 @@ class SkilletGymEnv(gym.Env):
     In addition to the standard Gym functions, it includes properties that enable interfacing
     with the SkilletEnvWrapper across IsaacLab, Mujoco, and ROS2 environments.
     """
+
+    @abstractmethod
+    def _find_link_idx(self, link: str) -> int:
+        """Find the link index of the robot link."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def _find_joint_idx(self, joint: str) -> int:
+        """Find the joint index robot joint."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def _get_latest_rgbd() -> torch.Tensor:
+        """Get the latest RGBD information from the camera in the environment."""
+        raise NotImplementedError
+
+    @property
+    def robot(self) -> Any:
+        """Returns the robot articulation for Isaac and Mj environments. Useful for helper functions."""
+        raise NotImplementedError
+
+    @property
+    def _joint_positions(self) -> torch.Tensor:
+        """Return current joint positions."""
+        raise NotImplementedError
+
+    @property
+    def _joint_velocities(self) -> torch.Tensor:
+        """Return current joint velocities."""
+        raise NotImplementedError
+
+    @property
+    def _joint_efforts(self) -> torch.Tensor:
+        """Return current joint efforts (torques)."""
+        raise NotImplementedError
+
+    @property
+    def _robot_body_pose_w(self) -> torch.Tensor:
+        """Return the body pose information in XYZ + Quaternion."""
+        raise NotImplementedError
+
+    @property
+    def _robot_root_pose_w(self) -> torch.Tensor:
+        """Return the body pose information in XYZ + Quaternion."""
+        raise NotImplementedError
+
+    @property
+    def _jacobians(self) -> torch.Tensor:
+        """Return the jacobian frame transforms of the robot."""
+        raise NotImplementedError
+
+    @property
+    def _robot_dof_lower_limits(self) -> torch.Tensor:
+        """Return the lower limits of the robot joints."""
+        raise NotImplementedError
+
+    @property
+    def _robot_dof_upper_limits(self) -> torch.Tensor:
+        """Return the upper limits of the robot joints."""
+        raise NotImplementedError
+
+    @property
+    def _gravity_vector(self) -> torch.Tensor:
+        """Return the gravity compenstation vector."""
+        raise NotImplementedError
+
+    @property
+    def _mass_matrices(self) -> torch.Tensor:
+        """Return the mass matrices."""
+        raise NotImplementedError
+
+    @property
+    def _robot_body_vel_w(self) -> torch.Tensor:
+        """Return body velocity in XYZ + Quaternion."""
+        raise NotImplementedError
+
+    @property
+    def _joint_centers(self) -> torch.Tensor:
+        """Return joint centers."""
+        raise NotImplementedError

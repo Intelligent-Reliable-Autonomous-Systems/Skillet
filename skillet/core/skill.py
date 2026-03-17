@@ -1,11 +1,10 @@
-import abc
+from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from enum import IntEnum
 from typing import Generic, TypeAlias, TypeVar
-from typing_extensions import deprecated
 
-import numpy as np
 from jaxtyping import Bool, Float, Int
+from typing_extensions import deprecated
 
 from skillet.core.policy import BatchedPolicy, Policy
 from skillet.core.spaces import (
@@ -74,7 +73,7 @@ class SkillStatusCodes(IntEnum):
     """The skill is failed."""
 
 
-class Skill(abc.ABC, Generic[TSkillObs, TAction, TSkillParams]):
+class Skill(ABC, Generic[TSkillObs, TAction, TSkillParams]):
     """A skill that represents a high-level action in the environment.
 
     Generic type parameters:
@@ -88,18 +87,18 @@ class Skill(abc.ABC, Generic[TSkillObs, TAction, TSkillParams]):
         return self.__class__.__name__
 
     @property
-    @abc.abstractmethod
+    @abstractmethod
     def policy(self) -> Policy[TSkillObs, TAction, TSkillParams]:
         """The policy for the skill."""
         raise NotImplementedError
 
     @property
-    @abc.abstractmethod
+    @abstractmethod
     def status(self) -> SkillStatus | Int[ArrayLike, "b"]:  # noqa: F821
         """The status of the skill."""
         raise NotImplementedError
 
-    @abc.abstractmethod
+    @abstractmethod
     def get_action(self, obs: TSkillObs) -> TAction:
         """Get the next action for the skill based on the observation. Return the action if the skill is not terminated, otherwise return the result of the skill."""
         raise NotImplementedError
@@ -147,13 +146,13 @@ class Skill(abc.ABC, Generic[TSkillObs, TAction, TSkillParams]):
 
 class SingleSkill(
     Skill[TSkillObs, TAction, TSkillParams],
-    abc.ABC,
+    ABC,
     Generic[TSkillObs, TAction, TSkillParams],
 ):
     """A single skill that takes a single observation and outputs a single action."""
 
     @property
-    @abc.abstractmethod
+    @abstractmethod
     def status(self) -> SkillStatus:
         """The status of the skills."""
         raise NotImplementedError
@@ -167,19 +166,19 @@ class SingleSkill(
 
 class BatchedSkill(
     Skill[TBSkillObs, TBAction, TBSkillParams],
-    abc.ABC,
+    ABC,
     Generic[TBSkillObs, TBAction, TBSkillParams],
 ):
     """A batched skill that takes a batched observation and outputs a batched action."""
 
     @property
-    @abc.abstractmethod
+    @abstractmethod
     def policy(self) -> BatchedPolicy[TBSkillObs, TBAction, TBSkillParams]:
         """The policy for the skill."""
         raise NotImplementedError
 
     @property
-    @abc.abstractmethod
+    @abstractmethod
     def status(self) -> Int[ArrayLike, "b"]:  # noqa: F821
         """The status of the skills. Must call initiate() before using this property."""
         raise NotImplementedError
@@ -193,7 +192,7 @@ class BatchedSkill(
 
 class CompositeSkill(
     BatchedSkill[TBSkillObs, TBAction, TBSkillParams],
-    abc.ABC,
+    ABC,
     Generic[TBSkillObs, TBAction, TBSkillParams],
 ):
     """Group of skills as a high level skill controller."""

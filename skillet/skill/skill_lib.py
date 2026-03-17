@@ -3,12 +3,7 @@
 Written by Will Solow, 2026
 """
 
-import gymnasium as gym
-import torch
-from jaxtyping import Float
-
 from skillet.core.skill import Skill
-from skillet.core.spaces import ObservationSpec
 from skillet.envs.compatibility import GymVectorInterface
 from skillet.envs.specs import BxM_Action, BxN_Obs
 from skillet.policy.ik_ee import IKEEPolicy, PosAbsIKEEPolicy, PoseAbsIKEEPolicy, PoseRelIKEEPolicy, XYZRPYAbsIKEEPolicy
@@ -27,71 +22,37 @@ from skillet.skill.low_level import (
 )
 
 
-def make_joint_obs_spec(device: str = "cuda") -> ObservationSpec:
-    """Make an observation spec for IK controllers."""
-    return ObservationSpec[Float[torch.Tensor, "b ..."]](
-        space=gym.spaces.Dict(),
-        name="ik_ee",
-        is_torch=True,
-        is_batched=True,
-        n_envs=-1,
-        device=device,
-    )
-
-
-def make_ik_obs_spec(device: str = "cuda") -> ObservationSpec:
-    """Make an observation spec for IK controllers."""
-    return ObservationSpec[Float[torch.Tensor, "b ..."]](
-        space=gym.spaces.Dict(),
-        name="ik_ee",
-        is_torch=True,
-        is_batched=True,
-        n_envs=-1,
-        device=device,
-    )
-
-
-def make_osc_obs_spec(device: str = "cuda") -> ObservationSpec:
-    """Make an observation spec for OSC controllers."""
-    return ObservationSpec[Float[torch.Tensor, "b ..."]](
-        space=gym.spaces.Dict(),
-        name="osc",
-        is_torch=True,
-        is_batched=True,
-        n_envs=-1,
-        device=device,
-    )
-
-
 def make_osc_ee_pose_policy(env: GymVectorInterface) -> IKEEPolicy:
-    return PoseAbsOSCEEPolicy[BxN_Obs, BxM_Action](make_osc_obs_spec(env.device), env.action_spec)
+    return PoseAbsOSCEEPolicy[BxN_Obs, BxM_Action](env.coerce_obs_spec("osc_ee"), env.action_spec)
 
 
 def make_ik_ee_xyzrpy_policy(env: GymVectorInterface) -> IKEEPolicy:
-    return XYZRPYAbsIKEEPolicy[BxM_Action](make_ik_obs_spec(env.device), env.action_spec)
+    return XYZRPYAbsIKEEPolicy[BxM_Action](env.coerce_obs_spec("ik_ee"), env.action_spec)
 
 
 def make_ik_ee_pose_policy(env: GymVectorInterface) -> IKEEPolicy:
-    return PoseAbsIKEEPolicy[BxM_Action](make_ik_obs_spec(env.device), env.action_spec)
+    return PoseAbsIKEEPolicy[BxM_Action](env.coerce_obs_spec("ik_ee"), env.action_spec)
 
 
 def make_ik_ee_pos_policy(env: GymVectorInterface) -> IKEEPolicy:
-    return PosAbsIKEEPolicy[BxM_Action](make_ik_obs_spec(env.device), env.action_spec)
+    return PosAbsIKEEPolicy[BxM_Action](env.coerce_obs_spec("ik_ee"), env.action_spec)
 
 
 def make_rel_ik_ee_pose_policy(env: GymVectorInterface) -> IKEEPolicy:
-    return PoseRelIKEEPolicy[BxM_Action](make_ik_obs_spec(env.device), env.action_spec)
+    return PoseRelIKEEPolicy[BxM_Action](env.coerce_obs_spec("ik_ee"), env.action_spec)
 
 
 def make_rel_ik_ee_pose_policy(env: GymVectorInterface) -> IKEEPolicy:
-    return PoseRelIKEEPolicy[BxM_Action](make_ik_obs_spec(env.device), env.action_spec)
+    return PoseRelIKEEPolicy[BxM_Action](env.coerce_obs_spec("ik_ee"), env.action_spec)
 
 
 def make_gripper_policy(env: GymVectorInterface) -> GripperPolicy:
+    raise NotImplementedError
     return GripperPolicy[BxN_Obs, BxM_Action](make_joint_obs_spec(env.device), env.action_spec)
 
 
 def make_joint_pos_policy(env: GymVectorInterface) -> JointPosPolicy:
+    raise NotImplementedError
     return JointPosPolicy[BxN_Obs, BxM_Action](make_joint_obs_spec(env.device), env.action_spec)
 
 

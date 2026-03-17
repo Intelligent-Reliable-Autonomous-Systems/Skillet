@@ -14,10 +14,10 @@ Skill parameters spaces describe the parameters of a skill.
 
 from __future__ import annotations
 
+import re
 from abc import ABC, abstractmethod
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
-import re
 from typing import (
     Any,
     ClassVar,
@@ -33,9 +33,9 @@ from typing import (
 )
 
 import gymnasium as gym
-from gymnasium.spaces.box import array_short_repr
 import numpy as np
 import torch
+from gymnasium.spaces.box import array_short_repr
 from jaxtyping import Bool, Float, Int, Shaped
 from numpy.typing import NDArray
 from tensordict import TensorDict
@@ -137,11 +137,15 @@ class SpaceSpecification(Generic[TSpace]):
                     space = next(iter(self.space.spaces.values()))
                     space_shape = space.shape
                 if space_shape is None:
-                    raise ValueError(f"Cannot infer batch size from dict space {self.space} because the shape of the \
-                            first subspace is unknown.")
+                    raise ValueError(
+                        f"Cannot infer batch size from dict space {self.space} because the shape of the \
+                            first subspace is unknown."
+                    )
             if len(space_shape) == 0:
-                raise ValueError(f"Cannot infer batch size from space {self.space} because the shape is empty. \
-                        The space is not batched.")
+                raise ValueError(
+                    f"Cannot infer batch size from space {self.space} because the shape is empty. \
+                        The space is not batched."
+                )
             if space_shape[0] == -1 or isinstance(space_shape[0], str):
                 raise ValueError(f"Cannot infer batch size from space {self.space}. shape[0]={space_shape[0]}")
             object.__setattr__(self, "n_envs", space_shape[0])
@@ -213,8 +217,10 @@ class SpaceSpecification(Generic[TSpace]):
             dtype = dtype or self.space.dtype
             if shape[0] == -1:
                 if self.n_envs == -1:
-                    raise ValueError("n_envs not specified. Cannot infer shape with first dimension -1. \
-                            Use with_n_envs() to set the batch size.")
+                    raise ValueError(
+                        "n_envs not specified. Cannot infer shape with first dimension -1. \
+                            Use with_n_envs() to set the batch size."
+                    )
                 shape = (self.n_envs, *shape[1:])
             if self.is_torch:
                 return torch.zeros(shape, dtype=as_torch_dtype(dtype), device=self.device)
@@ -270,8 +276,10 @@ class SpaceSpecification(Generic[TSpace]):
             dtype = dtype or self.space.dtype
             if shape[0] == -1:
                 if self.n_envs == -1:
-                    raise ValueError("n_envs not specified. Cannot infer shape with first dimension -1. \
-                            Use with_n_envs() to set the batch size.")
+                    raise ValueError(
+                        "n_envs not specified. Cannot infer shape with first dimension -1. \
+                            Use with_n_envs() to set the batch size."
+                    )
                 shape = (self.n_envs, *shape[1:])
             if self.is_torch:
                 return torch.ones(shape, dtype=as_torch_dtype(dtype), device=self.device)
@@ -334,11 +342,15 @@ class SpaceSpecification(Generic[TSpace]):
                     elif not self.is_batched and arr.shape[0] == 1 and arr.shape[1:] == expected_shape:
                         arr = arr.squeeze(0)  # can remove a singleton dimension
                     else:
-                        raise ValueError(f"Expected shape {expected_shape} (n_envs={self.n_envs}) but got {arr.shape} \
-                            for value {key}.")
+                        raise ValueError(
+                            f"Expected shape {expected_shape} (n_envs={self.n_envs}) but got {arr.shape} \
+                            for value {key}."
+                        )
                 elif self.is_batched and self.n_envs == -1:
-                    raise ValueError(f"Batched space with shape {(-1, *expected_shape)} cannot infer batch size from \
-                            value shape {arr.shape}.")
+                    raise ValueError(
+                        f"Batched space with shape {(-1, *expected_shape)} cannot infer batch size from \
+                            value shape {arr.shape}."
+                    )
                 return arr
             # numpy case
             if isinstance(v, torch.Tensor):
@@ -353,11 +365,15 @@ class SpaceSpecification(Generic[TSpace]):
                 elif not self.is_batched and arr.shape[0] == 1 and arr.shape[1:] == expected_shape:
                     arr = np.squeeze(arr, 0)  # can remove a singleton dimension
                 else:
-                    raise ValueError(f"Expected shape {expected_shape} (n_envs={self.n_envs}) but got {arr.shape} \
-                        for value {key}.")
+                    raise ValueError(
+                        f"Expected shape {expected_shape} (n_envs={self.n_envs}) but got {arr.shape} \
+                        for value {key}."
+                    )
             elif self.is_batched and self.n_envs == -1:
-                raise ValueError(f"Batched space with shape {(-1, *expected_shape)} cannot infer batch size from \
-                        value shape {arr.shape}.")
+                raise ValueError(
+                    f"Batched space with shape {(-1, *expected_shape)} cannot infer batch size from \
+                        value shape {arr.shape}."
+                )
             return arr
 
         if isinstance(self.space, gym.spaces.Dict):

@@ -79,7 +79,7 @@ OSC_SPEC_BATCHED = ObservationSpec[OSC_Obs](
             "joint_lims": ParameterizedBox(low=-torch.pi, high=torch.pi, shape=(2, "n_joints")),
             "mass_matrix": ParameterizedBox(low=-1, high=1, shape=("n_arm_joints", "n_arm_joints")),
             "joint_gravity": ParameterizedBox(low=-10.0, high=10.0, shape=("n_arm_joints",)),
-            "ee_vel_b": gym.spaces.Box(low=-10.0, high=10.0, shape=(7,)),
+            "ee_vel_b": gym.spaces.Box(low=-10.0, high=10.0, shape=(6,)),
             "joint_centers": ParameterizedBox(low=-torch.pi, high=torch.pi, shape=("n_arm_joints",)),
         }
     ),

@@ -19,6 +19,9 @@ from skillet_tasks.isaac_tasks.direct.cfg import Gen3BaseCfg
 @configclass
 class Gen3CabinetEnvCfg(Gen3BaseCfg):
     #
+    action_space = 8
+    observation_space = 30
+    state_space = 0
 
     # cabinet
     cabinet = ArticulationCfg(

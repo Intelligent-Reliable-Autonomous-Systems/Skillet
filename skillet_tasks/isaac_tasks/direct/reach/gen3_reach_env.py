@@ -14,6 +14,10 @@ from skillet_tasks.isaac_tasks.direct.reach.reach_env import ReachEnv
 
 @configclass
 class Gen3ReachEnvCfg(Gen3BaseCfg):
+    action_space = 8
+    observation_space = 30
+    state_space = 0
+
     action_scale = 0.5
     dof_velocity_scale = 0.1
     skills = []
@@ -61,6 +65,11 @@ class Gen3ReachIKEnv(ReachEnv):
     cfg: Gen3ReachEnvCfg
 
     def __init__(self, cfg: Gen3ReachEnvCfg, render_mode: str | None = None, **kwargs):
+        cfg.skills = ["reach_xyz", "orient_rpy"]
+        cfg.action_space = 8
+        cfg.observation_space = 13
+        cfg.state_space = 0
+
         cfg.decimation = 2
         cfg.sim.dt = 0.01
         cfg.robot.spawn.rigid_props.disable_gravity = True
@@ -74,7 +83,6 @@ class Gen3ReachIKEnv(ReachEnv):
         }
         cfg.robot.actuators["gripper"].stiffness = 2000.0
         cfg.robot.actuators["gripper"].damping = 200.0
-        cfg.skills = ["reach_xyz", "orient_rpy"]
         super().__init__(cfg, render_mode, **kwargs)
 
     # pre-physics step calls
@@ -113,6 +121,11 @@ class Gen3ReachOSCEnv(ReachEnv):
     cfg: Gen3ReachEnvCfg
 
     def __init__(self, cfg: Gen3ReachEnvCfg, render_mode: str | None = None, **kwargs):
+        cfg.skills = ["reach_xyz_osc", "orient_rpy_osc"]
+        cfg.action_space = 8
+        cfg.observation_space = 13
+        cfg.state_space = 0
+
         cfg.decimation = 2
         cfg.sim.dt = 0.01
         cfg.robot.actuators["arm"].stiffness = 0.0
@@ -120,7 +133,6 @@ class Gen3ReachOSCEnv(ReachEnv):
         cfg.robot.actuators["gripper"].stiffness = 0.0
         cfg.robot.actuators["gripper"].damping = 0.0
         cfg.ee_link_name = "end_effector_link"
-        cfg.skills = ["reach_xyz_osc", "orient_rpy_osc"]
         super().__init__(cfg, render_mode, **kwargs)
 
     # pre-physics step calls

@@ -38,16 +38,6 @@ gym.register(
 )
 
 gym.register(
-    id="Gen3-Reach-No-Table-Direct-v0",
-    entry_point=f"{__name__}.gen3_reach_no_table_env:Gen3ReachNoTableEnv",
-    disable_env_checker=True,
-    kwargs={
-        "env_cfg_entry_point": f"{__name__}.gen3_reach_no_table_env:Gen3ReachNoTableEnvCfg",
-        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:Gen3ReachPPORunnerCfg",
-    },
-)
-
-gym.register(
     id="Franka-Reach-Direct-v0",
     entry_point=f"{__name__}.franka_reach_env:FrankaReachEnv",
     disable_env_checker=True,

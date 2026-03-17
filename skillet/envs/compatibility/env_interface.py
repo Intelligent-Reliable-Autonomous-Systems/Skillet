@@ -4,7 +4,7 @@ Isaac Lab has two environment APIs: DirectRlEnv and ManagerBasedRlEnv.
 This module specifies the abstract interface for the DirectRlEnv, without any implementation details.
 
 Many properties are marked as deprecated, because they are not required for skillet.
-If we need to use them, we will need to implement them (e.g. in ROS2SkilletEnv).
+If we need to use them, we will need to implement them (e.g. in SkilletEnv).
 """
 
 from collections.abc import Sequence

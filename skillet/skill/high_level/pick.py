@@ -130,7 +130,6 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         self._prev_gripper_pos = None
 
         ee_pose_b = obs["tcp_pose_b"]
-        joint_efforts = obs["joint_eff"]
 
         # Define the target poses for each stage of the pick skill, indexed by PickStatusCodes
         # (n_envs, num_pick_stages, 7)

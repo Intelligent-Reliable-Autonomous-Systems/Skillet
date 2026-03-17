@@ -15,6 +15,10 @@ from .lift_cube_env import LiftCubeEnv
 
 @configclass
 class Gen3LiftCubeEnvCfg(Gen3BaseCfg):
+    action_space = 8
+    observation_space = 30
+    state_space = 0
+
     object_cfg = RigidObjectCfg(
         prim_path="/World/envs/env_.*/Object",
         spawn=sim_utils.UsdFileCfg(

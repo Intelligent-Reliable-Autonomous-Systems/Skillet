@@ -23,7 +23,7 @@ class Gen3LiteBaseCfg(SkillsDirectRlEnvCfg):
     observation_space = 29
     state_space = 0
 
-    joint_ids = [0, 1, 2, 3, 4, 5, 6]
+    joint_ids = [0, 1, 2, 3, 4, 5, 0]
     tcp_offset = [0.0, 0.0, 0.130, 0.70710678, 0, 0, 0.70710678]
     ee_link_name = "end_effector_link"
     base_link_name = "base_link"

@@ -3,14 +3,12 @@
 import argparse
 import os
 
-from skillet_tasks.ros2_tasks.factory import create_ros2_env
-
-from skillet.envs.ros2_skillet_env import ROS2SkilletEnv
-from skillet.envs.util import setup_ros
+from skillet.envs.skillet_env import SkilletEnv
 from skillet.perception.perception import Perception
 from skillet.perception.realsense import RealsenseEnv
 from skillet.perception.sam3.sam3 import SAMConcept
 from skillet.scene.visualize import Open3DVisualizer
+from skillet_tasks.ros2_tasks.factory import create_ros2_env
 
 parser = argparse.ArgumentParser(description="Visualize latest RGB-D frame from ROS2 service.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
@@ -76,7 +74,7 @@ def main() -> None:
         }
 
         env = create_ros2_env(args_cli.task, env_cfg)
-        env = ROS2SkilletEnv(env)
+        env = SkilletEnv(env)
     env.reset()
     rgbd_spec = env.obs_spec_rgbd.unbatched()
 

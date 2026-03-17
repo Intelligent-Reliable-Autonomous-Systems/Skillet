@@ -41,7 +41,7 @@ from skillet.envs.specs import (
 )
 
 
-class ROS2SkilletEnv(
+class SkilletEnv(
     BatchedEnvironment[BxN_Obs, BxM_Action],
     DirectRlInterface,
 ):
@@ -318,7 +318,6 @@ class ROS2SkilletEnv(
                     "joint_lims": self._get_joint_lims(),
                     "mass_matrix": self._get_mass_matrices(arm_joint_ids=self._joint_ids[:7]),
                     "joint_gravity": self._get_joint_gravity(arm_joint_ids=self._joint_ids[:7]),
-                    "ee_vel_b": self._get_ee_vel_b(ee_link=self._ee_link_name, base_link=self._base_link_name),
                     "joint_centers": self._get_joint_centers(arm_joint_ids=self._joint_ids[:7]),
                 }
             )
@@ -390,11 +389,7 @@ class ROS2SkilletEnv(
             env_ids = torch.arange(self.num_envs, device=self.device)
         if joint_ids is None:
             joint_ids = self._joint_ids
-        return (
-            torch.as_tensor(self._env._joint_positions, device=self.device)
-            .unsqueeze(0)[:, joint_ids][env_ids]
-            .to(torch.float32)
-        )
+        return self._env._joint_positions[:, joint_ids][env_ids]
 
     def _get_joint_velocities(self, env_ids: torch.Tensor | None = None, joint_ids: list | None = None) -> torch.Tensor:
         """Return the joint velocities.
@@ -411,11 +406,7 @@ class ROS2SkilletEnv(
         if joint_ids is None:
             joint_ids = self._joint_ids
 
-        return (
-            torch.as_tensor(self._env._joint_velocities, device=self.device)
-            .unsqueeze(0)[:, joint_ids][env_ids]
-            .to(torch.float32)
-        )
+        return self._env._joint_velocities[:, joint_ids][env_ids]
 
     def _get_joint_efforts(self, env_ids: torch.Tensor | None = None, joint_ids: list | None = None) -> torch.Tensor:
         """Return the joint efforts.
@@ -431,11 +422,7 @@ class ROS2SkilletEnv(
             env_ids = torch.arange(self.num_envs, device=self.device)
         if joint_ids is None:
             joint_ids = self._joint_ids
-        return (
-            torch.as_tensor(self._env._joint_efforts, device=self.device)
-            .unsqueeze(0)[:, joint_ids][env_ids]
-            .to(torch.float32)
-        )
+        return self._env._joint_efforts[:, joint_ids][env_ids]
 
     def _get_jacobians(
         self,
@@ -463,21 +450,18 @@ class ROS2SkilletEnv(
         ee_link_idx = self._env._find_link_idx(ee_link)
         base_link_idx = self._env._find_link_idx(base_link)
 
-        robot_base_pose_w = torch.as_tensor(
-            self._env._robot_body_pose_w, device=self.device, dtype=torch.float32
-        ).unsqueeze(0)[env_ids, base_link_idx]
+        robot_base_pose_w = self._env._robot_body_pose_w[env_ids, base_link_idx]
 
         # Have to convert quaternion from ROS format (x,y,z,w) to IsaacLab format (w,x,y,z)
-        robot_base_pose_w[:, 3:7] = convert_quat(robot_base_pose_w[:, 3:7], to="wxyz")
+        robot_base_pose_w[:, 3:7] = convert_quat(robot_base_pose_w[:, 3:7], to="wxyz")  # TODO
         base_rot_matrix = matrix_from_quat(quat_inv(robot_base_pose_w[:, 3:7]))
 
-        jacobian = torch.as_tensor(self._env._jacobians, device=self.device, dtype=torch.float32)
-        jacobian = jacobian.unsqueeze(0)[env_ids, ee_link_idx][:, :, arm_joint_ids]
+        jacobian = self._env._jacobians[env_ids, ee_link_idx][:, :, arm_joint_ids]
 
         jacobian[:, :3, :] = torch.bmm(base_rot_matrix, jacobian[:, :3, :])
         jacobian[:, 3:, :] = torch.bmm(base_rot_matrix, jacobian[:, 3:, :])
 
-        return jacobian.to(torch.float32)
+        return jacobian
 
     def _get_tcp_pose_b(
         self,
@@ -499,14 +483,10 @@ class ROS2SkilletEnv(
 
         ee_link_idx = self._env._find_link_idx(ee_link)
 
-        ee_pose_w = torch.as_tensor(
-            self._env._robot_body_pose_w[ee_link_idx], device=self.device, dtype=torch.float32
-        ).unsqueeze(0)[env_ids]
-        root_pose_w = torch.as_tensor(self._env._robot_root_pose_w, device=self.device, dtype=torch.float32).unsqueeze(
-            0
-        )[env_ids]
+        ee_pose_w = self._env._robot_body_pose_w[ee_link_idx][env_ids]
+        root_pose_w = self._env._robot_root_pose_w[env_ids]
 
-        # Have to convert quaternion from ROS format (x,y,z,w) to IsaacLab format (w,x,y,z)
+        # Have to convert quaternion from ROS format (x,y,z,w) to IsaacLab format (w,x,y,z) # TODO
         ee_pose_w[:, 3:7] = convert_quat(ee_pose_w[:, 3:7], to="wxyz")
         root_pose_w[:, 3:7] = convert_quat(root_pose_w[:, 3:7], to="wxyz")
 
@@ -526,9 +506,7 @@ class ROS2SkilletEnv(
             env_ids = torch.arange(self.num_envs, device=self.device)
 
         gripper_joint_idxs = [self._env._find_joint_idx(j) for j in gripper_joints]
-        gripper_pos = torch.as_tensor(self._env._joint_positions[gripper_joint_idxs], device=self.device).unsqueeze(0)[
-            env_ids
-        ]
+        gripper_pos = self._env._joint_positions[gripper_joint_idxs][env_ids]
         return gripper_pos.to(torch.float32)
 
     def _get_ee_pose_b(
@@ -557,14 +535,10 @@ class ROS2SkilletEnv(
 
         # Get the pose of the end effector and base in the world frame
         # (B, 7) with (pos_x, pos_y, pos_z, quat_x, quat_y, quat_z, quat_w)
-        robot_ee_pose_w = torch.as_tensor(
-            self._env._robot_body_pose_w[ee_link_idx], device=self.device, dtype=torch.float32
-        ).unsqueeze(0)[env_ids]
-        robot_base_pose_w = torch.as_tensor(
-            self._env._robot_body_pose_w[base_link_idx], device=self.device, dtype=torch.float32
-        ).unsqueeze(0)[env_ids]
+        robot_ee_pose_w = self._env._robot_body_pose_w[env_ids, ee_link_idx]
+        robot_base_pose_w = self._env._robot_body_pose_w[base_link_idx][env_ids]
 
-        # Have to convert quaternion from ROS format (x,y,z,w) to IsaacLab format (w,x,y,z)
+        # Have to convert quaternion from ROS format (x,y,z,w) to IsaacLab format (w,x,y,z) # TODO
         robot_ee_pose_w[:, 3:7] = convert_quat(robot_ee_pose_w[:, 3:7], to="wxyz")
         robot_base_pose_w[:, 3:7] = convert_quat(robot_base_pose_w[:, 3:7], to="wxyz")
 
@@ -693,23 +667,18 @@ class ROS2SkilletEnv(
         ee_link_idx = self._env._find_link_idx(ee_link)
         base_link_idx = self._env._find_link_idx(base_link)
 
-        ee_vel_w = torch.as_tensor(
-            self._env._robot_body_vel_w[ee_link_idx, :], device=self.device, dtype=torch.float32
-        ).unsqueeze(0)[env_ids]  # Extract end-effector velocity in the world frame
-        root_vel_w = torch.as_tensor(
-            self._env._robot_body_vel_w[base_link_idx, :], device=self.device, dtype=torch.float32
-        ).unsqueeze(0)[env_ids]  # Extract root velocity in the world frame
+        # TODO check this
+        ee_vel_w = self._env._robot_body_vel_w[ee_link_idx, :][
+            env_ids
+        ]  # Extract end-effector velocity in the world frame
+        root_vel_w = self._env._robot_body_vel_w[base_link_idx, :][env_ids]  # Extract root velocity in the world frame
         relative_vel_w = ee_vel_w - root_vel_w  # Compute the relative velocity in the world frame
         ee_lin_vel_b = quat_apply_inverse(
-            torch.as_tensor(
-                self._env._robot_body_pose_w[base_link_idx], device=self.device, dtype=torch.float32
-            ).unsqueeze(0)[env_ids][:, 3:7],
+            self._env._robot_body_pose_w[base_link_idx][env_ids][:, 3:7],
             relative_vel_w[:, 0:3],
         )  # From world to root frame
         ee_ang_vel_b = quat_apply_inverse(
-            torch.as_tensor(
-                self._env._robot_body_pose_w[base_link_idx], device=self.device, dtype=torch.float32
-            ).unsqueeze(0)[env_ids][:, 3:7],
+            self._env._robot_body_pose_w[base_link_idx][env_ids][:, 3:7],
             relative_vel_w[:, 3:6],
         )
         return torch.cat([ee_lin_vel_b, ee_ang_vel_b], dim=-1)

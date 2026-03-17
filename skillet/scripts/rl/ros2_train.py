@@ -14,9 +14,8 @@ import gymnasium as gym
 import torch
 
 import skillet_tasks.ros2_tasks  # noqa: F401
+from skillet.envs import SkillEnvWrapper, SkilletEnv
 from skillet.envs.compatibility.rsl_rl import RslRlVecEnvWrapper
-from skillet.envs.ros2_skillet_env import ROS2SkilletEnv
-from skillet.envs.skill_ros2_env_wrapper import SkillROS2EnvWrapper
 from skillet.envs.util import get_checkpoint_path, setup_ros
 from skillet.envs.util.dict import print_dict
 from skillet.envs.util.hydra import hydra_task_config
@@ -110,7 +109,7 @@ def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
         env = gym.wrappers.RecordVideo(env, **video_kwargs)
 
     # Wrap environment for RSL-RL
-    env = SkillROS2EnvWrapper(env) if args_cli.skill else ROS2SkilletEnv(env)
+    env = SkillEnvWrapper(env) if args_cli.skill else SkilletEnv(env)
     env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
 
     # Create runner from RSL-RL

@@ -14,6 +14,10 @@ from skillet_tasks.isaac_tasks.direct.reach.reach_env import ReachEnv
 
 @configclass
 class FrankaReachEnvCfg(FrankaBaseCfg):
+    action_space = 9
+    observation_space = 33
+    state_space = 0
+
     action_scale = 0.5
     dof_velocity_scale = 0.1
     skills = []
@@ -61,6 +65,11 @@ class FrankaReachIKEnv(FrankaReachEnv):
     cfg: FrankaReachEnvCfg
 
     def __init__(self, cfg: FrankaReachEnvCfg, render_mode: str | None = None, **kwargs) -> None:
+        cfg.skills = ["reach_xyz", "orient_rpy"]
+        cfg.observation_space = 13
+        cfg.action_space = 9
+        cfg.state_space = 0
+
         cfg.decimation = 2
         cfg.sim.dt = 0.01
         cfg.robot.actuators["panda_shoulder"].stiffness = 400.0
@@ -68,7 +77,6 @@ class FrankaReachIKEnv(FrankaReachEnv):
         cfg.robot.actuators["panda_forearm"].stiffness = 400.0
         cfg.robot.actuators["panda_forearm"].damping = 80.0
         cfg.ee_link_name = "panda_hand"
-        cfg.skills = ["reach_xyz", "orient_rpy"]
 
         super().__init__(cfg, render_mode, **kwargs)
 
@@ -108,6 +116,11 @@ class FrankaReachOSCEnv(FrankaReachEnv):
     cfg: FrankaReachEnvCfg
 
     def __init__(self, cfg: FrankaReachEnvCfg, render_mode: str | None = None, **kwargs):
+        cfg.skills = ["reach_xyz_osc", "orient_rpy_osc"]
+        cfg.observation_space = 13
+        cfg.action_space = 9
+        cfg.state_space = 0
+
         cfg.decimation = 2
         cfg.sim.dt = 0.01
         cfg.robot.actuators["panda_shoulder"].stiffness = 0.0
@@ -117,7 +130,6 @@ class FrankaReachOSCEnv(FrankaReachEnv):
         cfg.robot.actuators["panda_hand"].stiffness = 0.0
         cfg.robot.actuators["panda_hand"].damping = 0.0
         cfg.ee_link_name = "panda_hand"
-        cfg.skills = ["reach_xyz_osc", "orient_rpy_osc"]
         super().__init__(cfg, render_mode, **kwargs)
 
     # pre-physics step calls
