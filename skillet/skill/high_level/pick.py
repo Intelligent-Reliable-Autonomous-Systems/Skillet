@@ -123,9 +123,9 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         self._default_quat = self._default_quat.to(self.obs_spec.device)
         goal_quat = quat_mul(quat_from_yaw(params[:, 3]), self._default_quat.repeat(self.n_envs, 1))
 
-        self._pos_threshold = 0.01  # NOTE updated for Gen3Lite
+        self._pos_threshold = 0.01
         self._quat_threshold = 0.1
-        self._vel_threshold = 0.001  #
+        self._vel_threshold = 0.001
         self._joint_threshold = 0.001
         self._prev_gripper_pos = None
 
@@ -167,7 +167,7 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
             < self._pos_threshold
         )
         reached_height = self._pick_status == PickStatusCodes.ASCEND & (
-            ee_pose_b[:, 2] >= self._current_target_poses[:, 2] - self._pos_threshold  # NOTE added for Gen3Lite
+            ee_pose_b[:, 2] >= self._current_target_poses[:, 2] - self._pos_threshold
         )
         reached_quat = (
             quat_error_magnitude(ee_pose_b[:, 3:7], self._current_target_poses[:, 3:7]) < self._quat_threshold

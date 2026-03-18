@@ -376,7 +376,7 @@ class MjManagerBasedRlEnv(SkilletGymEnv):
         self.common_step_counter += 1
 
         # Check terminations and compute rewards.
-        # NOTE: Derived quantities (xpos, xquat, ...) are stale by one physics
+        # Note: Derived quantities (xpos, xquat, ...) are stale by one physics
         # substep here. See the docstring above for why this is acceptable.
         self.reset_buf = self.termination_manager.compute()
         self.reset_terminated = self.termination_manager.terminated
@@ -480,7 +480,7 @@ class MjManagerBasedRlEnv(SkilletGymEnv):
             env_step_count = self._sim_step_counter // self.cfg.decimation
             self.event_manager.apply(mode="reset", env_ids=env_ids, global_env_step_count=env_step_count)
 
-        # NOTE: This is order sensitive.
+        # Note: This is order sensitive.
         self.extras["log"] = dict()
         # observation manager.
         info = self.observation_manager.reset(env_ids)

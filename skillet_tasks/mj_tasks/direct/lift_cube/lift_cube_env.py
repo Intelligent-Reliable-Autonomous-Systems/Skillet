@@ -121,7 +121,7 @@ class LiftCubeEnv(MjDirectRlEnv):
                 self.cfg.joint_vel_reward_scale,
             ),
             nan=0.0,
-        )  # NOTE we cast nans to zero and reset the environment
+        )
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
         super()._reset_idx(env_ids)
@@ -165,7 +165,7 @@ class LiftCubeEnv(MjDirectRlEnv):
                 dim=-1,
             ),
             nan=0.0,
-        )  # NOTE we cast nans to zero and call doens
+        )
         return {"policy": torch.clamp(obs, -5.0, 5.0)}
 
     # auxiliary methods

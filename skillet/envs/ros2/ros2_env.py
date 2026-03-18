@@ -269,9 +269,9 @@ class ROS2Env(SkilletGymEnv):
             A tuple containing the observations, rewards, resets (terminated and truncated) and extras.
 
         """
-        assert self._supports_action_spec(action_spec), (
-            f"Action specification `{action_spec.name}: {action_spec}` not supported by environment {self}."
-        )
+        assert self._supports_action_spec(
+            action_spec
+        ), f"Action specification `{action_spec.name}: {action_spec}` not supported by environment {self}."
         if self._next_step_time is None:  # TODO check for right behavior
             self._next_step_time = time.monotonic()
 

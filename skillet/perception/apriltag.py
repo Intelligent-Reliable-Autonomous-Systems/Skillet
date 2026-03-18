@@ -80,7 +80,7 @@ class CameraLocalizer:
         self,
         apriltag_pose: np.ndarray = np.array([0.13, 0.0, 0.0, 0.0, 0.0, 0.7071068, 0.7071068]),
         apriltag_size_m: float = 0.100,
-        apriltag_id: int = 0,
+        apriltag_id: int = 3,
     ) -> None:
         """Initialize the camera localizer.
 

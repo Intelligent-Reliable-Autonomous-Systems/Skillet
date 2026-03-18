@@ -239,7 +239,6 @@ class Gen3ROS2Env(ROS2Env):
 
         self._camera_localizer = CameraLocalizer(apriltag_size_m=0.1, apriltag_id=self.cfg.base_apriltag_id)
 
-
     def _pre_process_action(self, actions: torch.Tensor, action_spec: ActionSpec[Any] | None = None) -> np.ndarray:
         """Pre process the robot action.
 
@@ -247,7 +246,7 @@ class Gen3ROS2Env(ROS2Env):
 
         Args:
             actions: The actions to apply on the environment. Shape is (num_envs, num_joints).
-            action_spec: The action specification of the batch of actions. NOTE: Currently assumes all actions are
+            action_spec: The action specification of the batch of actions. Note: Currently assumes all actions are
                 of same spec.
 
         """
@@ -355,7 +354,7 @@ class Gen3ROS2Env(ROS2Env):
         quat_xyzw = np.asarray([q["x"], q["y"], q["z"], q["w"]], dtype=np.float64)
         camera_pos_quat = np.concatenate((translation, quat_xyzw), axis=0)
         # TODO decide how we want to toggle between ROS2 vs Skillet side camera localization
-        camera_pos_quat = self._camera_localizer.get_camera_pose(rgb=rgb, intrinsic_k=k)
+        # camera_pos_quat = self._camera_localizer.get_camera_pose(rgb=rgb, intrinsic_k=k)
 
         # TODO I feel like we should localize the camera on the skillet side, not ROS side
         # if q["x"] == 0.0 and q["y"] == 0.0 and q["z"] == 0.0:

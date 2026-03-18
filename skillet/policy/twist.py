@@ -24,12 +24,7 @@ from skillet.core.math import (
 from skillet.core.policy import BatchedPolicy, TBAction, TBPolicyObs
 from skillet.core.spaces import ActionSpec, ObservationSpec
 from skillet.core import SkillParamsSpec
-from skillet.skill.specs import (
-    XYZ_QUAT_Params,
-    XYZ_QUAT_Params_Spec,
-    XYZ_RPY_Params,
-    XYZ_RPY_Params_Spec
-)
+from skillet.skill.specs import XYZ_QUAT_Params, XYZ_QUAT_Params_Spec, XYZ_RPY_Params, XYZ_RPY_Params_Spec
 from skillet.envs.specs import MOVEIT_TCP_Obs
 
 
@@ -103,7 +98,7 @@ class TwistPIDPosePolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Gen
         self._frame = frame
 
         # Max velocities
-        self.rot_sensitivity = 10.0
+        self.rot_sensitivity = 20.0
         self.pos_sensitivity = 0.06
 
         # PID gains
@@ -154,7 +149,7 @@ class TwistPIDPosePolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Gen
         dt = obs["dt"]
 
         error_pos, error_rot = compute_pose_error(
-            tcp_pose_b[:, 0:3], tcp_pose_b[:, 3:7], self._tcp_quat_des_b[:, 0:3], self._tcp_quat_des_b[:,3:7]
+            tcp_pose_b[:, 0:3], tcp_pose_b[:, 3:7], self._tcp_quat_des_b[:, 0:3], self._tcp_quat_des_b[:, 3:7]
         )
 
         # Required offset rotation about yaw for the twist controller
@@ -164,9 +159,9 @@ class TwistPIDPosePolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Gen
         error_pos = quat_apply(quat_inv(curr_new), error_pos)
         error_rot = quat_apply(quat_inv(curr_new), error_rot) * 10  # Scale rotation error to make it move faster
 
-        print(f"########")
-        print(tcp_pose_b.squeeze()[0:3])
-        print(self._tcp_quat_des_b.squeeze()[0:3])
+        # print(f"########")
+        # print(tcp_pose_b.squeeze()[0:3])
+        # print(self._tcp_quat_des_b.squeeze()[0:3])
 
         self.integral_pos += error_pos * dt
         self.integral_rot += error_rot * dt
