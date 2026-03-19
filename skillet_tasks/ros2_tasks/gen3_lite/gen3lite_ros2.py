@@ -6,31 +6,14 @@ Written by Will Solow, 2026
 
 """
 
-import base64
-import math
-import threading
 from typing import Any
 
-import cv2
-import gymnasium as gym
-import numpy as np
-import torch
-from roslibpy import ActionClient, Ros, Service, Topic
+from roslibpy import Ros
 
-from skillet.core.spaces import ActionSpec
 from skillet.envs.ros2 import (
-    ROS2Env,
     ROS2EnvCfg,
-    launch_robot_hardware,
-    wait_for_action_server,
-    wait_for_rviz,
-    wait_for_topic_publish,
-    wait_for_topic_subscribe,
-    wait_until_ready,
 )
 from skillet.envs.util import configclass
-from skillet.policy.specs import JOINTS_SPEC
-
 from skillet_tasks.ros2_tasks.gen3.gen3_ros2 import Gen3ROS2Env
 
 
@@ -63,7 +46,8 @@ class Gen3LiteROS2EnvCfg(ROS2EnvCfg):
     skills = ["reach_xyz"]
 
     joint_ids = [0, 1, 2, 3, 4, 5, 6]
-    tcp_offset = [0.0, 0.0, 0.12, 1.0, 0.0, 0.0, 0.0]
+    tcp_offset = [0.0, 0.0, 0.130, 0.70710678, 0, 0, 0.70710678]  # TODO possible that changing this
+    # has downstream effects on twist controller servo. Need to confirm(Will). used to be [0.0, 0.0, 0.120, 1.0, 0, 0, 0.0]
     ee_link_name = "end_effector_link"
     base_link_name = "base_link"
     gripper_joint_names = ["right_finger_bottom_joint"]
