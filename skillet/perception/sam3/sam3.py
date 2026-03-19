@@ -201,8 +201,7 @@ class SAM3:
         self.set_image(image, prompts)
         if len(self._example_bboxes) == 0:
             return self.segment(prompts)
-        else:
-            return self.segment_exemplars(prompts)
+        return self.segment_exemplars(prompts)
 
     def segment_exemplars(self, prompts: list[SAMConcept]) -> tuple[torch.Tensor, torch.Tensor]:
         """Segment all instances of the given concept prompts on the currently set image.

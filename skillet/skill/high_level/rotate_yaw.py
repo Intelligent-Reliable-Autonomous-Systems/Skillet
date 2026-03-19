@@ -1,4 +1,4 @@
-"""A rotate skill for picking an object up at a location, rotating it, and placing it back down"""
+"""A rotate skill for picking an object up at a location, rotating it, and placing it back down."""
 
 from enum import IntEnum
 from typing import Generic

@@ -1,5 +1,4 @@
-"""
-isaac_camera_test.py
+"""isaac_camera_test.py.
 
 Minimal smoke-test for Camera Sensor integration in a Kinova Gen3 environment:
   - Instantiates KinovaGenCameraEnvCfg with a custom camera pose

@@ -1,17 +1,14 @@
-"""
-Camera configuration for Isaac Sim RGBD sensors.
-"""
+"""Camera configuration for Isaac Sim RGBD sensors."""
 
-from isaaclab.sensors import CameraCfg
 import isaaclab.sim as sim_utils
+from isaaclab.sensors import CameraCfg
 
 from skillet.envs.util import configclass
 
 
 @configclass
 class RGBDCameraCfg:
-    """
-    Configuration for an RGBD camera sensor in Isaac Sim.
+    """Configuration for an RGBD camera sensor in Isaac Sim.
 
     Specifies spawn position/orientation relative to a parent prim, as well as
     resolution and intrinsic parameters.
@@ -90,12 +87,12 @@ class RGBDCameraCfg:
     """
 
     def to_isaac_cfg(self) -> CameraCfg:
-        """
-        Convert to an IsaacLab :class:`CameraCfg`.
+        """Convert to an IsaacLab :class:`CameraCfg`.
 
         Returns:
             A fully configured :class:`CameraCfg` ready to pass to
             :class:`isaaclab.sensors.Camera`.
+
         """
         return CameraCfg(
             prim_path=self.prim_path,

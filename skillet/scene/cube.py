@@ -1,10 +1,10 @@
 """Cube state representation."""
 
 from typing import Any, ClassVar, Literal
-from typing_extensions import override
 
-from jaxtyping import Float
 import torch
+from jaxtyping import Float
+from typing_extensions import override
 
 from skillet.core.math import normalize, quat_apply, quat_from_matrix, quat_inv, quat_mul
 from skillet.scene.base import SceneObject

@@ -1,9 +1,9 @@
 """Define simple dummy policies for testing."""
 
 from typing import Any, Generic
-from typing_extensions import override
 
 import torch
+from typing_extensions import override
 
 from skillet.core.policy import BatchedUPolicy, TAction, TBAction, TBPolicyObs, TPolicyObs, UPolicy
 from skillet.core.spaces import ActionSpec, ObservationSpec

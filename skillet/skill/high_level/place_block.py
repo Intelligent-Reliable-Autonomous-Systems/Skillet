@@ -1,13 +1,15 @@
-from typing import Callable, Sequence, TypeAlias
+from collections.abc import Callable, Sequence
+from typing import TypeAlias
+
 import gymnasium as gym
 import torch
 from typing_extensions import override
+
 from skillet.core import SkillParamsSpec
 from skillet.core.skill import SingleSkill, SkillStatus, SkillStatusCodes
 from skillet.envs.specs import BxM_Action, IKEE_Obs, M_Action
 from skillet.scene.base import Scene
 from skillet.skill.high_level.place import PlaceSkill
-import numpy as np
 
 Object_Params: TypeAlias = int
 """The parameters for selecting an object in the scene."""

@@ -288,8 +288,7 @@ class DifferentialIKController:
         return delta_joint_pos
 
     def _velocity_smoothing(self, delta_joint_pos: torch.Tensor) -> torch.Tensor:
-        """
-        Smooth joint velocities computed from DiffIK.
+        """Smooth joint velocities computed from DiffIK.
 
         Args:
             delta_joint_pose: A tensor of shape (N, num_joints) for delta joint positions.

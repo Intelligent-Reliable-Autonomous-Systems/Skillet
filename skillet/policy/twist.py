@@ -7,25 +7,18 @@ from typing import Any, Generic
 
 import torch
 
+from skillet.core import SkillParamsSpec
 from skillet.core.math import (
     base_to_tcp_twist,
-    euler_xyz_from_quat,
-    euler_xyz_to_rotvec,
-    quat_mul,
-    quat_inv,
-    quat_apply,
-    axis_angle_from_quat,
-    quat_from_euler_xyz,
-    convert_quat,
     compute_pose_error,
-    quat_apply_yaw,
-    yaw_quat,
+    quat_apply,
+    quat_inv,
+    quat_mul,
 )
 from skillet.core.policy import BatchedPolicy, TBAction, TBPolicyObs
 from skillet.core.spaces import ActionSpec, ObservationSpec
-from skillet.core import SkillParamsSpec
-from skillet.skill.specs import XYZ_QUAT_Params, XYZ_QUAT_Params_Spec, XYZ_RPY_Params, XYZ_RPY_Params_Spec
 from skillet.envs.specs import MOVEIT_TCP_Obs
+from skillet.skill.specs import XYZ_QUAT_Params, XYZ_QUAT_Params_Spec, XYZ_RPY_Params, XYZ_RPY_Params_Spec
 
 
 class TwistFramePolicy(BatchedPolicy[MOVEIT_TCP_Obs, TBAction, XYZ_RPY_Params], Generic[TBPolicyObs, TBAction]):
@@ -153,7 +146,8 @@ class TwistPIDPosePolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Gen
         )
 
         # Required offset rotation about yaw for the twist controller
-        twist_rot = torch.tensor([[0.7071, 0.0, 0.0, -0.7071]], device="cuda")
+        # twist_rot = torch.tensor([[0.7071, 0.0, 0.0, -0.7071]], device="cuda")
+        twist_rot = torch.tensor([[1.0, 0.0, 0.0, 0.0]], device="cuda")
         # Rotate position and rotation error into the frame the twist controller expects
         curr_new = quat_mul(twist_rot, tcp_pose_b[:, 3:7])
         error_pos = quat_apply(quat_inv(curr_new), error_pos)

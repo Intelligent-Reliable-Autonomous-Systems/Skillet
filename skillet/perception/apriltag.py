@@ -1,12 +1,11 @@
 from collections import defaultdict
-from typing import Literal
 
 import cv2
 import numpy as np
 import pupil_apriltags as apriltags
 import torch
 
-from skillet.core.math import quat_apply, quat_from_matrix
+from skillet.core.math import quat_apply
 from skillet.scene.base import Scene
 from skillet.scene.cube import Cube
 
@@ -75,7 +74,6 @@ class ApriltagStateEstimator:
 
 
 class CameraLocalizer:
-
     def __init__(
         self,
         apriltag_pose: np.ndarray = np.array([0.13, 0.0, 0.0, 0.0, 0.0, 0.7071068, 0.7071068]),
@@ -88,6 +86,7 @@ class CameraLocalizer:
             apriltag_pose: The pose of the AprilTag in the world frame.
             apriltag_size_m: The size of the AprilTag in meters.
             apriltag_id: The ID of the AprilTag.
+
         """
         self._apriltag_pose = apriltag_pose
         self._apriltag_size_m = apriltag_size_m
@@ -110,6 +109,7 @@ class CameraLocalizer:
 
         Returns:
             The camera pose in the world frame.
+
         """
         camera_params = (intrinsic_k[0, 0], intrinsic_k[1, 1], intrinsic_k[0, 2], intrinsic_k[1, 2])
         tag_size_m = self._apriltag_size_m

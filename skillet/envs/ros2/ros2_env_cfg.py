@@ -17,6 +17,9 @@ class ROS2EnvCfg:
 
     """Robot configuration"""
 
+    use_fake_hardware: bool = False
+    """If to use fake hardware or not"""
+
     ros2_workspace: str = MISSING
     """Workspace which bringup configuration is defined"""
 

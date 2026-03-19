@@ -10,20 +10,20 @@ from __future__ import annotations
 import time
 from collections.abc import Mapping
 from typing import Any
-from typing_extensions import override
 
 import cv2
 import gymnasium as gym
 import numpy as np
 import pyrealsense2 as rs
 from pupil_apriltags import Detector as AprilTagDetector
+from typing_extensions import override
 
 from skillet.core import ActionSpec
 from skillet.core.env import _EnvironmentBase
 from skillet.core.spaces import ObservationSpec
+from skillet.envs.specs import RGBD_SPEC_BATCHED
 from skillet.perception.apriltag import CameraLocalizer
 from skillet.perception.utils import depth_to_colormap_np
-from skillet.envs.specs import RGBD_SPEC_BATCHED
 
 
 class RealsenseEnv(_EnvironmentBase):
@@ -166,6 +166,7 @@ class RealsenseEnv(_EnvironmentBase):
               - ``intrinsic_k``: (3, 3) float64 camera intrinsic matrix
               - ``camera_pose``: 7D float64 array (x, y, z, qx, qy, qz, qw) in ROS xyzw
               - ``timestamp``: float timestamp in seconds
+
         """
         if self._closed:
             raise RuntimeError("RealsenseEnv is closed. Create a new instance to continue streaming.")

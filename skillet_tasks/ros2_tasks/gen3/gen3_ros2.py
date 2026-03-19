@@ -6,10 +6,10 @@ Written by Will Solow, 2026
 
 """
 
-import time
 import base64
 import math
 import threading
+import time
 from typing import Any
 
 import cv2
@@ -101,7 +101,11 @@ class Gen3ROS2Env(ROS2Env):
         self.body_pose_topic = "/robot_body_pose_w"
         self.body_vel_topic = "/robot_body_vel_w"
         # self.gripper_topic_type = "control_msgs/action/GripperCommand" NOTE: Uncomment if you want gripper in fake hardware
-        self.gripper_topic_type = "control_msgs/action/ParallelGripperCommand"
+        self.gripper_topic_type = (
+            "control_msgs/action/GripperCommand"
+            if self.cfg.use_fake_hardware
+            else "control_msgs/action/ParallelGripperCommand"
+        )
         self.moveit_cmd_topic = "/move_action"
         self.moveit_cmd_topic_type = "moveit_msgs/action/MoveGroup"
         self.realsense_snapshot_service = "/table_camera/realsense/get_latest_frame"
@@ -199,7 +203,9 @@ class Gen3ROS2Env(ROS2Env):
         # Set up controller interfaces
         self.moveit_client = ActionClient(self.ros, self.moveit_cmd_topic, self.moveit_cmd_topic_type)
         self.joint_states_pub = Topic(self.ros, self.joint_cmd_topic, "trajectory_msgs/msg/JointTrajectory")
-        self.twist_vel_pub = Topic(self.ros, self.twist_vel_topic, "geometry_msgs/msg/Twist")
+        self.twist_vel_pub = Topic(
+            self.ros, self.twist_vel_topic, "geometry_msgs/msg/TwistStamped"
+        )  # NOTE changed this here, test on real
         self.gripper_client = ActionClient(self.ros, self.gripper_cmd_topic, self.gripper_topic_type)
         self.controller_client = Service(
             self.ros, "/controller_manager/switch_controller", "controller_manager_msgs/srv/SwitchController"
@@ -266,7 +272,6 @@ class Gen3ROS2Env(ROS2Env):
             timeout: duration of time out
 
         """
-
         # Publish BLOCKING gripper command. To keep the gripper stationary
         # Assumes we can either move joints or close gripper, not both
         if self._publish_gripper(action, action_spec, close_time=4.0):
@@ -391,12 +396,18 @@ class Gen3ROS2Env(ROS2Env):
             close_time: time the gripper takes to close
 
         """
+        if self.cfg.use_fake_hardware:
+            return False
         new_gripper_goal = False
 
         gripper_val = float(joint_pos[-1])
         gripper_val = max(0, min(gripper_val, 1)) * 0.8
         # gripper_goal = {"command": {"position": gripper_val, "max_effort": 100.0}} # NOTE uncomment if you want gripper in fake hardware
-        gripper_goal = {"command": {"name": self.cfg.gripper_joint_names, "position": [gripper_val], "effort": [0.0]}}
+        gripper_goal = (
+            {"command": {"position": gripper_val, "max_effort": 100.0}}
+            if self.cfg.use_fake_hardware
+            else {"command": {"name": self.cfg.gripper_joint_names, "position": [gripper_val], "effort": [0.0]}}
+        )
 
         if gripper_goal != self.curr_gripper_goal:
             result_container = {}
@@ -472,7 +483,7 @@ class Gen3ROS2Env(ROS2Env):
             twist: Cartesian twist command (velocity) in XYZ (linear) and RPY (angular).
 
         """
-        if self.active_controller != "twist_controller":
+        if not self.cfg.use_fake_hardware and self.active_controller != "twist_controller":
             # print("[INFO] Switching controller to `twist_controller`") # TODO uncomment
             if not self.switch_controllers(activate=["twist_controller"], deactivate=["joint_trajectory_controller"]):
                 # print("[INFO] Unable to switch controller to `twist_controller`. Aborting trajectory.")
@@ -482,8 +493,11 @@ class Gen3ROS2Env(ROS2Env):
 
         twist = twist.tolist()
         twist_cmd = {
-            "linear": {"x": twist[0], "y": twist[1], "z": twist[2]},
-            "angular": {"x": twist[3], "y": twist[4], "z": twist[5]},
+            "header": {"stamp": {"sec": 0, "nanosec": 0}, "frame_id": "base_link"},
+            "twist": {
+                "linear": {"x": twist[0], "y": twist[1], "z": twist[2]},
+                "angular": {"x": twist[3], "y": twist[4], "z": twist[5]},
+            },
         }
 
         self.twist_vel_pub.publish(twist_cmd)

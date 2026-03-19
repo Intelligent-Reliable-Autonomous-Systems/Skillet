@@ -53,6 +53,7 @@ def main() -> None:
     )
     env_cfg.robot_ip = args_cli.robot_ip
     env_cfg.launch_ros = args_cli.launch_ros
+    env_cfg.use_fake_hardware = True
 
     env = gym.make(args_cli.task, cfg=env_cfg, ros=setup_ros())
     env = SkilletEnv(env)

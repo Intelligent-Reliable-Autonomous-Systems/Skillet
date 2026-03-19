@@ -181,9 +181,7 @@ def main() -> None:
         params_policy=fixed_param_policy,
     )
 
-    if (
-        not args_cli.realsense_env or True
-    ):  # args_cli.use_fake_hardware: NOTE this is a string so always evaluates to true, thus blocking
+    if not args_cli.realsense_env:
         input("Press Enter to start the skill execution...")
 
     # simulate environment

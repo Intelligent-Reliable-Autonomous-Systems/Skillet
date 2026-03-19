@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import threading
-from typing import Any, Callable, Sequence
+from collections.abc import Callable, Sequence
+from typing import Any
 
 import numpy as np
 import torch
@@ -119,7 +120,6 @@ def create_aabb_lineset(
         Open3D LineSet
 
     """
-
     x0, y0, z0, x1, y1, z1 = bounds
     # 8 corners ordered so bit pattern (z_bit, y_bit, x_bit) maps to index.
     corners = np.array(
@@ -149,6 +149,7 @@ def create_box_lineset(
 
     Returns:
         Open3D LineSet
+
     """
     RED = [1.0, 0.0, 0.0]
     GREEN = [0.0, 1.0, 0.0]
@@ -568,6 +569,7 @@ def quat_to_roll_pitch_yaw(quat: np.ndarray) -> tuple[float, float, float]:
 
     Returns:
         A tuple containing roll, pitch, yaw.
+
     """
     roll = np.arctan2(2 * (quat[0] * quat[1] + quat[2] * quat[3]), 1 - 2 * (quat[1] * quat[1] + quat[2] * quat[2]))
     pitch = np.arcsin(2 * (quat[0] * quat[2] - quat[3] * quat[1]))
