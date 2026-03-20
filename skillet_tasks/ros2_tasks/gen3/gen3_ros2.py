@@ -100,7 +100,6 @@ class Gen3ROS2Env(ROS2Env):
         self.robot_description_topic = "/robot_info"
         self.body_pose_topic = "/robot_body_pose_w"
         self.body_vel_topic = "/robot_body_vel_w"
-        # self.gripper_topic_type = "control_msgs/action/GripperCommand" NOTE: Uncomment if you want gripper in fake hardware
         self.gripper_topic_type = (
             "control_msgs/action/GripperCommand"
             if self.cfg.use_fake_hardware
@@ -203,9 +202,7 @@ class Gen3ROS2Env(ROS2Env):
         # Set up controller interfaces
         self.moveit_client = ActionClient(self.ros, self.moveit_cmd_topic, self.moveit_cmd_topic_type)
         self.joint_states_pub = Topic(self.ros, self.joint_cmd_topic, "trajectory_msgs/msg/JointTrajectory")
-        self.twist_vel_pub = Topic(
-            self.ros, self.twist_vel_topic, "geometry_msgs/msg/TwistStamped"
-        )  # NOTE changed this here, test on real
+        self.twist_vel_pub = Topic(self.ros, self.twist_vel_topic, "geometry_msgs/msg/Twist")
         self.gripper_client = ActionClient(self.ros, self.gripper_cmd_topic, self.gripper_topic_type)
         self.controller_client = Service(
             self.ros, "/controller_manager/switch_controller", "controller_manager_msgs/srv/SwitchController"
@@ -402,7 +399,6 @@ class Gen3ROS2Env(ROS2Env):
 
         gripper_val = float(joint_pos[-1])
         gripper_val = max(0, min(gripper_val, 1)) * 0.8
-        # gripper_goal = {"command": {"position": gripper_val, "max_effort": 100.0}} # NOTE uncomment if you want gripper in fake hardware
         gripper_goal = (
             {"command": {"position": gripper_val, "max_effort": 100.0}}
             if self.cfg.use_fake_hardware
@@ -493,11 +489,11 @@ class Gen3ROS2Env(ROS2Env):
 
         twist = twist.tolist()
         twist_cmd = {
-            "header": {"stamp": {"sec": 0, "nanosec": 0}, "frame_id": "base_link"},
-            "twist": {
-                "linear": {"x": twist[0], "y": twist[1], "z": twist[2]},
-                "angular": {"x": twist[3], "y": twist[4], "z": twist[5]},
-            },
+            # "header": {"stamp": {"sec": 0, "nanosec": 0}, "frame_id": "base_link"},
+            # "twist": {
+            "linear": {"x": twist[0], "y": twist[1], "z": twist[2]},
+            "angular": {"x": twist[3], "y": twist[4], "z": twist[5]},
+            # },
         }
 
         self.twist_vel_pub.publish(twist_cmd)

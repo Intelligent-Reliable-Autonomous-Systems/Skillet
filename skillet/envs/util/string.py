@@ -171,7 +171,7 @@ def string_to_callable(name: str) -> Callable:
             f"Received the error:\n {e}."
         )
         # raise ValueError(msg)
-        pass  # TODO address
+        pass
 
 
 """

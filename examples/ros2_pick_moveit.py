@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Main ROS2 executor file.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="ROS2-Gen3Lite-v0", help="Name of the task.")
+parser.add_argument("--task", type=str, default="ROS2-Gen3-v0", help="Name of the task.")
 parser.add_argument("--device", type=str, default="cuda", help="Device to use")
 parser.add_argument(
     "--ros2_ws", type=str, default=None, help="Absolute path to ROS2 workspace containing bringup files"

@@ -249,7 +249,7 @@ class ObservationsCfg:
 
         actions = ObservationTermCfg(func=mdp.last_action)
 
-    policy = ObservationGroupCfg(terms=PolicyCfg().__dict__, enable_corruption=True)  # TODO this used to be actor
+    policy = ObservationGroupCfg(terms=PolicyCfg().__dict__, enable_corruption=True)
     critic = ObservationGroupCfg(terms=PolicyCfg().__dict__, enable_corruption=True)
 
 

@@ -46,8 +46,7 @@ class Gen3LiteROS2EnvCfg(ROS2EnvCfg):
     skills = ["reach_xyz"]
 
     joint_ids = [0, 1, 2, 3, 4, 5, 6]
-    tcp_offset = [0.0, 0.0, 0.130, 0.70710678, 0, 0, 0.70710678]  # TODO possible that changing this
-    # has downstream effects on twist controller servo. Need to confirm(Will). used to be [0.0, 0.0, 0.120, 1.0, 0, 0, 0.0]
+    tcp_offset = [0.0, 0.0, 0.130, 0.70710678, 0, 0, 0.70710678]
     ee_link_name = "end_effector_link"
     base_link_name = "base_link"
     gripper_joint_names = ["right_finger_bottom_joint"]

@@ -89,8 +89,8 @@ class RotateYawSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[T
         self._rotate_status = None
         self._params = None
 
-        # 180 degree rotation about X axis
-        self._default_quat = torch.as_tensor([[0.0, 1.0, 0.0, 0.0]])
+        # 180 degree rotation about X axis + -90 yaw
+        self._default_quat = torch.as_tensor([[0.0, 0.7071, -0.7071, 0.0]])
 
     @property
     def param_dim(self) -> int:
@@ -136,9 +136,9 @@ class RotateYawSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[T
         grasp_quat = quat_mul(quat_from_yaw(params[:, 3]), self._default_quat.repeat(self.n_envs, 1))
         rotate_quat = quat_mul(quat_from_yaw(params[:, 4]), grasp_quat)
 
-        self._pos_threshold = 0.01  # NOTE updated for Gen3Lite
+        self._pos_threshold = 0.01
         self._quat_threshold = 0.1
-        self._vel_threshold = 0.001  #
+        self._vel_threshold = 0.001
         self._joint_threshold = 0.001
         self._prev_gripper_pos = None
 

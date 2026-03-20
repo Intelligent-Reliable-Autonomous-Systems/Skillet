@@ -72,7 +72,7 @@ def main() -> None:
     ik_ee_pose_policy = PoseAbsIKEEPolicy(env.obs_spec_ikee, env.action_spec)
     ik_ee_pose_policy = TwistPIDPosePolicy(env.obs_spec_twist_tcp, env.action_spec_twist_tcp)
     # Skills
-    skill_length = 200
+    skill_length = 1e9
     pick_skill = PickSkill(reach_policy=ik_ee_pose_policy, gripper_policy=None, lift_height=0.23, length=skill_length)
     skills: list[BatchedSkill[IKEE_Obs, BxM_Action, XYZ_YAW_Params]] = [pick_skill]
 
@@ -82,7 +82,7 @@ def main() -> None:
         pick_skill.params_spec,
         torch.as_tensor(
             [
-                [0.5, -0.2, 0.03, 0.0],
+                [0.3, -0.2, 0.03, 0.0],
                 [0.3, 0.2, 0.05, 0.0],
                 [0.2, 0.4, 0.05, 0.0],
             ],

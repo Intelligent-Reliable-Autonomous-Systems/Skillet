@@ -145,17 +145,15 @@ class TwistPIDPosePolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Gen
             tcp_pose_b[:, 0:3], tcp_pose_b[:, 3:7], self._tcp_quat_des_b[:, 0:3], self._tcp_quat_des_b[:, 3:7]
         )
 
-        # Required offset rotation about yaw for the twist controller
-        # twist_rot = torch.tensor([[0.7071, 0.0, 0.0, -0.7071]], device="cuda")
-        twist_rot = torch.tensor([[1.0, 0.0, 0.0, 0.0]], device="cuda")
         # Rotate position and rotation error into the frame the twist controller expects
-        curr_new = quat_mul(twist_rot, tcp_pose_b[:, 3:7])
-        error_pos = quat_apply(quat_inv(curr_new), error_pos)
-        error_rot = quat_apply(quat_inv(curr_new), error_rot) * 10  # Scale rotation error to make it move faster
+        error_pos = quat_apply(quat_inv(tcp_pose_b[:, 3:7]), error_pos)
+        error_rot = (
+            quat_apply(quat_inv(tcp_pose_b[:, 3:7]), error_rot) * 10
+        )  # Scale rotation error to make it move faster
 
-        # print(f"########")
-        # print(tcp_pose_b.squeeze()[0:3])
-        # print(self._tcp_quat_des_b.squeeze()[0:3])
+        print(f"########")
+        print(tcp_pose_b.squeeze()[0:3])
+        print(self._tcp_quat_des_b.squeeze()[0:3])
 
         self.integral_pos += error_pos * dt
         self.integral_rot += error_rot * dt

@@ -425,7 +425,7 @@ class ObservationsCfg:
 
         enable_corruption = False
 
-    policy = ObservationGroupCfg(terms=ActorCfg().__dict__, enable_corruption=True)  # TODO this used to be actor
+    policy = ObservationGroupCfg(terms=ActorCfg().__dict__, enable_corruption=True)
     critic = ObservationGroupCfg(terms=CriticCfg().__dict__, enable_corruption=True)
 
 

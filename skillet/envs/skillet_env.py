@@ -628,7 +628,6 @@ class SkilletEnv(
         ee_link_idx = self._env._find_link_idx(ee_link)
         base_link_idx = self._env._find_link_idx(base_link)
 
-        # TODO check this
         ee_vel_w = self._env._robot_body_vel_w[
             env_ids, ee_link_idx, :
         ]  # Extract end-effector velocity in the world frame

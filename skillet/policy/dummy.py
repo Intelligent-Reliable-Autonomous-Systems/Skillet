@@ -91,7 +91,6 @@ class FixedPolicy(BatchedUPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, TB
 
     def get_action(self, obs: TBPolicyObs, params: Any = None) -> TBAction:  # noqa: ANN401, D102
         n_envs = self._obs_spec.n_envs_from(obs)
-        # TODO: Make this general regardless of the type (torch/numpy)
         return self._params.unsqueeze(0).repeat(n_envs, 1)
 
 
@@ -123,7 +122,6 @@ class RandomFixedPolicy(BatchedUPolicy[TBPolicyObs, TBAction], Generic[TBPolicyO
 
     def get_action(self, obs: TBPolicyObs, params: Any = None) -> TBAction:  # noqa: ANN401, D102
         n_envs = self._obs_spec.n_envs_from(obs)
-        # TODO: Make this general regardless of the type (torch/numpy)
 
         indices = torch.multinomial(torch.ones(self._params.shape[0]), num_samples=n_envs, replacement=True)
 
