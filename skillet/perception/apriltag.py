@@ -71,12 +71,13 @@ class ApriltagStateEstimator:
                             spec["face"], pos_world, normal_world, up_world, cube.size
                         )
                         cube.pose = cube_pose
+                        print(cube.pose)
 
 
 class CameraLocalizer:
     def __init__(
         self,
-        apriltag_pose: np.ndarray = np.array([0.13, 0.0, 0.0, 0.0, 0.0, 0.7071068, 0.7071068]),
+        apriltag_pose: np.ndarray = np.array([0.12, 0.005, 0.0, 0.0, 0.0, 0.7071068, 0.7071068]),
         apriltag_size_m: float = 0.100,
         apriltag_id: int = 3,
     ) -> None:

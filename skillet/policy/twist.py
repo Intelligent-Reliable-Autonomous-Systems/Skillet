@@ -151,9 +151,9 @@ class TwistPIDPosePolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Gen
             quat_apply(quat_inv(tcp_pose_b[:, 3:7]), error_rot) * 10
         )  # Scale rotation error to make it move faster
 
-        print(f"########")
-        print(tcp_pose_b.squeeze()[0:3])
-        print(self._tcp_quat_des_b.squeeze()[0:3])
+        # print(f"########")
+        # print(tcp_pose_b.squeeze()[0:3])
+        # print(self._tcp_quat_des_b.squeeze()[0:3])
 
         self.integral_pos += error_pos * dt
         self.integral_rot += error_rot * dt
@@ -174,7 +174,7 @@ class TwistPIDPosePolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Gen
         # Save last errors
         self.last_error_pos = error_pos
         self.last_error_rot = error_rot
-
+        print(command)
         return torch.cat((command, self.start_gripper_pos), dim=-1)
 
     def reset(self, obs: TBPolicyObs, params: Any = None, env_ids: torch.Tensor = None) -> None:
