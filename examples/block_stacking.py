@@ -24,11 +24,11 @@ from skillet.scene.base import Scene
 from skillet.scene.cube import Cube
 from skillet.scene.visualize import Open3DVisualizer
 from skillet.skill.high_level.pick import PickSkill
-from skillet.skill.high_level.pick_block import PickBlockSkill
 from skillet.skill.high_level.place import PlaceSkill
-from skillet.skill.high_level.place_block import PlaceBlockSkill
-from skillet.skill.high_level.rotate_block import RotateBlockSkill
 from skillet.skill.high_level.rotate_yaw import RotateYawSkill
+from skillet.skill.object_level.pick_block import PickBlockSkill
+from skillet.skill.object_level.place_block import PlaceBlockSkill
+from skillet.skill.object_level.rotate_block import RotateBlockSkill
 from skillet_tasks.ros2_tasks.factory import create_ros2_env
 
 if TYPE_CHECKING:

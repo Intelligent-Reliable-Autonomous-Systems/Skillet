@@ -1,4 +1,4 @@
-"""A push skill for placing an object down at a location and height after lifting to specified height."""
+"""A drag skill for dragging an object to a desired position."""
 
 from enum import IntEnum
 from typing import Generic
@@ -20,7 +20,7 @@ from skillet.envs.specs import IKEE_Obs
 from skillet.skill.specs import XYZ_YAW_Params, XYZ_YAW_Params_Spec
 
 
-class PushStatusCodes(IntEnum):
+class DragStatusCodes(IntEnum):
     """The codes for the status of a skill."""
 
     IDLE = 0
@@ -31,47 +31,54 @@ class PushStatusCodes(IntEnum):
     """The skill is reaching the hovering position."""
     LOWER = 3
     """The skill is lowering to the object."""
-    CLOSE = 4
-    """The skill is releasing the object."""
-    PUSH = 5
-    """The skill is pushing the object."""
+    GRASP = 4
+    """The skill is grasping the object."""
+    DRAG = 5
+    """The skill dragging the object."""
     DONE = 6
     """The skill has lifted the ojbect."""
 
 
-class PushSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAction]):
-    """A push skill for placing an object down at a location and height after lifting to specified height.
+class DragSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAction]):
+    """A drag skill for dragging an object to a desired location.
 
-    Parameterized by [x,y,z, yaw, heading, dist] the x y z location to perform the push action and orientation (yaw)
-    of gripper, heading to perform push, and distance in meters
+    Generic Args:
+        TBAction: The type of the action for the skill.
+
+    Parameterized by [x,y,z, yaw, heading, dist] the x y z location to perform the drag action, orientation (yaw)
+    of the gripper, and heading and distance to drag
     """
 
     def __init__(
         self,
-        reach_policy: BatchedPolicy[TBSkillObs, TBAction, TBSkillParams],
-        gripper_policy: BatchedPolicy[TBSkillObs, TBAction, TBSkillParams],
+        reach_policy: BatchedPolicy[IKEE_Obs, TBAction, XYZ_YAW_Params],
+        gripper_policy: BatchedPolicy[IKEE_Obs, TBAction, XYZ_YAW_Params] | None,
         lift_height: float,
         length: int,
     ) -> None:
-        """Initialize the push skill.
+        """Initialize the drag skill.
+
+        Generic Args:
+            TBAction: The type of the action for the skill.
 
         Args:
             reach_policy: The policy for reaching.
             orient_policy: The policy for orienting.
             gripper_policy: The policy for grasping.
-            lift_height: The height to lift to at the beginning.
+            lift_height: The height to lift the object to.
             length: The number of steps to execute the skill for.
 
         """
-        self._name = "push_skill"
+        self._name = "drag_skill"
         self._reach_policy = reach_policy
         self._gripper_policy = gripper_policy
         self._lift_height = lift_height
         self._length = length
         self._status = None
-        self._push_status = None
+        self._drag_status = None
         self._params = None
-        # 180 degree rotation about X axis + -90 yaw
+
+        # 180 degree rotation about X axis + -90 degree yaw
         self._default_quat = torch.as_tensor([[0.0, 0.7071, -0.7071, 0.0]])
 
     @property
@@ -99,19 +106,19 @@ class PushSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         return self._status
 
     def initiate(self, obs: TBSkillObs, params: TBSkillParams) -> None:
-        """Initiate the push skill.
+        """Initiate the drag skill.
 
         Args:
             obs: The low-level observation for the skill.
-            params: The push parameters, (x, y, z, yaw, heading, dist) as shape (b, 6)
+            params: The drag parameters, (x, y, z, yaw, heading, dist) as shape (b, 6)
 
         """
         self.n_envs = self.obs_spec.n_envs_from(obs)
         spec = self.policy.obs_spec.with_n_envs(self.n_envs)
         self._status = spec.zeros(shape=(self.n_envs,), dtype=int)
-        self._push_status = spec.zeros(shape=(self.n_envs,), dtype=int)
+        self._drag_status = spec.zeros(shape=(self.n_envs,), dtype=int)
         self._status[:] = SkillStatusCodes.RUNNING
-        self._push_status[:] = PushStatusCodes.ASCEND
+        self._drag_status[:] = DragStatusCodes.ASCEND
         self._params = params
         self._n_steps = 0
         self._default_quat = self._default_quat.to(self.obs_spec.device)
@@ -125,25 +132,25 @@ class PushSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
 
         ee_pose_b = obs["tcp_pose_b"]
 
-        # Define the target poses for each stage of the push skill, indexed by PushStatusCodes
-        # (n_envs, num_pick_stages, 7)
+        # Define the target poses for each stage of the drag skill, indexed by DragStatusCodes
+        # (n_envs, num_drag_stages, 7)
         target_poses = spec.zeros(shape=(self.n_envs, 7, 7), dtype=float)
         # ASCEND[1]: Go up to lift height (gripper open)
-        target_poses[:, PushStatusCodes.ASCEND, :7] = ee_pose_b
-        target_poses[:, PushStatusCodes.ASCEND, 2] = self._lift_height
+        target_poses[:, DragStatusCodes.ASCEND, :7] = ee_pose_b
+        target_poses[:, DragStatusCodes.ASCEND, 2] = self._lift_height
 
         # HOVER[2]: Go over to the target x,y position, oriented downward (gripper open)
-        target_poses[:, PushStatusCodes.HOVER, :2] = params[:, :2]  # (x,y) from params
-        target_poses[:, PushStatusCodes.HOVER, 2] = self._lift_height
-        target_poses[:, PushStatusCodes.HOVER, 3:7] = goal_quat
+        target_poses[:, DragStatusCodes.HOVER, :2] = params[:, :2]  # (x,y) from params
+        target_poses[:, DragStatusCodes.HOVER, 2] = self._lift_height
+        target_poses[:, DragStatusCodes.HOVER, 3:7] = goal_quat
         # LOWER[3]: Go down to the target z position (gripper open)
-        target_poses[:, PushStatusCodes.LOWER, :7] = target_poses[:, PushStatusCodes.HOVER, :7]
-        target_poses[:, PushStatusCodes.LOWER, 2] = params[:, 2]
-        # CLOSE[4]: Close gripper
-        target_poses[:, PushStatusCodes.CLOSE, :7] = target_poses[:, PushStatusCodes.LOWER, :7]
-        # LIFT[5]: Push up to the target xyz position given by heading and direction (gripper closed)
-        target_poses[:, PushStatusCodes.PUSH, 2:] = target_poses[:, PushStatusCodes.LOWER, 2:]
-        target_poses[:, PushStatusCodes.PUSH, :2] = target_poses[:, PushStatusCodes.LOWER, :2] + params[
+        target_poses[:, DragStatusCodes.LOWER, :7] = target_poses[:, DragStatusCodes.HOVER, :7]
+        target_poses[:, DragStatusCodes.LOWER, 2] = params[:, 2]
+        # GRASP[4]: Close gripper
+        target_poses[:, DragStatusCodes.GRASP, :7] = target_poses[:, DragStatusCodes.LOWER, :7]
+        # DRAG[5]: Drag the object to the target location
+        target_poses[:, DragStatusCodes.DRAG, 2:] = target_poses[:, DragStatusCodes.LOWER, 2:]
+        target_poses[:, DragStatusCodes.DRAG, :2] = target_poses[:, DragStatusCodes.LOWER, :2] + params[
             :, 5
         ] * torch.cat((torch.cos(params[:, 4]), torch.sin(params[:, 4])), dim=-1)
 
@@ -152,7 +159,7 @@ class PushSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         # Start the skill by going to the ASCEND pose
         idx = torch.arange(self.n_envs, device=target_poses.device)
         valid_idx = self._status == SkillStatusCodes.RUNNING
-        self._current_target_poses = target_poses[idx, self._push_status]
+        self._current_target_poses = target_poses[idx, self._drag_status]
         env_ids = torch.nonzero(valid_idx, as_tuple=False).squeeze(-1)
         if env_ids.numel():
             self._reach_policy.reset(obs, self._current_target_poses, env_ids=env_ids)
@@ -164,8 +171,8 @@ class PushSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
             torch.linalg.vector_norm(ee_pose_b[:, 0:3] - self._current_target_poses[:, 0:3], dim=1)
             < self._pos_threshold
         )
-        reached_height = self._push_status == PushStatusCodes.ASCEND & (
-            ee_pose_b[:, 2] >= self._current_target_poses[:, 2]
+        reached_height = self._drag_status == DragStatusCodes.ASCEND & (
+            ee_pose_b[:, 2] >= self._current_target_poses[:, 2] - self._pos_threshold
         )
         reached_quat = (
             quat_error_magnitude(ee_pose_b[:, 3:7], self._current_target_poses[:, 3:7]) < self._quat_threshold
@@ -175,24 +182,30 @@ class PushSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         next_pose = reached_pose & ee_vel
 
         if next_pose.any():
-            idx = torch.arange(self.n_envs, device=next_pose.device)
-            valid_idx = (self._status == SkillStatusCodes.RUNNING) & (next_pose)
-            self._push_status[valid_idx] += 1
-            valid_idx = valid_idx & (self._push_status < PushStatusCodes.DONE)
-            print(f"[INFO][PUSH STATUS UPDATE]: {self._push_status.cpu().numpy()[0]} | reached_pose: {next_pose}")
-            # Update the target pose based on the new push status
-            self._current_target_poses[valid_idx] = self._target_poses[idx[valid_idx], self._push_status[valid_idx]]
+            idx = torch.arange(self.n_envs, device=reached_pose.device)
+            valid_idx = (self._status == SkillStatusCodes.RUNNING) & (reached_pose)
+            self._drag_status[valid_idx] += 1
+            valid_idx = valid_idx & (self._drag_status < DragStatusCodes.DONE)
+            print(
+                f"[INFO][DRAG STATUS UPDATE]: {DragStatusCodes(self._drag_status.cpu().numpy()[0]).name} | reached_pose: {reached_pose}"
+            )
+            # Update the target pose based on the new drag status
+            self._current_target_poses[valid_idx] = self._target_poses[idx[valid_idx], self._drag_status[valid_idx]]
 
             env_ids = torch.nonzero(valid_idx, as_tuple=False).squeeze(-1)
             if env_ids.numel():
                 self._reach_policy.reset(obs, self._current_target_poses, env_ids=env_ids)
 
         reach_actions = self._reach_policy.get_action(obs)
-        reach_actions[:, -1] = torch.ones_like(reach_actions[:, -1]) * 0.8  # Gripper always closed
+        reach_actions[:, -1] = torch.where(
+            self._drag_status >= DragStatusCodes.GRASP,
+            torch.ones_like(reach_actions[:, -1]) * 0.8,  # Close gripper
+            torch.zeros_like(reach_actions[:, -1]) + 0.2,  # Open gripper
+        )
 
         self._prev_gripper_pos = obs["joint_pos"][:, -1]
         self._n_steps += 1
-        self._status[self._push_status == PushStatusCodes.DONE] = SkillStatusCodes.SUCCESS
+        self._status[self._drag_status == DragStatusCodes.DONE] = SkillStatusCodes.SUCCESS
         if self._n_steps >= self._length:
             self._status[self._status == SkillStatusCodes.RUNNING] = SkillStatusCodes.FAILED
 
