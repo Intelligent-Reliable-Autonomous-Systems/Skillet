@@ -26,8 +26,15 @@ See [IsaacLab Installation](https://isaac-sim.github.io/IsaacLab/main/source/set
 3. Install perception python packages: `pip install -e ".[perception]"`
 4. Unlike other Ultralytics models, SAM 3 weights (sam3.pt) are not automatically downloaded. You must first request access for the model weights on the [SAM 3 model page on Hugging Face](https://huggingface.co/facebook/sam3) and then, once approved, download the sam3.pt file. Place the downloaded sam3.pt file at `data/models/sam3.pt`.
 
-
 Perception relies on some additional modules.
+
+## Kortex Integration
+Sometimes ROS2 is a pain. To run the robot through the Kortex API instead of ROS2, follow these directions:
+1. `python3 -m pip install skillet/envs/kortex/kortex_api-2.6.0.post3-py3-none-any.whl`
+2. `pip install pinnochio`
+3. Sometimes pinnochio needs to be upgraded: `pip install --upgrade pinnochio`
+
+You should now be all set to run an experiment with `--env_id Kortex-Gen3Lite-v0`
 
 ## ROS2 Integration
 See [ROS2 Installation](https://docs.ros.org/en/jazzy/Installation.html) to install ROS2. Be sure to install on system python (not venv/conda)
