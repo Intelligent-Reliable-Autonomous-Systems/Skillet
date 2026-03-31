@@ -1,4 +1,3 @@
-from .bridge import setup_ros as setup_ros
 from .configclass import configclass as configclass
 from .importer import import_packages as import_packages
 from .parse_cfg import get_checkpoint_path as get_checkpoint_path

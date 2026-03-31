@@ -12,6 +12,7 @@ import logging
 import math
 from typing import Literal
 
+import numpy as np
 import torch
 import torch.nn.functional
 
@@ -2134,3 +2135,43 @@ def base_to_tcp_twist(
     angular_vel_tcp = quat_apply(tcp_quat_inv, angular_vel)
 
     return linear_vel_tcp, angular_vel_tcp
+
+
+def np_euler_xyz_degrees_from_quat(
+    quat: np.ndarray, wrap_to_2pi: bool = False
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Convert rotations given as quaternions to Euler angles in degrees.
+
+    The euler angles are assumed in XYZ extrinsic convention.
+
+    Args:
+        quat: The quaternion orientation in (w, x, y, z). Shape is (N, 4).
+        wrap_to_2pi (bool): Whether to wrap output Euler angles into [0, 2π). If
+            False, angles are returned in the default range (−π, π]. Defaults to
+            False.
+
+    Returns:
+        A tuple containing roll-pitch-yaw. Each element is a tensor of shape (1,).
+
+    Reference:
+        https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
+
+    """
+    q_w, q_x, q_y, q_z = quat[0], quat[1], quat[2], quat[3]
+    # roll (x-axis rotation)
+    sin_roll = 2.0 * (q_w * q_x + q_y * q_z)
+    cos_roll = 1 - 2 * (q_x * q_x + q_y * q_y)
+    roll = np.arctan2(sin_roll, cos_roll)
+
+    # pitch (y-axis rotation)
+    sin_pitch = 2.0 * (q_w * q_y - q_z * q_x)
+    pitch = np.where(np.abs(sin_pitch) >= 1, np.copysign(np.array(np.pi / 2.0), sin_pitch), np.arcsin(sin_pitch))
+
+    # yaw (z-axis rotation)
+    sin_yaw = 2.0 * (q_w * q_z + q_x * q_y)
+    cos_yaw = 1 - 2 * (q_y * q_y + q_z * q_z)
+    yaw = np.arctan2(sin_yaw, cos_yaw)
+
+    if wrap_to_2pi:
+        return roll % (2 * np.pi), pitch % (2 * np.pi), yaw % (2 * np.pi)
+    return np.degrees(roll), np.degrees(pitch), np.degrees(yaw)

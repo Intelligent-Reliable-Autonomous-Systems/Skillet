@@ -13,8 +13,9 @@ import torch
 
 import skillet_tasks.ros2_tasks  # noqa: F401
 from skillet.controllers.devices import Se3Keyboard, Se3KeyboardCfg, VRHeadset, VRHeadsetCfg, VRJoystick, VRJoystickCfg
+from skillet.envs.ros2.ros_bridge import setup_ros
 from skillet.envs.skillet_env import SkilletEnv
-from skillet.envs.util import parse_ros2_env_cfg, setup_ros
+from skillet.envs.util import parse_ros2_env_cfg
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Keyboard teleoperation for Isaac Lab environments.")

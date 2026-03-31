@@ -1,7 +1,7 @@
 from typing import Any
 
 from skillet.envs.ros2 import ROS2Env
-from skillet.envs.util import setup_ros
+from skillet.envs.ros2.ros_bridge import setup_ros
 from skillet_tasks.ros2_tasks.gen3.gen3_ros2 import Gen3ROS2Env, Gen3ROS2EnvCfg
 from skillet_tasks.ros2_tasks.gen3_lite.gen3lite_ros2 import Gen3LiteROS2Env, Gen3LiteROS2EnvCfg
 

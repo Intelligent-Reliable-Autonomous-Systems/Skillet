@@ -19,8 +19,9 @@ if TYPE_CHECKING:
 
 import skillet_tasks.ros2_tasks  # noqa: F401
 from skillet.agents.policy_over_options import PolicyOverOptionsBatchedAgent
+from skillet.envs.ros2.ros_bridge import setup_ros
 from skillet.envs.skillet_env import SkilletEnv
-from skillet.envs.util import parse_ros2_env_cfg, setup_ros
+from skillet.envs.util import parse_ros2_env_cfg
 from skillet.policy.dummy import FixedSequencePolicy, RandomPolicy
 from skillet.policy.ik_ee import PoseAbsIKEEPolicy
 from skillet.skill import ReachPoseSkill

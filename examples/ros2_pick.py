@@ -60,7 +60,6 @@ def main() -> None:
     }
     env = create_ros2_env(args_cli.task, env_cfg)
 
-    # env = Gen3ROS2Env(cfg=env_cfg, ros=setup_ros())
     env = SkilletEnv(env)
     env.reset()
 

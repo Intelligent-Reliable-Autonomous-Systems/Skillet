@@ -335,6 +335,121 @@ def rot_to_quat_xyzw(R):
     return q
 
 
+class RealsenseCamera:
+    """Class that manages the Realsense camera streaming.
+
+    Used as a helper class in the Kortex API environments to avoid requiring ROS2.
+    """
+
+    def __init__(
+        self,
+        width: int = 640,
+        height: int = 480,
+        fps: int = 30,
+        apriltag_pose: np.ndarray = np.array([0.12, 0.005, 0.0, 0.0, 0.0, 0.7071068, 0.7071068]),
+        apriltag_size_m: float = 0.100,
+        apriltag_id: int = 0,
+    ) -> None:
+        """Initialize the RealSense pipeline and RGB-D observation space."""
+        self.width = width
+        self.height = height
+        self.fps = fps
+
+        # RealSense pipeline + streams.
+        self._pipeline = rs.pipeline()
+        self._config = rs.config()
+        self._config.enable_stream(rs.stream.color, self.width, self.height, rs.format.bgr8, self.fps)
+        self._config.enable_stream(rs.stream.depth, self.width, self.height, rs.format.z16, self.fps)
+
+        self._tag_detector = AprilTagDetector()
+        self._T_base_to_tag = make_T(quat_xyzw_to_R(*list(apriltag_pose[3:7])), list(apriltag_pose[:3]))
+        self._roll_180 = make_T(quat_xyzw_to_R(1.0, 0.0, 0.0, 0.0), [0.0, 0.0, 0.0])
+        self._T_base_to_tag = self._T_base_to_tag @ self._roll_180
+        self._latest_camera_pose = T_to_xyz_quat_xyzw(self._T_base_to_tag)
+        self._apriltag_size_m = apriltag_size_m
+        self._apriltag_id = apriltag_id
+
+        self._camera_localizer = CameraLocalizer(
+            apriltag_pose=apriltag_pose, apriltag_size_m=apriltag_size_m, apriltag_id=apriltag_id
+        )
+
+        self._profile = self._pipeline.start(self._config)
+
+        # Align depth to color so pixels correspond.
+        self._align = rs.align(rs.stream.color)
+
+        # Intrinsics for the color stream.
+        color_stream = self._profile.get_stream(rs.stream.color).as_video_stream_profile()
+        intr = color_stream.get_intrinsics()
+        self._intrinsic_k = np.array(
+            [
+                [intr.fx, 0.0, intr.ppx],
+                [0.0, intr.fy, intr.ppy],
+                [0.0, 0.0, 1.0],
+            ],
+            dtype=np.float64,
+        )
+
+        # Depth scale (meters per depth unit) retained for reference; we keep depth
+        # in uint16 units to match the ROS2 RGB-D observation convention.
+        depth_sensor = self._profile.get_device().first_depth_sensor()
+        self._depth_scale = depth_sensor.get_depth_scale()
+
+    def _get_latest_rgbd_raw(self) -> dict[str, Any]:
+        """Grab the latest RGB-D snapshot in the raw ROS-style format.
+
+        Returns:
+            A dictionary containing:
+              - ``rgb``: (H, W, 3) uint8 RGB image
+              - ``depth``: (H, W) uint16 depth image
+              - ``intrinsic_k``: (3, 3) float64 camera intrinsic matrix
+              - ``camera_pose``: 7D float64 array (x, y, z, qx, qy, qz, qw) in ROS xyzw
+              - ``timestamp``: float timestamp in seconds
+
+        """
+        if self._closed:
+            raise RuntimeError("RealsenseEnv is closed. Create a new instance to continue streaming.")
+
+        frames = self._pipeline.wait_for_frames()
+        frames = self._align.process(frames)
+
+        color_frame = frames.get_color_frame()
+        depth_frame = frames.get_depth_frame()
+        if not color_frame or not depth_frame:
+            raise RuntimeError("Failed to acquire both color and depth frames from RealSense.")
+
+        # (H, W, 3) BGR uint8 -> RGB
+        color_bgr = np.asanyarray(color_frame.get_data())
+        rgb = cv2.cvtColor(color_bgr, cv2.COLOR_BGR2RGB)
+
+        # (H, W) uint16 depth image (no conversion to meters here).
+        depth = np.asanyarray(depth_frame.get_data()).astype(np.uint16, copy=False)
+
+        # camera_params = (self._intrinsic_k[0,0], self._intrinsic_k[1,1], self._intrinsic_k[0,2], self._intrinsic_k[1,2])
+        # tag_size_m = self._apriltag_size_m
+        # gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+        # detections = self._tag_detector.detect(gray, estimate_tag_pose=True, camera_params=camera_params, tag_size=tag_size_m)
+        # if detections:
+        #     for detection in detections:
+        #         if detection.tag_id == self._apriltag_id:
+        #             T_tag_cam = make_T(detection.pose_R, detection.pose_t.reshape(3))
+        #             T_cam_tag = _inv_T(T_tag_cam)
+        #             T_base_cam = self._T_base_to_tag @ T_cam_tag
+        #             self._latest_camera_pose = T_to_xyz_quat_xyzw(T_base_cam)
+        #             break
+
+        # Wall-clock timestamp in seconds.
+        timestamp = float(time.time())
+
+        return {
+            "rgb": rgb,
+            "depth": depth,
+            "intrinsic_k": self._intrinsic_k,
+            "camera_pose": self._camera_localizer.get_camera_pose(rgb=rgb, intrinsic_k=self._intrinsic_k),
+            "timestamp": timestamp,
+        }
+
+
 if __name__ == "__main__":
     env = RealsenseEnv()
 

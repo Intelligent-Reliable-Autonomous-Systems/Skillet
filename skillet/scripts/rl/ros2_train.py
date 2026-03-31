@@ -16,7 +16,8 @@ import torch
 import skillet_tasks.ros2_tasks  # noqa: F401
 from skillet.envs import SkillEnvWrapper, SkilletEnv
 from skillet.envs.compatibility.rsl_rl import RslRlVecEnvWrapper
-from skillet.envs.util import get_checkpoint_path, setup_ros
+from skillet.envs.ros2.ros_bridge import setup_ros
+from skillet.envs.util import get_checkpoint_path
 from skillet.envs.util.dict import print_dict
 from skillet.envs.util.hydra import hydra_task_config
 from skillet.envs.util.parse_cfg import dump_yaml
