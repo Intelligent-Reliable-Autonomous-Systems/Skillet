@@ -174,7 +174,6 @@ class TwistPIDPosePolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Gen
         # Save last errors
         self.last_error_pos = error_pos
         self.last_error_rot = error_rot
-        print(command)
         return torch.cat((command, self.start_gripper_pos), dim=-1)
 
     def reset(self, obs: TBPolicyObs, params: Any = None, env_ids: torch.Tensor = None) -> None:

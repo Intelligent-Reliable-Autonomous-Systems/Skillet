@@ -11,6 +11,7 @@ from typing import Any
 
 from kortex_api.autogen.client_stubs.BaseClientRpc import BaseClient
 from kortex_api.autogen.client_stubs.BaseCyclicClientRpc import BaseCyclicClient
+from skillet.envs.kortex.kortex_bridge import DeviceConnection
 
 from skillet.envs.kortex import (
     KortexEnvCfg,
@@ -53,8 +54,10 @@ class Gen3LiteKortexEnvCfg(KortexEnvCfg):
     tcp_offset = [0.0, 0.0, 0.130, 0.70710678, 0, 0, 0.70710678]
     ee_link_name = "end_effector_link"
     base_link_name = "base_link"
-    gripper_joint_names = ["right_finger_bottom_joint"]
+    gripper_joint_names = ["left_finger_bottom_joint"]
     arm_joint_names = ["joint_1", "joint_2", "joint_3", "joint_4", "joint_5", "joint_6"]
+
+    base_apriltag_id = 3
 
 
 class Gen3LiteKortexEnv(Gen3KortexEnv):
@@ -63,10 +66,9 @@ class Gen3LiteKortexEnv(Gen3KortexEnv):
     def __init__(
         self,
         cfg: Gen3LiteKortexEnvCfg,
-        kortex: BaseClient,
-        kortex_c: BaseCyclicClient,
+        kortex_connection: DeviceConnection,
         render_mode: str | None = None,
         **kwargs: dict[str, Any],
     ) -> None:
         """Initialize Gen3Lite Arm ROS2."""
-        super().__init__(cfg, kortex=kortex, kortex_c=kortex_c, render_mode=render_mode, **kwargs)
+        super().__init__(cfg, kortex_connection=kortex_connection, render_mode=render_mode, **kwargs)

@@ -54,7 +54,7 @@ class DeviceConnection:
             session_info.connection_inactivity_timeout = 2000  # (milliseconds)
 
             self.sessionManager = SessionManager(self.router)
-            print("Logging as", self.credentials[0], "on device", self.ipAddress)
+            print("Logging as", self.credentials[0], "on device", self.ip_address)
             self.sessionManager.CreateSession(session_info)
 
         return self.router
@@ -68,6 +68,25 @@ class DeviceConnection:
             self.sessionManager.CloseSession(router_options)
 
         self.transport.disconnect()
+
+    def open(self):
+        """Open connection and return (base_client, cyclic_client)."""
+        self.transport.connect(self.ip_address, self.port)
+        if self.credentials[0] != "":
+            session_info = Session_pb2.CreateSessionInfo()
+            session_info.username = self.credentials[0]
+            session_info.password = self.credentials[1]
+            session_info.session_inactivity_timeout = 10000
+            session_info.connection_inactivity_timeout = 2000
+            self.sessionManager = SessionManager(self.router)
+            print("Logging as", self.credentials[0], "on device", self.ip_address)
+            self.sessionManager.CreateSession(session_info)
+        self.base = BaseClient(self.router)
+        self.cyclic = BaseCyclicClient(self.router)
+        return self.base, self.cyclic
+
+    def close(self):
+        self.__exit__(None, None, None)
 
 
 def check_for_end_or_abort(e):
@@ -89,6 +108,4 @@ def check_for_end_or_abort(e):
 
 def setup_kortex(ip: str = "192.168.1.10", username: str = "admin", password: str = "admin") -> BaseClient:
     """Set up the kortex base client."""
-    with DeviceConnection.create_tcp_connection(ip=ip, username=username, password=password) as router:
-        # Create required services
-        return BaseClient(router), BaseCyclicClient(router)
+    return DeviceConnection.create_tcp_connection(ip=ip, username=username, password=password)

@@ -348,7 +348,7 @@ class RealsenseCamera:
         fps: int = 30,
         apriltag_pose: np.ndarray = np.array([0.12, 0.005, 0.0, 0.0, 0.0, 0.7071068, 0.7071068]),
         apriltag_size_m: float = 0.100,
-        apriltag_id: int = 0,
+        apriltag_id: int = 3,
     ) -> None:
         """Initialize the RealSense pipeline and RGB-D observation space."""
         self.width = width
@@ -394,6 +394,7 @@ class RealsenseCamera:
         # in uint16 units to match the ROS2 RGB-D observation convention.
         depth_sensor = self._profile.get_device().first_depth_sensor()
         self._depth_scale = depth_sensor.get_depth_scale()
+        self._closed = False
 
     def _get_latest_rgbd_raw(self) -> dict[str, Any]:
         """Grab the latest RGB-D snapshot in the raw ROS-style format.

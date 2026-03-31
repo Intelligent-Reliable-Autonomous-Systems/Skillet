@@ -71,7 +71,6 @@ class ApriltagStateEstimator:
                             spec["face"], pos_world, normal_world, up_world, cube.size
                         )
                         cube.pose = cube_pose
-                        print(cube.pose)
 
 
 class CameraLocalizer:

@@ -881,12 +881,3 @@ class ParameterizedDiscrete(gym.spaces.Discrete, ParameterizedSpace):
         n = cast("int", n)
         start = cast("int", start) if start is not None else 0
         return gym.spaces.Discrete(n=n, start=start)
-
-
-if __name__ == "__main__":
-    # space = ParameterizedDiscrete(n="n_options", start=0)
-    space = ParameterizedBox(low=-3, high=3, shape=("n_options",), dtype=np.float32)
-    bound = space.bind(n_options=4)
-    print(bound)
-    for i in range(10):
-        print(bound.sample())

@@ -16,6 +16,7 @@ import pinocchio as pin
 import torch
 from kortex_api.autogen.client_stubs.BaseClientRpc import BaseClient
 from kortex_api.autogen.client_stubs.BaseCyclicClientRpc import BaseCyclicClient
+from skillet.envs.kortex.kortex_bridge import DeviceConnection
 from kortex_api.autogen.messages import Base_pb2
 
 from skillet.core.math import convert_quat
@@ -53,8 +54,7 @@ class KortexEnv(SkilletGymEnv):
     def __init__(
         self,
         cfg: KortexEnvCfg,
-        kortex: BaseClient,
-        kortex_c: BaseCyclicClient,
+        kortex_connection: DeviceConnection,
         render_mode: str | None = None,
         **kwargs: dict[str, Any],
     ) -> None:
@@ -67,8 +67,8 @@ class KortexEnv(SkilletGymEnv):
             kwargs: Additoinal arguments
 
         """
-        self.kortex = kortex
-        self.kortex_c = kortex_c
+        self.kortex_connection = kortex_connection
+        self.kortex, self.kortex_c = kortex_connection.open()
         self.cfg = cfg
         self.num_envs = cfg.num_envs
         self.device = cfg.device
@@ -95,6 +95,7 @@ class KortexEnv(SkilletGymEnv):
 
     def __del__(self) -> None:
         """Cleanup for the environment."""
+        self.kortex_connection.close()
         self.close()
 
     @property
@@ -253,7 +254,7 @@ class KortexEnv(SkilletGymEnv):
 
         self._episode_length_buf += 1  # step in current episode (per env)
         self._common_step_counter += 1  # total step (common for all envs)
-
+        self._update_robot_info()
         # return observations
         return self._get_observations(), self.extras
 
@@ -458,15 +459,15 @@ class KortexEnv(SkilletGymEnv):
         # Compute the current joint positions, velocities, and efforts
         curr_arm_positions = np.deg2rad([actuator.position for actuator in feedback.actuators])
         curr_gripper_positions = np.deg2rad([feedback.interconnect.gripper_feedback.motor[0].position])
-        self._current_joint_positions = np.concatenate(curr_arm_positions, curr_gripper_positions, dim=0)
+        self._current_joint_positions = np.concatenate((curr_arm_positions, curr_gripper_positions), axis=0)
 
         curr_arm_velocities = np.deg2rad([actuator.velocity for actuator in feedback.actuators])
         curr_gripper_velocities = np.deg2rad([feedback.interconnect.gripper_feedback.motor[0].velocity])
-        self._current_joint_velocities = np.concatenate(curr_arm_velocities, curr_gripper_velocities, dim=0)
+        self._current_joint_velocities = np.concatenate((curr_arm_velocities, curr_gripper_velocities), axis=0)
 
         curr_arm_efforts = np.asarray([actuator.torque for actuator in feedback.actuators])
         curr_gripper_efforts = np.asarray([feedback.interconnect.gripper_feedback.motor[0].current_motor])
-        self._current_joint_efforts = np.concatenate(curr_arm_efforts, curr_gripper_efforts, dim=0)
+        self._current_joint_efforts = np.concatenate((curr_arm_efforts, curr_gripper_efforts), axis=0)
 
         self._robot_links = [f.name for f in self.kortex_model.frames if f.type == pin.FrameType.BODY]
         self._robot_joints = [self.kortex_model.names[i] for i in range(1, self.kortex_model.njoints)]
@@ -478,15 +479,20 @@ class KortexEnv(SkilletGymEnv):
         jacobians = []
         poses = []
         vels = []
-        pin.computeJointJacobians(self.kortex_model, self.kortex_data, curr_arm_positions)
-        pin.forwardKinematics(self.kortex_model, self.kortex_data, curr_arm_positions, curr_arm_velocities)
+        # Pad gripper positions and velocities
+        q = pin.neutral(self.kortex_model)
+        q[: len(curr_arm_positions)] = curr_arm_positions
+        dq = pin.neutral(self.kortex_model)
+        dq[: len(curr_arm_velocities)] = curr_arm_velocities
+        pin.computeJointJacobians(self.kortex_model, self.kortex_data, q)
+        pin.forwardKinematics(self.kortex_model, self.kortex_data, q, dq)
         pin.updateFramePlacements(self.kortex_model, self.kortex_data)
         for f in self.kortex_model.frames:
             if f.type != pin.FrameType.BODY:
                 continue
             frame_id = self.kortex_model.getFrameId(f.name)
 
-            poses.append(pin.se3ToXYZQUAT(self.kortex_data.oMf[frame_id].copy()))
+            poses.append(pin.SE3ToXYZQUAT(self.kortex_data.oMf[frame_id].copy()))
             jacobians.append(
                 pin.getFrameJacobian(
                     self.kortex_model, self.kortex_data, frame_id, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED
@@ -502,7 +508,5 @@ class KortexEnv(SkilletGymEnv):
         self._current_robot_root_pose_w = np.asarray(poses[0])
         self._current_robot_body_vel_w = np.asarray(vels)
 
-        self._current_mass_matrices = pin.crba(self.kortex_model, self.kortex_data, curr_arm_positions)
-        self._current_gravity_vector = pin.computeGeneralizedGravity(
-            self.kortex_model, self.kortex_data, curr_arm_positions
-        )
+        self._current_mass_matrices = pin.crba(self.kortex_model, self.kortex_data, q)
+        self._current_gravity_vector = pin.computeGeneralizedGravity(self.kortex_model, self.kortex_data, q)

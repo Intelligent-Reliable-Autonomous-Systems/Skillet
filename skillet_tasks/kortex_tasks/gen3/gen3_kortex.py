@@ -14,8 +14,7 @@ from typing import Any
 import gymnasium as gym
 import numpy as np
 import torch
-from kortex_api.autogen.client_stubs.BaseClientRpc import BaseClient
-from kortex_api.autogen.client_stubs.BaseCyclicClientRpc import BaseCyclicClient
+from skillet.envs.kortex.kortex_bridge import DeviceConnection
 from kortex_api.autogen.messages import Base_pb2
 
 from skillet.core.math import np_euler_xyz_degrees_from_quat
@@ -78,13 +77,12 @@ class Gen3KortexEnv(KortexEnv):
     def __init__(
         self,
         cfg: KortexEnvCfg,
-        kortex: BaseClient,
-        kortex_c: BaseCyclicClient,
+        kortex_connection: DeviceConnection,
         render_mode: str | None = None,
         **kwargs: dict[str, Any],
     ) -> None:
         """Initialize Gen3 Arm Kortex."""
-        super().__init__(cfg, kortex=kortex, kortex_c=kortex_c, render_mode=render_mode, **kwargs)
+        super().__init__(cfg, kortex_connection=kortex_connection, render_mode=render_mode, **kwargs)
 
         self.joint_names = np.asarray(self.cfg.arm_joint_names + self.cfg.gripper_joint_names)
         self.arm_joint_names = np.asarray(self.cfg.arm_joint_names)
@@ -232,6 +230,7 @@ class Gen3KortexEnv(KortexEnv):
         if gripper_goal != self.curr_gripper_goal:
             gripper_command = Base_pb2.GripperCommand()
             finger = gripper_command.gripper.finger.add()
+            gripper_command.mode = Base_pb2.GRIPPER_POSITION
             finger.finger_identifier = 1
             finger.value = gripper_goal
 
@@ -341,15 +340,13 @@ class Gen3KortexEnv(KortexEnv):
         command = Base_pb2.TwistCommand()
 
         command.reference_frame = Base_pb2.CARTESIAN_REFERENCE_FRAME_TOOL
-        command.duration = 1  # Don't allow for longer than 1sec twist for safety # TODO Check this
-
-        twist = command.twist
-        twist.linear_x = twist[0]
-        twist.linear_y = twist[1]
-        twist.linear_z = twist[2]
-        twist_degrees = np.degrees(twist[3:6])
-        twist.angular_x = twist_degrees[0]
-        twist.angular_y = twist_degrees[1]
-        twist.angular_z = twist_degrees[2]
+        command.duration = 1
+        twist_cmd = command.twist
+        twist_cmd.linear_x = twist[0]
+        twist_cmd.linear_y = twist[1]
+        twist_cmd.linear_z = twist[2]
+        twist_cmd.angular_x = twist[3]
+        twist_cmd.angular_y = twist[4]
+        twist_cmd.angular_z = twist[5]
 
         self.kortex.SendTwistCommand(command)

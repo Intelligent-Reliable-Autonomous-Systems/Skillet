@@ -47,6 +47,7 @@ perception = [
     "open3d",
     "pyrealsense2",
     "pupil-apriltags",
+    "pinnochio",
 ]
 dev = [
     "ruff",
