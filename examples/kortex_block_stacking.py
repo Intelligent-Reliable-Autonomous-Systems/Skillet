@@ -14,7 +14,7 @@ from skillet.core.env import BatchToSingleWrapper
 from skillet.envs.skillet_env import SkilletEnv
 from skillet.perception.perception import Perception
 from skillet.perception.realsense import RealsenseEnv
-from skillet.perception.sam3.sam3 import SAMConcept
+from skillet.perception.sam3_text.sam3_text import SAMConcept
 from skillet.policy.dummy import FixedSequencePolicy
 from skillet.policy.ik_ee import PoseAbsIKEEPolicy
 from skillet.policy.moveit import MoveItTcpQuatPolicy

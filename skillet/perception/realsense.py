@@ -22,7 +22,7 @@ from skillet.core import ActionSpec
 from skillet.core.env import _EnvironmentBase
 from skillet.core.spaces import ObservationSpec
 from skillet.envs.specs import RGBD_SPEC_BATCHED
-from skillet.perception.apriltag import CameraLocalizer
+from skillet.perception.localization import CameraLocalizer
 from skillet.perception.utils import depth_to_colormap_np
 
 

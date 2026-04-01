@@ -6,7 +6,7 @@ import os
 from skillet.envs.skillet_env import SkilletEnv
 from skillet.perception.perception import Perception
 from skillet.perception.realsense import RealsenseEnv
-from skillet.perception.sam3.sam3 import SAMConcept
+from skillet.perception.sam3_text.sam3_text import SAMConcept
 from skillet.scene.visualize import Open3DVisualizer
 from skillet_tasks.ros2_tasks.factory import create_ros2_env
 

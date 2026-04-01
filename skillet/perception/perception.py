@@ -15,10 +15,9 @@ import cv2
 import numpy as np
 import torch
 
-from skillet.perception.apriltag import ApriltagStateEstimator
-from skillet.perception.object_localization import segmented_rgbd_to_point_cloud
+from skillet.perception.localization import ApriltagStateEstimator, segmented_rgbd_to_point_cloud
 from skillet.perception.realsense import RealsenseEnv
-from skillet.perception.sam3.sam3 import SAM3, SAMConcept
+from skillet.perception.sam3_text.sam3_text import SAM3, SAMConcept
 from skillet.perception.utils import depth_to_colormap_np
 from skillet.scene.base import Scene
 
@@ -399,7 +398,7 @@ class Perception:
 
 
 if __name__ == "__main__":
-    from skillet.perception.visualize import Open3DVisualizer
+    from skillet.scene.visualize import Open3DVisualizer
 
     env = RealsenseEnv()
     perception = Perception(

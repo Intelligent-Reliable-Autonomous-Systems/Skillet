@@ -30,7 +30,7 @@ from skillet.envs.ros2 import (
     wait_until_ready,
 )
 from skillet.envs.util import configclass
-from skillet.perception.apriltag import CameraLocalizer
+from skillet.perception.localization import CameraLocalizer
 from skillet.policy.specs import JOINTS_SPEC
 
 
