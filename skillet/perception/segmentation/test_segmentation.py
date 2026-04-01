@@ -8,9 +8,7 @@ import numpy as np
 from jaxtyping import UInt8
 from PIL import Image
 
-from skillet.perception.segmentation.sam import SAM3Client
-
-# from skillet.perception.segmentation.sam import SAM2Client
+from skillet.perception.segmentation.sam import SAM2Client
 from skillet.perception.segmentation.vlm import GeminiClient
 
 
@@ -18,7 +16,7 @@ class SegmentationPipeline:
     """Segmentation Pipeline using Gemini and SAM3."""
 
     def __init__(self) -> None:
-        self.sam_client = SAM3Client()
+        self.sam_client = SAM2Client()
         self.gemini_client = GeminiClient()
 
     def segmentation(self, rgb: UInt8[np.ndarray, "h w 3"], task_instruction: str) -> dict:
