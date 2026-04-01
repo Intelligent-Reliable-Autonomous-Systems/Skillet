@@ -14,15 +14,14 @@ from typing import Any
 import gymnasium as gym
 import numpy as np
 import torch
-from skillet.envs.kortex.kortex_bridge import DeviceConnection
 from kortex_api.autogen.messages import Base_pb2
 
 from skillet.core.math import np_euler_xyz_degrees_from_quat
 from skillet.core.spaces import ActionSpec
 from skillet.envs.kortex import KortexEnv, KortexEnvCfg
-from skillet.envs.kortex.kortex_bridge import check_for_end_or_abort
+from skillet.envs.kortex.kortex_bridge import DeviceConnection, check_for_end_or_abort
 from skillet.envs.util import configclass
-from skillet.perception.realsense import RealsenseCamera
+from skillet.perception.realsense import RealsenseCameraAprilTag
 from skillet.policy.specs import JOINTS_SPEC
 
 
@@ -124,7 +123,7 @@ class Gen3KortexEnv(KortexEnv):
 
         self.curr_gripper_goal = None
 
-        self._realsense_camera = RealsenseCamera(apriltag_size_m=0.1, apriltag_id=self.cfg.base_apriltag_id)
+        self._realsense_camera = RealsenseCameraAprilTag(apriltag_size_m=0.1, apriltag_id=self.cfg.base_apriltag_id)
 
     def _pre_process_action(self, actions: torch.Tensor, action_spec: ActionSpec[Any] | None = None) -> np.ndarray:
         """Pre process the robot action.

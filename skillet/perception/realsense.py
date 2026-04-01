@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import time
 from collections.abc import Mapping
-from typing import Any
+from dataclasses import dataclass
+from functools import cache
+from typing import TYPE_CHECKING, Any
 
 import cv2
 import gymnasium as gym
@@ -24,6 +26,45 @@ from skillet.core.spaces import ObservationSpec
 from skillet.envs.specs import RGBD_SPEC_BATCHED
 from skillet.perception.localization import CameraLocalizer
 from skillet.perception.utils import depth_to_colormap_np
+
+if TYPE_CHECKING:
+    from jaxtyping import Float, UInt8, UInt16
+
+
+@dataclass(frozen=True)
+class Frame:
+    """Class for storing data from a camera frame."""
+
+    serial: str
+    timestamp: float
+    rgb: UInt8[np.ndarray, "h w 3"]
+    intrinsics: Float[np.ndarray, "3 3"]  # Camera intrinsics matrix
+    depth: Float[np.ndarray, "h w"] | None = None  # Onboard sensor depth in metres (optional)
+
+    @property
+    def bgr(self) -> UInt8[np.ndarray, "h w 3"]:
+        """Convert from RGB to BGR."""
+        return cv2.cvtColor(self.rgb, cv2.COLOR_RGB2BGR)
+
+
+@dataclass(frozen=True, kw_only=True)
+class RealsenseFrame(Frame):
+    """Frame from RealSense which also includes the IR stereo pair."""
+
+    ir_left: UInt8[np.ndarray, "h w"] | None = None  # IR left uint8
+    ir_right: UInt8[np.ndarray, "h w"] | None = None  # IR right uint8
+    depth_raw: UInt16[np.ndarray, "h w"] | None = None  # Raw depth uint16 millimeters
+
+
+@dataclass(frozen=True)
+class RealsenseIntrinsics:
+    """Intrinsics for RealSense camera."""
+
+    K_color: Float[np.ndarray, "3 3"]  # Color camera matrix
+    K_ir: Float[np.ndarray, "3 3"]  # IR camera matrix
+    baseline_ir: float  # Meters (IR baseline)
+    T_color_from_ir: Float[np.ndarray, "4 4"]  # Transform from IR to color
+    distortion_color: Float[np.ndarray, 5]  # Color camera distortion coefficients
 
 
 class RealsenseEnv(_EnvironmentBase):
@@ -266,77 +307,8 @@ class RealsenseEnv(_EnvironmentBase):
             pass
 
 
-def quat_xyzw_to_R(qx, qy, qz, qw):
-    # assumes unit quaternion
-    x, y, z, w = qx, qy, qz, qw
-    return np.array(
-        [
-            [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
-            [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
-            [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
-        ],
-        dtype=float,
-    )
-
-
-def make_T(R, t_xyz):
-    T = np.eye(4)
-    T[:3, :3] = R
-    T[:3, 3] = np.array(t_xyz, dtype=float)
-    return T
-
-
-def _inv_T(T):
-    """Invert a 4x4 homogeneous transform."""
-    R = T[:3, :3]
-    t = T[:3, 3]
-    R_inv = R.T
-    t_inv = -R_inv @ t
-    return make_T(R_inv, t_inv)
-
-
-def T_to_xyz_quat_xyzw(T):
-    xyz = T[:3, 3]
-    quat = rot_to_quat_xyzw(T[:3, :3])
-    return np.concatenate((xyz, quat), axis=0)
-
-
-def rot_to_quat_xyzw(R):
-    q = np.empty(4)
-    trace = np.trace(R)
-
-    if trace > 0:
-        s = np.sqrt(trace + 1.0) * 2
-        q[3] = 0.25 * s
-        q[0] = (R[2, 1] - R[1, 2]) / s
-        q[1] = (R[0, 2] - R[2, 0]) / s
-        q[2] = (R[1, 0] - R[0, 1]) / s
-    else:
-        i = np.argmax([R[0, 0], R[1, 1], R[2, 2]])
-        if i == 0:
-            s = np.sqrt(1 + R[0, 0] - R[1, 1] - R[2, 2]) * 2
-            q[3] = (R[2, 1] - R[1, 2]) / s
-            q[0] = 0.25 * s
-            q[1] = (R[0, 1] + R[1, 0]) / s
-            q[2] = (R[0, 2] + R[2, 0]) / s
-        elif i == 1:
-            s = np.sqrt(1 + R[1, 1] - R[0, 0] - R[2, 2]) * 2
-            q[3] = (R[0, 2] - R[2, 0]) / s
-            q[0] = (R[0, 1] + R[1, 0]) / s
-            q[1] = 0.25 * s
-            q[2] = (R[1, 2] + R[2, 1]) / s
-        else:
-            s = np.sqrt(1 + R[2, 2] - R[0, 0] - R[1, 1]) * 2
-            q[3] = (R[1, 0] - R[0, 1]) / s
-            q[0] = (R[0, 2] + R[2, 0]) / s
-            q[1] = (R[1, 2] + R[2, 1]) / s
-            q[2] = 0.25 * s
-
-    return q
-
-
-class RealsenseCamera:
-    """Class that manages the Realsense camera streaming.
+class RealsenseCameraAprilTag:
+    """Class that manages the Realsense camera streaming with AprilTag estimation.
 
     Used as a helper class in the Kortex API environments to avoid requiring ROS2.
     """
@@ -449,6 +421,209 @@ class RealsenseCamera:
             "camera_pose": self._camera_localizer.get_camera_pose(rgb=rgb, intrinsic_k=self._intrinsic_k),
             "timestamp": timestamp,
         }
+
+
+class RealsenseCamera:
+    """Realsense Camera class for streaming raw camera images"""
+
+    def __init__(
+        self,
+        serial: str | None = None,
+        width: int = 640,
+        height: int = 480,
+        fps: int = 30,
+        enable_depth: bool = False,
+        enable_ir: bool = True,
+    ):
+        self._enable_depth = enable_depth
+        self._enable_ir = enable_ir
+
+        # Enable streams
+        config = rs.config()
+
+        config.enable_stream(rs.stream.color, width, height, rs.format.rgb8, fps)
+        if enable_depth:
+            config.enable_stream(rs.stream.depth, width, height, rs.format.z16, fps)
+        if enable_ir:
+            config.enable_stream(rs.stream.infrared, 1, width, height, rs.format.y8, fps)
+            config.enable_stream(rs.stream.infrared, 2, width, height, rs.format.y8, fps)
+
+        # Start pipeline
+        self.pipeline = rs.pipeline()
+        self._profile = self.pipeline.start(config)
+        for _ in range(30):
+            self.pipeline.wait_for_frames()
+
+        # Get camera serial number
+        device = self._profile.get_device()
+        self.serial = device.get_info(rs.camera_info.serial_number)
+
+        # Cache the intrinsics call
+        self.get_intrinsics()
+
+    @cache
+    def get_intrinsics(self) -> RealsenseIntrinsics:
+        # Color intrinsics
+        color_profile = self._profile.get_stream(rs.stream.color)
+        color_intr = color_profile.as_video_stream_profile().get_intrinsics()
+        K_color = np.array(
+            [
+                [color_intr.fx, 0, color_intr.ppx],
+                [0, color_intr.fy, color_intr.ppy],
+                [0, 0, 1],
+            ],
+            dtype=np.float32,
+        )
+        distortion_color = np.array(color_intr.coeffs, dtype=np.float32)
+
+        # IR intrinsics and extrinsics
+        if not self._enable_ir:
+            raise ValueError("IR streams must be enabled to get intrinsics")
+
+        ir_left_profile = self._profile.get_stream(rs.stream.infrared, 1)
+        ir_right_profile = self._profile.get_stream(rs.stream.infrared, 2)
+        ir_intr = ir_left_profile.as_video_stream_profile().get_intrinsics()
+        K_ir = np.array(
+            [
+                [ir_intr.fx, 0, ir_intr.ppx],
+                [0, ir_intr.fy, ir_intr.ppy],
+                [0, 0, 1],
+            ],
+            dtype=np.float32,
+        )
+
+        # Baseline between IR cameras
+        extr = ir_left_profile.get_extrinsics_to(ir_right_profile)
+        baseline = np.linalg.norm(extr.translation)
+
+        # Extrinsics from IR1 to color
+        extr_color = ir_left_profile.get_extrinsics_to(color_profile)
+        T_color_from_ir = np.eye(4, dtype=np.float32)
+        T_color_from_ir[:3, :3] = np.array(extr_color.rotation).reshape(3, 3).T
+        T_color_from_ir[:3, 3] = np.array(extr_color.translation)
+
+        return RealsenseIntrinsics(
+            K_color=K_color,
+            K_ir=K_ir,
+            baseline_ir=baseline,
+            T_color_from_ir=T_color_from_ir,
+            distortion_color=distortion_color,
+        )
+
+    def read_camera(self) -> RealsenseFrame:
+        """Read the camera frame."""
+        frames = self.pipeline.wait_for_frames()
+        color_frame = frames.get_color_frame()
+        rgb = np.asanyarray(color_frame.get_data())
+        timestamp = frames.get_timestamp()
+
+        # IR streams required for RealsenseFrame
+        if not self._enable_ir:
+            raise ValueError("IR streams must be enabled for RealsenseFrame")
+
+        ir_left_frame = frames.get_infrared_frame(1)
+        ir_right_frame = frames.get_infrared_frame(2)
+        ir_left = np.asanyarray(ir_left_frame.get_data())
+        ir_right = np.asanyarray(ir_right_frame.get_data())
+
+        # Optional depth
+        depth_float = None
+        depth_raw = None
+        if self._enable_depth:
+            # Get raw depth
+            depth_frame = frames.get_depth_frame()
+            depth_raw = np.asanyarray(depth_frame.get_data())
+
+            # Get aligned depth and convert mm to m
+            align = rs.align(rs.stream.color)
+            aligned_frames = align.process(frames)
+            aligned_depth_frame = aligned_frames.get_depth_frame()
+            depth_float = (np.asanyarray(aligned_depth_frame.get_data()) / 1000.0).astype(np.float32)
+
+        intrinsics = self.get_intrinsics()
+        return RealsenseFrame(
+            serial=self.serial,
+            timestamp=timestamp,
+            rgb=rgb,
+            intrinsics=intrinsics.K_color,
+            depth=depth_float,
+            ir_left=ir_left,
+            ir_right=ir_right,
+            depth_raw=depth_raw,
+        )
+
+    def close(self):
+        """Stop the camera pipeline."""
+        self.pipeline.stop()
+
+
+def quat_xyzw_to_R(qx, qy, qz, qw):
+    # assumes unit quaternion
+    x, y, z, w = qx, qy, qz, qw
+    return np.array(
+        [
+            [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+            [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+            [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+        ],
+        dtype=float,
+    )
+
+
+def make_T(R, t_xyz):
+    T = np.eye(4)
+    T[:3, :3] = R
+    T[:3, 3] = np.array(t_xyz, dtype=float)
+    return T
+
+
+def _inv_T(T):
+    """Invert a 4x4 homogeneous transform."""
+    R = T[:3, :3]
+    t = T[:3, 3]
+    R_inv = R.T
+    t_inv = -R_inv @ t
+    return make_T(R_inv, t_inv)
+
+
+def T_to_xyz_quat_xyzw(T):
+    xyz = T[:3, 3]
+    quat = rot_to_quat_xyzw(T[:3, :3])
+    return np.concatenate((xyz, quat), axis=0)
+
+
+def rot_to_quat_xyzw(R):
+    q = np.empty(4)
+    trace = np.trace(R)
+
+    if trace > 0:
+        s = np.sqrt(trace + 1.0) * 2
+        q[3] = 0.25 * s
+        q[0] = (R[2, 1] - R[1, 2]) / s
+        q[1] = (R[0, 2] - R[2, 0]) / s
+        q[2] = (R[1, 0] - R[0, 1]) / s
+    else:
+        i = np.argmax([R[0, 0], R[1, 1], R[2, 2]])
+        if i == 0:
+            s = np.sqrt(1 + R[0, 0] - R[1, 1] - R[2, 2]) * 2
+            q[3] = (R[2, 1] - R[1, 2]) / s
+            q[0] = 0.25 * s
+            q[1] = (R[0, 1] + R[1, 0]) / s
+            q[2] = (R[0, 2] + R[2, 0]) / s
+        elif i == 1:
+            s = np.sqrt(1 + R[1, 1] - R[0, 0] - R[2, 2]) * 2
+            q[3] = (R[0, 2] - R[2, 0]) / s
+            q[0] = (R[0, 1] + R[1, 0]) / s
+            q[1] = 0.25 * s
+            q[2] = (R[1, 2] + R[2, 1]) / s
+        else:
+            s = np.sqrt(1 + R[2, 2] - R[0, 0] - R[1, 1]) * 2
+            q[3] = (R[1, 0] - R[0, 1]) / s
+            q[0] = (R[0, 2] + R[2, 0]) / s
+            q[1] = (R[1, 2] + R[2, 1]) / s
+            q[2] = 0.25 * s
+
+    return q
 
 
 if __name__ == "__main__":

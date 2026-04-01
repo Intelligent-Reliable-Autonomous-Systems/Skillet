@@ -19,7 +19,7 @@ class SegmentationPipeline:
         self.sam_client = SAM2Client()
         self.gemini_client = GeminiClient()
 
-    def segmentation(self, rgb: UInt8[np.ndarray, "h w 3"], task_instruction: str) -> dict:
+    def _segmentation(self, rgb: UInt8[np.ndarray, "h w 3"], task_instruction: str) -> dict:
         """Test the segmentation and task instruction with the Gemini and SAM2 pipline.
 
         Args:
