@@ -339,7 +339,7 @@ class Gen3KortexEnv(KortexEnv):
         command = Base_pb2.TwistCommand()
 
         command.reference_frame = Base_pb2.CARTESIAN_REFERENCE_FRAME_TOOL
-        command.duration = 1
+        command.duration = 1 # must be int type
         twist_cmd = command.twist
         twist_cmd.linear_x = twist[0]
         twist_cmd.linear_y = twist[1]
