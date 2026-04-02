@@ -31,8 +31,8 @@ Perception relies on some additional modules.
 ## Kortex Integration
 Sometimes ROS2 is a pain. To run the robot through the Kortex API instead of ROS2, follow these directions:
 1. `python3 -m pip install skillet/envs/kortex/kortex_api-2.6.0.post3-py3-none-any.whl`
-2. `pip install pinnochio`
-3. Sometimes pinnochio needs to be upgraded: `pip install --upgrade pinnochio`
+2. `pip install pin`
+3. Sometimes pinocchio needs to be upgraded: `pip install --upgrade pin`
 
 You should now be all set to run an experiment with `--env_id Kortex-Gen3Lite-v0`
 
