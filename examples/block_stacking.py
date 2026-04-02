@@ -8,12 +8,12 @@ from typing import TYPE_CHECKING, Any
 
 import gymnasium as gym
 import torch
+from skillet.perception.perception import Perception
 
 from skillet.agents.policy_over_options import PolicyOverOptionsAgent, SelectedSkill
 from skillet.core import ActionSpec, ObservationSpec
 from skillet.core.env import BatchToSingleWrapper
 from skillet.envs.skillet_env import SkilletEnv
-from skillet.perception.perception import Perception
 from skillet.perception.realsense import RealsenseEnv
 from skillet.perception.sam3_text.sam3_text import SAMConcept
 from skillet.policy.dummy import FixedSequencePolicy
@@ -22,7 +22,7 @@ from skillet.policy.moveit import MoveItTcpQuatPolicy
 from skillet.policy.twist import TwistPIDPosePolicy
 from skillet.scene.base import Scene
 from skillet.scene.cube import Cube
-from skillet.scene.visualize import Open3DVisualizer
+from skillet.scene.scene_visualization import Open3DVisualizer
 from skillet.skill.high_level.pick import PickSkill
 from skillet.skill.high_level.place import PlaceSkill
 from skillet.skill.high_level.rotate_yaw import RotateYawSkill

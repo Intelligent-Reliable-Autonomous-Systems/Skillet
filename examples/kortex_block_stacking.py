@@ -1,8 +1,6 @@
 """Run a tabletop block stacking task."""
 
 import argparse
-import sys
-from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
 import gymnasium as gym
@@ -12,16 +10,15 @@ from skillet.agents.policy_over_options import PolicyOverOptionsAgent, SelectedS
 from skillet.core import ActionSpec, ObservationSpec
 from skillet.core.env import BatchToSingleWrapper
 from skillet.envs.skillet_env import SkilletEnv
-from skillet.perception.perception import Perception
+from skillet.perception.localization import ApriltagStateReconstructor
 from skillet.perception.realsense import RealsenseEnv
-from skillet.perception.sam3_text.sam3_text import SAMConcept
 from skillet.policy.dummy import FixedSequencePolicy
 from skillet.policy.ik_ee import PoseAbsIKEEPolicy
 from skillet.policy.moveit import MoveItTcpQuatPolicy
 from skillet.policy.twist import TwistPIDPosePolicy
+from skillet.scene import SkilletVisualizer
 from skillet.scene.base import Scene
 from skillet.scene.cube import Cube
-from skillet.scene.visualize import Open3DVisualizer
 from skillet.skill.high_level.pick import PickSkill
 from skillet.skill.high_level.place import PlaceSkill
 from skillet.skill.high_level.rotate_yaw import RotateYawSkill
@@ -40,7 +37,6 @@ parser.add_argument(
     "--use_moveit", action=argparse.BooleanOptionalAction, default=True, help="Use MoveIt for motion planning."
 )
 parser.add_argument("--use_twist", action=argparse.BooleanOptionalAction, default=False, help="Use cartesian servoing.")
-parser.add_argument("--segmentation", action=argparse.BooleanOptionalAction, default=False, help="Use segmentation.")
 parser.add_argument("--realsense_env", action="store_true", help="Use RealSense camera environment.")
 parser.add_argument(
     "--viz", type=str, default="rgb,depth,pointcloud", help="Visualization modes to display, as comma-separated string."
@@ -67,11 +63,6 @@ def main() -> None:
     world_bounds = (TABLE_X0, TABLE_Y0, 0, TABLE_X0 + TABLE_DX, TABLE_Y0 + TABLE_DY, 1)
     scene = Scene(objects=[cube_0, cube_1, cube_2], closed_set=True, bounds=world_bounds)
 
-    sam3_prompts = [
-        SAMConcept(name="wooden_block", prompt="a wooden block"),
-        SAMConcept(name="plastic_block", prompt="a plastic block"),
-    ]
-
     if args_cli.realsense_env:
         env = RealsenseEnv(apriltag_size_m=0.1, apriltag_id=3)
     else:
@@ -90,34 +81,24 @@ def main() -> None:
     rgbd_spec: ObservationSpec[RGBD_Obs] = env.coerce_obs_spec("rgb-d")
 
     poll_rate_hz = 1.0 / max(args_cli.period_s, 1e-6)
-    perception = Perception(
+    visualizer = SkilletVisualizer(
         env=env,
         obs_spec=rgbd_spec,
-        scene=scene,
-        segmentation=args_cli.segmentation,
+        reconstructor=ApriltagStateReconstructor(scene),
         poll_rate=poll_rate_hz,
         device=args_cli.device,
         max_depth_m=args_cli.max_depth_m,
-        prompts=sam3_prompts,
     )
 
-    def get_tcp_pos() -> Sequence[float]:
-        return env.get_observation(ikee_spec.unbatched())["tcp_pose_b"][:3].detach().cpu().numpy()
-
-    vis = Open3DVisualizer(scene, get_tcp_pos=get_tcp_pos) if not args_cli.realsense_env else Open3DVisualizer(scene)
     if "pointcloud" in args_cli.viz:
-        perception.set_visualizer(vis, segment_point_cloud=True)
-    perception.start_cv2_visualization(
+        visualizer.set_open3d_visualizer(segment_point_cloud=True)
+    visualizer.start_cv2_visualization(
         display_rgb="rgb" in args_cli.viz,
         display_depth="depth" in args_cli.viz,
         segment_rgb="rgb" in args_cli.viz,
         segment_depth="depth" in args_cli.viz,
     )
-    perception.run_thread()
-    if args_cli.realsense_env:
-        vis.run()
-        sys.exit(0)
-    vis.run_thread()
+    visualizer.run_thread()
 
     # Low-level policies
     if args_cli.use_moveit:
@@ -178,11 +159,7 @@ def main() -> None:
         with torch.inference_mode():
             env.reset()
             policy_over_options_agent.execute(env)
-            # skill_executor.execute()
             print("[INFO][Main] finished run of skill executor, resetting")
-
-    perception.stop()
-    env.close()
 
 
 if __name__ == "__main__":

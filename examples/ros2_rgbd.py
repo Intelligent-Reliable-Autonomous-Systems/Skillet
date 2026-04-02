@@ -4,10 +4,10 @@ import argparse
 import os
 
 from skillet.envs.skillet_env import SkilletEnv
-from skillet.perception.perception import Perception
 from skillet.perception.realsense import RealsenseEnv
 from skillet.perception.sam3_text.sam3_text import SAMConcept
-from skillet.scene.visualize import Open3DVisualizer
+from skillet.scene import SkilletVisualizer
+from skillet.scene.scene_visualization import Open3DVisualizer
 from skillet_tasks.ros2_tasks.factory import create_ros2_env
 
 parser = argparse.ArgumentParser(description="Visualize latest RGB-D frame from ROS2 service.")
@@ -79,7 +79,7 @@ def main() -> None:
     rgbd_spec = env.obs_spec_rgbd.unbatched()
 
     poll_rate_hz = 1.0 / max(args_cli.period_s, 1e-6)
-    perception = Perception(
+    perception = SkilletVisualizer(
         env=env,
         obs_spec=rgbd_spec,
         segmentation=args_cli.segmentation,

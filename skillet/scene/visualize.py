@@ -1,590 +1,373 @@
-"""Open3D visualization for point clouds from object localization."""
+"""Visualization class for the Robot Skills framework.
+
+This class polls the environment for RGB-D observations and localizes objects in the scene.
+"""
 
 from __future__ import annotations
 
 import threading
-from collections.abc import Callable, Sequence
-from typing import Any
+import time
+from contextlib import suppress
+from dataclasses import replace
+from typing import TYPE_CHECKING, Any
 
+import cv2
 import numpy as np
 import torch
 
-from skillet.scene.base import Scene, SceneObject
-from skillet.scene.cube import Cube
+from skillet.perception.localization import segmented_rgbd_to_point_cloud
+from skillet.perception.realsense import RealsenseEnv
+from skillet.perception.utils import depth_to_colormap_np
 
-try:
-    import open3d as o3d
-    import open3d.visualization.gui as _gui
-    import open3d.visualization.rendering as _rendering
-except ImportError:
-    o3d = None  # type: ignore[assignment]
-    _gui = None  # type: ignore[assignment]
-    _rendering = None  # type: ignore[assignment]
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+
+    from skillet.core import BatchedEnvironment
+    from skillet.core.env import Environment
+    from skillet.core.spaces import ObservationSpec
+    from skillet.perception.localization.reconstructor_base import ReconstructorBase
+    from skillet.scene.scene_visualization import Open3DVisualizer
+
+_PALETTE_BGR: list[tuple[int, int, int]] = [
+    (44, 44, 220),
+    (44, 190, 44),
+    (220, 110, 44),
+    (0, 190, 240),
+    (200, 44, 200),
+    (210, 210, 44),
+    (0, 130, 255),
+    (170, 44, 240),
+    (44, 240, 160),
+    (240, 160, 44),
+]
+_OVERLAY_ALPHA = 0.35
+_BBOX_THICKNESS = 2
+_FONT = cv2.FONT_HERSHEY_SIMPLEX
+_FONT_SCALE = 0.55
+_FONT_THICKNESS = 1
 
 
-def point_cloud_to_open3d(
-    points: torch.Tensor,
-    segment_indices: torch.Tensor | None = None,
-    filter_zero: bool = True,
-    world_bounds: tuple[float, float, float, float, float, float] | None = None,
-) -> object | None:
-    """Convert output of segmented_rgbd_to_point_cloud to an Open3D PointCloud.
+class SkilletVisualizer:
+    """Skillet Visualizer class for the Skillet framework.
 
-    Args:
-        points: (N, 3), (H, W, 3), (N, 6), or (H, W, 6) from
-            segmented_rgbd_to_point_cloud. Last dim is XYZ or XYZRGB.
-        segment_indices: Optional (N,) segment indices. If provided, points are colored
-            by segment id, overriding any embedded RGB colors.
-        filter_zero: If True, remove points at (0, 0, 0) (invalid/masked). Default True.
-        world_bounds: Optional (x_min, y_min, z_min, x_max, y_max, z_max). Points
-            outside this axis-aligned box are removed before visualization.
-
-    Returns:
-        Open3D PointCloud, or None if open3d is not installed.
-
+    This class polls the environment for RGB-D observations and localizes objects in the scene.
     """
-    if o3d is None:
-        return None
-
-    x = points.detach().float()
-    seg = None
-    if segment_indices is not None:
-        seg = segment_indices.detach().cpu().numpy().astype(np.int64)
-
-    if x.dim() == 3:
-        # (H, W, C) -> (H*W, C)
-        _, _, c = x.shape
-        x = x.reshape(-1, c)
-    x = x.cpu().numpy()
-
-    if seg is not None and seg.shape[0] != x.shape[0]:
-        raise ValueError(f"segment_indices shape {seg.shape} does not match points shape {x.shape}")
-
-    xyz = x[:, :3].astype(np.float64)
-    keep = np.ones(xyz.shape[0], dtype=bool)
-
-    if filter_zero:
-        keep &= np.any(xyz != 0, axis=1)
-
-    if world_bounds is not None:
-        lo = np.array(world_bounds[:3], dtype=np.float64)
-        hi = np.array(world_bounds[3:], dtype=np.float64)
-        keep &= np.all((xyz >= lo) & (xyz <= hi), axis=1)
-
-    xyz = xyz[keep]
-    x = x[keep]
-    if seg is not None:
-        seg = seg[keep]
-
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(xyz)
-
-    # If segment indices are provided, color by segment id.
-    if seg is not None:
-        colors = np.zeros((xyz.shape[0], 3), dtype=np.float64)
-        unique_seg = np.unique(seg)
-        for sid in unique_seg:
-            mask = seg == sid
-            r = ((sid * 37) % 255) / 255.0
-            g = ((sid * 57) % 255) / 255.0
-            b = ((sid * 97) % 255) / 255.0
-            colors[mask] = (r, g, b)
-        pcd.colors = o3d.utility.Vector3dVector(colors)
-    # Otherwise, if embedded RGB is present, use it.
-    elif x.shape[-1] >= 6:
-        rgb = x[:, 3:6]
-        if rgb.size > 0 and rgb.max() > 1.0:
-            rgb = np.clip(rgb / 255.0, 0.0, 1.0)
-        pcd.colors = o3d.utility.Vector3dVector(rgb.astype(np.float64))
-
-    return pcd
-
-
-def make_point_marker(pos, radius=0.01, color=(1, 0, 0)):
-    sphere = o3d.geometry.TriangleMesh.create_sphere(radius=radius)
-    sphere.translate(pos)
-    sphere.paint_uniform_color(color)
-    sphere.compute_vertex_normals()
-    return sphere
-
-
-def create_aabb_lineset(
-    bounds: tuple[float, float, float, float, float, float],
-) -> object:
-    """Create a wireframe box for the AABB with axis-colored edges.
-
-    Args:
-        bounds: (x_min, y_min, z_min, x_max, y_max, z_max).
-
-    Returns:
-        Open3D LineSet
-
-    """
-    x0, y0, z0, x1, y1, z1 = bounds
-    # 8 corners ordered so bit pattern (z_bit, y_bit, x_bit) maps to index.
-    corners = np.array(
-        [
-            [x0, y0, z0],  # 0
-            [x1, y0, z0],  # 1
-            [x0, y1, z0],  # 2
-            [x1, y1, z0],  # 3
-            [x0, y0, z1],  # 4
-            [x1, y0, z1],  # 5
-            [x0, y1, z1],  # 6
-            [x1, y1, z1],  # 7
-        ],
-        dtype=np.float64,
-    )
-
-    return create_box_lineset(corners)
-
-
-def create_box_lineset(
-    corners: np.ndarray,
-) -> object:
-    """Create a wireframe box with axis-colored edges.
-
-    Args:
-        corners: (8, 3) array of box corners.
-
-    Returns:
-        Open3D LineSet
-
-    """
-    RED = [1.0, 0.0, 0.0]
-    GREEN = [0.0, 1.0, 0.0]
-    BLUE = [0.0, 0.0, 1.0]
-    PURPLE = [1.0, 0.0, 1.0]
-
-    pos_xyz_corner = corners[7] * 0.95 + corners[0] * 0.05
-    corners = np.concatenate([corners, pos_xyz_corner.reshape(1, 3)], axis=0)
-
-    # (edge_start, edge_end, color) grouped by the axis the edge is parallel to.
-    edges_and_colors: list[tuple[list[int], list[float]]] = [
-        # X-axis edges (differ only in x)
-        ([0, 1], RED),
-        ([2, 3], RED),
-        ([4, 5], RED),
-        ([6, 7], RED),
-        # Y-axis edges (differ only in y)
-        ([0, 2], GREEN),
-        ([1, 3], GREEN),
-        ([4, 6], GREEN),
-        ([5, 7], GREEN),
-        # Z-axis edges (differ only in z)
-        ([0, 4], BLUE),
-        ([1, 5], BLUE),
-        ([2, 6], BLUE),
-        ([3, 7], BLUE),
-        ([7, 8], PURPLE),
-    ]
-    lines = [e for e, _ in edges_and_colors]
-    colors = [c for _, c in edges_and_colors]
-
-    ls = o3d.geometry.LineSet()
-    ls.points = o3d.utility.Vector3dVector(corners)
-    ls.lines = o3d.utility.Vector2iVector(lines)
-    ls.colors = o3d.utility.Vector3dVector(colors)
-    return ls
-
-
-def create_camera_model(
-    camera_pose: np.ndarray,
-    face_width: float = 0.06,
-    face_height: float = 0.04,
-    face_depth: float = 0.008,
-    body_width: float = 0.035,
-    body_height: float = 0.03,
-    body_depth: float = 0.045,
-    marker_width: float = 0.015,
-    marker_height: float = 0.008,
-    marker_depth: float = 0.01,
-) -> list[object] | None:
-    """Build a simple 3-part camera model positioned at *camera_pose*.
-
-    The camera looks down its local +Z axis (OpenCV convention).  The model
-    consists of:
-      1. Face plate -- a thin, wide box at the front (light gray).
-      2. Body -- a narrower, longer box behind the face (dark gray).
-      3. Top marker -- a small red box on top to indicate orientation.
-
-    Args:
-        camera_pose: 7-element array (x, y, z, qw, qx, qy, qz).
-        face_*: Dimensions of the front face plate.
-        body_*: Dimensions of the camera body.
-        marker_*: Dimensions of the red orientation marker.
-
-    Returns:
-        List of three Open3D TriangleMesh objects, or None if open3d is
-        not installed.
-
-    """
-    if o3d is None:
-        return None
-
-    from scipy.spatial.transform import Rotation
-
-    pos = camera_pose[:3]
-    quat_wxyz = camera_pose[3:7]
-    quat_xyzw = np.array([quat_wxyz[1], quat_wxyz[2], quat_wxyz[3], quat_wxyz[0]])
-    rot_mat = Rotation.from_quat(quat_xyzw).as_matrix()
-
-    T = np.eye(4)
-    T[:3, :3] = rot_mat
-    T[:3, 3] = pos
-
-    def _make_box(
-        w: float,
-        h: float,
-        d: float,
-        offset: np.ndarray,
-        color: tuple[float, float, float],
-    ) -> object:
-        mesh = o3d.geometry.TriangleMesh.create_box(width=w, height=h, depth=d)
-        # Center the box at the local origin then apply offset.
-        mesh.translate(np.array([-w / 2, -h / 2, -d / 2]) + offset)
-        mesh.paint_uniform_color(color)
-        mesh.transform(T)
-        mesh.compute_vertex_normals()
-        return mesh
-
-    # Face plate: centered at local origin (front of camera).
-    face = _make_box(face_width, face_height, face_depth, np.array([0.0, 0.0, 0.0]), (0.7, 0.7, 0.7))
-
-    # Body: behind the face along -Z.
-    body = _make_box(
-        body_width,
-        body_height,
-        body_depth,
-        np.array([0.0, 0.0, -(face_depth / 2 + body_depth / 2)]),
-        (0.35, 0.35, 0.35),
-    )
-
-    # Top marker: on top of the body (-Y in camera frame).
-    marker = _make_box(
-        marker_width,
-        marker_height,
-        marker_depth,
-        np.array([0.0, -(body_height / 2 + marker_height / 2), -(face_depth / 2 + body_depth / 2)]),
-        (0.9, 0.1, 0.1),
-    )
-
-    return [face, body, marker]
-
-
-class Open3DVisualizer:
-    """Stateful Open3D visualizer using the ``gui.Application`` API.
-
-    Renders a point cloud with optional world-bounds wireframe, camera model,
-    and a HUD label showing the current camera pose.  Designed to ``run()`` on
-    the main thread while a perception pipeline pushes updates from a
-    background thread via ``update()``.
-    """
-
-    _CAM_GEOMETRY_NAMES = ("cam_face", "cam_body", "cam_marker")
 
     def __init__(
         self,
-        scene: Scene,
-        window_name: str = "Table Scene",
-        width: int = 1024,
-        height: int = 768,
-        get_tcp_pos: Callable[[], Sequence[float]] | None = None,
+        env: Environment | BatchedEnvironment,
+        obs_spec: ObservationSpec,
+        reconstructor: ReconstructorBase,
+        poll_rate: float = 8,
+        device: str | torch.device | None = None,
+        max_depth_m: float | None = None,
     ) -> None:
-        self.scene = scene
-        self._window_name = window_name
-        self._width = width
-        self._height = height
+        """Initialize the visualizer."""
+        self.env = env
+        if isinstance(device, str):
+            device = torch.device(device)
+        self.device = device or obs_spec.device
+        self.obs_spec = replace(obs_spec, device=self.device, is_torch=True)
+        self.poll_rate = poll_rate
+        self.max_depth_m = max_depth_m
 
-        self._app: Any | None = None
-        self._window: Any | None = None
-        self._scene_widget: Any | None = None
-        self._hud_label: Any | None = None
-        self._mat_unlit: Any | None = None
-        self._mat_lit: Any | None = None
-        self._mat_line: Any | None = None
-
-        self._added_geometries: set[str] = set()
-        self._needs_camera_setup = True
-        self._closed = False
-        self._target_pos: np.ndarray | None = None
-        self._target_size: float = 0.007
-        self._tcp_pos: np.ndarray | None = None
-        self._get_tcp_pos = get_tcp_pos
+        # Scene reconstructor
+        self._reconstructor = reconstructor
 
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
+        self._lock = threading.Lock()
 
-    # ------------------------------------------------------------------
-    # Setup
-    # ------------------------------------------------------------------
+        self.latest_observation: Mapping[str, Any] | None = None
+        self.latest_point_cloud: torch.Tensor | None = None
+        self.latest_segment_indices: torch.Tensor | None = None
 
-    def _setup(self) -> None:
-        """Initialize gui.Application, create window / scene / HUD / static geometry."""
-        self._app = _gui.Application.instance
-        self._app.initialize()
+        self._pc_vis: Open3DVisualizer | None = None
+        self._segment_point_cloud = False
 
-        self._window = self._app.create_window(
-            self._window_name,
-            self._width,
-            self._height,
-        )
-        self._window.set_on_layout(self._on_layout)
-        self._window.set_on_close(self._on_close)
+        self._display_rgb = False
+        self._display_depth = False
+        self._segment_rgb = False
+        self._segment_depth = False
+        self._cv2_window_name = "Perception RGB-D"
+        self._cv2_active = False
+        self._last_depth_debug_t = 0.0
 
-        self._scene_widget = _gui.SceneWidget()
-        self._scene_widget.scene = _rendering.Open3DScene(self._window.renderer)
-        self._window.add_child(self._scene_widget)
+    @staticmethod
+    def _maybe_unbatch(obs: Mapping[str, Any]) -> dict[str, torch.Tensor]:
+        """Convert observations to unbatched torch tensors."""
+        rgb = obs["rgb"]
+        depth = obs["depth"]
+        intrinsic_k = obs["intrinsic_k"]
+        camera_pose = obs["camera_pose"]
 
-        self._hud_label = _gui.Label("Cam: waiting for data...")
-        self._window.add_child(self._hud_label)
+        if rgb.dim() == 4:
+            rgb = rgb[0]
+        if depth.dim() == 4:
+            depth = depth[0]
+        if intrinsic_k.dim() == 3:
+            intrinsic_k = intrinsic_k[0]
+        if camera_pose.dim() == 2:
+            camera_pose = camera_pose[0]
 
-        # Materials
-        self._mat_unlit = _rendering.MaterialRecord()
-        self._mat_unlit.shader = "defaultUnlit"
-        self._mat_unlit.point_size = 3 * self._window.scaling
+        return {
+            "rgb": rgb,
+            "depth": depth,
+            "intrinsic_k": intrinsic_k,
+            "camera_pose": camera_pose,
+        }
 
-        self._mat_lit = _rendering.MaterialRecord()
-        self._mat_lit.shader = "defaultLit"
+    def _apply_far_plane(self, obs_unbatched: Mapping[str, Any]) -> dict[str, torch.Tensor]:
+        """Apply optional far-plane clipping in meters by zeroing distant depth."""
+        if self.max_depth_m is None:
+            return dict(obs_unbatched)
 
-        self._mat_line = _rendering.MaterialRecord()
-        self._mat_line.shader = "unlitLine"
-        self._mat_line.line_width = 2 * self._window.scaling
-
-        # Static geometries
-        coord = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.2, origin=[0, 0, 0])
-        self._add_geometry("coord_frame", coord, self._mat_lit)
-
-        if self.scene.bounds is not None:
-            bounds_ls = create_aabb_lineset(self.scene.bounds)
-            if bounds_ls is not None:
-                self._add_geometry("scene_bounds", bounds_ls, self._mat_line)
-
-    # ------------------------------------------------------------------
-    # Geometry helpers
-    # ------------------------------------------------------------------
-
-    def _add_geometry(self, name: str, geom: Any, mat: Any) -> None:
-        """Add or replace a named geometry in the scene."""
-        scene = self._scene_widget.scene
-        if name in self._added_geometries:
-            scene.remove_geometry(name)
-        if isinstance(geom, list):
-            for g in geom:
-                scene.add_geometry(name, g, mat)
+        depth = obs_unbatched["depth"].clone()
+        if depth.dtype == torch.uint16:
+            max_depth_native = int(self.max_depth_m * 1000.0)
+            depth[depth > max_depth_native] = 0
         else:
-            scene.add_geometry(name, geom, mat)
-        self._added_geometries.add(name)
+            depth = depth.float()
+            depth[depth > self.max_depth_m] = 0.0
 
-    def _remove_geometry(self, name: str) -> None:
-        if name in self._added_geometries:
-            self._scene_widget.scene.remove_geometry(name)
-            self._added_geometries.discard(name)
+        return {
+            "rgb": obs_unbatched["rgb"],
+            "depth": depth,
+            "intrinsic_k": obs_unbatched["intrinsic_k"],
+            "camera_pose": obs_unbatched["camera_pose"],
+        }
 
-    # ------------------------------------------------------------------
-    # Layout / close callbacks (called on main thread by gui framework)
-    # ------------------------------------------------------------------
+    def _default_segmentation(self, obs: Mapping[str, Any]) -> tuple[torch.Tensor, torch.Tensor]:
+        """Fallback segmentation: a single full-image mask."""
+        depth = obs["depth"]
+        masks = torch.ones((1, depth.shape[-2], depth.shape[-1]), dtype=torch.bool, device=depth.device)
+        segment_ids = torch.zeros((1,), dtype=torch.int64, device=depth.device)
+        return masks, segment_ids
 
-    def _on_layout(self, layout_context: Any) -> None:
-        r = self._window.content_rect
-        self._scene_widget.frame = r
-        pref = self._hud_label.calc_preferred_size(
-            layout_context,
-            _gui.Widget.Constraints(),
+    def _get_masks(self, obs_unbatched: Mapping[str, Any]) -> tuple[torch.Tensor, torch.Tensor]:
+        """Get segmentation masks and persistent segment IDs."""
+        return self._default_segmentation(obs_unbatched)
+
+    def _observation_to_point_cloud(
+        self, obs_unbatched: Mapping[str, Any], masks: torch.Tensor, segment_ids: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Build a point cloud from an unbatched RGB-D observation."""
+        point_cloud, segment_indices = segmented_rgbd_to_point_cloud(
+            obs_unbatched["depth"],
+            masks,
+            obs_unbatched["intrinsic_k"],
+            obs_unbatched["camera_pose"],
+            rgb=obs_unbatched["rgb"],
+            use_perspective=False,
         )
-        self._hud_label.frame = _gui.Rect(
-            r.x + 10,
-            r.y + 10,
-            pref.width,
-            pref.height,
-        )
-
-    def _on_close(self) -> bool:
-        self._closed = True
-        return True
-
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
-
-    def update(
-        self,
-        point_cloud: torch.Tensor,
-        segment_indices: torch.Tensor | None = None,
-        camera_pose: torch.Tensor | None = None,
-    ) -> None:
-        """Push new data from any thread; the scene update runs on the GUI thread."""
-        if self._closed or self._app is None or self._window is None:
-            return
-
-        # Prepare heavy geometry conversion on the calling (perception) thread.
-        pcd = point_cloud_to_open3d(
-            point_cloud,
-            segment_indices=segment_indices,
-            filter_zero=True,
-            world_bounds=self.scene.bounds,
-        )
-
-        cam_meshes: list[Any] | None = None
-        hud_text = ""
-        if camera_pose is not None:
-            cam_np = camera_pose.detach().cpu().numpy().astype(np.float64)
-            cam_meshes = create_camera_model(cam_np)
-            pos = cam_np[:3]
-            q = cam_np[3:7]
-            roll, pitch, yaw = quat_to_roll_pitch_yaw(q)
-            hud_text = (
-                f"Cam: ({pos[0]:+.3f}, {pos[1]:+.3f}, {pos[2]:+.3f})  "
-                f"q=({q[0]:.3f}, {q[1]:.3f}, {q[2]:.3f}, {q[3]:.3f}) \n"
-                f"rpy=({roll:.3f}, {pitch:.3f}, {yaw:.3f})  "
-                f"Tilt: {tilt_from_quat_wxyz(q):.3f}°"
-            )
-
-        do_camera_setup = self._needs_camera_setup
-
-        def _do_update() -> None:
-            if self._closed:
-                return
-
-            # Point cloud
-            if pcd is not None:
-                self._add_geometry("pcd", pcd, self._mat_unlit)
-            else:
-                self._remove_geometry("pcd")
-
-            # Camera model (3 meshes)
-            if cam_meshes is not None:
-                for name, mesh in zip(
-                    self._CAM_GEOMETRY_NAMES,
-                    cam_meshes,
-                    strict=True,
-                ):
-                    self._add_geometry(name, mesh, self._mat_lit)
-            else:
-                for name in self._CAM_GEOMETRY_NAMES:
-                    self._remove_geometry(name)
-
-            for obj in self.scene.objects:
-                geometry = get_object_geometry(obj)
-                if geometry is not None and len(geometry) > 0:
-                    self._add_geometry(obj.identifier, geometry, self._mat_line)
-                else:
-                    self._remove_geometry(obj.identifier)
-
-            # Target position sphere
-            if self._target_pos is not None:
-                sphere = make_point_marker(self._target_pos, radius=self._target_size, color=(1, 0.5, 0))
-                self._add_geometry("target_pos", sphere, self._mat_lit)
-            else:
-                self._remove_geometry("target_pos")
-
-            # TCP position sphere
-            if self._get_tcp_pos is not None:
-                xyz = self._get_tcp_pos()
-                if isinstance(xyz, torch.Tensor):
-                    xyz = xyz.detach().cpu().numpy().astype(np.float64)
-                if xyz is not None:
-                    self._tcp_pos = np.array(xyz, dtype=np.float64)
-                    if self._tcp_pos.ndim > 1:
-                        self._tcp_pos = self._tcp_pos[0]
-            if self._tcp_pos is not None:
-                sphere = make_point_marker(self._tcp_pos[:3], radius=0.007, color=(1, 0, 1))
-                self._add_geometry("tcp_pos", sphere, self._mat_lit)
-            else:
-                self._remove_geometry("tcp_pos")
-
-            # HUD
-            if hud_text:
-                self._hud_label.text = hud_text
-                self._window.set_needs_layout()
-
-            # Auto-fit view on first valid point cloud
-            if do_camera_setup and pcd is not None:
-                bounds = self._scene_widget.scene.bounding_box
-                center = bounds.get_center()
-                self._scene_widget.setup_camera(60, bounds, center)
-                self._needs_camera_setup = False
-
-        self._app.post_to_main_thread(self._window, _do_update)
-
-    def run(self) -> None:
-        """Set up the window and block on the GUI event loop (call on main thread)."""
-        if o3d is None:
-            raise ImportError("Open3D is required for visualization. Install with: pip install open3d")
-        self._setup()
-        self._app.run()
+        if segment_ids.numel() > 0 and segment_indices.numel() > 0:
+            segment_indices = segment_ids[segment_indices]
+        return point_cloud, segment_indices
 
     def run_thread(self) -> None:
-        """Run the visualizer in a thread."""
+        """Run the SkilletVisualizer pipeline in a thread."""
         if self._thread is not None and self._thread.is_alive():
             return
         self._stop_event.clear()
-        self._thread = threading.Thread(target=self.run, name="VisualizerThread", daemon=True)
+        self._thread = threading.Thread(target=self.run, name="SkilletVisualizerThread", daemon=True)
         self._thread.start()
 
-    def stop_thread(self) -> None:
-        """Stop the visualizer thread."""
+        if self._pc_vis is not None:
+            self._pc_vis.run_thread()
+
+    def set_open3d_visualizer(
+        self,
+        vis: Open3DVisualizer | None = None,
+        segment_point_cloud: bool = False,
+    ) -> None:
+        """Attach an external :class:`PointCloudVisualizer` for 3-D rendering.
+
+        The visualizer's ``run()`` should be called separately on the main
+        thread; this method just stores the reference so the main visualization loop
+        can push updates via ``vis.update()``.
+        """
+
+        def get_tcp_pos() -> Sequence[float]:
+            return self.env.get_observation(self.env.ikee_spec.unbatched())["tcp_pose_b"][:3].detach().cpu().numpy()
+
+        self._pc_vis = vis or Open3DVisualizer(self._reconstructor.scene, get_tcp_pos=get_tcp_pos)
+        self._segment_point_cloud = segment_point_cloud
+
+    def start_cv2_visualization(
+        self,
+        display_rgb: bool = False,
+        display_depth: bool = False,
+        segment_rgb: bool = False,
+        segment_depth: bool = False,
+        cv2_window_name: str = "Perception RGB-D",
+    ) -> None:
+        """Enable the CV2 RGB-D preview window."""
+        self._display_rgb = display_rgb
+        self._display_depth = display_depth
+        self._segment_rgb = segment_rgb
+        self._segment_depth = segment_depth
+        self._cv2_window_name = cv2_window_name
+
+    def _ensure_cv2_window(self) -> None:
+        """Create the CV2 window lazily on the run-loop thread."""
+        if self._cv2_active:
+            return
+        if not (self._display_rgb or self._display_depth):
+            return
+        cv2.namedWindow(self._cv2_window_name, cv2.WINDOW_NORMAL)
+        self._cv2_active = True
+
+    def _draw_instance_annotations(
+        self, image: np.ndarray, masks: torch.Tensor, segment_ids: torch.Tensor
+    ) -> np.ndarray:
+        """Draw semi-transparent overlays, bounding boxes, and prompt labels."""
+        out = image.copy()
+        overlay = image.copy()
+        masks_np = masks.detach().cpu().numpy()
+        ids_np = segment_ids.detach().cpu().numpy()
+        n = masks_np.shape[0]
+
+        for i in range(n):
+            color = _PALETTE_BGR[i % len(_PALETTE_BGR)]
+            overlay[masks_np[i] > 0] = color
+
+        cv2.addWeighted(overlay, _OVERLAY_ALPHA, out, 1.0 - _OVERLAY_ALPHA, 0, out)
+
+        for i in range(n):
+            seg_mask = masks_np[i] > 0
+            prompt_idx = int(ids_np[i])
+            color = _PALETTE_BGR[i % len(_PALETTE_BGR)]
+
+            ys, xs = np.where(seg_mask)
+            if len(ys) == 0:
+                continue
+            x1, y1, x2, y2 = int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())
+            cv2.rectangle(out, (x1, y1), (x2, y2), color, _BBOX_THICKNESS)
+
+            name = self._prompt_names[prompt_idx] if prompt_idx < len(self._prompt_names) else f"obj_{prompt_idx}"
+            label = f"#{i} {name}"
+            (tw, th), _ = cv2.getTextSize(label, _FONT, _FONT_SCALE, _FONT_THICKNESS)
+            tx, ty = x1, y1 - 6
+            if ty - th < 0:
+                ty = y1 + th + 6
+            cv2.rectangle(out, (tx - 1, ty - th - 4), (tx + tw + 5, ty + 4), color, cv2.FILLED)
+            cv2.putText(
+                out,
+                label,
+                (tx + 2, ty),
+                _FONT,
+                _FONT_SCALE,
+                (255, 255, 255),
+                _FONT_THICKNESS,
+                cv2.LINE_AA,
+            )
+
+        return out
+
+    def _colorize_segmented_rgb(
+        self, rgb_bgr: np.ndarray, masks: torch.Tensor, segment_ids: torch.Tensor
+    ) -> np.ndarray:
+        """Annotate RGB image with per-type overlays, bounding boxes, and labels."""
+        return self._draw_instance_annotations(rgb_bgr, masks, segment_ids)
+
+    def _colorize_segmented_depth(
+        self, depth_bgr: np.ndarray, masks: torch.Tensor, segment_ids: torch.Tensor
+    ) -> np.ndarray:
+        """Annotate depth colormap with per-type overlays, bounding boxes, and labels."""
+        return self._draw_instance_annotations(depth_bgr, masks, segment_ids)
+
+    def _update_rgbd_window(
+        self, obs_unbatched: Mapping[str, Any], masks: torch.Tensor, segment_ids: torch.Tensor
+    ) -> None:
+        """Update side-by-side RGB/Depth CV2 preview."""
+        if not (self._display_rgb or self._display_depth):
+            return
+
+        panels: list[np.ndarray] = []
+        if self._display_rgb:
+            rgb = obs_unbatched["rgb"].detach().to("cpu").numpy().transpose((1, 2, 0))
+            rgb_bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+            if self._segment_rgb:
+                rgb_bgr = self._colorize_segmented_rgb(rgb_bgr, masks, segment_ids)
+            panels.append(rgb_bgr)
+        if self._display_depth:
+            depth = obs_unbatched["depth"].detach().to("cpu").numpy()[0]
+            depth_vis = depth
+            if depth.dtype != np.uint16:
+                depth_vis = (depth * 1000.0).astype(np.uint16)
+            depth_bgr = depth_to_colormap_np(depth_vis)
+            if self._segment_depth:
+                depth_bgr = self._colorize_segmented_depth(depth_bgr, masks, segment_ids)
+            panels.append(depth_bgr)
+
+        if not panels:
+            return
+        frame = panels[0] if len(panels) == 1 else np.concatenate(panels, axis=1)
+        cv2.imshow(self._cv2_window_name, frame)
+        cv2.waitKey(1)
+
+    def _stop_cv2(self) -> None:
+        """Tear down the CV2 window."""
+        if self._cv2_active:
+            with suppress(cv2.error):
+                cv2.destroyWindow(self._cv2_window_name)
+            self._cv2_active = False
+        self._display_rgb = False
+        self._display_depth = False
+
+    def stop(self) -> None:
+        """Signal the polling loop to stop and wait for the worker thread."""
+        self._stop_event.set()
         if self._thread is not None and self._thread.is_alive():
-            self._stop_event.set()
             self._thread.join(timeout=2.0)
-            self._thread = None
+        self._stop_cv2()
+        if self._pc_vis is not None:
+            self._pc_vis.request_close()
 
-    def request_close(self) -> None:
-        """Request the GUI to shut down (safe to call from any thread)."""
-        self._closed = True
-        if self._app is not None:
-            self._app.quit()
+    def run(self) -> None:
+        """Run the SkilletVisualizer pipeline."""
+        poll_period_s = 1.0 / self.poll_rate
+        next_poll_t = time.perf_counter()
 
-    def set_target_pos(self, xyz: Sequence[float] | None, size: float = 0.007) -> None:
-        """Set the target position sphere marker. Pass None to clear."""
-        if isinstance(xyz, torch.Tensor):
-            xyz = xyz.detach().cpu().numpy().astype(np.float64)
-        self._target_pos = np.array(xyz, dtype=np.float64) if xyz is not None else None
-        if self._target_pos is not None:
-            if self._target_pos.ndim > 1:
-                self._target_pos = self._target_pos[0]
-        self._target_size = size
+        while not self._stop_event.is_set():
+            obs = self.env.get_observation(self.obs_spec)
+            obs_unbatched = self._apply_far_plane(self._maybe_unbatch(obs))
 
+            # Update the state based on reconstruction
+            self._reconstructor.update_state(obs_unbatched, update=False)
 
-def get_object_geometry(obj: SceneObject) -> list[object]:
-    """Get the geometry of an object in the scene.
+            masks, segment_ids = self._get_masks(obs_unbatched)
+            point_cloud, segment_indices = self._observation_to_point_cloud(obs_unbatched, masks, segment_ids)
 
-    Defaults to an AABB wireframe. Unknown poses are ignored.
-    """
-    # TODO: add object-specific geometry visualization.
-    if not obj.is_pose_known():
-        return []
-    if isinstance(obj, Cube):
-        corners = obj.get_corners().cpu().numpy()
-        return [create_box_lineset(corners)]
-    aabb = obj.aabb.cpu().numpy()
-    return [create_aabb_lineset(aabb)]
+            with self._lock:
+                self.latest_observation = obs
+                self.latest_point_cloud = point_cloud
+                self.latest_segment_indices = segment_indices
 
+            if self._pc_vis is not None:
+                vis_seg = segment_indices if self._segment_point_cloud else None
+                self._pc_vis.update(
+                    point_cloud,
+                    segment_indices=vis_seg,
+                    camera_pose=obs_unbatched["camera_pose"],
+                )
 
-def quat_to_roll_pitch_yaw(quat: np.ndarray) -> tuple[float, float, float]:
-    """Convert a quaternion to roll, pitch, yaw.
+            self._ensure_cv2_window()
+            self._update_rgbd_window(obs_unbatched, masks, segment_ids)
 
-    Args:
-        quat: The quaternion in (w, x, y, z).
+            next_poll_t += poll_period_s
+            sleep_s = max(0.0, next_poll_t - time.perf_counter())
+            if sleep_s > 0:
+                time.sleep(sleep_s)
 
-    Returns:
-        A tuple containing roll, pitch, yaw.
-
-    """
-    roll = np.arctan2(2 * (quat[0] * quat[1] + quat[2] * quat[3]), 1 - 2 * (quat[1] * quat[1] + quat[2] * quat[2]))
-    pitch = np.arcsin(2 * (quat[0] * quat[2] - quat[3] * quat[1]))
-    yaw = np.arctan2(2 * (quat[0] * quat[3] + quat[1] * quat[2]), 1 - 2 * (quat[2] * quat[2] + quat[3] * quat[3]))
-    return roll, pitch, yaw
+        self.stop()
 
 
-def tilt_from_quat_wxyz(q):
-    w, x, y, z = q
+if __name__ == "__main__":
+    from skillet.scene.scene_visualization import Open3DVisualizer
 
-    # right vector z-component from rotation matrix
-    right_z = 2 * (x * z - y * w)
-
-    # tilt angle
-    tilt = np.arcsin(np.clip(right_z, -1.0, 1.0))
-
-    tilt_deg = np.degrees(tilt)
-    return tilt_deg  # degrees
+    env = RealsenseEnv()
+    visualizer = SkilletVisualizer(env, env.obs_spec, 8)
+    visualizer.run_thread()
+    while True:
+        time.sleep(0.1)

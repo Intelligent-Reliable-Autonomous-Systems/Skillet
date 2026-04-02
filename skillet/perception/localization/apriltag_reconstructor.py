@@ -13,7 +13,7 @@ from skillet.scene.cube import Cube
 class ApriltagStateReconstructor(ReconstructorBase):
     """Parses observations for reconstructing the scene using AprilTags."""
 
-    def __init__(self, scene: Scene) -> None:
+    def __init__(self, scene: Scene | None = None) -> None:
         """Initialize the AprilTag state estimator.
 
         Args:
@@ -23,13 +23,16 @@ class ApriltagStateReconstructor(ReconstructorBase):
         super().__init__(self, scene)
         self._detector = apriltags.Detector()
 
-    def update_state(self, obs: dict[str, torch.Tensor]) -> None:
+    def update_state(self, obs: dict[str, torch.Tensor], update: bool = True) -> None:
         """Update the state estimator with a new observation.
 
         Args:
             obs: The RGB-D observation to update the state estimator with.
+            update: If to update the state or not
 
         """
+        if not update:
+            return
         device = obs["rgb"].device
         rgb = obs["rgb"].cpu().numpy().transpose(1, 2, 0)
         gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
