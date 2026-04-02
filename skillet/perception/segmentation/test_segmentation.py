@@ -1,7 +1,7 @@
 import pathlib
 import pickle
 import time
-
+import argparse
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
@@ -115,20 +115,23 @@ def display_segmentation_output(task_instruction, rgb, out):
     print("Saved to segmentation_output.png")
 
 
-# In your main():
-
 
 def main():
-    task_instruction = "Move the apple onto the cup."
-    rgb = np.array(Image.open("test_robot.jpg"))
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--ti", type=str, default="Move the red block onto the purple block")
+    parser.add_argument("--png", type=str, default="captures/capture_20260402_081454/img_color.png")
+    args = parser.parse_args()
+
+
+    rgb = np.array(Image.open(args.png))
     seg = SegmentationPipeline()
-    out = seg.segmentation(rgb, task_instruction=task_instruction)
+    out = seg.segmentation(rgb, task_instruction=args.ti)
     with pathlib.Path("out.pkl").open("wb") as f:
         pickle.dump(out, f)
     # with pathlib.Path("out.pkl").open("rb") as f:
     #     out = pickle.load(f)
     print(out["grounded_atoms"])
-    display_segmentation_output(task_instruction, rgb, out)
+    display_segmentation_output(args.ti, rgb, out)
 
 
 if __name__ == "__main__":

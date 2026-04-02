@@ -37,17 +37,18 @@ dependencies = [
     "scipy",
     "pupil_apriltags",
     "pyrealsense2",
-    "ultralytics",
     "open3d",
+    "google-genai",
+    "sam2",
+    "sam3",
 ]
 
 [project.optional-dependencies]
 perception = [
-    "ultralytics",
     "open3d",
     "pyrealsense2",
     "pupil-apriltags",
-    "pinnochio",
+    "pin",
 ]
 dev = [
     "ruff",
