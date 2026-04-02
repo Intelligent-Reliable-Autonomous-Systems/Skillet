@@ -11,6 +11,8 @@ from PIL import Image
 
 
 class SAMClient(ABC):
+    """Base class for all SAM clients."""
+
     def __init__(
         self,
         model_name: str | None = None,
