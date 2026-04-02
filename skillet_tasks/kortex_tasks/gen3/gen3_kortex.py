@@ -21,7 +21,7 @@ from skillet.core.spaces import ActionSpec
 from skillet.envs.kortex import KortexEnv, KortexEnvCfg
 from skillet.envs.kortex.kortex_bridge import DeviceConnection, check_for_end_or_abort
 from skillet.envs.util import configclass
-from skillet.perception.realsense import RealsenseCameraAprilTag
+from skillet.perception.realsense import RealsenseCameraLocalizer
 from skillet.policy.specs import JOINTS_SPEC
 
 
@@ -123,7 +123,7 @@ class Gen3KortexEnv(KortexEnv):
 
         self.curr_gripper_goal = None
 
-        self._realsense_camera = RealsenseCameraAprilTag(apriltag_size_m=0.1, apriltag_id=self.cfg.base_apriltag_id)
+        self._rs_cam_localizer = RealsenseCameraLocalizer(apriltag_size_m=0.1, apriltag_id=self.cfg.base_apriltag_id)
 
     def _pre_process_action(self, actions: torch.Tensor, action_spec: ActionSpec[Any] | None = None) -> np.ndarray:
         """Pre process the robot action.
@@ -202,7 +202,7 @@ class Gen3KortexEnv(KortexEnv):
               - ``timestamp``: float timestamp in seconds
 
         """
-        return self._realsense_camera._get_latest_rgbd_raw()
+        return self._rs_cam_localizer._get_latest_rgbd_raw()
 
     def _publish_gripper(
         self,

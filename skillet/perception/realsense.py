@@ -306,7 +306,7 @@ class RealsenseEnv(_EnvironmentBase):
             pass
 
 
-class RealsenseCameraAprilTag:
+class RealsenseCameraLocalizer:
     """Class that manages the Realsense camera streaming with AprilTag estimation.
 
     Used as a helper class in the Kortex API environments to avoid requiring ROS2.
@@ -396,19 +396,6 @@ class RealsenseCameraAprilTag:
 
         # (H, W) uint16 depth image (no conversion to meters here).
         depth = np.asanyarray(depth_frame.get_data()).astype(np.uint16, copy=False)
-
-        # camera_params = (self._intrinsic_k[0,0], self._intrinsic_k[1,1], self._intrinsic_k[0,2], self._intrinsic_k[1,2])
-        # tag_size_m = self._apriltag_size_m
-        # gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
-        # detections = self._tag_detector.detect(gray, estimate_tag_pose=True, camera_params=camera_params, tag_size=tag_size_m)
-        # if detections:
-        #     for detection in detections:
-        #         if detection.tag_id == self._apriltag_id:
-        #             T_tag_cam = make_T(detection.pose_R, detection.pose_t.reshape(3))
-        #             T_cam_tag = _inv_T(T_tag_cam)
-        #             T_base_cam = self._T_base_to_tag @ T_cam_tag
-        #             self._latest_camera_pose = T_to_xyz_quat_xyzw(T_base_cam)
-        #             break
 
         # Wall-clock timestamp in seconds.
         timestamp = float(time.time())

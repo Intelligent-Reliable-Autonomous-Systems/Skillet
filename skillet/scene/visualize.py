@@ -15,9 +15,8 @@ import cv2
 import numpy as np
 import torch
 
-from skillet.perception.localization import segmented_rgbd_to_point_cloud
-from skillet.perception.realsense import RealsenseEnv
 from skillet.perception.utils import depth_to_colormap_np
+from skillet.scene.utils import segmented_rgbd_to_point_cloud
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -361,13 +360,3 @@ class SkilletVisualizer:
                 time.sleep(sleep_s)
 
         self.stop()
-
-
-if __name__ == "__main__":
-    from skillet.scene.scene_visualization import Open3DVisualizer
-
-    env = RealsenseEnv()
-    visualizer = SkilletVisualizer(env, env.obs_spec, 8)
-    visualizer.run_thread()
-    while True:
-        time.sleep(0.1)

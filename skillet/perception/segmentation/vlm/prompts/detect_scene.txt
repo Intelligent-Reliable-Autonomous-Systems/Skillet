@@ -6,6 +6,7 @@ Detect and return bounding boxes for objects in the image.
 - DO NOT include objects or surfaces irrelevant to the task or too far away to matter (e.g. walls, things on the wall that are far away, things on the floor below the table, people who might be in the scene, etc.)
 - Limit to 25 objects
 - If an object appears multiple times, name them by unique characteristics (color, size, position, etc.). If they seem the same, then just use numbers (e.g. 'soda_can1' and 'soda_can2', ... for identical-looking soda cans)
+- If an object is a block, only name it by its color, not by any additional information on the cube face.
 - An object **cannot have the same name** as another under any circumstance.
 - Format: normalized coordinates 0-1000 as integers
 

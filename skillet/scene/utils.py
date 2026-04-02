@@ -1,5 +1,3 @@
-"""Object localization utilities: RGB-D to point cloud conversion."""
-
 import torch
 from jaxtyping import Int
 

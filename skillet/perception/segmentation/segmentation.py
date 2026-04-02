@@ -1,14 +1,11 @@
 import asyncio
-import time
 
 import aiohttp
 import numpy as np
 from jaxtyping import Bool, Float, UInt8
 from PIL import Image
 
-from skillet.perception.realsense import Frame, RealsenseCamera
-from skillet.perception.segmentation.depth import StereoClient
-from skillet.perception.segmentation.grasp import M2T2Client
+from skillet.perception.realsense import Frame
 from skillet.perception.segmentation.sam import SAM2Client
 from skillet.perception.segmentation.utils import depth_to_xyz, get_o3d_pcd
 from skillet.perception.segmentation.vlm import GeminiClient
@@ -21,44 +18,44 @@ class SegmentationClient:
         self,
     ) -> None:
         self.sam_client = SAM2Client()
-        self.gemini_client = GeminiClient()
-        self.depth_client = StereoClient()
-        self.grasp_client = M2T2Client()
-        self.camera = RealsenseCamera()
+        self.vlm_client = GeminiClient()
 
-    def run_perception(self, task_instruction: str):
+    def run_perception(self) -> dict:
         """Run the full perception pipeline."""
-        self._segmentation()
-        self._predict_depth_and_grasps()
+        raise NotImplementedError
 
-    def _segmentation(self, rgb: UInt8[np.ndarray, "h w 3"], task_instruction: str) -> dict:
+    def segmentation(self, rgb: UInt8[np.ndarray, "h w 3"], task_instruction: str) -> dict:
         """Test the segmentation and task instruction with the Gemini and SAM2 pipline.
 
         Args:
             rgb: RGB image to segment
             task_instruction: Instruction of the task to complete.
 
+        Returns:
+            dictionary of bounding boxes, segmentation masks, goal predicates, and scene predicates
+
         """
         rgb_pil = Image.fromarray(rgb)
         rgb_pil_resized = rgb_pil.resize((800, int(800 * rgb_pil.size[1] / rgb_pil.size[0])), Image.Resampling.LANCZOS)
-        print("[INFO] Starting Gemini object detection")
-        _st = time.perf_counter()
-        bboxes, grounded_atoms = self.gemini_client.detect_and_translate(rgb_pil_resized, task_instruction)
-        _dur = time.perf_counter() - _st
-        print(f"[INFO] Gemini detection took {_dur:.2f}s ({len(bboxes)} objects)")
+        bboxes, grounded_goal_atoms, grounded_scene_atoms = self.vlm_client.detect_and_translate(
+            rgb_pil_resized, task_instruction
+        )
 
         for bbox in bboxes:
             bbox["label"] = bbox["label"].replace(" ", "_")
-        for atom in grounded_atoms:
+        for atom in grounded_goal_atoms:
+            atom["args"] = [arg.replace(" ", "_") for arg in atom["args"]]
+        for atom in grounded_scene_atoms:
             atom["args"] = [arg.replace(" ", "_") for arg in atom["args"]]
 
-        print("[INFO] Starting SAM object segmentation with Gemini masks")
-        _st = time.perf_counter()
         masks = self.sam_client.segment_objects(rgb_pil, bboxes)
-        _dur = time.perf_counter() - _st
-        print(f"[INFO] SAM segmentation took {_dur:.2f}s ({len(masks)} masks)")
 
-        return {"bboxes": bboxes, "masks": masks, "grounded_atoms": grounded_atoms}
+        return {
+            "bboxes": bboxes,
+            "masks": masks,
+            "grounded_goal_atoms": grounded_goal_atoms,
+            "grounded_scene_atoms": grounded_scene_atoms,
+        }
 
     async def _predict_depth_and_grasps(
         self,
