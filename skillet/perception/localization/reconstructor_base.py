@@ -1,9 +1,11 @@
 from abc import ABC, abstractmethod
 
 import torch
+from typing import Any
 
 from skillet.scene.base import Scene
-
+from skillet.core import ObservationSpec
+from skillet.core.env import BatchedEnvironment, TSpecObs
 
 class ReconstructorBase(ABC):
     """Base scene reconstructor for cube localization with AprilTags or segmentation + depth."""
@@ -26,6 +28,11 @@ class ReconstructorBase(ABC):
             update: If to update the scene or not
 
         """
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_observation(self, obs_spec: ObservationSpec[TSpecObs]) -> Any:
+        """Return the current state of the scene built by the reconstructor."""
         raise NotImplementedError
 
     @property
