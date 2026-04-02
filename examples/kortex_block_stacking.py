@@ -114,9 +114,9 @@ def main() -> None:
     rotate_y_skill = RotateYawSkill(
         reach_policy=arm_policy, gripper_policy=None, lift_height=0.23, lift_delta=0.04, length=skill_length
     )
-    pick_block_skill = PickBlockSkill(scene, pick_skill, vis_target_pos=vis.set_target_pos)
-    place_block_skill = PlaceBlockSkill(scene, place_skill, vis_target_pos=vis.set_target_pos)
-    rotate_block_skill = RotateBlockSkill(scene, rotate_y_skill, vis_target_pos=vis.set_target_pos)
+    pick_block_skill = PickBlockSkill(scene, pick_skill, vis_target_pos=visualizer.o3d_viz.set_target_pos)
+    place_block_skill = PlaceBlockSkill(scene, place_skill, vis_target_pos=visualizer.o3d_viz.set_target_pos)
+    rotate_block_skill = RotateBlockSkill(scene, rotate_y_skill, vis_target_pos=visualizer.o3d_viz.set_target_pos)
     skills = [pick_block_skill, place_block_skill, rotate_block_skill]
 
     # High-level policy

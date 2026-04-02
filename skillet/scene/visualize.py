@@ -16,16 +16,16 @@ import numpy as np
 import torch
 
 from skillet.perception.utils import depth_to_colormap_np
+from skillet.scene.scene_visualization import Open3DVisualizer
 from skillet.scene.utils import segmented_rgbd_to_point_cloud
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
-
     from skillet.core import BatchedEnvironment
     from skillet.core.env import Environment
     from skillet.core.spaces import ObservationSpec
     from skillet.perception.localization.reconstructor_base import ReconstructorBase
-    from skillet.scene.scene_visualization import Open3DVisualizer
+
 
 _PALETTE_BGR: list[tuple[int, int, int]] = [
     (44, 44, 220),
@@ -116,6 +116,11 @@ class SkilletVisualizer:
             "camera_pose": camera_pose,
         }
 
+    @property
+    def o3d_viz(self) -> Open3DVisualizer:
+        """Return the Open3D visualizer."""
+        return self._pc_vis
+
     def _apply_far_plane(self, obs_unbatched: Mapping[str, Any]) -> dict[str, torch.Tensor]:
         """Apply optional far-plane clipping in meters by zeroing distant depth."""
         if self.max_depth_m is None:
@@ -187,7 +192,7 @@ class SkilletVisualizer:
         """
 
         def get_tcp_pos() -> Sequence[float]:
-            return self.env.get_observation(self.env.ikee_spec.unbatched())["tcp_pose_b"][:3].detach().cpu().numpy()
+            return self.env.get_observation(self.env.unwrapped.obs_spec_ikee.unbatched())["tcp_pose_b"][:3].detach().cpu().numpy()
 
         self._pc_vis = vis or Open3DVisualizer(self._reconstructor.scene, get_tcp_pos=get_tcp_pos)
         self._segment_point_cloud = segment_point_cloud
@@ -243,7 +248,7 @@ class SkilletVisualizer:
             x1, y1, x2, y2 = int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())
             cv2.rectangle(out, (x1, y1), (x2, y2), color, _BBOX_THICKNESS)
 
-            name = self._prompt_names[prompt_idx] if prompt_idx < len(self._prompt_names) else f"obj_{prompt_idx}"
+            name = f"obj_{prompt_idx}"
             label = f"#{i} {name}"
             (tw, th), _ = cv2.getTextSize(label, _FONT, _FONT_SCALE, _FONT_THICKNESS)
             tx, ty = x1, y1 - 6
@@ -333,7 +338,7 @@ class SkilletVisualizer:
             obs_unbatched = self._apply_far_plane(self._maybe_unbatch(obs))
 
             # Update the state based on reconstruction
-            self._reconstructor.update_state(obs_unbatched, update=False)
+            self._reconstructor.update_state(obs_unbatched, update=True) # TODO: update only at specific Hz
 
             masks, segment_ids = self._get_masks(obs_unbatched)
             point_cloud, segment_indices = self._observation_to_point_cloud(obs_unbatched, masks, segment_ids)

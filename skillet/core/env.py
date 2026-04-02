@@ -320,6 +320,10 @@ class BatchToSingleWrapper(Environment[TObs, TAction], Generic[TObs, TAction]):
         """The wrapped batched environment."""
 
     @property
+    def unwrapped(self) -> Environment:
+        return self.batched_env.unwrapped
+
+    @property
     @override
     def obs_spec(self) -> ObservationSpec[TObs]:
         return self.batched_env.obs_spec.unbatched()

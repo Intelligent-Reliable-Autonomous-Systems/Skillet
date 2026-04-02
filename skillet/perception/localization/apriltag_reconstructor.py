@@ -20,7 +20,7 @@ class ApriltagStateReconstructor(ReconstructorBase):
             scene: The scene to update with the estimated poses of the AprilTags.
 
         """
-        super().__init__(self, scene)
+        super().__init__(scene)
         self._detector = apriltags.Detector()
 
     def update_state(self, obs: dict[str, torch.Tensor], update: bool = True) -> None:
