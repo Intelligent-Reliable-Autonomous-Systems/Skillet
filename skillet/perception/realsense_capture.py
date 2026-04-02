@@ -57,25 +57,31 @@ def get_frames(pipeline, align, colorizer):
     color_frame = aligned.get_color_frame()
     depth_frame = aligned.get_depth_frame()
 
-    ir_left  = frames.get_infrared_frame(1)
+    ir_left = frames.get_infrared_frame(1)
     ir_right = frames.get_infrared_frame(2)
 
     if not color_frame or not depth_frame:
         return None, None, None
 
-    color_image    = np.asanyarray(color_frame.get_data())
+    color_image = np.asanyarray(color_frame.get_data())
     depth_colormap = np.asanyarray(colorizer.colorize(depth_frame).get_data())
 
-    ir_left_img  = np.asanyarray(ir_left.get_data())
+    ir_left_img = np.asanyarray(ir_left.get_data())
     ir_right_img = np.asanyarray(ir_right.get_data())
 
     return color_image, depth_colormap, depth_frame, ir_left_img, ir_right_img
 
 
-def save_batch(color_image: np.ndarray, depth_colormap: np.ndarray, depth_frame:np.ndarray, ir_left:np.ndarray, ir_right:np.ndarray,
-               output_dir: Path) -> None:
+def save_batch(
+    color_image: np.ndarray,
+    depth_colormap: np.ndarray,
+    depth_frame: np.ndarray,
+    ir_left: np.ndarray,
+    ir_right: np.ndarray,
+    output_dir: Path,
+) -> None:
     """Save a color + depth pair with a zero-padded batch index."""
-    ts   = datetime.now().strftime("%Y%m%d_%H%M%S")
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     stem = f"capture_{ts}"
     (output_dir / f"{stem}").mkdir(exist_ok=True, parents=True)
 
@@ -87,7 +93,7 @@ def save_batch(color_image: np.ndarray, depth_colormap: np.ndarray, depth_frame:
     ir_left_path = output_dir / f"{stem}" / "np_ir_left.npy"
     ir_right_path = output_dir / f"{stem}" / "np_ir_right.npy"
     depth_npy_path = output_dir / f"{stem}" / "np_depth.npy"
-    depth_m_path   = output_dir / f"{stem}" / "np_depth_m.npy"
+    depth_m_path = output_dir / f"{stem}" / "np_depth_m.npy"
 
     # Raw arrays
     depth_raw = np.asanyarray(depth_frame.get_data())  # uint16 (depth in sensor units)
@@ -129,12 +135,26 @@ def run(width: int, height: int, fps: int, warmup_frames: int, output_dir: Path)
 
             # Side-by-side preview with on-screen instructions
             preview = np.hstack([color_image, depth_colormap])
-            cv2.putText(preview, "SPACE: save  |  Q/ESC: quit",
-                        (10, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2,
-                        cv2.LINE_AA)
-            cv2.putText(preview, f"Saved: {batch_index - 1}",
-                        (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 120), 2,
-                        cv2.LINE_AA)
+            cv2.putText(
+                preview,
+                "SPACE: save  |  Q/ESC: quit",
+                (10, 28),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                (255, 255, 255),
+                2,
+                cv2.LINE_AA,
+            )
+            cv2.putText(
+                preview,
+                f"Saved: {batch_index - 1}",
+                (10, 60),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                (0, 255, 120),
+                2,
+                cv2.LINE_AA,
+            )
 
             cv2.imshow(window, preview)
             key = cv2.waitKey(1) & 0xFF
@@ -143,7 +163,7 @@ def run(width: int, height: int, fps: int, warmup_frames: int, output_dir: Path)
                 save_batch(color_image, depth_colormap, depth_frame, ir_left, ir_right, output_dir)
                 batch_index += 1
 
-            elif key in (ord("q"), ord("Q"), 27):   # 27 = ESC
+            elif key in (ord("q"), ord("Q"), 27):  # 27 = ESC
                 print("Exiting.")
                 break
 
@@ -154,15 +174,12 @@ def run(width: int, height: int, fps: int, warmup_frames: int, output_dir: Path)
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Live RealSense preview — press SPACE to save a frame batch."
-    )
-    parser.add_argument("--output-dir", default="captures",
-                        help="Directory to save images (default: ./captures)")
-    parser.add_argument("--width",  type=int, default=640, help="Stream width  (default: 640)")
+    parser = argparse.ArgumentParser(description="Live RealSense preview — press SPACE to save a frame batch.")
+    parser.add_argument("--output-dir", default="captures", help="Directory to save images (default: ./captures)")
+    parser.add_argument("--width", type=int, default=640, help="Stream width  (default: 640)")
     parser.add_argument("--height", type=int, default=480, help="Stream height (default: 480)")
-    parser.add_argument("--fps",    type=int, default=30,  help="Frame rate    (default: 30)")
-    parser.add_argument("--warmup", type=int, default=30,  help="Warm-up frames (default: 30)")
+    parser.add_argument("--fps", type=int, default=30, help="Frame rate    (default: 30)")
+    parser.add_argument("--warmup", type=int, default=30, help="Warm-up frames (default: 30)")
     args = parser.parse_args()
 
     run(

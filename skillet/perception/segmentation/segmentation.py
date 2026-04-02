@@ -45,18 +45,18 @@ class SegmentationClient:
         _st = time.perf_counter()
         bboxes, grounded_atoms = self.gemini_client.detect_and_translate(rgb_pil_resized, task_instruction)
         _dur = time.perf_counter() - _st
-        print(f"[INFO] Gemini detection took {_dur:.2f}s ({len(bboxes)} objects, {len(grounded_atoms)} atoms)")
+        print(f"[INFO] Gemini detection took {_dur:.2f}s ({len(bboxes)} objects)")
 
         for bbox in bboxes:
             bbox["label"] = bbox["label"].replace(" ", "_")
         for atom in grounded_atoms:
             atom["args"] = [arg.replace(" ", "_") for arg in atom["args"]]
 
-        print("[INFO] Starting SAM2 object segmentation with Gemini masks")
+        print("[INFO] Starting SAM object segmentation with Gemini masks")
         _st = time.perf_counter()
         masks = self.sam_client.segment_objects(rgb_pil, bboxes)
         _dur = time.perf_counter() - _st
-        print(f"[INFO] SAM2 segmentation took {_dur:.2f}s ({len(masks)} masks)")
+        print(f"[INFO] SAM segmentation took {_dur:.2f}s ({len(masks)} masks)")
 
         return {"bboxes": bboxes, "masks": masks, "grounded_atoms": grounded_atoms}
 

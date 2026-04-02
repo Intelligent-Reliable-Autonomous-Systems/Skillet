@@ -12,7 +12,7 @@ _PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 class GeminiClient:
     """Class for Google Gemini Client."""
 
-    def __init__(self, prompt_name: str = "detect_and_translate") -> None:
+    def __init__(self, prompt_name: str = "detect_goal_scene") -> None:
         self.prompt = self._load_prompt(prompt_name)
 
     def detect_and_translate(
@@ -84,7 +84,7 @@ class GeminiClient:
         return self._parse_response(response.text)
 
     def _parse_response(self, response_text: str) -> tuple[list, list]:
-        """Parse Gemini response text into bboxes and grounded atoms."""
+        """Parse Gemini response text into bboxes, grounded goal atoms, and grounded scene atoms."""
         try:
             result = self._load_json(response_text)
         except Exception:
@@ -92,12 +92,17 @@ class GeminiClient:
                 f"Gemini returned a non-JSON response; check for a discrepancy in your image: {response_text}"
             )
         bboxes = result.get("bboxes", [])
-        grounded_atoms = [
-            {"predicate": spec["name"], "args": spec["args"]}
-            for spec in result.get("predicates", [])
+        grounded_goal_atoms = [
+            {"goal_predicate": spec["name"], "args": spec["args"]}
+            for spec in result.get("goal_predicates", [])
             if spec.get("name") and spec.get("args")
         ]
-        return bboxes, grounded_atoms
+        grounded_scene_atoms = [
+            {"scene_predicate": spec["name"], "args": spec["args"]}
+            for spec in result.get("scene_predicates", [])
+            if spec.get("name") and spec.get("args")
+        ]
+        return bboxes, grounded_goal_atoms, grounded_scene_atoms
 
     def _load_json(self, response_text: str) -> list | dict:
         """Extract JSON string from code fencing if present."""
