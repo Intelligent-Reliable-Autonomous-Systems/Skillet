@@ -1,16 +1,15 @@
-"""
-Capture color and depth images from an Intel RealSense camera using pyrealsense2.
+"""Capture color and depth images from an Intel RealSense camera using pyrealsense2.
 
 Shows a live preview window — press SPACE to save a batch, press Q or ESC to quit.
 """
 
 import argparse
 import sys
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
-import numpy as np
 import cv2
+import numpy as np
 import pyrealsense2 as rs
 
 

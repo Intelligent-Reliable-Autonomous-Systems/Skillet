@@ -7,6 +7,7 @@ import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
 from jaxtyping import UInt8
+from matplotlib.gridspec import GridSpec
 from PIL import Image
 
 from skillet.perception.segmentation.sam import SAM2Client
@@ -14,14 +15,14 @@ from skillet.perception.segmentation.vlm import GeminiClient
 
 
 class SegmentationPipeline:
-    """Segmentation Pipeline using Gemini and SAM3."""
+    """Segmentation Pipeline using VLM and SAM."""
 
     def __init__(self) -> None:
         self.sam_client = SAM2Client()
-        self.gemini_client = GeminiClient()
+        self.vlm_client = GeminiClient()
 
     def _segmentation(self, rgb: UInt8[np.ndarray, "h w 3"], task_instruction: str) -> dict:
-        """Test the segmentation and task instruction with the Gemini and SAM2 pipline.
+        """Test the segmentation and task instruction with the VLM and SAM pipline.
 
         Args:
             rgb: RGB image to segment
@@ -30,13 +31,13 @@ class SegmentationPipeline:
         """
         rgb_pil = Image.fromarray(rgb)
         rgb_pil_resized = rgb_pil.resize((800, int(800 * rgb_pil.size[1] / rgb_pil.size[0])), Image.Resampling.LANCZOS)
-        print("[INFO] Starting Gemini object detection")
+        print("[INFO] Starting VLM object detection")
         _st = time.perf_counter()
-        bboxes, grounded_goal_atoms, grounded_scene_atoms = self.gemini_client.detect_and_translate(
+        bboxes, grounded_goal_atoms, grounded_scene_atoms = self.vlm_client.detect_and_translate(
             rgb_pil_resized, task_instruction
         )
         _dur = time.perf_counter() - _st
-        print(f"[INFO] Gemini detection took {_dur:.2f}s ({len(bboxes)} objects, {len(grounded_goal_atoms)} atoms)")
+        print(f"[INFO] VLM detection took {_dur:.2f}s ({len(bboxes)} objects, {len(grounded_goal_atoms)} atoms)")
 
         for bbox in bboxes:
             bbox["label"] = bbox["label"].replace(" ", "_")
@@ -45,7 +46,7 @@ class SegmentationPipeline:
         for atom in grounded_scene_atoms:
             atom["args"] = [arg.replace(" ", "_") for arg in atom["args"]]
 
-        print("[INFO] Starting SAM object segmentation with Gemini masks")
+        print("[INFO] Starting SAM object segmentation with VLM masks")
         _st = time.perf_counter()
         masks = self.sam_client.segment_objects(rgb_pil, bboxes)
         _dur = time.perf_counter() - _st
@@ -59,14 +60,14 @@ class SegmentationPipeline:
         }
 
 
-def display_segmentation_output(task_instruction: str, rgb: np.ndarray, out: dict, dir: str):
-    """Display the output of segmentation with Gemini/SAM2.
+def display_segmentation_output(task_instruction: str, rgb: np.ndarray, out: dict, start_dir: str) -> None:
+    """Display the output of segmentation with VLM/SAM.
 
     Args:
         task_instruction: the task instruction as a natural language prompt.
         rgb: the RGB image of the scene
         out: a dictionary containing the bounding boxes, segmentation masks, and PDDL predictates
-        dir: directory to save the output of segmentation
+        start_dir: directory to save the output of segmentation
 
     """
     img_h, img_w = rgb.shape[:2]
@@ -80,7 +81,7 @@ def display_segmentation_output(task_instruction: str, rgb: np.ndarray, out: dic
 
     # Display original image with bounding boxes
     axes[0].imshow(rgb)
-    axes[0].set_title("Gemini Bounding Boxes")
+    axes[0].set_title("VLM Bounding Boxes")
     colors = plt.cm.tab10.colors
     for i, bbox in enumerate(bboxes):
         color = colors[i % len(colors)]
@@ -159,7 +160,53 @@ def display_segmentation_output(task_instruction: str, rgb: np.ndarray, out: dic
 
     plt.suptitle(f"Task: {task_instruction}", fontsize=13, fontweight="bold")
     plt.tight_layout()
-    plt.savefig(f"{dir}/segmentation_output.png", dpi=150, bbox_inches="tight")
+    plt.savefig(f"{start_dir}/segmentation_output.png", dpi=150, bbox_inches="tight")
+    plt.show()
+
+
+def display_depth(start_dir: str, out: dict) -> None:
+    """Display the depth and masks in the scene.
+
+    Args:
+        start_dir: Starting directory for the image.
+        out: dictionary containing masks.
+
+    """
+    depth = np.load(f"{start_dir}/np_depth.npy")
+    depth_vis = (depth - np.min(depth)) / (np.max(depth) - np.min(depth))
+
+    masks = out["masks"].squeeze(1)
+    num_masks = masks.shape[0]
+
+    cmap = plt.get_cmap("tab10")
+    colors = [cmap(i % 10) for i in range(num_masks)]
+
+    # Create figure and account for colorbar
+    fig = plt.figure(figsize=(14, 6))
+    gs = GridSpec(1, 2, width_ratios=[1, 1], wspace=0.05)
+
+    # Depth with mask overlay
+    ax0 = fig.add_subplot(gs[0, 0])
+    ax0.imshow(depth_vis, cmap="viridis")
+    for i in range(num_masks):
+        mask_rgba = np.zeros((*masks[i].shape, 4))
+        mask_rgba[..., :3] = colors[i][:3]
+        mask_rgba[..., 3] = masks[i] * 0.5
+        ax0.imshow(mask_rgba)
+    ax0.set_title("Depth with Masks")
+    ax0.axis("off")
+
+    # Raw depth image
+    ax1 = fig.add_subplot(gs[0, 1])
+    im = ax1.imshow(depth, cmap="viridis")
+    ax1.set_title("Raw Depth")
+    ax1.axis("off")
+
+    # Add colorbar without changing axes size
+    cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
+    plt.colorbar(im, cax=cbar_ax)
+    plt.tight_layout()
+    plt.savefig(f"{start_dir}/depth_output.png", dpi=150, bbox_inches="tight")
     plt.show()
 
 
@@ -184,7 +231,9 @@ def main():
     else:
         with pathlib.Path(f"{args.dir}/out.pkl").open("rb") as f:
             out = pickle.load(f)
-    display_segmentation_output(args.ti, rgb, out, args.dir)
+    # display_segmentation_output(args.ti, rgb, out, args.dir)
+
+    display_depth(args.dir, out)
 
 
 if __name__ == "__main__":

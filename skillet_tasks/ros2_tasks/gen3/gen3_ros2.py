@@ -30,7 +30,6 @@ from skillet.envs.ros2 import (
     wait_until_ready,
 )
 from skillet.envs.util import configclass
-from skillet.perception.localization import CameraLocalizer
 from skillet.policy.specs import JOINTS_SPEC
 
 
@@ -240,8 +239,6 @@ class Gen3ROS2Env(ROS2Env):
             self.realsense_snapshot_service_type,
         )
 
-        self._camera_localizer = CameraLocalizer(apriltag_size_m=0.1, apriltag_id=self.cfg.base_apriltag_id)
-
     def _pre_process_action(self, actions: torch.Tensor, action_spec: ActionSpec[Any] | None = None) -> np.ndarray:
         """Pre process the robot action.
 
@@ -355,14 +352,6 @@ class Gen3ROS2Env(ROS2Env):
         # wrapper must convert to wxyz format
         quat_xyzw = np.asarray([q["x"], q["y"], q["z"], q["w"]], dtype=np.float64)
         camera_pos_quat = np.concatenate((translation, quat_xyzw), axis=0)
-        # TODO decide how we want to toggle between ROS2 vs Skillet side camera localization
-        # camera_pos_quat = self._camera_localizer.get_camera_pose(rgb=rgb, intrinsic_k=k)
-
-        # TODO I feel like we should localize the camera on the skillet side, not ROS side
-        # if q["x"] == 0.0 and q["y"] == 0.0 and q["z"] == 0.0:
-        #     # TODO: This is a hack for fake hardware
-        #     if not hasattr(self, "_camera_localizer"):
-        #         self._camera_localizer = CameraLocalizer(apriltag_size_m=0.1, apriltag_id=0)
 
         stamp = data.get("stamp", {"sec": 0, "nanosec": 0})
         timestamp = float(stamp.get("sec", 0)) + float(stamp.get("nanosec", 0)) * 1e-9

@@ -10,7 +10,6 @@ from __future__ import annotations
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
-from functools import cache
 from typing import TYPE_CHECKING, Any
 
 import cv2
@@ -60,10 +59,10 @@ class RealsenseFrame(Frame):
 class RealsenseIntrinsics:
     """Intrinsics for RealSense camera."""
 
-    K_color: Float[np.ndarray, "3 3"]  # Color camera matrix
-    K_ir: Float[np.ndarray, "3 3"]  # IR camera matrix
+    k_color: Float[np.ndarray, "3 3"]  # Color camera matrix
+    k_ir: Float[np.ndarray, "3 3"]  # IR camera matrix
     baseline_ir: float  # Meters (IR baseline)
-    T_color_from_ir: Float[np.ndarray, "4 4"]  # Transform from IR to color
+    t_color_from_ir: Float[np.ndarray, "4 4"]  # Transform from IR to color
     distortion_color: Float[np.ndarray, 5]  # Color camera distortion coefficients
 
 
@@ -424,33 +423,43 @@ class RealsenseCameraAprilTag:
 
 
 class RealsenseCamera:
-    """Realsense Camera class for streaming raw camera images"""
+    """Realsense Camera class for streaming raw camera images."""
 
     def __init__(
         self,
-        serial: str | None = None,
         width: int = 640,
         height: int = 480,
         fps: int = 30,
-        enable_depth: bool = False,
+        enable_depth: bool = True,
         enable_ir: bool = True,
-    ):
+    ) -> None:
+        """Initialize the Realsense Camera.
+
+        Args:
+            width: width of image
+            height: height of image
+            fps: frames per second to stream at
+            enable_depth: if to stream depth
+            enable_ir: if to enable IR
+
+        """
         self._enable_depth = enable_depth
         self._enable_ir = enable_ir
 
         # Enable streams
-        config = rs.config()
+        self.config = rs.config()
+        self.colorizer = rs.colorizer()
 
-        config.enable_stream(rs.stream.color, width, height, rs.format.rgb8, fps)
+        self.config.enable_stream(rs.stream.color, width, height, rs.format.rgb8, fps)
         if enable_depth:
-            config.enable_stream(rs.stream.depth, width, height, rs.format.z16, fps)
+            self.config.enable_stream(rs.stream.depth, width, height, rs.format.z16, fps)
         if enable_ir:
-            config.enable_stream(rs.stream.infrared, 1, width, height, rs.format.y8, fps)
-            config.enable_stream(rs.stream.infrared, 2, width, height, rs.format.y8, fps)
+            self.config.enable_stream(rs.stream.infrared, 1, width, height, rs.format.y8, fps)
+            self.config.enable_stream(rs.stream.infrared, 2, width, height, rs.format.y8, fps)
 
         # Start pipeline
         self.pipeline = rs.pipeline()
-        self._profile = self.pipeline.start(config)
+        self._profile = self.pipeline.start(self.config)
         for _ in range(30):
             self.pipeline.wait_for_frames()
 
@@ -459,14 +468,19 @@ class RealsenseCamera:
         self.serial = device.get_info(rs.camera_info.serial_number)
 
         # Cache the intrinsics call
-        self.get_intrinsics()
+        self.intrinsics = self.get_intrinsics()
 
-    @cache
     def get_intrinsics(self) -> RealsenseIntrinsics:
+        """Get the intrinsics of the Realsense camera.
+
+        Returns:
+            Realsense Camera intrinsics object.
+
+        """
         # Color intrinsics
         color_profile = self._profile.get_stream(rs.stream.color)
         color_intr = color_profile.as_video_stream_profile().get_intrinsics()
-        K_color = np.array(
+        k_color = np.array(
             [
                 [color_intr.fx, 0, color_intr.ppx],
                 [0, color_intr.fy, color_intr.ppy],
@@ -483,7 +497,7 @@ class RealsenseCamera:
         ir_left_profile = self._profile.get_stream(rs.stream.infrared, 1)
         ir_right_profile = self._profile.get_stream(rs.stream.infrared, 2)
         ir_intr = ir_left_profile.as_video_stream_profile().get_intrinsics()
-        K_ir = np.array(
+        k_ir = np.array(
             [
                 [ir_intr.fx, 0, ir_intr.ppx],
                 [0, ir_intr.fy, ir_intr.ppy],
@@ -498,20 +512,25 @@ class RealsenseCamera:
 
         # Extrinsics from IR1 to color
         extr_color = ir_left_profile.get_extrinsics_to(color_profile)
-        T_color_from_ir = np.eye(4, dtype=np.float32)
-        T_color_from_ir[:3, :3] = np.array(extr_color.rotation).reshape(3, 3).T
-        T_color_from_ir[:3, 3] = np.array(extr_color.translation)
+        t_color_from_ir = np.eye(4, dtype=np.float32)
+        t_color_from_ir[:3, :3] = np.array(extr_color.rotation).reshape(3, 3).T
+        t_color_from_ir[:3, 3] = np.array(extr_color.translation)
 
         return RealsenseIntrinsics(
-            K_color=K_color,
-            K_ir=K_ir,
+            k_color=k_color,
+            k_ir=k_ir,
             baseline_ir=baseline,
-            T_color_from_ir=T_color_from_ir,
+            t_color_from_ir=t_color_from_ir,
             distortion_color=distortion_color,
         )
 
     def read_camera(self) -> RealsenseFrame:
-        """Read the camera frame."""
+        """Read the camera frame.
+
+        Returns:
+            A Realsense Frame object with the current camera image information.
+
+        """
         frames = self.pipeline.wait_for_frames()
         color_frame = frames.get_color_frame()
         rgb = np.asanyarray(color_frame.get_data())
@@ -540,19 +559,18 @@ class RealsenseCamera:
             aligned_depth_frame = aligned_frames.get_depth_frame()
             depth_float = (np.asanyarray(aligned_depth_frame.get_data()) / 1000.0).astype(np.float32)
 
-        intrinsics = self.get_intrinsics()
         return RealsenseFrame(
             serial=self.serial,
             timestamp=timestamp,
             rgb=rgb,
-            intrinsics=intrinsics.K_color,
+            intrinsics=self.intrinsics.k_color,
             depth=depth_float,
             ir_left=ir_left,
             ir_right=ir_right,
             depth_raw=depth_raw,
         )
 
-    def close(self):
+    def close(self) -> None:
         """Stop the camera pipeline."""
         self.pipeline.stop()
 
