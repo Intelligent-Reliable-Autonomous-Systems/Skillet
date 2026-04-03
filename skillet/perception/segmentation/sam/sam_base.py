@@ -37,26 +37,32 @@ class SAMClient(ABC):
         self.model_path = self._download_sam_checkpoint(model_name)
         self.sam_model = self._load_sam_model(checkpoint=self.model_path)
 
+    def reset(self) -> None:  # noqa: B027
+        """Reset the SAM session."""
+        pass
+
     def segment_objects(
         self,
         rgb_pil: Image.Image,
-        detection_results: list[dict],
+        text_prompts: list[str] | str | None = None,
+        bboxes: Float[np.ndarray, "n 4"] | None = None,
     ) -> Float[np.ndarray, "n 1 h w"]:
         """Segment detection results from VLM with SAM3.
 
         Args:
             rgb_pil: PIL Image to segment.
-            detection_results: List of detection dicts from VLM, each with a 'box_2d' key
-                            in [ymin, xmin, ymax, xmax] format normalized to 0-1000.
+            text_prompts: Text prompts to segment.
+            bboxes: Bounding boxes in xywh format (2 dimensional).
+                            in [ymin, xmin, ymax, xmax] format normalized to 0-1.
 
         Returns:
             Segmentation masks of shape (N, 1, H, W).
 
         """
-        boxes = self._convert_bounding_boxes(rgb_pil, detection_results)
+        boxes = self._convert_bounding_boxes(rgb_pil, bboxes)
 
         if self.mode == "local":
-            masks, _ = self._segment_local(rgb_pil, boxes)
+            masks, _ = self._segment_local(rgb_pil, text_prompts, boxes)
         else:
             masks, _ = self._segment_remote(rgb_pil, boxes, self.remote_url)
 
@@ -66,24 +72,25 @@ class SAMClient(ABC):
 
     def _segment_remote(self, image: Image.Image, boxes: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Run SAM segmentation via remote server."""
-        assert self.remote_url is not None
-        buffer = io.BytesIO()
-        image.save(buffer, format="PNG")
-        payload = {"image_base64": base64.b64encode(buffer.getvalue()).decode(), "boxes": boxes.tolist()}
+        # assert self.remote_url is not None
+        # buffer = io.BytesIO()
+        # image.save(buffer, format="PNG")
+        # payload = {"image_base64": base64.b64encode(buffer.getvalue()).decode(), "boxes": boxes.tolist()}
 
-        try:
-            response = requests.post(f"{self.remote_url}/segment", json=payload, timeout=30)
-            response.raise_for_status()
-            result = response.json()
+        # try:
+        #     response = requests.post(f"{self.remote_url}/segment", json=payload, timeout=30)
+        #     response.raise_for_status()
+        #     result = response.json()
 
-            masks = np.array(
-                [[np.load(io.BytesIO(base64.b64decode(m))) for m in mask_batch] for mask_batch in result["masks"]]
-            )
-            return masks, np.array(result["scores"])
+        #     masks = np.array(
+        #         [[np.load(io.BytesIO(base64.b64decode(m))) for m in mask_batch] for mask_batch in result["masks"]]
+        #     )
+        #     return masks, np.array(result["scores"])
 
-        except Exception as e:
-            print(f"[SAM][ERROR] Remote SAM segmentation failed: {e}")
-            raise e
+        # except Exception as e:
+        #     print(f"[SAM][ERROR] Remote SAM segmentation failed: {e}")
+        #     raise e
+        raise NotImplementedError
 
     @abstractmethod
     def _segment_local(self, image: Image.Image, boxes: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
