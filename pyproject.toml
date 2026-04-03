@@ -35,6 +35,7 @@ dependencies = [
     "tensordict",
     "zmq",
     "scipy",
+    "unified_planning"
 ]
 
 [project.optional-dependencies]

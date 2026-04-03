@@ -91,3 +91,11 @@ class Scene:
             self._type_id_autoincrement[object.type_name] += 1
         self.closed_set = closed_set
         self.bounds = bounds
+
+    def reset(self, task: str) -> None:
+        """Reset the scene."""
+        pass
+
+    def perceive(self) -> None:
+        """Perceive the scene."""
+        pass
