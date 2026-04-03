@@ -1,5 +1,3 @@
-import h5py
-
 """Open3D visualization for point clouds from object localization - HDF5 Playback Mode."""
 
 from __future__ import annotations
@@ -10,6 +8,7 @@ from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 import cv2
+import h5py
 import numpy as np
 import torch
 
@@ -23,10 +22,10 @@ from skillet.scene.utils import (
     segmented_rgbd_to_point_cloud,
     tilt_from_quat_wxyz,
 )
+from skillet.scene.base import Scene
+from skillet.scene.cube import Cube
 
-if TYPE_CHECKING:
-    from skillet.core.spaces import ObservationSpec
-    from skillet.scene.base import Scene
+import argparse
 
 try:
     import open3d as o3d
@@ -69,10 +68,8 @@ class SkilletPlaybackVisualizer:
 
     def __init__(
         self,
-        obs_spec: ObservationSpec,
-        scene: Scene,
         log_file: str,
-        device: str | torch.device | None = None,
+        device: str = "cuda",
         width: int = 1024,
         height: int = 768,
         display_rgb: bool = True,
@@ -80,27 +77,23 @@ class SkilletPlaybackVisualizer:
         segment_rgb: bool = False,
         segment_depth: bool = False,
     ) -> None:
-        self.scene = scene
         self._width = width
         self._height = height
 
-        if isinstance(device, str):
-            device = torch.device(device)
-        self.device = device or obs_spec.device
-        self.obs_spec = replace(obs_spec, device=self.device, is_torch=True)
+        self.device = device
 
         # Playback state
         self._frame_idx = 0
         self._n_frames = 0
-        self._advance_event = threading.Event()  # set when spacebar pressed
+        self._advance_event = threading.Event()
 
         # Data arrays (populated by _load_log_file)
-        self._rgb_obs: np.ndarray | None = None  # (T, H, W, 3)  uint8
-        self._depth_obs: np.ndarray | None = None  # (T, 1, H, W)  float32
-        self._camera_pos: np.ndarray | None = None  # (T, 7)  xyz + quat_wxyz
-        self._twist_obs: np.ndarray | None = None  # (T, ...)
-        self._time_stamps: np.ndarray | None = None  # (T,)
-        self._abs_state: np.ndarray | None = None  # (T, ...)
+        self._rgb_obs: np.ndarray | None = None
+        self._depth_obs: np.ndarray | None = None
+        self._camera_pos: np.ndarray | None = None
+        self._twist_obs: np.ndarray | None = None
+        self._time_stamps: np.ndarray | None = None
+        self._abs_state: np.ndarray | None = None
 
         # Intrinsics — must be set before running (or loaded from file if stored)
         self.intrinsic_k: torch.Tensor | None = None
@@ -131,59 +124,42 @@ class SkilletPlaybackVisualizer:
         self._rgbd_thread: threading.Thread | None = None
         self._rgbd_stop_event = threading.Event()
 
-    # ------------------------------------------------------------------
-    # Data loading
-    # ------------------------------------------------------------------
-
     def _load_log_file(self, log_file: str) -> None:
         with h5py.File(log_file, "r") as f:
-            self._rgb_obs = f["episode/rgb"][:]  # (T, H, W, 3)
-            self._depth_obs = f["episode/depth"][:]  # (T, 1, H, W)
-            self._camera_pos = f["camera_pos"][:]  # (T, 7)
-            self._twist_obs = f["episode/tcp_pose"][:]  # (T, ...)
+            self._rgb_obs = f["episode/rgb"][:]
+            self._depth_obs = f["episode/depth"][:]
+            self._camera_pose = f["episode/camera_pose"][:]
+            self._tcp_pose = f["episode/tcp_pose"][:]
             self._time_stamps = f["episode/time_stamps"][:]
-            self._abs_state = f["episode/abs_state"][:]
-
-            # Load intrinsics if stored in the file
-            if "intrinsic_k" in f:
-                self._intrinsic_k_np = f["intrinsic_k"][:]  # (3, 3)
-            else:
-                self._intrinsic_k_np = None
+            # self._abs_state = f["episode/abs_state"][:]
+            self._intrinsic_k = f["intrinsic_k"][:]  # (3, 3)
+            self._poses = f["poses"][:]
+            self._ids = f["ids"][:]
 
         self._n_frames = self._rgb_obs.shape[0]
         print(f"[Playback] Loaded {self._n_frames} frames from {log_file}")
 
     def _get_obs_at(self, idx: int) -> dict[str, torch.Tensor]:
         """Build an obs dict (matching env observation format) for frame idx."""
-        dev = self.device
-
         # rgb: stored as (H, W, 3) uint8 -> (3, H, W) float32 in [0,1]
-        rgb_np = self._rgb_obs[idx]  # (H, W, 3)
-        rgb = torch.from_numpy(rgb_np).permute(2, 0, 1).float().to(dev) / 255.0
+        rgb = torch.from_numpy(self._rgb_obs[idx]).permute(2, 0, 1).float().to(self.device) / 255.0
+        depth = torch.from_numpy(self._depth_obs[idx]).float().to(self.device)
+        camera_pose = torch.from_numpy(self._camera_pos[idx]).float().to(self.device)
+        tcp_pose = torch.from_numpy(self._tcp_pose[idx]).float().to(self.device)
+        intrinsic_k = torch.from_numpy(self._intrinsic_k[idx]).float().to(self.device)
+        cube_poses = torch.from_numpy(self._poses[idx]).float().to(self.device)
+        cube_ids = torch.from_numpy(self._ids[idx]).float().to(self.device)
+        for i in range(cube_ids.shape[0]):
+            Cube()
+        self.scene = Scene()
 
-        # depth: stored as (1, H, W) float32
-        depth = torch.from_numpy(self._depth_obs[idx]).float().to(dev)
-
-        # camera pose: (7,) xyz + quat
-        camera_pose = torch.from_numpy(self._camera_pos[idx]).float().to(dev)
-
-        # tcp pose: (N,) — take first 7 elements as pose
-        tcp_pose = torch.from_numpy(self._twist_obs[idx]).float().to(dev)
-
-        obs = {
+        return {
             "rgb": rgb,
             "depth": depth,
             "camera_pose": camera_pose,
             "tcp_pose_b": tcp_pose,
+            "intrinsic_k": intrinsic_k,
         }
-
-        # Attach intrinsics if available
-        if self._intrinsic_k_np is not None:
-            obs["intrinsic_k"] = torch.from_numpy(self._intrinsic_k_np).float().to(dev)
-        elif self.intrinsic_k is not None:
-            obs["intrinsic_k"] = self.intrinsic_k.to(dev)
-
-        return obs
 
     def _default_masks(self, depth: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Single full-image mask — mirrors _default_segmentation."""
@@ -343,20 +319,17 @@ class SkilletPlaybackVisualizer:
             masks, segment_ids = self._default_masks(obs["depth"])
 
             # Update Open3D scene
-            if "intrinsic_k" in obs:
-                point_cloud, segment_indices = self._observation_to_point_cloud(obs, masks, segment_ids)
-                self.update(
-                    point_cloud,
-                    segment_indices=segment_indices,
-                    camera_pose=obs["camera_pose"],
-                    frame_idx=self._frame_idx,
-                    timestamp=float(self._time_stamps[self._frame_idx]),
-                )
+            point_cloud, segment_indices = self._observation_to_point_cloud(obs, masks, segment_ids)
+            self.update(
+                point_cloud,
+                segment_indices=segment_indices,
+                camera_pose=obs["camera_pose"],
+                frame_idx=self._frame_idx,
+                timestamp=float(self._time_stamps[self._frame_idx]),
+            )
 
-            # Update CV2 window
             self._update_rgbd_window(obs, masks, segment_ids)
 
-            # Print frame info to terminal
             ts = self._time_stamps[self._frame_idx]
             print(f"[Playback] Frame {self._frame_idx}/{self._n_frames - 1}  t={ts:.3f}s  (SPACE=next  Q=quit)")
 
@@ -494,3 +467,15 @@ class SkilletPlaybackVisualizer:
             self._rgbd_thread.join(timeout=2.0)
         self._stop_rgbd()
         self.request_close()
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--log_dir", type="str", default="data/test/31314.655014466/exp_0/data.h5")
+    args = parser.parse_args()
+
+    viz = SkilletPlaybackVisualizer()
+
+
+if __name__ == "__main__":
+    main()

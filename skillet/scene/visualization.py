@@ -92,8 +92,7 @@ class SkilletVisualizer:
         self.obs_spec = replace(obs_spec, device=self.device, is_torch=True)
         self.poll_rate = poll_rate
 
-        # Open3D visualization variables
-        self._scene_window_name = "Processed Table Scene"
+        # Open3D state
         self._app: Any | None = None
         self._window: Any | None = None
         self._scene_widget: Any | None = None
@@ -105,6 +104,9 @@ class SkilletVisualizer:
         self._added_geometries: set[str] = set()
         self._needs_camera_setup = True
         self._closed = False
+        self._scene_window_enabled = False
+
+        # Marker state (written from any thread, read on GUI thread)
         self._target_pos: np.ndarray | None = None
         self._target_size: float = 0.007
         self._tcp_pos: np.ndarray | None = None
@@ -130,7 +132,7 @@ class SkilletVisualizer:
         self._app.initialize()
 
         self._window = self._app.create_window(
-            self._window_name,
+            "Processed Table Scene",
             self._width,
             self._height,
         )
@@ -165,6 +167,20 @@ class SkilletVisualizer:
             if bounds_ls is not None:
                 self._add_geometry("scene_bounds", bounds_ls, self._mat_line)
 
+        self._scene_window_enabled = True
+
+    def _on_layout(self, layout_context: Any) -> None:
+        r = self._window.content_rect
+        self._scene_widget.frame = r
+        pref = self._hud_label.calc_preferred_size(layout_context, _gui.Widget.Constraints())
+        self._hud_label.frame = _gui.Rect(r.x + 10, r.y + 10, pref.width, pref.height)
+
+    def _on_close(self) -> bool:
+        self._closed = True
+        self._scene_window_enabled = False
+        return True
+
+    # ── Geometry helpers (GUI thread only)
     def _add_geometry(self, name: str, geom: Any, mat: Any) -> None:
         """Add or replace a named geometry in the scene."""
         scene = self._scene_widget.scene
@@ -182,24 +198,6 @@ class SkilletVisualizer:
             self._scene_widget.scene.remove_geometry(name)
             self._added_geometries.discard(name)
 
-    def _on_layout(self, layout_context: Any) -> None:
-        r = self._window.content_rect
-        self._scene_widget.frame = r
-        pref = self._hud_label.calc_preferred_size(
-            layout_context,
-            _gui.Widget.Constraints(),
-        )
-        self._hud_label.frame = _gui.Rect(
-            r.x + 10,
-            r.y + 10,
-            pref.width,
-            pref.height,
-        )
-
-    def _on_close(self) -> bool:
-        self._closed = True
-        return True
-
     def update(
         self,
         point_cloud: torch.Tensor,
@@ -210,7 +208,7 @@ class SkilletVisualizer:
         if self._closed or self._app is None or self._window is None:
             return
 
-        # Prepare heavy geometry conversion on the calling (perception) thread.
+        # Prepare heavy geometry conversion on the calling (RGBD) thread.
         pcd = point_cloud_to_open3d(
             point_cloud,
             segment_indices=segment_indices,
@@ -235,7 +233,7 @@ class SkilletVisualizer:
 
         do_camera_setup = self._needs_camera_setup
 
-        def _do_update() -> None:
+        def _apply_to_scene() -> None:
             if self._closed:
                 return
 
@@ -277,7 +275,7 @@ class SkilletVisualizer:
                 if isinstance(xyz, torch.Tensor):
                     xyz = xyz.detach().cpu().numpy().astype(np.float64)
                 if xyz is not None:
-                    self._tcp_pos = np.array(xyz, dtype=np.float64)
+                    self._tcp_pos = np.asarray(xyz, dtype=np.float64)
                     if self._tcp_pos.ndim > 1:
                         self._tcp_pos = self._tcp_pos[0]
             if self._tcp_pos is not None:
@@ -294,11 +292,10 @@ class SkilletVisualizer:
             # Auto-fit view on first valid point cloud
             if do_camera_setup and pcd is not None:
                 bounds = self._scene_widget.scene.bounding_box
-                center = bounds.get_center()
-                self._scene_widget.setup_camera(60, bounds, center)
+                self._scene_widget.setup_camera(60, bounds, bounds.get_center())
                 self._needs_camera_setup = False
 
-        self._app.post_to_main_thread(self._window, _do_update)
+        self._app.post_to_main_thread(self._window, _apply_to_scene)
 
     def run_scene(self) -> None:
         """Set up the window and block on the GUI event loop (call on main thread)."""
@@ -313,9 +310,8 @@ class SkilletVisualizer:
         next_poll_t = time.perf_counter()
 
         while not self._rgbd_stop_event.is_set():
-            obs_unbatched = self.env.get_observation(self.obs_spec)
-            # obs_unbatched = self._apply_far_plane(self._maybe_unbatch(obs))
-            # masks, segment_ids = self._get_masks(obs_unbatched)
+            obs = self.env.get_observation(self.obs_spec)
+            obs_unbatched = self._maybe_unbatch(obs)
 
             # NOTE: No meaningful masks currently, this will all happen in scene
             depth = obs_unbatched["depth"]
@@ -323,19 +319,20 @@ class SkilletVisualizer:
             segment_ids = torch.zeros((1,), dtype=torch.int64, device=depth.device)
             point_cloud, segment_indices = self._observation_to_point_cloud(obs_unbatched, masks, segment_ids)
 
-            self.update(
-                point_cloud,
-                segment_indices=segment_indices,
-                camera_pose=obs_unbatched["camera_pose"],
-            )
+            if self._scene_window_enabled:
+                self.update(
+                    point_cloud,
+                    segment_indices=segment_indices,
+                    camera_pose=obs_unbatched["camera_pose"],
+                )
 
-            self._ensure_rgbd_window()
             self._update_rgbd_window(obs_unbatched, masks, segment_ids)
 
             next_poll_t += poll_period_s
             sleep_s = max(0.0, next_poll_t - time.perf_counter())
             if sleep_s > 0:
                 time.sleep(sleep_s)
+        self._stop_rgbd()
 
     def run_thread(self) -> None:
         """Run the visualizer in a thread."""
@@ -345,8 +342,8 @@ class SkilletVisualizer:
         self._rgbd_stop_event.clear()
         self._scene_thread = threading.Thread(target=self.run_scene, name="SceneVisualizerThread", daemon=True)
         self._rgbd_thread = threading.Thread(target=self.run_rgbd, name="RGBDVisualizerThread", daemon=True)
-        self._scene_thread.start()
         self._rgbd_thread.start()
+        self._scene_thread.start()
 
     def stop_thread(self) -> None:
         """Stop the visualizer thread."""
@@ -403,12 +400,10 @@ class SkilletVisualizer:
         for i in range(n):
             color = _PALETTE_BGR[i % len(_PALETTE_BGR)]
             overlay[masks_np[i] > 0] = color
-
         cv2.addWeighted(overlay, _OVERLAY_ALPHA, out, 1.0 - _OVERLAY_ALPHA, 0, out)
 
         for i in range(n):
             seg_mask = masks_np[i] > 0
-            prompt_idx = int(ids_np[i])
             color = _PALETTE_BGR[i % len(_PALETTE_BGR)]
 
             ys, xs = np.where(seg_mask)
@@ -417,23 +412,11 @@ class SkilletVisualizer:
             x1, y1, x2, y2 = int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())
             cv2.rectangle(out, (x1, y1), (x2, y2), color, _BBOX_THICKNESS)
 
-            name = f"obj_{prompt_idx}"
-            label = f"#{i} {name}"
+            label = f"#{i} obj_{int(ids_np[i])}"
             (tw, th), _ = cv2.getTextSize(label, _FONT, _FONT_SCALE, _FONT_THICKNESS)
-            tx, ty = x1, y1 - 6
-            if ty - th < 0:
-                ty = y1 + th + 6
+            tx, ty = x1, y1 - 6 if y1 - 6 - th >= 0 else y1 + th + 6
             cv2.rectangle(out, (tx - 1, ty - th - 4), (tx + tw + 5, ty + 4), color, cv2.FILLED)
-            cv2.putText(
-                out,
-                label,
-                (tx + 2, ty),
-                _FONT,
-                _FONT_SCALE,
-                (255, 255, 255),
-                _FONT_THICKNESS,
-                cv2.LINE_AA,
-            )
+            cv2.putText(out, label, (tx + 2, ty), _FONT, _FONT_SCALE, (255, 255, 255), _FONT_THICKNESS, cv2.LINE_AA)
 
         return out
 
@@ -455,6 +438,8 @@ class SkilletVisualizer:
         """Update side-by-side RGB/Depth CV2 preview."""
         if not (self._display_rgb or self._display_depth):
             return
+
+        self._ensure_rgbd_window()
 
         panels: list[np.ndarray] = []
         if self._display_rgb:
@@ -497,6 +482,24 @@ class SkilletVisualizer:
         cv2.namedWindow(self._rgbd_window_name, cv2.WINDOW_NORMAL)
         self._rgbd_active = True
 
+    def _maybe_unbatch(self, obs: Mapping[str, Any]) -> dict[str, torch.Tensor]:
+        """Convert observations to unbatched torch tensors."""
+        rgb = obs["rgb"]
+        depth = obs["depth"]
+        intrinsic_k = obs["intrinsic_k"]
+        camera_pose = obs["camera_pose"]
+
+        if rgb.dim() == 4:
+            rgb = rgb[0]
+        if depth.dim() == 4:
+            depth = depth[0]
+        if intrinsic_k.dim() == 3:
+            intrinsic_k = intrinsic_k[0]
+        if camera_pose.dim() == 2:
+            camera_pose = camera_pose[0]
+
+        return {"rgb": rgb, "depth": depth, "intrinsic_k": intrinsic_k, "camera_pose": camera_pose}
+
     def _observation_to_point_cloud(
         self, obs_unbatched: Mapping[str, Any], masks: torch.Tensor, segment_ids: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor]:
@@ -513,9 +516,7 @@ class SkilletVisualizer:
             segment_indices = segment_ids[segment_indices]
         return point_cloud, segment_indices
 
-    def get_tcp_pos(
-        self,
-    ) -> Sequence[float]:
+    def get_tcp_pos(self) -> Sequence[float]:
         return (
             self.env.get_observation(self.env.unwrapped.obs_spec_ikee.unbatched())["tcp_pose_b"][:3]
             .detach()

@@ -171,7 +171,7 @@ class PlaceSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAct
         ee_vel = (obs["ee_vel_b"][:, 0:3] < self._vel_threshold).any(dim=-1)
         self._n_lower_steps = self._n_lower_steps + (self._place_status == PlaceStatusCodes.LOWER)
         next_pose = (reached_pose & ee_vel) | (
-            (torch.abs(joint_efforts) > 5).any(dim=-1)
+            (torch.abs(joint_efforts) > 7).any(dim=-1)
             & (self._place_status == PlaceStatusCodes.LOWER)
             & (self._n_lower_steps > 10)
         )  # Avoids dropping due to initial acceleration

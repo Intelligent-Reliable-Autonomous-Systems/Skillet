@@ -1,6 +1,7 @@
 """Run a tabletop block stacking task."""
 
 import argparse
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import gymnasium as gym
@@ -10,6 +11,7 @@ from skillet.agents.policy_over_options import PolicyOverOptionsAgent, SelectedS
 from skillet.core import ActionSpec, ObservationSpec
 from skillet.core.env import BatchToSingleWrapper
 from skillet.envs.skillet_env import SkilletEnv
+from skillet.logging import SkilletDataLogger
 from skillet.perception import SkilletPerception
 from skillet.perception.localization import ApriltagStateReconstructor
 from skillet.perception.realsense import RealsenseEnv
@@ -18,6 +20,7 @@ from skillet.policy.ik_ee import PoseAbsIKEEPolicy
 from skillet.policy.moveit import MoveItTcpQuatPolicy
 from skillet.policy.twist import TwistPIDPosePolicy
 from skillet.scene import SkilletVisualizer
+from skillet.scene.abstract.abstract_model import AbstractModel
 from skillet.scene.base import Scene
 from skillet.scene.cube import Cube
 from skillet.skill.high_level.pick import PickSkill
@@ -89,10 +92,11 @@ def main() -> None:
         poll_rate=poll_rate_hz,
         device=args_cli.device,
     )
+    reconstructor = ApriltagStateReconstructor(scene=scene)
     perception = SkilletPerception(
         env=env,
         obs_spec=rgbd_spec,
-        reconstructor=ApriltagStateReconstructor(scene=scene),
+        reconstructor=reconstructor,
         poll_rate=poll_rate_hz,
         device=args_cli.device,
     )
@@ -114,9 +118,9 @@ def main() -> None:
     rotate_y_skill = RotateYawSkill(
         reach_policy=arm_policy, gripper_policy=None, lift_height=0.23, lift_delta=0.04, length=skill_length
     )
-    pick_block_skill = PickBlockSkill(scene, pick_skill, vis_target_pos=visualizer.o3d_viz.set_target_pos)
-    place_block_skill = PlaceBlockSkill(scene, place_skill, vis_target_pos=visualizer.o3d_viz.set_target_pos)
-    rotate_block_skill = RotateBlockSkill(scene, rotate_y_skill, vis_target_pos=visualizer.o3d_viz.set_target_pos)
+    pick_block_skill = PickBlockSkill(scene, pick_skill, vis_target_pos=visualizer.set_target_pos)
+    place_block_skill = PlaceBlockSkill(scene, place_skill, vis_target_pos=visualizer.set_target_pos)
+    rotate_block_skill = RotateBlockSkill(scene, rotate_y_skill, vis_target_pos=visualizer.set_target_pos)
     skills = [pick_block_skill, place_block_skill, rotate_block_skill]
 
     # High-level policy
@@ -130,7 +134,7 @@ def main() -> None:
         rgbd_spec,
         options_spec,
         torch.as_tensor(
-            [0, 1, 0, 1, 2],
+            [0, 1],
             device=rgbd_spec.device,
             dtype=torch.int32,
         ),
@@ -139,7 +143,7 @@ def main() -> None:
         rgbd_spec,
         pick_block_skill.params_spec,
         torch.as_tensor(
-            [1, 2, 0, 1, 0],
+            [1, 2],
             device=rgbd_spec.device,
             dtype=torch.int32,
         ),
@@ -151,14 +155,17 @@ def main() -> None:
         params_policy=fixed_param_policy,
     )
 
+    # simulate environment
+    abs_model = None  # AbstractModel(Path("skillet/scene/abstract/assets/3-block-table-restack.problem.pddl"))
+    logger = SkilletDataLogger("data/test/", env, reconstructor, abs_model)
+
     if not args_cli.realsense_env:
         input("Press Enter to start the skill execution...")
 
-    # simulate environment
     while True:
         with torch.inference_mode():
             env.reset()
-            policy_over_options_agent.execute(env)
+            policy_over_options_agent.execute(env, data_logger=logger)
             print("[INFO][Main] finished run of skill executor, resetting")
 
 

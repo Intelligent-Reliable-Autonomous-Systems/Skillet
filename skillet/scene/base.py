@@ -2,6 +2,7 @@ from abc import abstractmethod
 from collections import defaultdict
 
 import torch
+import numpy as np
 
 
 class SceneObject:
@@ -99,3 +100,13 @@ class Scene:
     def perceive(self) -> None:
         """Perceive the scene."""
         pass
+
+    def serialize_scene_poses(self) -> None:
+        """Return a numpy array of poses for all the objects in the scene."""
+        poses = []
+        obj_ids = []
+        for obj in self.objects:
+            poses.append(obj.pose.cpu().numpy())
+            obj_ids.append(obj.object_id)
+
+        return {"poses": np.asarray(poses), "ids": np.asarray(obj_ids), "bounds": np.asarray(self.bounds)}

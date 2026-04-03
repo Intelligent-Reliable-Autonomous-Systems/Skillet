@@ -5,16 +5,17 @@ Controls logging of data and messages within Skillet.
 
 import copy
 import time
-
+from skillet.scene.base import Scene
 import h5py
 import numpy as np
 
 from skillet.envs import SkilletEnv
 from skillet.perception.localization.reconstructor_base import ReconstructorBase
 from skillet.scene.abstract.abstract_model import AbstractModel
+from pathlib import Path
 
 
-class SkilletDataCollector:
+class SkilletDataLogger:
     def __init__(self, log_dir: str, env: SkilletEnv, reconstructor: ReconstructorBase, abs_model: AbstractModel):
         self._log_dir = log_dir
         self._env = env
@@ -22,16 +23,11 @@ class SkilletDataCollector:
         self._abs_model = abs_model
 
         self._num_points = 0
-        self._exp_id = 0
+        self._exp_id = -1
         self._start_time = time.perf_counter()
 
-        self._rgbd_obs: np.ndarray = None
-        self._depth_obs: np.ndarray = None
-        self._camera_pos: np.ndarray = None
-        self._twist_obs: np.ndarray = None
-        self._time_stamps: np.ndarray = None
-        self._abs_state: np.ndarray = None
-        self._scenes: np.ndarray = None
+        self.reset_logging()
+        Path(self._log_dir).mkdir(exist_ok=True, parents=True)
 
     def setup_logging(self) -> None:
         """Set up logging."""
@@ -42,42 +38,72 @@ class SkilletDataCollector:
         self._log_dir = log_dir if log_dir is not None else self._log_dir
         self._num_points = 0
         self._exp_id += 1
+        self._rgbd_obs: np.ndarray = None
+        self._depth_obs: np.ndarray = None
+        self._camera_pose: np.ndarray = None
+        self._tcp_pose: np.ndarray = None
+        self._time_stamps: np.ndarray = None
+        self._abs_state: np.ndarray = None
+        self._obj_poses: np.ndarray = None
+        self._obj_ids: np.ndarray = None
+        self._intrinsic_k: np.ndarray = None
 
     def add_datapoint(self) -> None:
         """Add a datapoint to the logger by querying the environment for relevant observations."""
-        time_stamp = time.perf_counter
-        twist_obs = self._env.get_observation(self._env.obs_spec_twist_tcp)
-        rgbd_obs = self._env.get_observation(self._env.obs_spec_rgbd)
-        scene_obs = self._reconstructor.get_observation()
-        abstract_state = self._abs_model.get_abstract_state()
+        print("[INFO][LOGGER] Logging datapoint.")
+        time_stamp = time.perf_counter()
+        twist_obs = self._env.get_observation(self._env.unwrapped.obs_spec_twist_tcp)
+        rgbd_obs = self._env.get_observation(self._env.unwrapped.obs_spec_rgbd)
+        scene_obs: Scene = self._reconstructor.get_observation()
+        scene_dict = scene_obs.serialize_scene_poses()
+        # abstract_state = self._abs_model.get_abstract_state()
         if self._time_stamps is None:
             self._time_stamps = np.array([time_stamp])
-            self._rgbd_obs = rgbd_obs["rgb"].cpu().numpy().squeeze()
-            self._depth_obs = rgbd_obs["depth"].cpu().numpy().squeeze()
-            self._camera_pos = rgbd_obs["camera_pos"].cpu().numpy().squeeze()
-            self._twist_obs = twist_obs["tcp_pose"].cpu().numpy().squeeze()
-            self._abs_state = np.array([abstract_state])
-            self._scenes = np.array([copy.deepcopy(scene_obs)])
+            self._rgbd_obs = rgbd_obs["rgb"].cpu().numpy().squeeze()[None, ...]
+            self._depth_obs = rgbd_obs["depth"].cpu().numpy().squeeze()[None, ...]
+            self._camera_pose = rgbd_obs["camera_pose"].cpu().numpy().squeeze()[None, ...]
+            self._intrinsic_k = rgbd_obs["intrinsic_k"].cpu().numpy().squeeze()[None, ...]
+            self._tcp_pose = twist_obs["tcp_pose_b"].cpu().numpy().squeeze()[None, ...]
+            # self._abs_state = np.array([abstract_state])
+            self._obj_ids = scene_dict["ids"][None, ...]
+            self._obj_poses = scene_dict["poses"][None, ...]
+            self._world_bounds = scene_dict["bounds"][None, ...]
         else:
-            self._time_stamps = np.stack((self._time_stamps, np.array([time_stamp])), axis=-1)
-            self._rgbd_obs = np.stack((self._rgbd_obs, rgbd_obs["rgb"].cpu().numpy().squeeze()), axis=-1)
-            self._depth_obs = np.stack((self._depth_obs, rgbd_obs["depth"].cpu().numpy().squeeze()), axis=-1)
-            self._camera_pos = np.stack((self._camera_pos, rgbd_obs["camera_pos"].cpu().numpy().squeeze()), axis=-1)
-            self._twist_obs = np.stack((self._twist_obs, twist_obs["tcp_pose"].cpu().numpy().squeeze()), axis=-1)
-            self._abs_state = np.stack((self._abs_state, np.array([abstract_state])), axis=-1)
-            self._scenes = np.array((self._scenes, [copy.deepcopy(scene_obs)]), axis=-1)
+            self._time_stamps = np.concatenate((self._time_stamps, np.array([time_stamp])), axis=0)
+            self._rgbd_obs = np.concatenate(
+                (self._rgbd_obs, rgbd_obs["rgb"].cpu().numpy().squeeze()[None, ...]), axis=0
+            )
+            self._depth_obs = np.concatenate(
+                (self._depth_obs, rgbd_obs["depth"].cpu().numpy().squeeze()[None, ...]), axis=0
+            )
+            self._camera_pose = np.concatenate(
+                (self._camera_pose, rgbd_obs["camera_pose"].cpu().numpy().squeeze()[None, ...]), axis=0
+            )
+            self._tcp_pose = np.concatenate(
+                (self._tcp_pose, twist_obs["tcp_pose_b"].cpu().numpy().squeeze()[None, ...]), axis=0
+            )
+            # self._abs_state = np.concatenate((self._abs_state, np.array([abstract_state])), axis=-1)
+            self._obj_ids = np.concatenate((self._obj_ids, scene_dict["ids"][None, ...]), axis=0)
+            self._obj_poses = np.concatenate((self._obj_poses, scene_dict["poses"][None, ...]), axis=0)
+            self._intrinsic_k = np.concatenate(
+                (self._intrinsic_k, rgbd_obs["intrinsic_k"].cpu().numpy().squeeze()[None, ...]), axis=0
+            )
 
         self._num_points += 1
 
     def save_log(self) -> None:
         """Save the log to a file."""
-        with h5py.File(f"{self._log_dir}/{self._start_time}/exp_{self._exp_id}", "w") as f:
+        print("[INFO][LOGGER] Saving datafile")
+        fpath = Path(f"{self._log_dir}/{self._start_time}/exp_{self._exp_id}")
+        fpath.mkdir(exist_ok=True, parents=True)
+        with h5py.File(f"{fpath}/data.h5", "w") as f:
             ep = f.create_group("episode")
 
             ep.create_dataset("rgb", data=self._rgbd_obs, compression="gzip")
             ep.create_dataset("depth", data=self._depth_obs, compression="gzip")
-            ep.create_dataset("camera_pos", data=self._camera_pos, compression="gzip")
-            ep.create_dataset("tcp_pose", data=self._twist_obs, compression="gzip")
+            ep.create_dataset("camera_pose", data=self._camera_pose, compression="gzip")
+            ep.create_dataset("tcp_pose", data=self._tcp_pose, compression="gzip")
             ep.create_dataset("time_stamps", data=self._time_stamps, compression="gzip")
-            ep.create_dataset("abs_state", data=self._abs_state, compression="gzip")
-            ep.create_dataset("scenes", data=self._scenes, compression="gzip")
+            # ep.create_dataset("abs_state", data=self._abs_state, compression="gzip")
+            ep.create_dataset("obj_ids", data=self._obj_ids, compression="gzip")
+            ep.create_dataset("obj_poses", data=self._obj_poses, compression="gzip")

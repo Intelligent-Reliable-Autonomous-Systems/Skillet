@@ -981,7 +981,6 @@ def apply_delta_pose(
     return target_pos, target_rot
 
 
-@torch.jit.script
 def transform_points(
     points: torch.Tensor, pos: torch.Tensor | None = None, quat: torch.Tensor | None = None
 ) -> torch.Tensor:
@@ -1151,7 +1150,6 @@ def orthogonalize_perspective_depth(depth: torch.Tensor, intrinsics: torch.Tenso
     return orthogonal_depth
 
 
-@torch.jit.script
 def unproject_depth(depth: torch.Tensor, intrinsics: torch.Tensor, is_ortho: bool = True) -> torch.Tensor:
     r"""Un-project depth image into a pointcloud.
 
