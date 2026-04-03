@@ -81,7 +81,7 @@ class SkilletPlaybackVisualizer:
         self._height = height
 
         self.device = device
-
+        self.scene = None
         # Playback state
         self._frame_idx = 0
         self._n_frames = 0
@@ -90,7 +90,7 @@ class SkilletPlaybackVisualizer:
         # Data arrays (populated by _load_log_file)
         self._rgb_obs: np.ndarray | None = None
         self._depth_obs: np.ndarray | None = None
-        self._camera_pos: np.ndarray | None = None
+        self._camera_pose: np.ndarray | None = None
         self._twist_obs: np.ndarray | None = None
         self._time_stamps: np.ndarray | None = None
         self._abs_state: np.ndarray | None = None
@@ -126,15 +126,22 @@ class SkilletPlaybackVisualizer:
 
     def _load_log_file(self, log_file: str) -> None:
         with h5py.File(log_file, "r") as f:
+
+            def print_datasets(name, obj):
+                if isinstance(obj, h5py.Dataset):
+                    print(f"{name}: shape={obj.shape}, dtype={obj.dtype}")
+
+            f.visititems(print_datasets)
             self._rgb_obs = f["episode/rgb"][:]
             self._depth_obs = f["episode/depth"][:]
             self._camera_pose = f["episode/camera_pose"][:]
             self._tcp_pose = f["episode/tcp_pose"][:]
             self._time_stamps = f["episode/time_stamps"][:]
             # self._abs_state = f["episode/abs_state"][:]
-            self._intrinsic_k = f["intrinsic_k"][:]  # (3, 3)
-            self._poses = f["poses"][:]
-            self._ids = f["ids"][:]
+            self._intrinsic_k = f["episode/intrinsic_k"][:]  # (3, 3)
+            self._obj_poses = f["episode/obj_poses"][:]
+            self._obj_ids = f["episode/obj_ids"][:]
+            self._world_bounds = f["episode/world_bounds"][:]
 
         self._n_frames = self._rgb_obs.shape[0]
         print(f"[Playback] Loaded {self._n_frames} frames from {log_file}")
@@ -142,16 +149,16 @@ class SkilletPlaybackVisualizer:
     def _get_obs_at(self, idx: int) -> dict[str, torch.Tensor]:
         """Build an obs dict (matching env observation format) for frame idx."""
         # rgb: stored as (H, W, 3) uint8 -> (3, H, W) float32 in [0,1]
-        rgb = torch.from_numpy(self._rgb_obs[idx]).permute(2, 0, 1).float().to(self.device) / 255.0
-        depth = torch.from_numpy(self._depth_obs[idx]).float().to(self.device)
-        camera_pose = torch.from_numpy(self._camera_pos[idx]).float().to(self.device)
-        tcp_pose = torch.from_numpy(self._tcp_pose[idx]).float().to(self.device)
-        intrinsic_k = torch.from_numpy(self._intrinsic_k[idx]).float().to(self.device)
-        cube_poses = torch.from_numpy(self._poses[idx]).float().to(self.device)
-        cube_ids = torch.from_numpy(self._ids[idx]).float().to(self.device)
-        for i in range(cube_ids.shape[0]):
-            Cube()
-        self.scene = Scene()
+        rgb = torch.from_numpy(self._rgb_obs[idx]).to(self.device) / 255.0
+        depth = torch.from_numpy(self._depth_obs[idx]).to(self.device).unsqueeze(0)
+        camera_pose = torch.from_numpy(self._camera_pose[idx]).to(self.device)
+        tcp_pose = torch.from_numpy(self._tcp_pose[idx]).to(self.device)
+        intrinsic_k = torch.from_numpy(self._intrinsic_k[idx]).to(self.device)
+        cube_poses = torch.from_numpy(self._obj_poses[idx]).to(self.device)
+        cube_ids = torch.from_numpy(self._obj_ids[idx]).to(self.device)
+        world_bounds = self._world_bounds[idx]
+        scene_objs = [Cube(size=0.036, init_pose=cube_poses[i]) for i in range(cube_ids.shape[0])]
+        self.scene = Scene(scene_objs, bounds=world_bounds, closed_set=True)
 
         return {
             "rgb": rgb,
@@ -200,7 +207,7 @@ class SkilletPlaybackVisualizer:
         coord = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.2, origin=[0, 0, 0])
         self._add_geometry("coord_frame", coord, self._mat_lit)
 
-        if self.scene.bounds is not None:
+        if self.scene is not None and self.scene.bounds is not None:
             bounds_ls = create_aabb_lineset(self.scene.bounds)
             if bounds_ls is not None:
                 self._add_geometry("scene_bounds", bounds_ls, self._mat_line)
@@ -282,12 +289,14 @@ class SkilletPlaybackVisualizer:
                     self._remove_geometry(name)
 
             for obj in self.scene.objects:
+                np.set_printoptions(suppress=True, precision=5)
+                print(obj.pose.cpu().numpy())
                 geometry = get_object_geometry(obj)
                 if geometry is not None and len(geometry) > 0:
-                    self._add_geometry(obj.identifier, geometry, self._mat_line)
+                    self._add_geometry(obj.identifier, geometry[0], self._mat_line)
                 else:
                     self._remove_geometry(obj.identifier)
-
+            print(f"\n\n")
             if hud_text:
                 self._hud_label.text = hud_text
                 self._window.set_needs_layout()
@@ -471,10 +480,11 @@ class SkilletPlaybackVisualizer:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--log_dir", type="str", default="data/test/31314.655014466/exp_0/data.h5")
+    parser.add_argument("--log_file", type=str, default="data/test/33163.270634938/exp_0/data.h5")
     args = parser.parse_args()
 
-    viz = SkilletPlaybackVisualizer()
+    viz = SkilletPlaybackVisualizer(log_file=args.log_file)
+    viz.run()
 
 
 if __name__ == "__main__":

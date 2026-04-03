@@ -47,6 +47,7 @@ class SkilletDataLogger:
         self._obj_poses: np.ndarray = None
         self._obj_ids: np.ndarray = None
         self._intrinsic_k: np.ndarray = None
+        self._world_bounds: np.ndarray = None
 
     def add_datapoint(self) -> None:
         """Add a datapoint to the logger by querying the environment for relevant observations."""
@@ -79,15 +80,16 @@ class SkilletDataLogger:
             self._camera_pose = np.concatenate(
                 (self._camera_pose, rgbd_obs["camera_pose"].cpu().numpy().squeeze()[None, ...]), axis=0
             )
+            self._intrinsic_k = np.concatenate(
+                (self._intrinsic_k, rgbd_obs["intrinsic_k"].cpu().numpy().squeeze()[None, ...]), axis=0
+            )
             self._tcp_pose = np.concatenate(
                 (self._tcp_pose, twist_obs["tcp_pose_b"].cpu().numpy().squeeze()[None, ...]), axis=0
             )
             # self._abs_state = np.concatenate((self._abs_state, np.array([abstract_state])), axis=-1)
             self._obj_ids = np.concatenate((self._obj_ids, scene_dict["ids"][None, ...]), axis=0)
             self._obj_poses = np.concatenate((self._obj_poses, scene_dict["poses"][None, ...]), axis=0)
-            self._intrinsic_k = np.concatenate(
-                (self._intrinsic_k, rgbd_obs["intrinsic_k"].cpu().numpy().squeeze()[None, ...]), axis=0
-            )
+            self._world_bounds = np.concatenate((self._world_bounds, scene_dict["bounds"][None, ...]), axis=0)
 
         self._num_points += 1
 
@@ -98,12 +100,13 @@ class SkilletDataLogger:
         fpath.mkdir(exist_ok=True, parents=True)
         with h5py.File(f"{fpath}/data.h5", "w") as f:
             ep = f.create_group("episode")
-
+            ep.create_dataset("time_stamps", data=self._time_stamps, compression="gzip")
             ep.create_dataset("rgb", data=self._rgbd_obs, compression="gzip")
             ep.create_dataset("depth", data=self._depth_obs, compression="gzip")
             ep.create_dataset("camera_pose", data=self._camera_pose, compression="gzip")
+            ep.create_dataset("intrinsic_k", data=self._intrinsic_k, compression="gzip")
             ep.create_dataset("tcp_pose", data=self._tcp_pose, compression="gzip")
-            ep.create_dataset("time_stamps", data=self._time_stamps, compression="gzip")
             # ep.create_dataset("abs_state", data=self._abs_state, compression="gzip")
             ep.create_dataset("obj_ids", data=self._obj_ids, compression="gzip")
             ep.create_dataset("obj_poses", data=self._obj_poses, compression="gzip")
+            ep.create_dataset("world_bounds", data=self._world_bounds, compression="gzip")
