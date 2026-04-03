@@ -67,7 +67,10 @@ class _EnvironmentBase(ABC, Generic[TObs, TAction]):
         raise NotImplementedError
 
     def coerce_obs_spec(self, obs_spec: str | ObservationSpec[Any]) -> ObservationSpec[Any]:
-        """Coerce an observation specification or name to a compatible ObservationSpec."""
+        """Coerce an observation specification or name to a compatible ObservationSpec.
+
+        Raises ValueError if the observation specification is not supported by the environment.
+        """
         if isinstance(obs_spec, str):
             if obs_spec == self.obs_spec.name:
                 return self.obs_spec
@@ -75,7 +78,10 @@ class _EnvironmentBase(ABC, Generic[TObs, TAction]):
         return obs_spec
 
     def coerce_action_spec(self, action_spec: str | ActionSpec[Any]) -> ActionSpec[Any]:
-        """Coerce an action specification or name to a compatible ActionSpec."""
+        """Coerce an action specification or name to a compatible ActionSpec.
+
+        Raises ValueError if the action specification is not supported by the environment.
+        """
         if isinstance(action_spec, str):
             if action_spec == self.action_spec.name:
                 return self.action_spec
@@ -102,7 +108,9 @@ class _EnvironmentBase(ABC, Generic[TObs, TAction]):
         raise NotImplementedError
 
     @abstractmethod
-    def step(self, action: TAction, action_spec: ActionSpec[Any] | None = None) -> tuple[TObs, float, bool, bool, dict]:
+    def step(self, action: TAction, action_spec: ActionSpec[Any] | None = None) -> \
+            tuple[TObs, float | Float[ArrayLike, " b"], bool | Bool[ArrayLike, " b"], \
+                bool | Bool[ArrayLike, " b"], dict]:
         """Step the environment.
 
         Args:
@@ -124,6 +132,12 @@ class Environment(_EnvironmentBase[TObs, TAction], gym.Env[TObs, TAction], Gener
         TAction: The type associated with the action spec
     """
 
+    @override
+    @abstractmethod
+    def step(self, action: TAction, action_spec: ActionSpec[Any] | None = None) -> \
+            tuple[TObs, float, bool, bool, dict]:
+        raise NotImplementedError
+
 
 class BatchedEnvironment(
     _EnvironmentBase[TBObs, TBAction], gym.vector.VectorEnv[TBObs, TBAction, ArrayLike], Generic[TBObs, TBAction]
@@ -134,6 +148,12 @@ class BatchedEnvironment(
         TBObs: The type of the batched environment observation. e.g. torch.Tensor[(b, 8), float]
         TBAction: The type associated with the batched action spec
     """
+
+    @abstractmethod
+    @override
+    def step(self, action: TBAction, action_spec: ActionSpec[Any] | None = None) -> \
+            tuple[TBObs, Float[ArrayLike, " b"], Bool[ArrayLike, " b"], Bool[ArrayLike, " b"], dict]:
+        raise NotImplementedError
 
 
 class BasicEnvironment(Environment[TObs, TAction], gym.Wrapper[TObs, TAction, TObs, TAction], Generic[TObs, TAction]):
@@ -186,11 +206,13 @@ class BasicEnvironment(Environment[TObs, TAction], gym.Wrapper[TObs, TAction, TO
     def supports_action_spec(self, action_spec: ActionSpec) -> bool:  # noqa: D102
         return action_spec.name == self.action_spec.name
 
+    @override
     def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None) -> tuple[TObs, dict]:
         obs, info = self.env.reset(seed=seed, options=options)
         self.last_obs = obs
         return obs, info
 
+    @override
     def step(self, action: TAction, action_spec: ActionSpec[Any] | None = None) -> tuple[TObs, float, bool, bool, dict]:
         if action_spec is not None and not self.supports_action_spec(action_spec):
             raise ValueError(f"Action spec {action_spec} not supported by environment.")
@@ -242,7 +264,7 @@ class BasicBatchedEnvironment(BatchedEnvironment[TBObs, TBAction], gym.vector.Ve
         """
         super().__init__(env, *args, **kwargs)
         self.last_obs = None
-        self._obs_spec = ObservationSpec[TObs](
+        self._obs_spec = ObservationSpec[TBObs](
             space=env.single_observation_space,
             name="obs",
             is_torch=is_torch,
@@ -250,7 +272,7 @@ class BasicBatchedEnvironment(BatchedEnvironment[TBObs, TBAction], gym.vector.Ve
             n_envs=-1,  # Variable batch size is more flexible
             device=device,
         )
-        self._action_spec = ActionSpec[TAction](
+        self._action_spec = ActionSpec[TBAction](
             space=env.single_action_space,
             name="action",
             is_torch=is_torch,
@@ -260,11 +282,11 @@ class BasicBatchedEnvironment(BatchedEnvironment[TBObs, TBAction], gym.vector.Ve
         )
 
     @property
-    def obs_spec(self) -> ObservationSpec[TObs]:  # noqa: D102
+    def obs_spec(self) -> ObservationSpec[TBObs]:  # noqa: D102
         return self._obs_spec
 
     @property
-    def action_spec(self) -> ActionSpec[TAction]:  # noqa: D102
+    def action_spec(self) -> ActionSpec[TBAction]:  # noqa: D102
         return self._action_spec
 
     def supports_observation_spec(self, obs_spec: ObservationSpec) -> bool:  # noqa: D102
@@ -273,7 +295,8 @@ class BasicBatchedEnvironment(BatchedEnvironment[TBObs, TBAction], gym.vector.Ve
     def supports_action_spec(self, action_spec: ActionSpec) -> bool:  # noqa: D102
         return action_spec.name == self.action_spec.name
 
-    def reset(  # noqa: D102
+    @override
+    def reset(
         self,
         *,
         seed: int | list[int] | None = None,
@@ -281,17 +304,19 @@ class BasicBatchedEnvironment(BatchedEnvironment[TBObs, TBAction], gym.vector.Ve
     ) -> tuple[TBObs, dict]:
         obs, info = self.env.reset(seed=seed, options=options)
         self.last_obs = obs
-        return obs, info
+        return self.obs_spec.cast(obs), info
 
-    def step(  # noqa: D102
+    @override
+    def step(
         self, actions: TBAction
-    ) -> tuple[TBObs, Float[ArrayLike, "b"], Bool[ArrayLike, "b"], Bool[ArrayLike, "b"], dict]:  # noqa: F821
+    ) -> tuple[TBObs, Float[ArrayLike, " b"], Bool[ArrayLike, " b"], Bool[ArrayLike, " b"], dict]:
         obs, reward, term, trunc, info = self.env.step(actions)
         self.last_obs = obs
-        return obs, reward, term, trunc, info
+        return self.obs_spec.cast(obs), self.obs_spec.cast(reward, False), self.obs_spec.cast(term, False), \
+            self.obs_spec.cast(trunc, False), info
 
     @overload
-    def get_observation(self) -> TObs: ...
+    def get_observation(self) -> TBObs: ...
     @overload
     def get_observation(self, obs_spec: ObservationSpec[TSpecObs]) -> TSpecObs: ...
 
@@ -365,7 +390,7 @@ class BatchToSingleWrapper(Environment[TObs, TAction], Generic[TObs, TAction]):
         batched_state = self.batched_env.get_state()
         try:
             obs_spec = self.coerce_obs_spec("state")
-        except:
+        except ValueError:
             obs_spec = self.obs_spec
         return obs_spec.cast(batched_state)
 

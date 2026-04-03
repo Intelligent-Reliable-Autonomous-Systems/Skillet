@@ -170,7 +170,7 @@ class SpaceSpecification(Generic[TSpace]):
         if self.is_parameterized():
             raise ValueError("Cannot perform operation on a parameterized space.")
 
-    def index(self, value: TSpace, env_ids: Int[NDArrayOrTensor, b] | Bool[NDArrayOrTensor, b]) -> TSpace:
+    def index(self, value: TSpace, env_ids: Int[NDArrayOrTensor, " b"] | Bool[NDArrayOrTensor, " b"]) -> TSpace:
         """Index the space value for the given environment ids.
 
         Args:
@@ -183,7 +183,8 @@ class SpaceSpecification(Generic[TSpace]):
         self._ensure_not_parameterized()
         return cast("TSpace", self._index(value, env_ids))
 
-    def _index(self, value: SpaceValue, env_ids: Int[NDArrayOrTensor, b] | Bool[NDArrayOrTensor, b]) -> SpaceValue:
+    def _index(self, value: SpaceValue, env_ids: Int[NDArrayOrTensor, " b"] | Bool[NDArrayOrTensor, " b"]) \
+            -> SpaceValue:
         if not self.is_batched:
             raise ValueError("Cannot index a non-batched space.")
         env_ids = torch.as_tensor(env_ids, device=self.device) if self.is_torch else np.asarray(env_ids)
@@ -313,18 +314,26 @@ class SpaceSpecification(Generic[TSpace]):
     def sample(self) -> TSpace:
         """Sample a random value from the space."""
         self._ensure_not_parameterized()
+        if self.is_batched and self.n_envs == -1:
+                raise ValueError("Cannot sample from a variable batch size space. Use with_n_envs() to set the batch \
+size.")
         sampled = self.space.sample()
-        if self.is_torch:
-            return torch.tensor(sampled, device=self.device)
-        return sampled
+        return self.cast(sampled)
 
-    def cast(self, value: SpaceValue) -> TSpace:
+    @overload
+    def cast(self, value: SpaceValue) -> TSpace: ...
+    @overload
+    def cast(self, value: SpaceValue, check_shape: bool) -> SpaceValue: ...
+
+    def cast(self, value: SpaceValue, check_shape: bool = True) -> Any:
         """Cast a value to the type of the space."""
         self._ensure_not_parameterized()
 
         def cast_array(v: Any, expected_shape: tuple[int, ...], dtype: Any, key: str = "") -> Any:  # noqa: ANN401
             if self.is_torch:
                 arr = torch.as_tensor(v, dtype=as_torch_dtype(dtype), device=self.device)
+                if not check_shape:
+                    return arr
                 if arr.shape != expected_shape:
                     if self.is_batched and self.n_envs != -1 and arr.shape == expected_shape[1:]:
                         arr = arr.unsqueeze(0)
@@ -344,6 +353,8 @@ class SpaceSpecification(Generic[TSpace]):
             if isinstance(v, torch.Tensor):
                 v = v.cpu().numpy()
             arr = np.asarray(v, dtype=dtype)
+            if not check_shape:
+                return arr
             if arr.shape != expected_shape:
                 if self.is_batched and self.n_envs != -1 and arr.shape == expected_shape[1:]:
                     arr = arr[np.newaxis, ...]
@@ -359,6 +370,11 @@ class SpaceSpecification(Generic[TSpace]):
                 raise ValueError(f"Batched space with shape {(-1, *expected_shape)} cannot infer batch size from \
                         value shape {arr.shape}.")
             return arr
+
+        if not check_shape:
+            if isinstance(value, Mapping):
+                return {key: cast_array(v, (), float) for key, v in value.items()}
+            return cast_array(value, (), float)
 
         if isinstance(self.space, gym.spaces.Dict):
             if not isinstance(value, Mapping):
@@ -514,24 +530,6 @@ class BatchedSkillParamsSpec(SpaceSpecification[TBSkillParams], Generic[TBSkillP
 
     ...
 
-
-# Brainstorming parameter examples:
-# Continuous-only: pick(xyz), place(xyzrpy), etc.
-# - Box(n, float)
-# Discrete: pick(box), place(box, table), etc.
-# - Box(n, int)
-# - List(n, object)
-# Continuous and discrete: pick(box, xyz), place(box, table, xyzrpy), etc.
-# Dictionary: pick(object=box, position=xyz), place(object=box, position=xyz, orientation=xyzrpy), etc.
-# Batched continuous homogeneous: pick([xyz]), etc.
-# Batched discrete homogeneous:
-# - unary: pick([box, table])
-# - binary: pick([box, table], [ball, ground])
-# Batched dictionary homogenous: pick(object=[box, table], position=[xyz, xyzrpy])
-# Batched continuous heterogeneous: pick([xyz, xyzrpy]), etc. -> pad to max length to make it homogeneous
-# Batched discrete heterogeneous: pick([box, table], [ball]), etc. -> list of lists needn't be padded, but might be useful
-
-
 # =============================================
 # Common observation space type aliases and definitions
 # =============================================
@@ -544,8 +542,8 @@ BatchedArrayEmpty: TypeAlias = Float[np.ndarray | torch.Tensor, "b 0"]
 class ParamDC(NamedTuple):
     """Represents a skill parameter set with m discrete parameters and n continuous parameters."""
 
-    discrete: Int[np.ndarray, m]
-    continuous: Float[np.ndarray, n]
+    discrete: Int[np.ndarray, " m"]
+    continuous: Float[np.ndarray, " n"]
 
 
 class BatchedParamDC(NamedTuple):
@@ -596,21 +594,20 @@ def as_torch_dtype(dtype: type[int] | type[float] | type[bool] | np.dtype | torc
         return torch.float32
     if dtype is bool:
         return torch.bool
-    if isinstance(dtype, np.dtype):
-        if dtype == np.uint8:
-            return torch.uint8
-        if dtype == np.uint16:
-            return torch.uint16
-        if dtype == np.int32:
-            return torch.int32
-        if dtype == np.int64:
-            return torch.int64
-        if dtype == np.float32:
-            return torch.float32
-        if dtype == np.float64:
-            return torch.float64
-        if dtype.kind == "b":
-            return torch.bool
+    if dtype == np.uint8:
+        return torch.uint8
+    if dtype == np.uint16:
+        return torch.uint16
+    if dtype == np.int32:
+        return torch.int32
+    if dtype == np.int64:
+        return torch.int64
+    if dtype == np.float32:
+        return torch.float32
+    if dtype == np.float64:
+        return torch.float64
+    if isinstance(dtype, np.dtype) and dtype.kind == "b":
+        return torch.bool
     raise ValueError(f"Unsupported dtype: {dtype}")
 
 
@@ -684,7 +681,7 @@ class ParameterizedBox(gym.spaces.Box, ParameterizedSpace):
         shape: Sequence[int | str],
         dtype: type[np.floating[Any]] | type[np.integer[Any]] = np.float32,
         seed: int | np.random.Generator | None = None,
-    ):
+    ) -> None:
         """Initialize the parameterized box space with some variables in low, high, or shape.
 
         Replace numbers in low, high, or shape with string variables.
@@ -723,11 +720,12 @@ class ParameterizedBox(gym.spaces.Box, ParameterizedSpace):
     def bind_partial(self, **params: int) -> ParameterizedBox | gym.spaces.Box:
         """Bind the parameterized box space to the given parameters.
 
-        If the parameterized box space is not fully bound, return a new parameterized box space with the parameters bound.
+        If the parameterized box space is not fully bound, return a new parameterized box space with the parameters
+        bound.
         Otherwise, return a gym.spaces.Box.
         """
 
-        def _eval(value: str | Any) -> Any:
+        def _eval(value: str | Any) -> Any:  # noqa: ANN401
             if not isinstance(value, str):
                 return value
             tokens = re.split(r"([+-\\*])", value)
@@ -741,13 +739,13 @@ class ParameterizedBox(gym.spaces.Box, ParameterizedSpace):
                 elif token.isnumeric():
                     try:
                         val = int(token)
-                    except ValueError:
+                    except ValueError as e:
                         try:
                             val = float(token)
                         except ValueError:
-                            raise ValueError(
-                                f"Invalid token {token} in shape {shape}. Must be a valid Python variable name or number."
-                            )
+                            raise ValueError(f"Invalid token {token} in shape {shape}. Must be a valid Python variable \
+name or number."
+                            ) from e
                 else:
                     val = token
                 simplified.append(val)
@@ -757,7 +755,7 @@ class ParameterizedBox(gym.spaces.Box, ParameterizedSpace):
             try:
                 return eval("".join([str(s) for s in simplified]))
             except Exception as e:
-                raise ValueError(f"Error evaluating expression {value}: {e}")
+                raise ValueError(f"Error evaluating expression {value}: {e}") from e
 
         low = _eval(self._low)
         high = _eval(self._high)
@@ -851,7 +849,8 @@ class ParameterizedDiscrete(gym.spaces.Discrete, ParameterizedSpace):
     Discrete is implemented as an integer Box space with the number of options for each discrete parameter.
     """
 
-    def __init__(self, n: int | str, start: int | str | None = None):
+    def __init__(self, n: int | str, start: int | str | None = None) -> None:
+        """Initialize the parameterized discrete space with some variables in n or start."""
         self._n = n
         self._start = start
         self._variables = set[str]()

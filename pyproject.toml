@@ -35,12 +35,6 @@ dependencies = [
     "tensordict",
     "zmq",
     "scipy",
-    "pupil_apriltags",
-    "pyrealsense2",
-    "open3d",
-    "google-genai",
-    "sam2",
-    "sam3",
 ]
 
 [project.optional-dependencies]
@@ -49,6 +43,9 @@ perception = [
     "pyrealsense2",
     "pupil-apriltags",
     "pin",
+    "google-genai",
+    "sam2",
+    "sam3",
 ]
 dev = [
     "ruff",
