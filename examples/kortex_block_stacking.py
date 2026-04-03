@@ -134,7 +134,7 @@ def main() -> None:
         rgbd_spec,
         options_spec,
         torch.as_tensor(
-            [0, 1],
+            [0, 1, 0, 1],
             device=rgbd_spec.device,
             dtype=torch.int32,
         ),
@@ -143,7 +143,7 @@ def main() -> None:
         rgbd_spec,
         pick_block_skill.params_spec,
         torch.as_tensor(
-            [1, 2],
+            [1, 2, 0, 1],
             device=rgbd_spec.device,
             dtype=torch.int32,
         ),

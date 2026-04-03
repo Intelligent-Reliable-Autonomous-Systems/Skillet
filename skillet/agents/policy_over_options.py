@@ -101,7 +101,7 @@ class PolicyOverOptionsAgent(Generic[THighLevelObs, TLowLevelObs, TAction, TSkil
                 # 4c. Check if the composite skill is terminated
                 skill_done = selected_skill.is_terminated(env.get_observation(selected_skill.obs_spec))
             i += 1
-            if i > 2:
+            if i > 4:
                 break
         if data_logger is not None:
             data_logger.save_log()

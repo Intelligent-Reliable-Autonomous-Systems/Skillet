@@ -3,7 +3,7 @@
 Controls logging of data and messages within Skillet.
 """
 
-import copy
+from datetime import datetime
 import time
 from skillet.scene.base import Scene
 import h5py
@@ -24,7 +24,7 @@ class SkilletDataLogger:
 
         self._num_points = 0
         self._exp_id = -1
-        self._start_time = time.perf_counter()
+        self._start_time = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         self.reset_logging()
         Path(self._log_dir).mkdir(exist_ok=True, parents=True)

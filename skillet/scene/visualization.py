@@ -13,6 +13,12 @@ import numpy as np
 import torch
 
 from skillet.scene.utils import (
+    _BBOX_THICKNESS,
+    _FONT,
+    _FONT_SCALE,
+    _FONT_THICKNESS,
+    _OVERLAY_ALPHA,
+    _PALETTE_BGR,
     create_aabb_lineset,
     create_camera_model,
     depth_to_colormap_np,
@@ -40,25 +46,6 @@ except ImportError:
     o3d = None  # type: ignore[assignment]
     _gui = None  # type: ignore[assignment]
     _rendering = None  # type: ignore[assignment]
-
-
-_PALETTE_BGR: list[tuple[int, int, int]] = [
-    (44, 44, 220),
-    (44, 190, 44),
-    (220, 110, 44),
-    (0, 190, 240),
-    (200, 44, 200),
-    (210, 210, 44),
-    (0, 130, 255),
-    (170, 44, 240),
-    (44, 240, 160),
-    (240, 160, 44),
-]
-_OVERLAY_ALPHA = 0.35
-_BBOX_THICKNESS = 2
-_FONT = cv2.FONT_HERSHEY_SIMPLEX
-_FONT_SCALE = 0.55
-_FONT_THICKNESS = 1
 
 
 class SkilletVisualizer:

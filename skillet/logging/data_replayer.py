@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import argparse
 import threading
 from contextlib import suppress
-from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 import cv2
@@ -12,7 +12,15 @@ import h5py
 import numpy as np
 import torch
 
+from skillet.scene.base import Scene
+from skillet.scene.cube import Cube
 from skillet.scene.utils import (
+    _BBOX_THICKNESS,
+    _FONT,
+    _FONT_SCALE,
+    _FONT_THICKNESS,
+    _OVERLAY_ALPHA,
+    _PALETTE_BGR,
     create_aabb_lineset,
     create_camera_model,
     depth_to_colormap_np,
@@ -22,38 +30,15 @@ from skillet.scene.utils import (
     segmented_rgbd_to_point_cloud,
     tilt_from_quat_wxyz,
 )
-from skillet.scene.base import Scene
-from skillet.scene.cube import Cube
-
-import argparse
 
 try:
     import open3d as o3d
     import open3d.visualization.gui as _gui
     import open3d.visualization.rendering as _rendering
 except ImportError:
-    o3d = None
-    _gui = None
-    _rendering = None
-
-
-_PALETTE_BGR: list[tuple[int, int, int]] = [
-    (44, 44, 220),
-    (44, 190, 44),
-    (220, 110, 44),
-    (0, 190, 240),
-    (200, 44, 200),
-    (210, 210, 44),
-    (0, 130, 255),
-    (170, 44, 240),
-    (44, 240, 160),
-    (240, 160, 44),
-]
-_OVERLAY_ALPHA = 0.35
-_BBOX_THICKNESS = 2
-_FONT = cv2.FONT_HERSHEY_SIMPLEX
-_FONT_SCALE = 0.55
-_FONT_THICKNESS = 1
+    o3d = None  # type: ignore[assignment]
+    _gui = None  # type: ignore[assignment]
+    _rendering = None  # type: ignore[assignment]
 
 
 class SkilletPlaybackVisualizer:
@@ -87,15 +72,13 @@ class SkilletPlaybackVisualizer:
         self._n_frames = 0
         self._advance_event = threading.Event()
 
-        # Data arrays (populated by _load_log_file)
+        # Data arrays
         self._rgb_obs: np.ndarray | None = None
         self._depth_obs: np.ndarray | None = None
         self._camera_pose: np.ndarray | None = None
         self._twist_obs: np.ndarray | None = None
         self._time_stamps: np.ndarray | None = None
         self._abs_state: np.ndarray | None = None
-
-        # Intrinsics — must be set before running (or loaded from file if stored)
         self.intrinsic_k: torch.Tensor | None = None
 
         self._load_log_file(log_file)
@@ -174,10 +157,7 @@ class SkilletPlaybackVisualizer:
         segment_ids = torch.zeros((1,), dtype=torch.int64, device=depth.device)
         return masks, segment_ids
 
-    # ------------------------------------------------------------------
-    # Scene (Open3D) thread
-    # ------------------------------------------------------------------
-
+    # Open3D Scene info
     def _setup(self) -> None:
         self._app = _gui.Application.instance
         self._app.initialize()
@@ -289,22 +269,18 @@ class SkilletPlaybackVisualizer:
                     self._remove_geometry(name)
 
             for obj in self.scene.objects:
-                np.set_printoptions(suppress=True, precision=5)
-                print(obj.pose.cpu().numpy())
                 geometry = get_object_geometry(obj)
                 if geometry is not None and len(geometry) > 0:
                     self._add_geometry(obj.identifier, geometry[0], self._mat_line)
                 else:
                     self._remove_geometry(obj.identifier)
-            print(f"\n\n")
             if hud_text:
                 self._hud_label.text = hud_text
                 self._window.set_needs_layout()
 
             if do_camera_setup and pcd is not None:
                 bounds = self._scene_widget.scene.bounding_box
-                center = bounds.get_center()
-                self._scene_widget.setup_camera(60, bounds, center)
+                self._scene_widget.setup_camera(60, bounds, bounds.get_center())
                 self._needs_camera_setup = False
 
         self._app.post_to_main_thread(self._window, _do_update)
@@ -314,10 +290,6 @@ class SkilletPlaybackVisualizer:
             raise ImportError("Open3D is required. Install with: pip install open3d")
         self._setup()
         self._app.run()
-
-    # ------------------------------------------------------------------
-    # CV2 playback loop (spacebar-driven)
-    # ------------------------------------------------------------------
 
     def run_rgbd(self) -> None:
         """CV2 loop: render current frame, wait for spacebar to advance."""
@@ -344,23 +316,19 @@ class SkilletPlaybackVisualizer:
 
             # Block until spacebar or quit
             while not self._rgbd_stop_event.is_set():
-                key = cv2.waitKey(50) & 0xFF  # 50 ms polling keeps window responsive
+                key = cv2.waitKey(50) & 0xFF
                 if key == ord(" "):
                     self._frame_idx += 1
                     break
-                if key in (ord("q"), ord("Q"), 27):  # Q or Escape
+                if key in (ord("q"), ord("Q"), 27):
                     self._rgbd_stop_event.set()
-                    self.request_close()
+                    self.stop()
                     break
 
         if self._frame_idx >= self._n_frames:
             print("[Playback] End of recording.")
 
-        self._stop_rgbd()
-
-    # ------------------------------------------------------------------
-    # Helpers (mirrors SkilletVisualizer)
-    # ------------------------------------------------------------------
+        self.stop()
 
     def _update_rgbd_window(self, obs: dict[str, torch.Tensor], masks: torch.Tensor, segment_ids: torch.Tensor) -> None:
         if not (self._display_rgb or self._display_depth):
@@ -369,7 +337,6 @@ class SkilletPlaybackVisualizer:
         panels: list[np.ndarray] = []
 
         if self._display_rgb:
-            # (3, H, W) float [0,1] -> (H, W, 3) uint8 BGR
             rgb_np = (obs["rgb"].detach().cpu().numpy().transpose(1, 2, 0) * 255).astype(np.uint8)
             rgb_bgr = cv2.cvtColor(rgb_np, cv2.COLOR_RGB2BGR)
             if self._segment_rgb:
@@ -390,7 +357,7 @@ class SkilletPlaybackVisualizer:
 
         frame = panels[0] if len(panels) == 1 else np.concatenate(panels, axis=1)
         cv2.imshow(self._rgbd_window_name, frame)
-        cv2.waitKey(1)  # let imshow render without blocking
+        cv2.waitKey(1)
 
     def _draw_instance_annotations(
         self, image: np.ndarray, masks: torch.Tensor, segment_ids: torch.Tensor
@@ -447,6 +414,7 @@ class SkilletPlaybackVisualizer:
         if not (self._display_rgb or self._display_depth):
             return
         cv2.namedWindow(self._rgbd_window_name, cv2.WINDOW_NORMAL)
+        cv2.resizeWindow(self._rgbd_window_name, self._width, self._height)
         self._rgbd_active = True
 
     def _stop_rgbd(self) -> None:
@@ -460,19 +428,16 @@ class SkilletPlaybackVisualizer:
         if self._app is not None:
             self._app.quit()
 
-    # ------------------------------------------------------------------
-    # Public entry points
-    # ------------------------------------------------------------------
-
+    # Public API
     def run(self) -> None:
         """Launch both windows. Call on the main thread."""
         self._rgbd_thread = threading.Thread(target=self.run_rgbd, name="PlaybackRGBDThread", daemon=True)
         self._rgbd_thread.start()
-        self.run_scene()  # blocks on main thread (Open3D requirement)
+        self.run_scene()
 
     def stop(self) -> None:
         self._rgbd_stop_event.set()
-        if self._rgbd_thread is not None:
+        if self._rgbd_thread is not None and threading.current_thread() != self._rgbd_thread:
             self._rgbd_thread.join(timeout=2.0)
         self._stop_rgbd()
         self.request_close()

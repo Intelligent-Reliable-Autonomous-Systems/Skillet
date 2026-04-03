@@ -8,6 +8,24 @@ from skillet.core.math import transform_points, unproject_depth
 from skillet.scene.base import SceneObject
 from skillet.scene.cube import Cube
 
+_PALETTE_BGR: list[tuple[int, int, int]] = [
+    (44, 44, 220),
+    (44, 190, 44),
+    (220, 110, 44),
+    (0, 190, 240),
+    (200, 44, 200),
+    (210, 210, 44),
+    (0, 130, 255),
+    (170, 44, 240),
+    (44, 240, 160),
+    (240, 160, 44),
+]
+_OVERLAY_ALPHA = 0.35
+_BBOX_THICKNESS = 2
+_FONT = cv2.FONT_HERSHEY_SIMPLEX
+_FONT_SCALE = 0.55
+_FONT_THICKNESS = 1
+
 
 def segmented_rgbd_to_point_cloud(
     depth: torch.Tensor,
