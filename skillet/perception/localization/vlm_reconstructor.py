@@ -51,7 +51,9 @@ class VLMReconstructor(ReconstructorBase):
 
         return seg_out
 
-    from scipy.spatial.transform import Rotation as R
+    def get_observation(self) -> Scene:
+        """Return the scene."""
+        return self._scene
 
     def compute_cube_centers(
         self,

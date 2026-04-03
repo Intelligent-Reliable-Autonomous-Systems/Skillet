@@ -74,3 +74,7 @@ class ApriltagStateReconstructor(ReconstructorBase):
                             spec["face"], pos_world, normal_world, up_world, cube.size
                         )
                         cube.pose = cube_pose
+
+    def get_observation(self) -> Scene:
+        """Return the scene."""
+        return self._scene
