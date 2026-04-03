@@ -10,8 +10,9 @@ from unified_planning.model import State as UPState
 from unified_planning.model import Type as UPType
 from unified_planning.shortcuts import Bool as UPBool
 
-UPDictState = dict['FluentExpLike', bool]
+UPDictState = dict["FluentExpLike", bool]
 """A dictionary of assignments to Unified Planning fluents."""
+
 
 class ObjectExpLike(Protocol):
     """Unified Planning FNode specialized to object expressions."""
@@ -29,6 +30,7 @@ class ObjectExpLike(Protocol):
     def object(self) -> UPObject:
         """Get the Unified Planning object from the object expression."""
         ...
+
 
 class FluentExpLike(Protocol):
     """Unified Planning FNode specialized to fluent expressions."""
@@ -52,6 +54,7 @@ class FluentExpLike(Protocol):
         """Get the Unified Planning fluent from the fluent expression."""
         ...
 
+
 class NotFluentExpLike(Protocol):
     """Unified Planning FNode specialized to the negation of fluent expressions."""
 
@@ -70,6 +73,7 @@ class NotFluentExpLike(Protocol):
         """The arguments of the not fluent expression should be a single element list."""
         ...
 
+
 def up_state_to_dict(state: UPState | Sequence[FluentExpLike | NotFluentExpLike]) -> dict[FluentExpLike, bool]:
     """Convert a Unified Planning state to a dictionary of assignments to fluents."""
     if isinstance(state, UPState):
@@ -85,6 +89,7 @@ def up_state_to_dict(state: UPState | Sequence[FluentExpLike | NotFluentExpLike]
         else:
             dict_state[fexp] = True
     return dict_state
+
 
 def dict_state_to_up_state(state: dict[FluentExpLike, bool], problem: Problem) -> UPState:
     """Convert a dictionary of assignments to fluents to a Unified Planning state."""

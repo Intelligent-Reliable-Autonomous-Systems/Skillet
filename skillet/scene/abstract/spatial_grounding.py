@@ -41,7 +41,7 @@ def _is_on(a: Cube, b: Cube, height_tol_frac: float = 0.3, xy_slack_frac: float 
     return bool(within_x and within_y)
 
 
-def ground_on_relations(scene: Scene) -> list[tuple[Literal['on'], SceneObject, SceneObject]]:
+def ground_on_relations(scene: Scene) -> list[tuple[Literal["on"], SceneObject, SceneObject]]:
     """Ground the on relations in the scene."""
     on_relations = []
     for obj in scene.objects:
@@ -51,5 +51,5 @@ def ground_on_relations(scene: Scene) -> list[tuple[Literal['on'], SceneObject, 
             if not isinstance(other_obj, Cube):
                 continue
             if obj.object_id != other_obj.object_id and _is_on(obj, other_obj):
-                on_relations.append(('on', obj, other_obj))
+                on_relations.append(("on", obj, other_obj))
     return on_relations

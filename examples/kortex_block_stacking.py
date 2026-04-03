@@ -10,6 +10,7 @@ from skillet.agents.policy_over_options import PolicyOverOptionsAgent, SelectedS
 from skillet.core import ActionSpec, ObservationSpec
 from skillet.core.env import BatchToSingleWrapper
 from skillet.envs.skillet_env import SkilletEnv
+from skillet.perception import SkilletPerception
 from skillet.perception.localization import ApriltagStateReconstructor
 from skillet.perception.realsense import RealsenseEnv
 from skillet.policy.dummy import FixedSequencePolicy
@@ -84,21 +85,20 @@ def main() -> None:
     visualizer = SkilletVisualizer(
         env=env,
         obs_spec=rgbd_spec,
-        reconstructor=ApriltagStateReconstructor(scene),
+        scene=scene,
         poll_rate=poll_rate_hz,
         device=args_cli.device,
-        max_depth_m=args_cli.max_depth_m,
+    )
+    perception = SkilletPerception(
+        env=env,
+        obs_spec=rgbd_spec,
+        reconstructor=ApriltagStateReconstructor(scene=scene),
+        poll_rate=poll_rate_hz,
+        device=args_cli.device,
     )
 
-    if "pointcloud" in args_cli.viz:
-        visualizer.set_open3d_visualizer(segment_point_cloud=True)
-    visualizer.start_cv2_visualization(
-        display_rgb="rgb" in args_cli.viz,
-        display_depth="depth" in args_cli.viz,
-        segment_rgb="rgb" in args_cli.viz,
-        segment_depth="depth" in args_cli.viz,
-    )
     visualizer.run_thread()
+    perception.run_thread()
 
     # Low-level policies
     if args_cli.use_moveit:

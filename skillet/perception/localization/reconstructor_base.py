@@ -7,6 +7,7 @@ from skillet.scene.base import Scene
 from skillet.core import ObservationSpec
 from skillet.core.env import BatchedEnvironment, TSpecObs
 
+
 class ReconstructorBase(ABC):
     """Base scene reconstructor for cube localization with AprilTags or segmentation + depth."""
 

@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from skillet.core import BatchedEnvironment
     from skillet.core.env import Environment
     from skillet.core.spaces import ObservationSpec
-    from skillet.scene.scene_visualization import Open3DVisualizer
+    from skillet.scene.visualization import Open3DVisualizer
 
 _PALETTE_BGR: list[tuple[int, int, int]] = [
     (44, 44, 220),
@@ -398,7 +398,7 @@ class Perception:
 
 
 if __name__ == "__main__":
-    from skillet.scene.scene_visualization import Open3DVisualizer
+    from skillet.scene.visualization import Open3DVisualizer
 
     env = RealsenseEnv()
     perception = Perception(

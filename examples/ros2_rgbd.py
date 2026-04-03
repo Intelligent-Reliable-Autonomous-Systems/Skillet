@@ -7,7 +7,7 @@ from skillet.envs.skillet_env import SkilletEnv
 from skillet.perception.realsense import RealsenseEnv
 from skillet.perception.sam3_text.sam3_text import SAMConcept
 from skillet.scene import SkilletVisualizer
-from skillet.scene.scene_visualization import Open3DVisualizer
+from skillet.scene.visualization import Open3DVisualizer
 from skillet_tasks.ros2_tasks.factory import create_ros2_env
 
 parser = argparse.ArgumentParser(description="Visualize latest RGB-D frame from ROS2 service.")

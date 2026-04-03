@@ -183,8 +183,9 @@ class SpaceSpecification(Generic[TSpace]):
         self._ensure_not_parameterized()
         return cast("TSpace", self._index(value, env_ids))
 
-    def _index(self, value: SpaceValue, env_ids: Int[NDArrayOrTensor, " b"] | Bool[NDArrayOrTensor, " b"]) \
-            -> SpaceValue:
+    def _index(
+        self, value: SpaceValue, env_ids: Int[NDArrayOrTensor, " b"] | Bool[NDArrayOrTensor, " b"]
+    ) -> SpaceValue:
         if not self.is_batched:
             raise ValueError("Cannot index a non-batched space.")
         env_ids = torch.as_tensor(env_ids, device=self.device) if self.is_torch else np.asarray(env_ids)
@@ -315,7 +316,7 @@ class SpaceSpecification(Generic[TSpace]):
         """Sample a random value from the space."""
         self._ensure_not_parameterized()
         if self.is_batched and self.n_envs == -1:
-                raise ValueError("Cannot sample from a variable batch size space. Use with_n_envs() to set the batch \
+            raise ValueError("Cannot sample from a variable batch size space. Use with_n_envs() to set the batch \
 size.")
         sampled = self.space.sample()
         return self.cast(sampled)
@@ -529,6 +530,7 @@ class BatchedSkillParamsSpec(SpaceSpecification[TBSkillParams], Generic[TBSkillP
     """The specification of a batched skill parameter space."""
 
     ...
+
 
 # =============================================
 # Common observation space type aliases and definitions
@@ -744,8 +746,7 @@ class ParameterizedBox(gym.spaces.Box, ParameterizedSpace):
                             val = float(token)
                         except ValueError:
                             raise ValueError(f"Invalid token {token} in shape {shape}. Must be a valid Python variable \
-name or number."
-                            ) from e
+name or number.") from e
                 else:
                     val = token
                 simplified.append(val)

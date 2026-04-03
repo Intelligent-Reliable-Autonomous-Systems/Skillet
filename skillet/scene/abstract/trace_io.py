@@ -1,4 +1,5 @@
 """PDDL trace file parser and writer."""
+
 import re
 from collections import defaultdict
 from itertools import zip_longest
@@ -22,6 +23,7 @@ OBJECTS_PREFIX = "(:objects"
 GOAL_REACHED_STR = "(:goal-reached)"
 INAPPLICABLE_STR = "(:inapplicable)"
 
+
 class PDDLTraceIO:
     """PDDL trace file parser and writer."""
 
@@ -37,8 +39,13 @@ class PDDLTraceIO:
         self.prefer_delta: bool = prefer_delta
         self._obj_name_to_obj: dict[str, Object] = {}
 
-    def write_trace_file(self, plan_file: Path, states: list[UPDictState], actions: list[ActionInstance],
-            executions: list[Literal['applicable', 'goal_reached', 'inapplicable']] | None = None) -> None:
+    def write_trace_file(
+        self,
+        plan_file: Path,
+        states: list[UPDictState],
+        actions: list[ActionInstance],
+        executions: list[Literal["applicable", "goal_reached", "inapplicable"]] | None = None,
+    ) -> None:
         """Write a PDDL trace file from a list of states, actions, and executions.
 
         Args:
@@ -62,7 +69,7 @@ class PDDLTraceIO:
         if executions is None:
             executions = []
         with Path(plan_file).open("w") as f:
-            type_strs = [' '.join(names) + ' - ' + type for type, names in object_types.items()]
+            type_strs = [" ".join(names) + " - " + type for type, names in object_types.items()]
             f.write(f"(:objects {' '.join(type_strs)})\n")
             prev_state = None
             for state, action, execution in zip_longest(states, actions, executions):
@@ -74,7 +81,7 @@ class PDDLTraceIO:
                         for pred, value in delta.items():
                             pred_str = f'({pred.fluent().name} {" ".join([str(arg) for arg in pred.args])})'
                             if not value:
-                                pred_str = f'(not {pred_str})'
+                                pred_str = f"(not {pred_str})"
                             pred_strs.append(pred_str)
                         f.write(f"(:delta {' '.join(pred_strs)})\n")
                     else:
@@ -82,7 +89,7 @@ class PDDLTraceIO:
                         for pred, value in state.items():
                             pred_str = f'({pred.fluent().name} {" ".join([str(arg) for arg in pred.args])})'
                             if not value:
-                                pred_str = f'(not {pred_str})'
+                                pred_str = f"(not {pred_str})"
                             pred_strs.append(pred_str)
                         f.write(f"(:state {' '.join(pred_strs)})\n")
                     prev_state = state
@@ -91,9 +98,9 @@ class PDDLTraceIO:
                     f.write(f"(:action {action_str})\n")
 
                 if execution is not None:
-                    if execution == 'goal_reached':
+                    if execution == "goal_reached":
                         f.write(f"{GOAL_REACHED_STR}\n")
-                    elif execution == 'inapplicable':
+                    elif execution == "inapplicable":
                         f.write(f"{INAPPLICABLE_STR}\n")
 
     def parse_trace_file(self, trace_file: Path) -> tuple[list[UPDictState], list[ActionInstance], list[str]]:
@@ -109,7 +116,6 @@ class PDDLTraceIO:
         with Path(trace_file).open("r") as f:
             return self._parse_plan(f.read())
 
-
     def _parse_plan(self, plan_text: str) -> tuple[list[dict[FluentExpLike, bool]], list[ActionInstance], list[str]]:
         self._domain_instance = self.domain.clone()
         self._obj_name_to_obj = {}
@@ -122,16 +128,16 @@ class PDDLTraceIO:
         for line in plan_text.splitlines():
             line = line.strip()
             if line.startswith(";"):
-                line = line[:line.index(";")]
+                line = line[: line.index(";")]
             if len(line) == 0:
                 continue
 
             if line.startswith(OBJECTS_PREFIX):
-                self._parse_objects(line[len(OBJECTS_PREFIX):-len(")")])
+                self._parse_objects(line[len(OBJECTS_PREFIX) : -len(")")])
                 continue
             # A state uses closed world assumption; overrides all previous predicates, including not stated ones
             if line.startswith("(:state"):
-                cur_state = self._parse_predicates(line[len(STATE_PREFIX):-len(")")])
+                cur_state = self._parse_predicates(line[len(STATE_PREFIX) : -len(")")])
                 while len(states) <= step:
                     # fill in the missing states with the previous state
                     if len(states) == 0:
@@ -144,7 +150,7 @@ class PDDLTraceIO:
 
             # An observation can be a partial state, modifying a subset of the predicates
             if line.startswith(OBSERVE_PREFIX):
-                cur_observation = self._parse_predicates(line[len(OBSERVE_PREFIX):-len(")")])
+                cur_observation = self._parse_predicates(line[len(OBSERVE_PREFIX) : -len(")")])
                 if cur_state is None:
                     cur_state = {}
                 next_state = {**cur_state, **cur_observation}
@@ -158,7 +164,7 @@ class PDDLTraceIO:
 
             # A delta specifies only the predicates that changed. It is a strict observation
             if line.startswith(DELTA_PREFIX):
-                assignments = self._parse_predicates(line[len(DELTA_PREFIX):-len(")")])
+                assignments = self._parse_predicates(line[len(DELTA_PREFIX) : -len(")")])
                 if cur_state is None:
                     raise ValueError("Full state or observation must be specified before deltas")
                 next_state = {**cur_state, **assignments}
@@ -173,23 +179,23 @@ class PDDLTraceIO:
 
                 continue
             if line.startswith(ACTION_PREFIX):
-                grounded_action = self._parse_action(line[len(ACTION_PREFIX):-len(")")])
+                grounded_action = self._parse_action(line[len(ACTION_PREFIX) : -len(")")])
                 actions.append(grounded_action)
                 step += 1
                 continue
             if line.startswith(GOAL_REACHED_STR):
                 while len(executions) <= step:
-                    executions.append('applicable')
-                executions[step] = 'goal_reached'
+                    executions.append("applicable")
+                executions[step] = "goal_reached"
                 continue
             if line.startswith(INAPPLICABLE_STR):
                 while len(executions) < step:
-                    executions.append('applicable')
-                executions[step-1] = 'inapplicable'
+                    executions.append("applicable")
+                executions[step - 1] = "inapplicable"
                 continue
 
         while len(executions) < len(actions):
-            executions.append('applicable')
+            executions.append("applicable")
         return states, actions, executions
 
     def _parse_predicates(self, state_text: str):
@@ -227,8 +233,9 @@ class PDDLTraceIO:
         if action is None:
             raise ValueError(f"No action found for {tokens[0]}")
 
-        objects = [self._match_object(token, param.type) for token, param in
-                zip(tokens[1:], action.parameters, strict=True)]
+        objects = [
+            self._match_object(token, param.type) for token, param in zip(tokens[1:], action.parameters, strict=True)
+        ]
         return ActionInstance(action, objects)
 
     def _parse_predicate(self, predicate: str) -> tuple[FluentExpLike, bool, str]:
@@ -261,7 +268,7 @@ class PDDLTraceIO:
             raise ValueError(f"Unmatched '(' in: {s!r}")
 
         close = find_matching_close(s, 0)
-        remainder = s[close + 1:]
+        remainder = s[close + 1 :]
         inner = s[1:close].strip()
 
         if inner.startswith("not"):
@@ -314,7 +321,7 @@ class PDDLTraceIO:
                 i += 1
 
         for name in current_names:
-            result[name] = 'object'
+            result[name] = "object"
 
         for name, type_name in result.items():
             up_type = self._domain_instance.user_type(type_name)

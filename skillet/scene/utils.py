@@ -1,7 +1,12 @@
+import cv2
+import numpy as np
+import open3d as o3d
 import torch
 from jaxtyping import Int
 
 from skillet.core.math import transform_points, unproject_depth
+from skillet.scene.base import SceneObject
+from skillet.scene.cube import Cube
 
 
 def segmented_rgbd_to_point_cloud(
@@ -96,3 +101,322 @@ def segmented_rgbd_to_point_cloud(
     segment_indices = torch.cat(all_indices, dim=0)  # (N_total,)
 
     return points, segment_indices
+
+
+def depth_to_colormap_np(depth_mm: np.ndarray) -> np.ndarray:
+    """Convert depth map to a numpy colormap for plotting.
+
+    Args:
+        depth_mm: Depth map in millimeters
+
+    Returns:
+        Numpy colormap
+
+    """
+    valid = depth_mm > 0
+    if not valid.any():
+        return cv2.applyColorMap(depth_mm.astype("uint8"), cv2.COLORMAP_TURBO)
+
+    depth_valid = depth_mm[valid].astype("float32")
+    lo = float(depth_valid.min())
+    hi = float(depth_valid.max())
+    if hi <= lo:
+        hi = lo + 1.0
+    depth_norm = ((depth_mm.astype("float32") - lo) / (hi - lo) * 255.0).clip(0, 255).astype("uint8")
+    depth_norm[~valid] = 0
+    return cv2.applyColorMap(depth_norm, cv2.COLORMAP_TURBO)
+
+
+def get_object_geometry(obj: SceneObject) -> list[object]:
+    """Get the geometry of an object in the scene.
+
+    Defaults to an AABB wireframe. Unknown poses are ignored.
+    """
+    # TODO: add object-specific geometry visualization.
+    if not obj.is_pose_known():
+        return []
+    if isinstance(obj, Cube):
+        corners = obj.get_corners().cpu().numpy()
+        return [create_box_lineset(corners)]
+    aabb = obj.aabb.cpu().numpy()
+    return [create_aabb_lineset(aabb)]
+
+
+def quat_to_roll_pitch_yaw(quat: np.ndarray) -> tuple[float, float, float]:
+    """Convert a quaternion to roll, pitch, yaw.
+
+    Args:
+        quat: The quaternion in (w, x, y, z).
+
+    Returns:
+        A tuple containing roll, pitch, yaw.
+
+    """
+    roll = np.arctan2(2 * (quat[0] * quat[1] + quat[2] * quat[3]), 1 - 2 * (quat[1] * quat[1] + quat[2] * quat[2]))
+    pitch = np.arcsin(2 * (quat[0] * quat[2] - quat[3] * quat[1]))
+    yaw = np.arctan2(2 * (quat[0] * quat[3] + quat[1] * quat[2]), 1 - 2 * (quat[2] * quat[2] + quat[3] * quat[3]))
+    return roll, pitch, yaw
+
+
+def tilt_from_quat_wxyz(q: np.ndarray) -> np.ndarray:
+    """Return tilt from quaternion."""
+    w, x, y, z = q
+
+    # right vector z-component from rotation matrix
+    right_z = 2 * (x * z - y * w)
+
+    # tilt angle
+    tilt = np.arcsin(np.clip(right_z, -1.0, 1.0))
+
+    return np.degrees(tilt)
+
+
+def point_cloud_to_open3d(
+    points: torch.Tensor,
+    segment_indices: torch.Tensor | None = None,
+    filter_zero: bool = True,
+    world_bounds: tuple[float, float, float, float, float, float] | None = None,
+) -> object | None:
+    """Convert output of segmented_rgbd_to_point_cloud to an Open3D PointCloud.
+
+    Args:
+        points: (N, 3), (H, W, 3), (N, 6), or (H, W, 6) from
+            segmented_rgbd_to_point_cloud. Last dim is XYZ or XYZRGB.
+        segment_indices: Optional (N,) segment indices. If provided, points are colored
+            by segment id, overriding any embedded RGB colors.
+        filter_zero: If True, remove points at (0, 0, 0) (invalid/masked). Default True.
+        world_bounds: Optional (x_min, y_min, z_min, x_max, y_max, z_max). Points
+            outside this axis-aligned box are removed before visualization.
+
+    Returns:
+        Open3D PointCloud, or None if open3d is not installed.
+
+    """
+    if o3d is None:
+        return None
+
+    x = points.detach().float()
+    seg = None
+    if segment_indices is not None:
+        seg = segment_indices.detach().cpu().numpy().astype(np.int64)
+
+    if x.dim() == 3:
+        # (H, W, C) -> (H*W, C)
+        _, _, c = x.shape
+        x = x.reshape(-1, c)
+    x = x.cpu().numpy()
+
+    if seg is not None and seg.shape[0] != x.shape[0]:
+        raise ValueError(f"segment_indices shape {seg.shape} does not match points shape {x.shape}")
+
+    xyz = x[:, :3].astype(np.float64)
+    keep = np.ones(xyz.shape[0], dtype=bool)
+
+    if filter_zero:
+        keep &= np.any(xyz != 0, axis=1)
+
+    if world_bounds is not None:
+        lo = np.array(world_bounds[:3], dtype=np.float64)
+        hi = np.array(world_bounds[3:], dtype=np.float64)
+        keep &= np.all((xyz >= lo) & (xyz <= hi), axis=1)
+
+    xyz = xyz[keep]
+    x = x[keep]
+    if seg is not None:
+        seg = seg[keep]
+
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(xyz)
+
+    # If segment indices are provided, color by segment id.
+    if seg is not None:
+        colors = np.zeros((xyz.shape[0], 3), dtype=np.float64)
+        unique_seg = np.unique(seg)
+        for sid in unique_seg:
+            mask = seg == sid
+            r = ((sid * 37) % 255) / 255.0
+            g = ((sid * 57) % 255) / 255.0
+            b = ((sid * 97) % 255) / 255.0
+            colors[mask] = (r, g, b)
+        pcd.colors = o3d.utility.Vector3dVector(colors)
+    # Otherwise, if embedded RGB is present, use it.
+    elif x.shape[-1] >= 6:
+        rgb = x[:, 3:6]
+        if rgb.size > 0 and rgb.max() > 1.0:
+            rgb = np.clip(rgb / 255.0, 0.0, 1.0)
+        pcd.colors = o3d.utility.Vector3dVector(rgb.astype(np.float64))
+
+    return pcd
+
+
+def make_point_marker(pos: np.ndarray, radius: float = 0.01, color: tuple[int] = (1, 0, 0)) -> object:
+    """Make a spherical point marker."""
+    sphere = o3d.geometry.TriangleMesh.create_sphere(radius=radius)
+    sphere.translate(pos)
+    sphere.paint_uniform_color(color)
+    sphere.compute_vertex_normals()
+    return sphere
+
+
+def create_aabb_lineset(
+    bounds: tuple[float, float, float, float, float, float],
+) -> object:
+    """Create a wireframe box for the AABB with axis-colored edges.
+
+    Args:
+        bounds: (x_min, y_min, z_min, x_max, y_max, z_max).
+
+    Returns:
+        Open3D LineSet
+
+    """
+    x0, y0, z0, x1, y1, z1 = bounds
+    # 8 corners ordered so bit pattern (z_bit, y_bit, x_bit) maps to index.
+    corners = np.array(
+        [
+            [x0, y0, z0],  # 0
+            [x1, y0, z0],  # 1
+            [x0, y1, z0],  # 2
+            [x1, y1, z0],  # 3
+            [x0, y0, z1],  # 4
+            [x1, y0, z1],  # 5
+            [x0, y1, z1],  # 6
+            [x1, y1, z1],  # 7
+        ],
+        dtype=np.float64,
+    )
+
+    return create_box_lineset(corners)
+
+
+def create_box_lineset(
+    corners: np.ndarray,
+) -> object:
+    """Create a wireframe box with axis-colored edges.
+
+    Args:
+        corners: (8, 3) array of box corners.
+
+    Returns:
+        Open3D LineSet
+
+    """
+    RED = [1.0, 0.0, 0.0]
+    GREEN = [0.0, 1.0, 0.0]
+    BLUE = [0.0, 0.0, 1.0]
+    PURPLE = [1.0, 0.0, 1.0]
+
+    pos_xyz_corner = corners[7] * 0.95 + corners[0] * 0.05
+    corners = np.concatenate([corners, pos_xyz_corner.reshape(1, 3)], axis=0)
+
+    # (edge_start, edge_end, color) grouped by the axis the edge is parallel to.
+    edges_and_colors: list[tuple[list[int], list[float]]] = [
+        # X-axis edges (differ only in x)
+        ([0, 1], RED),
+        ([2, 3], RED),
+        ([4, 5], RED),
+        ([6, 7], RED),
+        # Y-axis edges (differ only in y)
+        ([0, 2], GREEN),
+        ([1, 3], GREEN),
+        ([4, 6], GREEN),
+        ([5, 7], GREEN),
+        # Z-axis edges (differ only in z)
+        ([0, 4], BLUE),
+        ([1, 5], BLUE),
+        ([2, 6], BLUE),
+        ([3, 7], BLUE),
+        ([7, 8], PURPLE),
+    ]
+    lines = [e for e, _ in edges_and_colors]
+    colors = [c for _, c in edges_and_colors]
+
+    ls = o3d.geometry.LineSet()
+    ls.points = o3d.utility.Vector3dVector(corners)
+    ls.lines = o3d.utility.Vector2iVector(lines)
+    ls.colors = o3d.utility.Vector3dVector(colors)
+    return ls
+
+
+def create_camera_model(
+    camera_pose: np.ndarray,
+    face_width: float = 0.06,
+    face_height: float = 0.04,
+    face_depth: float = 0.008,
+    body_width: float = 0.035,
+    body_height: float = 0.03,
+    body_depth: float = 0.045,
+    marker_width: float = 0.015,
+    marker_height: float = 0.008,
+    marker_depth: float = 0.01,
+) -> list[object] | None:
+    """Build a simple 3-part camera model positioned at *camera_pose*.
+
+    The camera looks down its local +Z axis (OpenCV convention).  The model
+    consists of:
+      1. Face plate -- a thin, wide box at the front (light gray).
+      2. Body -- a narrower, longer box behind the face (dark gray).
+      3. Top marker -- a small red box on top to indicate orientation.
+
+    Args:
+        camera_pose: 7-element array (x, y, z, qw, qx, qy, qz).
+        face_*: Dimensions of the front face plate.
+        body_*: Dimensions of the camera body.
+        marker_*: Dimensions of the red orientation marker.
+
+    Returns:
+        List of three Open3D TriangleMesh objects, or None if open3d is
+        not installed.
+
+    """
+    if o3d is None:
+        return None
+
+    from scipy.spatial.transform import Rotation
+
+    pos = camera_pose[:3]
+    quat_wxyz = camera_pose[3:7]
+    quat_xyzw = np.array([quat_wxyz[1], quat_wxyz[2], quat_wxyz[3], quat_wxyz[0]])
+    rot_mat = Rotation.from_quat(quat_xyzw).as_matrix()
+
+    T = np.eye(4)
+    T[:3, :3] = rot_mat
+    T[:3, 3] = pos
+
+    def _make_box(
+        w: float,
+        h: float,
+        d: float,
+        offset: np.ndarray,
+        color: tuple[float, float, float],
+    ) -> object:
+        mesh = o3d.geometry.TriangleMesh.create_box(width=w, height=h, depth=d)
+        # Center the box at the local origin then apply offset.
+        mesh.translate(np.array([-w / 2, -h / 2, -d / 2]) + offset)
+        mesh.paint_uniform_color(color)
+        mesh.transform(T)
+        mesh.compute_vertex_normals()
+        return mesh
+
+    # Face plate: centered at local origin (front of camera).
+    face = _make_box(face_width, face_height, face_depth, np.array([0.0, 0.0, 0.0]), (0.7, 0.7, 0.7))
+
+    # Body: behind the face along -Z.
+    body = _make_box(
+        body_width,
+        body_height,
+        body_depth,
+        np.array([0.0, 0.0, -(face_depth / 2 + body_depth / 2)]),
+        (0.35, 0.35, 0.35),
+    )
+
+    # Top marker: on top of the body (-Y in camera frame).
+    marker = _make_box(
+        marker_width,
+        marker_height,
+        marker_depth,
+        np.array([0.0, -(body_height / 2 + marker_height / 2), -(face_depth / 2 + body_depth / 2)]),
+        (0.9, 0.1, 0.1),
+    )
+
+    return [face, body, marker]

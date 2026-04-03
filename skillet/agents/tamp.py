@@ -1,4 +1,5 @@
 """A Task and Motion Planner executor for running an agent in an environment."""
+
 from typing import Any
 
 from skillet.core.env import Environment
@@ -37,13 +38,16 @@ from skillet.scene.base import Scene
 #             if action_or_status != SkillStatus.SUCCESS:
 #                 return SkillStatus.FAILED
 
+
 class PlanningAgent:
     """A Task-Planning agent that plans a sequence of skills to execute to complete a task."""
 
-    def __init__(self,
-            scene: Scene,
-            abstract_model: AbstractModel,
-            action_to_skill_map: dict[str, SingleSkill[Any, Any, Unparameterized]]) -> None:
+    def __init__(
+        self,
+        scene: Scene,
+        abstract_model: AbstractModel,
+        action_to_skill_map: dict[str, SingleSkill[Any, Any, Unparameterized]],
+    ) -> None:
         """Initialize the planning agent.
 
         Args:

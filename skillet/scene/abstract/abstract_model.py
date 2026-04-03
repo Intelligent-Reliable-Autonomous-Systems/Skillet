@@ -15,6 +15,8 @@ from skillet.scene.base import Scene, SceneObject
 
 AbstractState: TypeAlias = Any
 AbstractTask: TypeAlias = Any
+
+
 # AbstractAction = tuple[str, *tuple[SceneObject]]
 @dataclass(frozen=True)
 class AbstractAction:
@@ -23,6 +25,7 @@ class AbstractAction:
     name: str
     args: tuple[SceneObject]
     up_action: ActionInstance
+
 
 class AbstractModel:
     """An abstract model of the scene."""
@@ -52,14 +55,15 @@ class AbstractModel:
         """Get the current abstract state of the scene."""
         # TODO: Get state from VLM or predicate grounding
         abstract_state = {}
-        if 'on' in [f.name for f in self.domain.fluents]:
-            on_fluent = self.domain.fluent('on')
+        if "on" in [f.name for f in self.domain.fluents]:
+            on_fluent = self.domain.fluent("on")
             for on_pred in ground_on_relations(self._scene):
                 abstract_state[on_fluent(on_pred[1].identifier, on_pred[2].identifier)] = True
         return abstract_state
 
-    def plan(self, abstract_state: UPDictState, task: str | None = None, timeout: float = 10.0) -> \
-            tuple[bool, list[AbstractAction] | None]:
+    def plan(
+        self, abstract_state: UPDictState, task: str | None = None, timeout: float = 10.0
+    ) -> tuple[bool, list[AbstractAction] | None]:
         """Plan the sequence of actions to execute to complete the task."""
         if task is None:
             task = self._task
@@ -75,8 +79,9 @@ class AbstractModel:
 
             status = result.status
             if status not in (PGResultStatus.SOLVED_SATISFICING, PGResultStatus.SOLVED_OPTIMALLY):
-                return (False,None)
+                return (False, None)
         return True, [AbstractAction(action.action.name, action.args, action) for action in result.plan]
+
 
 class PDDLParsingError(Exception):
     """An error that occurs when parsing a PDDL file."""

@@ -1,1 +1,1 @@
-from .visualize import SkilletVisualizer as SkilletVisualizer
+from .visualization import SkilletVisualizer as SkilletVisualizer

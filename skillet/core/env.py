@@ -108,9 +108,9 @@ class _EnvironmentBase(ABC, Generic[TObs, TAction]):
         raise NotImplementedError
 
     @abstractmethod
-    def step(self, action: TAction, action_spec: ActionSpec[Any] | None = None) -> \
-            tuple[TObs, float | Float[ArrayLike, " b"], bool | Bool[ArrayLike, " b"], \
-                bool | Bool[ArrayLike, " b"], dict]:
+    def step(
+        self, action: TAction, action_spec: ActionSpec[Any] | None = None
+    ) -> tuple[TObs, float | Float[ArrayLike, " b"], bool | Bool[ArrayLike, " b"], bool | Bool[ArrayLike, " b"], dict]:
         """Step the environment.
 
         Args:
@@ -134,8 +134,7 @@ class Environment(_EnvironmentBase[TObs, TAction], gym.Env[TObs, TAction], Gener
 
     @override
     @abstractmethod
-    def step(self, action: TAction, action_spec: ActionSpec[Any] | None = None) -> \
-            tuple[TObs, float, bool, bool, dict]:
+    def step(self, action: TAction, action_spec: ActionSpec[Any] | None = None) -> tuple[TObs, float, bool, bool, dict]:
         raise NotImplementedError
 
 
@@ -151,8 +150,9 @@ class BatchedEnvironment(
 
     @abstractmethod
     @override
-    def step(self, action: TBAction, action_spec: ActionSpec[Any] | None = None) -> \
-            tuple[TBObs, Float[ArrayLike, " b"], Bool[ArrayLike, " b"], Bool[ArrayLike, " b"], dict]:
+    def step(
+        self, action: TBAction, action_spec: ActionSpec[Any] | None = None
+    ) -> tuple[TBObs, Float[ArrayLike, " b"], Bool[ArrayLike, " b"], Bool[ArrayLike, " b"], dict]:
         raise NotImplementedError
 
 
@@ -312,8 +312,13 @@ class BasicBatchedEnvironment(BatchedEnvironment[TBObs, TBAction], gym.vector.Ve
     ) -> tuple[TBObs, Float[ArrayLike, " b"], Bool[ArrayLike, " b"], Bool[ArrayLike, " b"], dict]:
         obs, reward, term, trunc, info = self.env.step(actions)
         self.last_obs = obs
-        return self.obs_spec.cast(obs), self.obs_spec.cast(reward, False), self.obs_spec.cast(term, False), \
-            self.obs_spec.cast(trunc, False), info
+        return (
+            self.obs_spec.cast(obs),
+            self.obs_spec.cast(reward, False),
+            self.obs_spec.cast(term, False),
+            self.obs_spec.cast(trunc, False),
+            info,
+        )
 
     @overload
     def get_observation(self) -> TBObs: ...
