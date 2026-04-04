@@ -27,7 +27,6 @@ classifiers = [
 dependencies = [
     "torch",
     "numpy",
-    "roslibpy",
     "gymnasium>=1.1",
     "jaxtyping",
     "typing-extensions",
@@ -43,10 +42,10 @@ perception = [
     "open3d",
     "pyrealsense2",
     "pupil-apriltags",
-    "pin",
     "google-genai",
     "sam2",
     "sam3",
+    "roslibpy",
 ]
 dev = [
     "ruff",
