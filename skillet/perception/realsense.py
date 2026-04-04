@@ -8,27 +8,29 @@ RealSense camera in a format compatible with the ROS2 RGB-D pipeline and
 from __future__ import annotations
 
 import time
-from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import cv2
-import gymnasium as gym
 import numpy as np
 import pyrealsense2 as rs
 from pupil_apriltags import Detector as AprilTagDetector
 from typing_extensions import override
 
-from skillet.core import ActionSpec
 from skillet.core.env import _EnvironmentBase
-from skillet.core.spaces import ObservationSpec
-from skillet.envs.specs import RGBD_SPEC_BATCHED
+from skillet.envs.specs import RGBD_SPEC_BATCHED, RGBD_Obs
 from skillet.perception.localization import CameraLocalizer
 from skillet.scene.utils import depth_to_colormap_np
 
 if TYPE_CHECKING:
     from jaxtyping import Float, UInt8, UInt16
 
+    from skillet.core import ActionSpec
+    from skillet.core.spaces import ObservationSpec
+
+DEFAULT_APRILTAG_POSE = np.array([0.12, 0.005, 0.0, 0.0, 0.0, 0.7071068, 0.7071068])
+DEFAULT_APRILTAG_SIZE_M = 0.100
+DEFAULT_APRILTAG_ID = 3
 
 @dataclass(frozen=True)
 class Frame:
@@ -66,7 +68,7 @@ class RealsenseIntrinsics:
     distortion_color: Float[np.ndarray, 5]  # Color camera distortion coefficients
 
 
-class RealsenseEnv(_EnvironmentBase):
+class RealsenseEnv(_EnvironmentBase[RGBD_Obs, Any]):
     """Environment that streams RGB-D observations from an Intel RealSense camera.
 
     The raw RGB-D snapshot matches `_get_latest_rgbd` in
@@ -87,9 +89,9 @@ class RealsenseEnv(_EnvironmentBase):
         width: int = 640,
         height: int = 480,
         fps: int = 30,
-        apriltag_pose: np.ndarray = np.array([0.12, 0.005, 0.0, 0.0, 0.0, 0.7071068, 0.7071068]),
-        apriltag_size_m: float = 0.100,
-        apriltag_id: int = 0,
+        apriltag_pose: np.ndarray = DEFAULT_APRILTAG_POSE,
+        apriltag_size_m: float = DEFAULT_APRILTAG_SIZE_M,
+        apriltag_id: int = DEFAULT_APRILTAG_ID,
     ) -> None:
         """Initialize the RealSense pipeline and RGB-D observation space."""
         self.width = width
@@ -103,10 +105,10 @@ class RealsenseEnv(_EnvironmentBase):
         self._config.enable_stream(rs.stream.depth, self.width, self.height, rs.format.z16, self.fps)
 
         self._tag_detector = AprilTagDetector()
-        self._T_base_to_tag = make_T(quat_xyzw_to_R(*list(apriltag_pose[3:7])), list(apriltag_pose[:3]))
-        self._roll_180 = make_T(quat_xyzw_to_R(1.0, 0.0, 0.0, 0.0), [0.0, 0.0, 0.0])
+        self._T_base_to_tag = _make_T(_quat_xyzw_to_R(*list(apriltag_pose[3:7])), list(apriltag_pose[:3]))
+        self._roll_180 = _make_T(_quat_xyzw_to_R(1.0, 0.0, 0.0, 0.0), [0.0, 0.0, 0.0])
         self._T_base_to_tag = self._T_base_to_tag @ self._roll_180
-        self._latest_camera_pose = T_to_xyz_quat_xyzw(self._T_base_to_tag)
+        self._latest_camera_pose = _T_to_xyz_quat_xyzw(self._T_base_to_tag)
         self._apriltag_size_m = apriltag_size_m
         self._apriltag_id = apriltag_id
 
@@ -138,45 +140,6 @@ class RealsenseEnv(_EnvironmentBase):
 
         # Unbatched RGB-D observation spec, numpy-based, matching ROS2 `"rgb-d"` spec
         # in `ROS2EnvWrapper` but without batching.
-        self.obs_spec_rgbd: ObservationSpec[Mapping[str, Any]] = ObservationSpec[Mapping[str, Any]](
-            space=gym.spaces.Dict(
-                {
-                    "rgb": gym.spaces.Box(
-                        low=0,
-                        high=255,
-                        shape=(3, self.height, self.width),
-                        dtype=np.uint8,
-                    ),
-                    "depth": gym.spaces.Box(
-                        low=0,
-                        high=10,
-                        shape=(1, self.height, self.width),
-                        dtype=np.float32,
-                    ),
-                    "intrinsic_k": gym.spaces.Box(
-                        low=0.0,
-                        high=2000.0,
-                        shape=(3, 3),
-                        dtype=np.float32,
-                    ),
-                    "camera_pose": gym.spaces.Box(
-                        low=-10.0,
-                        high=10.0,
-                        shape=(7,),
-                        dtype=np.float32,
-                    ),
-                    "timestamp": gym.spaces.Box(
-                        low=0.0,
-                        high=1e10,
-                        shape=(),
-                        dtype=np.float64,
-                    ),
-                }
-            ),
-            name="rgb-d",
-            is_torch=False,
-            is_batched=False,
-        )
         self.obs_spec_rgbd = (
             RGBD_SPEC_BATCHED.bind(height=self.height, width=self.width).replace(is_torch=False).unbatched()
         )
@@ -184,11 +147,11 @@ class RealsenseEnv(_EnvironmentBase):
         self._closed = False
 
     @property
-    def obs_spec(self) -> ObservationSpec[Mapping[str, Any]]:
+    def obs_spec(self) -> ObservationSpec[RGBD_Obs]:
         """Return the default (unbatched) RGB-D observation specification."""
         return self.obs_spec_rgbd
 
-    def supports_observation_spec(self, obs_spec: ObservationSpec[Mapping[str, Any]]) -> bool:
+    def supports_observation_spec(self, obs_spec: ObservationSpec[RGBD_Obs]) -> bool:
         """Return True if the given observation spec is supported."""
         return obs_spec.name == "rgb-d"
 
@@ -226,19 +189,6 @@ class RealsenseEnv(_EnvironmentBase):
         # (H, W) uint16 depth image (no conversion to meters here).
         depth = np.asanyarray(depth_frame.get_data()).astype(np.uint16, copy=False)
 
-        # camera_params = (self._intrinsic_k[0,0], self._intrinsic_k[1,1], self._intrinsic_k[0,2], self._intrinsic_k[1,2])
-        # tag_size_m = self._apriltag_size_m
-        # gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
-        # detections = self._tag_detector.detect(gray, estimate_tag_pose=True, camera_params=camera_params, tag_size=tag_size_m)
-        # if detections:
-        #     for detection in detections:
-        #         if detection.tag_id == self._apriltag_id:
-        #             T_tag_cam = make_T(detection.pose_R, detection.pose_t.reshape(3))
-        #             T_cam_tag = _inv_T(T_tag_cam)
-        #             T_base_cam = self._T_base_to_tag @ T_cam_tag
-        #             self._latest_camera_pose = T_to_xyz_quat_xyzw(T_base_cam)
-        #             break
-
         # Wall-clock timestamp in seconds.
         timestamp = float(time.time())
 
@@ -252,8 +202,8 @@ class RealsenseEnv(_EnvironmentBase):
 
     def get_observation(
         self,
-        obs_spec: ObservationSpec[Mapping[str, Any]] | None = None,
-    ) -> Mapping[str, Any]:
+        obs_spec: ObservationSpec[RGBD_Obs] | None = None,
+    ) -> RGBD_Obs:
         """Return the latest RGB-D observation, optionally cast to a spec."""
         latest = self._get_latest_rgbd_raw()
 
@@ -283,12 +233,14 @@ class RealsenseEnv(_EnvironmentBase):
             raise ValueError(f"Observation spec {obs_spec} not supported by RealsenseEnv.")
         return obs_spec.cast(obs)
 
+    @override
     def reset(
         self, *, seed: int | None = None, options: dict[str, Any] | None = None
-    ) -> tuple[dict[str, Any], dict[str, Any]]:
+    ) -> tuple[RGBD_Obs, dict[str, Any]]:
         return self.get_observation(), {}
 
-    def step(self, action: Any) -> tuple[dict[str, Any], float, bool, bool, dict[str, Any]]:
+    @override
+    def step(self, action: Any) -> tuple[RGBD_Obs, float, bool, bool, dict[str, Any]]:
         return self.get_observation(), 0.0, False, False, {}
 
     def close(self) -> None:
@@ -317,9 +269,9 @@ class RealsenseCameraLocalizer:
         width: int = 640,
         height: int = 480,
         fps: int = 30,
-        apriltag_pose: np.ndarray = np.array([0.12, 0.005, 0.0, 0.0, 0.0, 0.7071068, 0.7071068]),
-        apriltag_size_m: float = 0.100,
-        apriltag_id: int = 3,
+        apriltag_pose: np.ndarray = DEFAULT_APRILTAG_POSE,
+        apriltag_size_m: float = DEFAULT_APRILTAG_SIZE_M,
+        apriltag_id: int = DEFAULT_APRILTAG_ID,
     ) -> None:
         """Initialize the RealSense pipeline and RGB-D observation space."""
         self.width = width
@@ -333,10 +285,10 @@ class RealsenseCameraLocalizer:
         self._config.enable_stream(rs.stream.depth, self.width, self.height, rs.format.z16, self.fps)
 
         self._tag_detector = AprilTagDetector()
-        self._T_base_to_tag = make_T(quat_xyzw_to_R(*list(apriltag_pose[3:7])), list(apriltag_pose[:3]))
-        self._roll_180 = make_T(quat_xyzw_to_R(1.0, 0.0, 0.0, 0.0), [0.0, 0.0, 0.0])
+        self._T_base_to_tag = _make_T(_quat_xyzw_to_R(*list(apriltag_pose[3:7])), list(apriltag_pose[:3]))
+        self._roll_180 = _make_T(_quat_xyzw_to_R(1.0, 0.0, 0.0, 0.0), [0.0, 0.0, 0.0])
         self._T_base_to_tag = self._T_base_to_tag @ self._roll_180
-        self._latest_camera_pose = T_to_xyz_quat_xyzw(self._T_base_to_tag)
+        self._latest_camera_pose = _T_to_xyz_quat_xyzw(self._T_base_to_tag)
         self._apriltag_size_m = apriltag_size_m
         self._apriltag_id = apriltag_id
 
@@ -562,7 +514,7 @@ class RealsenseCamera:
         self.pipeline.stop()
 
 
-def quat_xyzw_to_R(qx, qy, qz, qw):
+def _quat_xyzw_to_R(qx: float, qy: float, qz: float, qw: float) -> np.ndarray:  # noqa: N802
     # assumes unit quaternion
     x, y, z, w = qx, qy, qz, qw
     return np.array(
@@ -575,29 +527,29 @@ def quat_xyzw_to_R(qx, qy, qz, qw):
     )
 
 
-def make_T(R, t_xyz):
-    T = np.eye(4)
+def _make_T(R: np.ndarray, t_xyz: np.ndarray) -> np.ndarray:  # noqa: N802, N803
+    T = np.eye(4)  # noqa: N806
     T[:3, :3] = R
     T[:3, 3] = np.array(t_xyz, dtype=float)
     return T
 
 
-def _inv_T(T):
+def _inv_T(T: np.ndarray) -> np.ndarray:  # noqa: N802, N803
     """Invert a 4x4 homogeneous transform."""
-    R = T[:3, :3]
+    R = T[:3, :3]  # noqa: N806
     t = T[:3, 3]
-    R_inv = R.T
+    R_inv = R.T  # noqa: N806
     t_inv = -R_inv @ t
-    return make_T(R_inv, t_inv)
+    return _make_T(R_inv, t_inv)
 
 
-def T_to_xyz_quat_xyzw(T):
+def _T_to_xyz_quat_xyzw(T: np.ndarray) -> np.ndarray:  # noqa: N802, N803
     xyz = T[:3, 3]
-    quat = rot_to_quat_xyzw(T[:3, :3])
+    quat = _rot_to_quat_xyzw(T[:3, :3])
     return np.concatenate((xyz, quat), axis=0)
 
 
-def rot_to_quat_xyzw(R):
+def _rot_to_quat_xyzw(R: np.ndarray) -> np.ndarray:  # noqa: N803
     q = np.empty(4)
     trace = np.trace(R)
 

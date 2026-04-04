@@ -1,12 +1,11 @@
-import base64
-import io
-import pathlib
+"""Base class for all Segment Anything (SAM) clients."""
 from abc import ABC, abstractmethod
-from functools import cache
+from collections.abc import Sequence
+from pathlib import Path
 
 import numpy as np
-import requests
-from jaxtyping import Float
+import torch
+from jaxtyping import Float, Int, UInt8
 from PIL import Image
 
 
@@ -15,126 +14,62 @@ class SAMClient(ABC):
 
     def __init__(
         self,
-        model_name: str | None = None,
+        model_path: Path,
         device: str = "cuda",
-        mode: str = "local",
-        remote_url: str | None = None,
     ) -> None:
         """Initialize the base SAM client.
 
         Args:
-            model_name: Name of SAM model
+            model_path: Path to the SAM model
             device: Device to load model on
-            mode: If to run on remote server or locally
-            remote_url: Remote URL to run server
 
         """
         self.device = device
-        self.mode = mode
-        self.remote_url = remote_url
-        self.model_name = model_name
-
-        self.model_path = self._download_sam_checkpoint(model_name)
-        self.sam_model = self._load_sam_model(checkpoint=self.model_path)
+        self.model_path = model_path
 
     def reset(self) -> None:  # noqa: B027
         """Reset the SAM session."""
         pass
 
-    def segment_objects(
+    @abstractmethod
+    def segment_from_bboxes(
         self,
-        rgb_pil: Image.Image,
-        text_prompts: list[str] | str | None = None,
-        bboxes: Float[np.ndarray, "n 4"] | None = None,
-    ) -> Float[np.ndarray, "n 1 h w"]:
-        """Segment detection results from VLM with SAM3.
+        rgb: UInt8[torch.Tensor | np.ndarray, "3 h w"] | Image.Image,
+        bboxes: Sequence[Float[torch.Tensor | np.ndarray, "n 4"]] | None = None,
+    ) -> tuple[Float[torch.Tensor, "n 1 h w"], Float[torch.Tensor, " n"]]:
+        """Segment detection results from bounding boxes with SAM.
 
         Args:
-            rgb_pil: PIL Image to segment.
-            text_prompts: Text prompts to segment.
-            bboxes: Bounding boxes in xywh format (2 dimensional).
-                            in [ymin, xmin, ymax, xmax] format normalized to 0-1.
+            rgb: RGB image to segment. Can be an rgb from an RGBD obs or a PIL image.
+            bboxes: Bounding boxes in [ymin, xmin, ymax, xmax] format in pixel space.
 
         Returns:
-            Segmentation masks of shape (N, 1, H, W).
-
-        """
-        boxes = self._convert_bounding_boxes(rgb_pil, bboxes)
-
-        if self.mode == "local":
-            masks, _ = self._segment_local(rgb_pil, text_prompts, boxes)
-        else:
-            masks, _ = self._segment_remote(rgb_pil, boxes, self.remote_url)
-
-        if masks.ndim == 3:
-            masks = masks[None]
-        return masks
-
-    def _segment_remote(self, image: Image.Image, boxes: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """Run SAM segmentation via remote server."""
-        # assert self.remote_url is not None
-        # buffer = io.BytesIO()
-        # image.save(buffer, format="PNG")
-        # payload = {"image_base64": base64.b64encode(buffer.getvalue()).decode(), "boxes": boxes.tolist()}
-
-        # try:
-        #     response = requests.post(f"{self.remote_url}/segment", json=payload, timeout=30)
-        #     response.raise_for_status()
-        #     result = response.json()
-
-        #     masks = np.array(
-        #         [[np.load(io.BytesIO(base64.b64decode(m))) for m in mask_batch] for mask_batch in result["masks"]]
-        #     )
-        #     return masks, np.array(result["scores"])
-
-        # except Exception as e:
-        #     print(f"[SAM][ERROR] Remote SAM segmentation failed: {e}")
-        #     raise e
-        raise NotImplementedError
-
-    @abstractmethod
-    def _segment_local(self, image: Image.Image, boxes: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """Run SAM segmentation locally.
-
-        Args:
-            image: PIL image to segment
-            boxes: bounding boxes
-
-        Returns:
-            Masks of segmented objects and confidence scores
+            - masks: Segmentation masks of shape (N, 1, H, W).
+            - scores: Confidence scores of the segmentation masks.
 
         """
         raise NotImplementedError
 
     @abstractmethod
-    def _convert_bounding_boxes(self, rgb_pil: Image.Image, detection_results: list[dict]) -> np.ndarray:
-        """Convert bounding boxes into required SAM format.
+    def segment_from_concepts(
+        self,
+        rgb: UInt8[torch.Tensor | np.ndarray, "3 h w"] | Image.Image,
+        concepts: list[str],
+    ) -> tuple[Float[torch.Tensor, "n 1 h w"], Int[torch.Tensor, "n 4"],
+            Float[torch.Tensor, " n"], Int[torch.Tensor, " n"]]:
+        """Segment an image from a list of text concepts.
+
+        This functionality was introduced in SAM3.
 
         Args:
-            rgb_pil: RGB image to segment.
-            detection_results: dictionary list of segmentation results from VLM.
+            rgb: RGB image to segment. Can be an rgb from an RGBD obs or a PIL image.
+            concepts: List of text concepts to segment.
 
         Returns:
-            np.ndarray of bounding boxes
+            - masks: Segmentation masks of shape (N, 1, H, W).
+            - boxes: Boxes of the segmentation masks in [ymin, xmin, ymax, xmax] format in pixel space.
+            - scores: Confidence scores of the segmentation masks.
+            - prompt_indices: Corresponding indices of the prompts that were used to segment the image.
 
         """
-        raise NotImplementedError
-
-    @abstractmethod
-    def _download_sam_checkpoint(self, model_name: str | None = None) -> pathlib.Path:
-        """Download the SAM model.
-
-        Args:
-            model_name: name of the SAM model
-
-        Returns:
-            Path to the BPE file.
-
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    @cache
-    def _load_sam_model(self, checkpoint: str):  # noqa: ANN202
-        """Load and cache the SAM2 image predictor."""
         raise NotImplementedError

@@ -1,15 +1,15 @@
 """Observation specifications for the environment."""
 
 from collections.abc import Mapping
-from typing import TypeAlias
+from typing import Generic, Protocol, TypeAlias, TypeVar
 
 import gymnasium as gym
 import numpy as np
 import torch
-from jaxtyping import Float
+from jaxtyping import Float, UInt8
 
 from skillet.core import ObservationSpec
-from skillet.core.spaces import ActionSpec, BatchedSpaceItem, ParameterizedBox
+from skillet.core.spaces import ActionSpec, ParameterizedBox
 
 N_Obs = Float[torch.Tensor, "n"]
 """Environment observation: torch.Tensor[(n), float]"""
@@ -22,9 +22,25 @@ BxN_Obs = Float[torch.Tensor, "b n"]
 BxM_Action = Float[torch.Tensor, "b m"]
 """A B-batched M-dim vector action: torch.Tensor[(b, m), float]"""
 
-RGBD_Obs = dict[str, BatchedSpaceItem]
+TNPOrTensor = TypeVar("TNPOrTensor", bound=torch.Tensor | np.ndarray)
+"""A numpy or torch tensor generic type."""
+
+class RGBD_Obs(Protocol, Generic[TNPOrTensor]):  # noqa: N801
+    """An RGB-D observation with intrinsics and camera pose."""
+
+    rgb: UInt8[TNPOrTensor, "... 3 h w"]
+    """An RGB CHW image. UInt8[torch.Tensor | np.ndarray, '... 3 h w']"""
+    depth: Float[TNPOrTensor, "... 1 h w"]
+    """A depth HW image. Float[TNPOrTensor, '... 1 h w']"""
+    intrinsic_k: Float[TNPOrTensor, "3 3"]
+    """A 3x3 camera intrinsic matrix. Float[TNPOrTensor, '3 3']"""
+    camera_pose: Float[TNPOrTensor, "7"]
+    """A 7D camera pose. Float[TNPOrTensor, '7']"""
+    timestamp: Float[TNPOrTensor, ""]
+    """A timestamp. Float[TNPOrTensor, '']"""
+
 """Type of RGB-D observation."""
-RGBD_SPEC_BATCHED = ObservationSpec[RGBD_Obs](
+RGBD_SPEC_BATCHED: ObservationSpec[RGBD_Obs] = ObservationSpec[RGBD_Obs[TNPOrTensor]](
     space=gym.spaces.Dict(
         {
             "rgb": ParameterizedBox(low=0, high=255, shape=(3, "height", "width"), dtype=np.uint8),

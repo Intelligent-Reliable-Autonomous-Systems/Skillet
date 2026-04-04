@@ -1,14 +1,16 @@
 """SAM2 segmentation — local predictor and remote HTTP client."""
 
 import pathlib
-from functools import cache
+from collections.abc import Sequence
 
 import numpy as np
-import requests
+import torch
+from jaxtyping import Float, Int, UInt8
 from PIL import Image
-from tqdm import tqdm
+from typing_extensions import override
 
 from skillet.perception.segmentation.sam.sam_base import SAMClient
+from skillet.perception.utils import get_skillet_model_cache_dir
 
 _SAM3_BPE_URL = "https://github.com/openai/CLIP/raw/main/clip/bpe_simple_vocab_16e6.txt.gz"
 
@@ -18,114 +20,178 @@ class SAM3Client(SAMClient):
 
     def __init__(
         self,
-        model_name: str | None = None,
+        model_name: str = "sam3.pt",
         device: str = "cuda",
-        mode: str = "local",
-        remote_url: str | None = None,
     ) -> None:
-        super().__init__(model_name, device, mode, remote_url)
-
-    def _segment_local(self, image: Image.Image, boxes: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """Run SAM3 segmentation locally.
+        """Initialize the SAM3 client.
 
         Args:
-            image: PIL image to segment
-            boxes: bounding boxes
-
-        Returns:
-            Masks of segmented objects and confidence scores
+            model_name: Name of the SAM3 model checkpoint
+            device: Device to load the model on
 
         """
-        inference_state = self.sam_model.set_image(image)
-        for b in boxes:
-            inference_state = self.sam_model.add_geometric_prompt(
-                box=b,
-                label=[True],
-                state=inference_state,
-            )
-        return inference_state["masks"].cpu().numpy(), inference_state["scores"].cpu().numpy()
+        model_path = get_skillet_model_cache_dir() / model_name
+        super().__init__(model_path, device)
+        self.sam_model = self._load_sam_model(checkpoint=model_path)
 
-    def _convert_bounding_boxes(self, rgb_pil: Image.Image, detection_results: list[dict]) -> np.ndarray:
+    @override
+    def segment_from_bboxes(
+        self,
+        rgb: UInt8[torch.Tensor | np.ndarray, "3 h w"] | Image.Image,
+        bboxes: Sequence[Float[torch.Tensor | np.ndarray, "n 4"]] | None = None,
+    ) -> Float[torch.Tensor, "n 1 h w"]:
+        boxes = self._convert_bounding_boxes(rgb, bboxes)
+        masks = []
+        scores = []
+        with torch.autocast("cuda", dtype=torch.bfloat16):
+            if isinstance(rgb, np.ndarray):
+                rgb = torch.as_tensor(rgb, device=self.device)
+
+            state = self.sam_model.set_image(rgb)
+            for idx, box in enumerate(boxes):
+                box_state = self.sam_model.add_geometric_prompt(box, True, state)
+
+                if len(box_state["masks"]) == 0:
+                    masks.append(torch.zeros((0, 1, *rgb.shape[-2:]), dtype=torch.float32, device=self.device))
+                    scores.append(torch.zeros((0,), dtype=torch.float32, device=self.device))
+                    continue
+                best_idx = box_state["scores"].argmax().item()
+                masks.append(box_state["masks"][best_idx].detach())
+                scores.append(box_state["scores"][best_idx].detach().item())
+
+        if len(masks) == 0:
+            return torch.zeros((0, 1, *rgb.shape[-2:]), dtype=torch.float32, device=self.device), \
+                    torch.zeros((0,), dtype=torch.float32, device=self.device)
+
+        masks_t = torch.cat(masks, dim=0).to(dtype=torch.float32, device=self.device)
+        scores_t = torch.tensor(scores, dtype=torch.float32, device=self.device)
+
+        return masks_t, scores_t
+
+    @override
+    def segment_from_concepts(self,
+        rgb: UInt8[torch.Tensor | np.ndarray, "3 h w"] | Image.Image,
+        concepts: Sequence[str]
+    ) -> tuple[Float[torch.Tensor, "n 1 h w"], Int[torch.Tensor, "n 4"],
+            Float[torch.Tensor, " n"], Int[torch.Tensor, " n"]]:
+        boxes = []
+        masks = []
+        scores = []
+        concept_indices = []
+        with torch.autocast("cuda", dtype=torch.bfloat16):
+            if isinstance(rgb, np.ndarray):
+                rgb = torch.as_tensor(rgb, device=self.device)
+
+            state = self.sam_model.set_image(rgb)
+            for idx, concept in enumerate(concepts):
+                concept_state = self.sam_model.set_text_prompt(concept, state)
+                for box_idx in range(len(state["boxes"])):
+                    boxes.append(concept_state["boxes"][box_idx].detach())
+                    masks.append(concept_state["masks"][box_idx].detach())
+                    scores.append(concept_state["scores"][box_idx].detach())
+                    concept_indices.append(idx)
+
+        if len(masks) == 0:
+            return torch.zeros((0, 1, *rgb.shape[-2:]), dtype=torch.float32, device=self.device), \
+                    torch.zeros((0, 4), dtype=torch.float32, device=self.device), \
+                    torch.zeros((0,), dtype=torch.float32, device=self.device), \
+                    torch.zeros((0,), dtype=torch.int64, device=self.device)
+
+        masks_t = torch.cat(masks, dim=0).to(dtype=torch.float32, device=self.device)
+        scores_t = torch.tensor(scores, dtype=torch.float32, device=self.device)
+        concept_indices_t = torch.tensor(concept_indices, dtype=torch.int64, device=self.device)
+
+        # Convert boxes to [ymin, xmin, ymax, xmax] format
+        boxes_t = torch.stack(boxes, dim=0).to(dtype=torch.float32, device=self.device) # in [center_x, center_y, width, height] format
+        minx = boxes_t[:, 0] - boxes_t[:, 2] / 2
+        miny = boxes_t[:, 1] - boxes_t[:, 3] / 2
+        maxx = boxes_t[:, 0] + boxes_t[:, 2] / 2
+        maxy = boxes_t[:, 1] + boxes_t[:, 3] / 2
+        boxes_t = torch.stack([minx, miny, maxx, maxy], dim=1)
+        return masks_t, boxes_t, scores_t, concept_indices_t
+
+    def _convert_bounding_boxes(self,
+        rgb: UInt8[torch.Tensor | np.ndarray, "3 h w"] | Image.Image,
+        bboxes: Sequence[Float[torch.Tensor | np.ndarray, "n 4"]] | None = None
+    ) -> Float[torch.Tensor, "n 4"]:
         """Convert bounding boxes into required SAM3 format.
 
-        Convert VLM bbox format [ymin, xmin, ymax, xmax] (0-1000) to SAM3 [center_x, center_y, width, height] format
+        Convert bbox format [ymin, xmin, ymax, xmax] pixel space to
+        SAM3 [center_x, center_y, width, height] format
         and normalized in [0, 1] range.
 
         Args:
-            rgb_pil: RGB image to segment.
-            detection_results: dictionary list of segmentation results from VLM.
+            rgb: RGB image to segment. Can be an rgb from an RGBD obs or a PIL image.
+            bboxes: Bounding boxes in [ymin, xmin, ymax, xmax] format in pixel space.
 
         Returns:
             np.ndarray of bounding boxes
 
         """
-        return np.array(
+        height, width = rgb.shape[-2:]
+        return torch.tensor(
             [
                 [
-                    ((xmin + xmax) / 2) / 1000.0,  # center_x
-                    ((ymin + ymax) / 2) / 1000.0,  # center_y
-                    (xmax - xmin) / 1000.0,  # width
-                    (ymax - ymin) / 1000.0,  # height
+                    ((xmin + xmax) / 2) / width,  # center_x
+                    ((ymin + ymax) / 2) / height,  # center_y
+                    (xmax - xmin) / width,  # width
+                    (ymax - ymin) / height,  # height
                 ]
-                for detection in detection_results
-                if len(box_2d := detection.get("box_2d", [])) == 4
-                for ymin, xmin, ymax, xmax in [box_2d]
+                for ymin, xmin, ymax, xmax in bboxes
             ],
-            dtype=np.float32,
+            dtype=torch.float32,
         )
 
-    def _download_sam_checkpoint(self, model_name: str | None = None) -> pathlib.Path:
-        """Ensure the SAM3 BPE tokenizer file exists in cache.
-
-        Returns:
-            Path to the BPE file.
-
-        """
-        from skillet.perception.utils import get_skillet_model_cache_dir
-
-        cache_dir = get_skillet_model_cache_dir() / "sam3"
-
-        bpe_path = cache_dir / "bpe_simple_vocab_16e6.txt.gz"
-
-        if bpe_path.exists():
-            return bpe_path
-
-        cache_dir.mkdir(parents=True, exist_ok=True)
-
-        print(f"[INFO][SAM3] Downloading BPE vocab: {bpe_path}")
-
-        response = requests.get(_SAM3_BPE_URL, stream=True)
-        response.raise_for_status()
-
-        total_size = int(response.headers.get("content-length", 0))
-        block_size = 1024
-
-        with (
-            pathlib.Path(bpe_path).open("wb") as f,
-            tqdm(
-                total=total_size,
-                unit="B",
-                unit_scale=True,
-                desc="bpe_vocab",
-            ) as pbar,
-        ):
-            for chunk in response.iter_content(block_size):
-                if chunk:
-                    f.write(chunk)
-                    pbar.update(len(chunk))
-
-        print("[SAM3] BPE vocab ready.")
-        return bpe_path
-
-    @cache
-    def _load_sam_model(self, checkpoint: str | None = None, confidence: float = 0.5):  # noqa: ANN202
+    def _load_sam_model(self, checkpoint: pathlib.Path | None = None, confidence: float = 0.5):  # noqa: ANN202
         """Load and cache the SAM2 image predictor."""
-        import sam3
+        # import sam3
         from sam3.model.sam3_image_processor import Sam3Processor
         from sam3.model_builder import build_sam3_image_model
 
-        sam3_root = pathlib.Path(sam3.__file__).parent
-        bpe_path = f"{sam3_root}/assets/bpe_simple_vocab_16e6.txt.gz"
+        # sam3_root = pathlib.Path(sam3.__file__).parent
+        # bpe_path = f"{sam3_root}/assets/bpe_simple_vocab_16e6.txt.gz"
 
-        print(f"[INFO][SAM] Loading SAM3 with checkpoint={checkpoint}, device={self.device}")
-        return Sam3Processor(build_sam3_image_model(bpe_path=checkpoint), confidence_threshold=confidence)
+        if checkpoint is not None and not checkpoint.exists():
+            # Let sam3 download the checkpoint if it doesn't exist
+            checkpoint = None
+        print(f"[INFO][SAM] Loading SAM3 with checkpoint={checkpoint or 'default'}, device={self.device}")
+        with torch.autocast("cuda", dtype=torch.bfloat16):
+            sam_model = build_sam3_image_model(checkpoint_path=checkpoint)
+        return Sam3Processor(sam_model, confidence_threshold=confidence)
+
+if __name__ == "__main__":
+    import os
+
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    import sam3
+    from PIL import Image
+    from sam3 import build_sam3_image_model
+    from sam3.model.box_ops import box_xywh_to_cxcywh
+    from sam3.model.sam3_image_processor import Sam3Processor
+    from sam3.visualization_utils import draw_box_on_image, normalize_bbox, plot_results
+
+    sam3_root = os.path.join(os.path.dirname(sam3.__file__), "..")
+
+    import torch
+
+    image_path = f"{sam3_root}/assets/images/test_image.jpg"
+    image = Image.open(image_path)
+    width, height = image.size
+    # turn on tfloat32 for Ampere GPUs
+    # https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices
+    # torch.backends.cuda.matmul.allow_tf32 = True
+    # torch.backends.cudnn.allow_tf32 = True
+
+    # use bfloat16 for the entire notebook
+    # torch.autocast("cuda", dtype=torch.bfloat16).__enter__()
+
+    # model = build_sam3_image_model()
+
+    # processor = Sam3Processor(model, confidence_threshold=0.5)
+    # inference_state = processor.set_image(image)
+    image.show()
+    sam3_client = SAM3Client()
+    masks, boxes, scores, concept_indices = sam3_client.segment_from_concepts(image, ["shoe", "a child", "basketball hoop"])
+    print(masks.shape, boxes.shape, scores.shape, concept_indices.shape)

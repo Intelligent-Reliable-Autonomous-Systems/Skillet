@@ -48,7 +48,7 @@ class SegmentationPipeline:
 
         print("[INFO] Starting SAM object segmentation with VLM masks")
         _st = time.perf_counter()
-        masks = self.sam_client.segment_objects(rgb_pil, bboxes)
+        masks = self.sam_client.segment_from_bboxes(rgb_pil, bboxes)
         _dur = time.perf_counter() - _st
         print(f"[INFO] SAM segmentation took {_dur:.2f}s ({len(masks)} masks)")
 

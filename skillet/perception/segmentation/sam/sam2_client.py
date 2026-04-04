@@ -1,18 +1,21 @@
 """SAM2 segmentation — local predictor and remote HTTP client."""
 
 import os
-import pathlib
 from functools import cache
+from pathlib import Path
 
 import numpy as np
 import requests
+import torch
+from jaxtyping import Float, Int, UInt8
 from PIL import Image
 from tqdm import tqdm
+from typing_extensions import override
 
 from skillet.perception.segmentation.sam.sam_base import SAMClient
 from skillet.perception.utils import get_skillet_model_cache_dir
 
-_SAM2_BASE_URL = "https://dl.fbaipublicfiles.com/segment_anything_2/092824"
+_SAM2_BASE_URL = Path("https://dl.fbaipublicfiles.com/segment_anything_2/092824")
 
 
 class SAM2Client(SAMClient):
@@ -22,62 +25,52 @@ class SAM2Client(SAMClient):
         self,
         model_name: str = "sam2.1_hiera_large.pt",
         device: str = "cuda",
-        mode: str = "local",
-        remote_url: str | None = None,
     ) -> None:
-        super().__init__(model_name, device, mode, remote_url)
-
-    def _segment_local(self, image: Image.Image, boxes: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """Run SAM2 segmentation locally.
+        """Initialize the SAM2 client.
 
         Args:
-            image: PIL image to segment
-            boxes: bounding boxes
-
-        Returns:
-            Masks of segmented objects and confidence scores
+            model_name: Name of the SAM2 model checkpoint
+            device: Device to load the model on
 
         """
-        self.sam_model.set_image(image)
+        model_path = self._download_sam_checkpoint(model_name)
+        self.sam_model = self._load_sam_model(checkpoint=model_path)
+        super().__init__(model_path, device)
+
+    @override
+    def segment_from_bboxes(
+        self,
+        rgb: UInt8[torch.Tensor | np.ndarray, "3 h w"] | Image.Image,
+        bboxes: Float[torch.Tensor | np.ndarray, "n 4"] | None = None,
+    ) -> tuple[Float[torch.Tensor, "n 1 h w"], Float[torch.Tensor, " n"]]:
+        # bboxes are already in SAM2 format [x0, y0, x1, y1] (pixels)
+
+        self.sam_model.set_image(rgb)
         masks, scores, _ = self.sam_model.predict(
             point_coords=None,
             point_labels=None,
-            box=boxes,
+            box=bboxes,
             multimask_output=False,
         )
-        return masks, scores
 
-    def _convert_bounding_boxes(self, rgb_pil: Image.Image, detection_results: list[dict]) -> np.ndarray:
-        """Convert bounding boxes into required SAM3 format.
+        masks_t = torch.from_numpy(masks, device=self.device)
+        if masks.dim() == 3:
+            masks_t = masks_t.unsqueeze(0)
+        scores_t = torch.from_numpy(scores, device=self.device)
+        return masks_t, scores_t
 
-        Convert VLM bbox format [ymin, xmin, ymax, xmax] (0-1000) to SAM2 [x0, y0, x1, y1] (pixels)
-
-        Args:
-            rgb_pil: RGB image to segment.
-            detection_results: dictionary list of segmentation results from VLM.
-
-        Returns:
-            np.ndarray of bounding boxes
-
-        """
-        img_height, img_width = rgb_pil.height, rgb_pil.width
-        return np.array(
-            [
-                [
-                    (xmin / 1000.0) * img_width,
-                    (ymin / 1000.0) * img_height,
-                    (xmax / 1000.0) * img_width,
-                    (ymax / 1000.0) * img_height,
-                ]
-                for detection in detection_results
-                if len(box_2d := detection.get("box_2d", [])) == 4
-                for ymin, xmin, ymax, xmax in [box_2d]
-            ]
-        )
+    @override
+    def segment_from_concepts(
+        self,
+        rgb: UInt8[torch.Tensor | np.ndarray, "3 h w"] | Image.Image,
+        concepts: list[str],
+    ) -> tuple[Float[torch.Tensor, "n 1 h w"], Int[torch.Tensor, "n 4"],
+            Float[torch.Tensor, " n"], Int[torch.Tensor, " n"]]:
+        raise NotImplementedError("SAM2 does not support segmenting from concepts.")
 
     def _download_sam_checkpoint(self, model_name: str = "sam2.1_hiera_large.pt") -> str:
         """Download SAM2 checkpoint if it doesn't already exist."""
-        model_url = os.path.join(_SAM2_BASE_URL, model_name)
+        model_url = _SAM2_BASE_URL / model_name
         dest_path = get_skillet_model_cache_dir() / "sam2" / model_name
 
         if dest_path.exists():
@@ -93,7 +86,7 @@ class SAM2Client(SAMClient):
         block_size = 1024  # 1 KB
 
         with (
-            pathlib.Path(dest_path).open("wb") as file,
+            Path(dest_path).open("wb") as file,
             tqdm(total=total_size, unit="iB", unit_scale=True, desc=model_name) as progress_bar,
         ):
             for data in response.iter_content(block_size):
@@ -103,7 +96,6 @@ class SAM2Client(SAMClient):
         print(f"[INFO][SAM] SAM2 checkpoint {model_name} downloaded successfully.")
         return dest_path
 
-    @cache
     def _load_sam_model(self, checkpoint: str):  # noqa: ANN202
         """Load and cache the SAM2 image predictor."""
         from sam2.build_sam import build_sam2
