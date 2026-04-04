@@ -15,7 +15,7 @@ import cv2
 import numpy as np
 import torch
 
-from skillet.perception.localization import ApriltagStateReconstructor, segmented_rgbd_to_point_cloud
+from skillet.perception.reconstruction import ApriltagStateReconstructor, segmented_rgbd_to_point_cloud
 from skillet.perception.realsense import RealsenseEnv
 from skillet.perception.sam3_text.sam3_text import SAM3, SAMConcept
 from skillet.perception.utils import depth_to_colormap_np

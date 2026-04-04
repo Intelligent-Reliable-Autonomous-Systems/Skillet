@@ -32,7 +32,7 @@ class SAM3StreamingClient(SAMClient):
     @override
     def reset(self) -> None:
         resp = self.sam_model.handle_request({"type": "start_session"})
-        print('Session start response:', resp)
+        print("Session start response:", resp)
         self._session_id = resp["session_id"]
         self._frame_idx = 0
 
@@ -50,14 +50,18 @@ class SAM3StreamingClient(SAMClient):
             self.sam_model.handle_request({"type": "add_frame", "session_id": self._session_id, "frame": rgb})
             # Add text prompt only on first frame
             if self._frame_idx == 0:
-                self.sam_model.handle_request({"type": "add_prompt", "session_id": self._session_id, 
-                    "frame_index": 0, "bounding_boxes": boxes})
+                self.sam_model.handle_request(
+                    {"type": "add_prompt", "session_id": self._session_id, "frame_index": 0, "bounding_boxes": boxes}
+                )
             # Run per-frame inference
-            resp = self.sam_model.handle_request({"type": "run_inference", "session_id": self._session_id, "frame_index": self._frame_idx})
+            resp = self.sam_model.handle_request(
+                {"type": "run_inference", "session_id": self._session_id, "frame_index": self._frame_idx}
+            )
 
-    def _convert_bounding_boxes(self,
+    def _convert_bounding_boxes(
+        self,
         rgb: UInt8[torch.Tensor | np.ndarray, "3 h w"] | Image.Image,
-        bboxes: Sequence[Float[torch.Tensor | np.ndarray, "n 4"]] | None = None
+        bboxes: Sequence[Float[torch.Tensor | np.ndarray, "n 4"]] | None = None,
     ) -> Float[torch.Tensor, "n 4"]:
         """Convert bounding boxes into required SAM3 format.
 
@@ -95,8 +99,5 @@ class SAM3StreamingClient(SAMClient):
         print(f"[INFO][SAM] Loading SAM3 with checkpoint={checkpoint}, device={self.device}")
         with torch.autocast("cuda", dtype=torch.bfloat16):
             sam_model = build_sam3_stream_predictor(checkpoint_path=checkpoint, device=self.device)
-        return Sam3Processor(
-            sam_model,
-            confidence_threshold=confidence
-        )
+        return Sam3Processor(sam_model, confidence_threshold=confidence)
         return Sam3Processor(sam_model, confidence_threshold=confidence)

@@ -32,7 +32,6 @@ dependencies = [
     "typing-extensions",
     "pynput",
     "tensordict",
-    "zmq",
     "scipy",
     "unified_planning"
 ]
@@ -45,7 +44,16 @@ perception = [
     "google-genai",
     "sam2",
     "sam3",
+    "opencv-python",
+    "psutil",
+    "h5py",
+]
+ros = [
     "roslibpy",
+    "zmq",
+]
+kortex = [
+    "pin",
 ]
 dev = [
     "ruff",

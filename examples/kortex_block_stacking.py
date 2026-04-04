@@ -3,6 +3,7 @@
 import argparse
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+import sys
 
 import gymnasium as gym
 import torch
@@ -13,7 +14,7 @@ from skillet.core.env import BatchToSingleWrapper
 from skillet.envs.skillet_env import SkilletEnv
 from skillet.logging import SkilletDataLogger
 from skillet.perception import SkilletPerception
-from skillet.perception.localization import ApriltagStateReconstructor
+from skillet.perception.reconstruction import ApriltagStateReconstructor, SAMReconstructor
 from skillet.perception.realsense import RealsenseEnv
 from skillet.policy.dummy import FixedSequencePolicy
 from skillet.policy.ik_ee import PoseAbsIKEEPolicy
@@ -38,10 +39,12 @@ parser = argparse.ArgumentParser(description="Visualize latest RGB-D frame from 
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
 parser.add_argument("--device", type=str, default="cuda", help="Device to use")
 parser.add_argument(
-    "--use_moveit", action=argparse.BooleanOptionalAction, default=True, help="Use MoveIt for motion planning."
+    "--use_moveit", action=argparse.BooleanOptionalAction, default=False, help="Use MoveIt for motion planning."
 )
 parser.add_argument("--use_twist", action=argparse.BooleanOptionalAction, default=False, help="Use cartesian servoing.")
-parser.add_argument("--realsense_env", action="store_true", help="Use RealSense camera environment.")
+parser.add_argument(
+    "--realsense_env", action=argparse.BooleanOptionalAction, default=False, help="Use RealSense camera environment."
+)
 parser.add_argument(
     "--viz", type=str, default="rgb,depth,pointcloud", help="Visualization modes to display, as comma-separated string."
 )
@@ -92,7 +95,8 @@ def main() -> None:
         poll_rate=poll_rate_hz,
         device=args_cli.device,
     )
-    reconstructor = ApriltagStateReconstructor(scene=scene)
+    # reconstructor = ApriltagStateReconstructor(scene=scene)
+    reconstructor = SAMReconstructor()
     perception = SkilletPerception(
         env=env,
         obs_spec=rgbd_spec,
@@ -102,7 +106,14 @@ def main() -> None:
     )
 
     visualizer.run_thread()
-    perception.run_thread()
+    # perception.run_thread()
+    import time
+
+    if args_cli.realsense_env:
+        while True:
+            perception.run()
+            time.sleep(0.2)
+        sys.exit(0)
 
     # Low-level policies
     if args_cli.use_moveit:
@@ -110,7 +121,7 @@ def main() -> None:
     elif args_cli.use_twist:
         arm_policy = TwistPIDPosePolicy(env.batched_env.obs_spec_twist_tcp, env.batched_env.action_spec_twist_tcp)
     else:
-        arm_policy = PoseAbsIKEEPolicy(ikee_spec, low_action_spec)
+        arm_policy = PoseAbsIKEEPolicy(env.obs_spec_ikee, low_action_spec)
     # Skills
     skill_length = 1e9
     place_skill = PlaceSkill(reach_policy=arm_policy, gripper_policy=None, lift_height=0.23, length=skill_length)

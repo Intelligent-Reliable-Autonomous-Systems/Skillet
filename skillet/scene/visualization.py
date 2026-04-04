@@ -97,7 +97,7 @@ class SkilletVisualizer:
         self._target_pos: np.ndarray | None = None
         self._target_size: float = 0.007
         self._tcp_pos: np.ndarray | None = None
-        self._get_tcp_pos = self.get_tcp_pos
+        self._get_tcp_pos = None
 
         self._scene_thread: threading.Thread | None = None
         self._scene_stop_event = threading.Event()

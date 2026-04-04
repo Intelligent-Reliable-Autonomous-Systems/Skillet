@@ -64,8 +64,9 @@ class SAM2Client(SAMClient):
         self,
         rgb: UInt8[torch.Tensor | np.ndarray, "3 h w"] | Image.Image,
         concepts: list[str],
-    ) -> tuple[Float[torch.Tensor, "n 1 h w"], Int[torch.Tensor, "n 4"],
-            Float[torch.Tensor, " n"], Int[torch.Tensor, " n"]]:
+    ) -> tuple[
+        Float[torch.Tensor, "n 1 h w"], Int[torch.Tensor, "n 4"], Float[torch.Tensor, " n"], Int[torch.Tensor, " n"]
+    ]:
         raise NotImplementedError("SAM2 does not support segmenting from concepts.")
 
     def _download_sam_checkpoint(self, model_name: str = "sam2.1_hiera_large.pt") -> str:

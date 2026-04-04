@@ -10,7 +10,7 @@ import h5py
 import numpy as np
 
 from skillet.envs import SkilletEnv
-from skillet.perception.localization.reconstructor_base import ReconstructorBase
+from skillet.perception.reconstruction.reconstructor_base import ReconstructorBase
 from skillet.scene.abstract.abstract_model import AbstractModel
 from pathlib import Path
 

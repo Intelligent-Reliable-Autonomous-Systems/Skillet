@@ -136,9 +136,9 @@ def main(
 ) -> None:
     """Run live SAM benchmark with RGB/depth view and mask overlay."""
     env = RealsenseEnv()
-    print('RealsenseEnv initialized')
+    print("RealsenseEnv initialized")
     sam_model = get_sam_client(model)
-    print('Sam model loaded')
+    print("Sam model loaded")
 
     latencies_ms: deque[float] = deque(maxlen=rolling_window)
     frame_idx = 0
@@ -163,8 +163,13 @@ def main(
                     concepts=concepts,
                 )
             elif mode == "bboxes":
-                bboxes = [[100, 100, 150, 150], [200, 200, 250, 250], [300, 300, 350, 350],
-                            [200, 100, 250, 150], [100, 200, 150, 250]]
+                bboxes = [
+                    [100, 100, 150, 150],
+                    [200, 200, 250, 250],
+                    [300, 300, 350, 350],
+                    [200, 100, 250, 150],
+                    [100, 200, 150, 250],
+                ]
                 masks, scores = sam_model.segment_from_bboxes(rgb, bboxes)
                 _sync_cuda()
                 t1 = time.perf_counter()

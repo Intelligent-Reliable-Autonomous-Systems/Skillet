@@ -19,7 +19,7 @@ from typing_extensions import override
 
 from skillet.core.env import _EnvironmentBase
 from skillet.envs.specs import RGBD_SPEC_BATCHED, RGBD_Obs
-from skillet.perception.localization import CameraLocalizer
+from skillet.perception.reconstruction import CameraLocalizer
 from skillet.scene.utils import depth_to_colormap_np
 
 if TYPE_CHECKING:
@@ -31,6 +31,7 @@ if TYPE_CHECKING:
 DEFAULT_APRILTAG_POSE = np.array([0.12, 0.005, 0.0, 0.0, 0.0, 0.7071068, 0.7071068])
 DEFAULT_APRILTAG_SIZE_M = 0.100
 DEFAULT_APRILTAG_ID = 3
+
 
 @dataclass(frozen=True)
 class Frame:

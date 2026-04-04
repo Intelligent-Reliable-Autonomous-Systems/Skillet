@@ -25,6 +25,7 @@ BxM_Action = Float[torch.Tensor, "b m"]
 TNPOrTensor = TypeVar("TNPOrTensor", bound=torch.Tensor | np.ndarray)
 """A numpy or torch tensor generic type."""
 
+
 class RGBD_Obs(Protocol, Generic[TNPOrTensor]):  # noqa: N801
     """An RGB-D observation with intrinsics and camera pose."""
 
@@ -38,6 +39,7 @@ class RGBD_Obs(Protocol, Generic[TNPOrTensor]):  # noqa: N801
     """A 7D camera pose. Float[TNPOrTensor, '7']"""
     timestamp: Float[TNPOrTensor, ""]
     """A timestamp. Float[TNPOrTensor, '']"""
+
 
 """Type of RGB-D observation."""
 RGBD_SPEC_BATCHED: ObservationSpec[RGBD_Obs] = ObservationSpec[RGBD_Obs[TNPOrTensor]](

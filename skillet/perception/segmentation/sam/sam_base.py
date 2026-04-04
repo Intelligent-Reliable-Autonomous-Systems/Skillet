@@ -1,4 +1,5 @@
 """Base class for all Segment Anything (SAM) clients."""
+
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from pathlib import Path
@@ -55,8 +56,9 @@ class SAMClient(ABC):
         self,
         rgb: UInt8[torch.Tensor | np.ndarray, "3 h w"] | Image.Image,
         concepts: list[str],
-    ) -> tuple[Float[torch.Tensor, "n 1 h w"], Int[torch.Tensor, "n 4"],
-            Float[torch.Tensor, " n"], Int[torch.Tensor, " n"]]:
+    ) -> tuple[
+        Float[torch.Tensor, "n 1 h w"], Int[torch.Tensor, "n 4"], Float[torch.Tensor, " n"], Int[torch.Tensor, " n"]
+    ]:
         """Segment an image from a list of text concepts.
 
         This functionality was introduced in SAM3.

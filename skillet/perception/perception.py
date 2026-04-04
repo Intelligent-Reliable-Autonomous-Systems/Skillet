@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from skillet.core import BatchedEnvironment
     from skillet.core.env import Environment
     from skillet.core.spaces import ObservationSpec
-    from skillet.perception.localization.reconstructor_base import ReconstructorBase
+    from skillet.perception.reconstruction.reconstructor_base import ReconstructorBase
 
 
 class SkilletPerception:

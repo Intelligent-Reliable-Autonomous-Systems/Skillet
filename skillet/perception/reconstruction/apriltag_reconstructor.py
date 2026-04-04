@@ -5,7 +5,7 @@ import pupil_apriltags as apriltags
 import torch
 
 from skillet.core.math import quat_apply
-from skillet.perception.localization.reconstructor_base import ReconstructorBase
+from skillet.perception.reconstruction.reconstructor_base import ReconstructorBase
 from skillet.scene.base import Scene
 from skillet.scene.cube import Cube
 

@@ -6,8 +6,8 @@ Primary Developers: Jeff Jewett (jewettje@oregonstate.edu) and Will Solow (solow
 
 ## Installation
 
-1. Create a conda environment: `conda create -n skills python=3.11`
-2. Activate conda environment: `conda activate skills`
+1. Create a conda environment: `conda create -n skillet python=3.11`
+2. Activate conda environment: `conda activate skillet`
 3. Install requirements via pip: `pip install -e .`
 
 ### IsaacSim/IsaacLab integration

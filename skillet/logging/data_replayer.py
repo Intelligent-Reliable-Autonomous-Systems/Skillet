@@ -445,7 +445,7 @@ class SkilletPlaybackVisualizer:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--log_file", type=str, default="data/test/33163.270634938/exp_0/data.h5")
+    parser.add_argument("--log_file", type=str, default="data/test/20260403_140731/exp_0/data.h5")
     args = parser.parse_args()
 
     viz = SkilletPlaybackVisualizer(log_file=args.log_file)

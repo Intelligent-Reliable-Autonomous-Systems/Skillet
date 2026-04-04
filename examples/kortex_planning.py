@@ -11,7 +11,7 @@ from skillet.core import ActionSpec, ObservationSpec
 from skillet.core.env import BatchToSingleWrapper
 from skillet.envs.skillet_env import SkilletEnv
 from skillet.perception import SkilletPerception
-from skillet.perception.localization import ApriltagStateReconstructor
+from skillet.perception.reconstruction import ApriltagStateReconstructor
 from skillet.perception.realsense import RealsenseEnv
 from skillet.policy.dummy import FixedSequencePolicy
 from skillet.policy.ik_ee import PoseAbsIKEEPolicy

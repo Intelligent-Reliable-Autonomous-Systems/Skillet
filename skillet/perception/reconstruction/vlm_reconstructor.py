@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from scipy.spatial.transform import Rotation as R
 
-from skillet.perception.localization.reconstructor_base import ReconstructorBase
+from skillet.perception.reconstruction.reconstructor_base import ReconstructorBase
 from skillet.scene.base import Scene
 
 
@@ -15,7 +15,7 @@ class VLMReconstructor(ReconstructorBase):
     """Parses observations for localizing objects depth and segmentation masks."""
 
     def __init__(self, scene: Scene | None = None) -> None:
-        """Initialize the AprilTag state estimator.
+        """Initialize the VLM Reconstructor.
 
         Args:
             scene: The scene to update with the estimated poses of the AprilTags.

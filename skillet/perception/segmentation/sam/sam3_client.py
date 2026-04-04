@@ -60,8 +60,9 @@ class SAM3Client(SAMClient):
                 scores.append(box_state["scores"][best_idx].detach().item())
 
         if len(masks) == 0:
-            return torch.zeros((0, 1, *rgb.shape[-2:]), dtype=torch.float32, device=self.device), \
-                    torch.zeros((0,), dtype=torch.float32, device=self.device)
+            return torch.zeros((0, 1, *rgb.shape[-2:]), dtype=torch.float32, device=self.device), torch.zeros(
+                (0,), dtype=torch.float32, device=self.device
+            )
 
         masks_t = torch.cat(masks, dim=0).to(dtype=torch.float32, device=self.device)
         scores_t = torch.tensor(scores, dtype=torch.float32, device=self.device)
@@ -69,11 +70,11 @@ class SAM3Client(SAMClient):
         return masks_t, scores_t
 
     @override
-    def segment_from_concepts(self,
-        rgb: UInt8[torch.Tensor | np.ndarray, "3 h w"] | Image.Image,
-        concepts: Sequence[str]
-    ) -> tuple[Float[torch.Tensor, "n 1 h w"], Int[torch.Tensor, "n 4"],
-            Float[torch.Tensor, " n"], Int[torch.Tensor, " n"]]:
+    def segment_from_concepts(
+        self, rgb: UInt8[torch.Tensor | np.ndarray, "3 h w"] | Image.Image, concepts: Sequence[str]
+    ) -> tuple[
+        Float[torch.Tensor, "n 1 h w"], Int[torch.Tensor, "n 4"], Float[torch.Tensor, " n"], Int[torch.Tensor, " n"]
+    ]:
         boxes = []
         masks = []
         scores = []
@@ -92,17 +93,21 @@ class SAM3Client(SAMClient):
                     concept_indices.append(idx)
 
         if len(masks) == 0:
-            return torch.zeros((0, 1, *rgb.shape[-2:]), dtype=torch.float32, device=self.device), \
-                    torch.zeros((0, 4), dtype=torch.float32, device=self.device), \
-                    torch.zeros((0,), dtype=torch.float32, device=self.device), \
-                    torch.zeros((0,), dtype=torch.int64, device=self.device)
+            return (
+                torch.zeros((0, 1, *rgb.shape[-2:]), dtype=torch.float32, device=self.device),
+                torch.zeros((0, 4), dtype=torch.float32, device=self.device),
+                torch.zeros((0,), dtype=torch.float32, device=self.device),
+                torch.zeros((0,), dtype=torch.int64, device=self.device),
+            )
 
         masks_t = torch.cat(masks, dim=0).to(dtype=torch.float32, device=self.device)
         scores_t = torch.tensor(scores, dtype=torch.float32, device=self.device)
         concept_indices_t = torch.tensor(concept_indices, dtype=torch.int64, device=self.device)
 
         # Convert boxes to [ymin, xmin, ymax, xmax] format
-        boxes_t = torch.stack(boxes, dim=0).to(dtype=torch.float32, device=self.device) # in [center_x, center_y, width, height] format
+        boxes_t = torch.stack(boxes, dim=0).to(
+            dtype=torch.float32, device=self.device
+        )  # in [center_x, center_y, width, height] format
         minx = boxes_t[:, 0] - boxes_t[:, 2] / 2
         miny = boxes_t[:, 1] - boxes_t[:, 3] / 2
         maxx = boxes_t[:, 0] + boxes_t[:, 2] / 2
@@ -110,9 +115,10 @@ class SAM3Client(SAMClient):
         boxes_t = torch.stack([minx, miny, maxx, maxy], dim=1)
         return masks_t, boxes_t, scores_t, concept_indices_t
 
-    def _convert_bounding_boxes(self,
+    def _convert_bounding_boxes(
+        self,
         rgb: UInt8[torch.Tensor | np.ndarray, "3 h w"] | Image.Image,
-        bboxes: Sequence[Float[torch.Tensor | np.ndarray, "n 4"]] | None = None
+        bboxes: Sequence[Float[torch.Tensor | np.ndarray, "n 4"]] | None = None,
     ) -> Float[torch.Tensor, "n 4"]:
         """Convert bounding boxes into required SAM3 format.
 
@@ -159,6 +165,7 @@ class SAM3Client(SAMClient):
             sam_model = build_sam3_image_model(checkpoint_path=checkpoint)
         return Sam3Processor(sam_model, confidence_threshold=confidence)
 
+
 if __name__ == "__main__":
     import os
 
@@ -193,5 +200,7 @@ if __name__ == "__main__":
     # inference_state = processor.set_image(image)
     image.show()
     sam3_client = SAM3Client()
-    masks, boxes, scores, concept_indices = sam3_client.segment_from_concepts(image, ["shoe", "a child", "basketball hoop"])
+    masks, boxes, scores, concept_indices = sam3_client.segment_from_concepts(
+        image, ["shoe", "a child", "basketball hoop"]
+    )
     print(masks.shape, boxes.shape, scores.shape, concept_indices.shape)
