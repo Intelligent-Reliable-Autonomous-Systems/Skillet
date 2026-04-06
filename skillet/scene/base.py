@@ -17,6 +17,7 @@ class SceneObject:
         """
         self._object_id = object_id
         self._type_id = -1
+        self._name = None
 
     @property
     @abstractmethod
@@ -58,6 +59,19 @@ class SceneObject:
         if self.type_id == -1:
             raise AttributeError("The type ID is not initialized.")
         return f"{self.type_name}_{self.type_id}"
+
+    @property
+    def name(self) -> str:
+        """The name of the object assigned from the scene/VLM.
+
+        Usually in the form <attribute>_<type>, i.e. purple_block
+        """
+        return self._name
+
+    @name.setter
+    def name(self, name: str) -> None:
+        """Set the name of the object."""
+        self._name = name
 
     @abstractmethod
     def is_pose_known(self) -> bool:
@@ -110,3 +124,11 @@ class Scene:
             obj_ids.append(obj.object_id)
 
         return {"poses": np.asarray(poses), "ids": np.asarray(obj_ids), "bounds": np.asarray(self.bounds)}
+
+    def __str__(self) -> str:
+        """Print the scene."""
+        print_str = "### Scene ###\n"
+        np.set_printoptions(suppress=True, precision=3)
+        for ob in self.objects:
+            print_str += f"{type(ob)} | ID: {ob.object_id} | Pose: {ob.pose.cpu().numpy()}\n"
+        return print_str

@@ -2,7 +2,41 @@ from typing import Any
 
 import numpy as np
 from scipy.linalg import svd
+from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
+
+
+def assign_objects_to_id(
+    positions: np.ndarray, detections: np.ndarray, ids: np.ndarray | None = None, max_distance: float = 50.0
+) -> tuple[np.ndarray, np.ndarray]:
+    """Match detections to known objects (cubes).
+
+    Occluded cubes (no confident match) retain their last known position and are flagged in self.occluded.
+
+    Args:
+        positions: np.ndarray of shape (N, 3) of current cube positions
+        detections: np.ndarray of shape (N, 3) of new cube positions
+        ids: np.ndarray of shape (N,) of the ids of the cubes in the scene
+        max_distance: the maximum distance for a cube to be considered not visible
+
+    Returns:
+        tuple of: np.ndarray of positions and cube ids of those positions
+
+    """
+    # Create cost matrix
+    diff = positions[:, None, :] - detections[None, :, :]  # (K, D, 3)
+    cost = np.linalg.norm(diff, axis=-1)  # (K, D)
+
+    # Assignment using Hungarian Algorithm
+    cube_idx, det_idx = linear_sum_assignment(cost)
+    valid_cube_idx = []
+    valid_det_idx = []
+    for k, d in zip(cube_idx, det_idx, strict=True):
+        if cost[k, d] <= max_distance:
+            valid_cube_idx.append(k)
+            valid_det_idx.append(d)
+
+    return np.asarray(valid_cube_idx), np.asarray(valid_det_idx)
 
 
 def find_cube_centers(
@@ -16,7 +50,7 @@ def find_cube_centers(
 
     Args:
         masks: Binary masks for each cube, shape (N, H, W) or list of (H, W) arrays
-        depth: Depth map, shape (H, W) in meters or scaled units
+        depth: Depth map, shape (1, H, W) in meters or scaled units
         camera_matrix: 3x3 camera intrinsics matrix
         depth_scale: Scale factor for depth values (if depth is in mm, use 1/1000)
         cube_size: Expected cube size in meters (used for validation)
@@ -301,7 +335,7 @@ def validate_cube_detection(
 
 def transform_cube_centers_to_world(
     cube_centers_camera: list[np.ndarray], camera_pos: np.ndarray, camera_quat: np.ndarray
-) -> list[np.ndarray]:
+) -> np.ndarray:
     """Transform cube centers from the camera frame to the world frame.
 
     Args:
@@ -310,7 +344,7 @@ def transform_cube_centers_to_world(
         camera_quat:     Camera orientation as quaternion (w, x, y, z), shape (4,).
 
     Returns:
-        List of 3D points (x, y, z) in the world frame.
+        np.ndarray of shape (N,3) of 3D points (x, y, z) in the world frame.
 
     """
     R = quaternion_to_rotation_matrix(camera_quat)
@@ -320,7 +354,7 @@ def transform_cube_centers_to_world(
         p_world = R @ np.asarray(p_cam) + camera_pos
         cube_centers_world.append(p_world)
 
-    return cube_centers_world
+    return np.asarray(cube_centers_world)
 
 
 def quaternion_to_rotation_matrix(wxyz: np.ndarray) -> np.ndarray:

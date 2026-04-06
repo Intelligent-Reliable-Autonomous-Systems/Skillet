@@ -14,7 +14,8 @@ from skillet.core.env import BatchToSingleWrapper
 from skillet.envs.skillet_env import SkilletEnv
 from skillet.logging import SkilletDataLogger
 from skillet.perception import SkilletPerception
-from skillet.perception.reconstruction import ApriltagStateReconstructor, SAMReconstructor
+from skillet.perception.reconstruction import ApriltagStateReconstructor
+from skillet.perception.reconstruction.sam_reconstructor import SAMReconstructor
 from skillet.perception.realsense import RealsenseEnv
 from skillet.policy.dummy import FixedSequencePolicy
 from skillet.policy.ik_ee import PoseAbsIKEEPolicy
@@ -63,9 +64,12 @@ TABLE_DY = 1.2446
 
 def main() -> None:
     """Visualize RGB + depth color map from _get_latest_rgbd()."""
-    cube_0 = Cube(size=0.041, face_apriltags=[{"face": "top", "size": 0.036, "id": 1}])
-    cube_1 = Cube(size=0.041, face_apriltags=[{"face": "front", "size": 0.036, "id": 2}])
-    cube_2 = Cube(size=0.041, face_apriltags=[{"face": "front", "size": 0.036, "id": 5}])
+    # cube_0 = Cube(size=0.041, face_apriltags=[{"face": "top", "size": 0.036, "id": 1}])
+    # cube_1 = Cube(size=0.041, face_apriltags=[{"face": "front", "size": 0.036, "id": 2}])
+    # cube_2 = Cube(size=0.041, face_apriltags=[{"face": "front", "size": 0.036, "id": 5}])
+    cube_0 = Cube(size=0.041, init_pose=torch.as_tensor([0.26, 0.041, 0.016, 1, 0, 0, 0], device="cuda"))
+    cube_1 = Cube(size=0.041, init_pose=torch.as_tensor([0.44, 0.041, 0.016, 1, 0, 0, 0], device="cuda"))
+    cube_2 = Cube(size=0.041, init_pose=torch.as_tensor([0.35, 0.041, 0.016, 1, 0, 0, 0], device="cuda"))
 
     world_bounds = (TABLE_X0, TABLE_Y0, 0, TABLE_X0 + TABLE_DX, TABLE_Y0 + TABLE_DY, 1)
     scene = Scene(objects=[cube_0, cube_1, cube_2], closed_set=True, bounds=world_bounds)
@@ -96,17 +100,17 @@ def main() -> None:
         device=args_cli.device,
     )
     # reconstructor = ApriltagStateReconstructor(scene=scene)
-    reconstructor = SAMReconstructor()
+
     perception = SkilletPerception(
         env=env,
+        scene=scene,
         obs_spec=rgbd_spec,
-        reconstructor=reconstructor,
+        reconstructor=None,  # reconstructor = SAMReconstructor()
         poll_rate=poll_rate_hz,
         device=args_cli.device,
     )
 
     visualizer.run_thread()
-    # perception.run_thread()
     import time
 
     if args_cli.realsense_env:
@@ -114,6 +118,8 @@ def main() -> None:
             perception.run()
             time.sleep(0.2)
         sys.exit(0)
+
+    perception.run_thread()
 
     # Low-level policies
     if args_cli.use_moveit:
@@ -168,7 +174,7 @@ def main() -> None:
 
     # simulate environment
     abs_model = None  # AbstractModel(Path("skillet/scene/abstract/assets/3-block-table-restack.problem.pddl"))
-    logger = SkilletDataLogger("data/test/", env, reconstructor, abs_model)
+    logger = None  # SkilletDataLogger("data/test/", env, reconstructor, abs_model)
 
     if not args_cli.realsense_env:
         input("Press Enter to start the skill execution...")

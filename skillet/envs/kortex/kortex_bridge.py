@@ -108,4 +108,5 @@ def check_for_end_or_abort(e):
 
 def setup_kortex(ip: str = "192.168.1.10", username: str = "admin", password: str = "admin") -> BaseClient:
     """Set up the kortex base client."""
+    print("[INFO] Connecting to Kortex. Ensure that device is plugged in.")
     return DeviceConnection.create_tcp_connection(ip=ip, username=username, password=password)

@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from skillet.perception.reconstruction.sam_reconstructor import SAMReconstructor
 from skillet.scene.utils import segmented_rgbd_to_point_cloud
 
 if TYPE_CHECKING:
@@ -22,6 +23,7 @@ if TYPE_CHECKING:
     from skillet.core.env import Environment
     from skillet.core.spaces import ObservationSpec
     from skillet.perception.reconstruction.reconstructor_base import ReconstructorBase
+    from skillet.scene.base import Scene
 
 
 class SkilletPerception:
@@ -33,6 +35,7 @@ class SkilletPerception:
     def __init__(
         self,
         env: Environment | BatchedEnvironment,
+        scene: Scene,
         obs_spec: ObservationSpec,
         reconstructor: ReconstructorBase,
         poll_rate: float = 8,
@@ -41,6 +44,7 @@ class SkilletPerception:
     ) -> None:
         """Initialize the perception pipeline."""
         self.env = env
+        self._scene = scene
         if isinstance(device, str):
             device = torch.device(device)
         self.device = device or obs_spec.device
@@ -148,6 +152,9 @@ class SkilletPerception:
 
     def run(self) -> None:
         """Run the SkilletPerception pipeline."""
+        if self._reconstructor is None:
+            print("[INFO][PERCEPTION] Loading SAM reconstructor")
+            self._reconstructor = SAMReconstructor(scene=self._scene)
         poll_period_s = 1.0 / self.poll_rate
         next_poll_t = time.perf_counter()
 

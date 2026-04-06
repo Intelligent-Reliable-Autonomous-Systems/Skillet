@@ -6,19 +6,19 @@ Reconstruct the scene from SAM bounding boxes.
 import time
 from typing import Any, Literal
 
-import numpy as np
-import torch
-
 from skillet.perception.realsense import RealsenseEnv
 from skillet.perception.reconstruction.reconstructor_base import ReconstructorBase
 from skillet.perception.reconstruction.utils import (
+    assign_objects_to_id,
     filter_cube_centers,
     find_cube_centers,
     transform_cube_centers_to_world,
 )
 from skillet.perception.segmentation.sam import get_sam_client
+from skillet.perception.segmentation.sam.sam_display import show_masks
 from skillet.scene.base import Scene
 from skillet.scene.cube import Cube
+from skillet.scene.utils import assign_poses_to_objects, get_sorted_object_poses
 
 
 class SAMReconstructor(ReconstructorBase):
@@ -35,12 +35,14 @@ class SAMReconstructor(ReconstructorBase):
         model: Literal["sam2", "sam3", "sam3_streaming"] = "sam3",
         mode: Literal["text", "bboxes"] = "text",
         device: str = "cuda",
+        display: bool = False,
     ) -> None:
         super().__init__(scene)
         self._model = model
         self._mode = mode
         self._sam_model = get_sam_client(model)
         self._device = device
+        self._display = display
 
     def update_state(self, obs: dict[str, Any], update: bool = True) -> None:
         """Update the state of the scene by finding cube centers.
@@ -55,10 +57,10 @@ class SAMReconstructor(ReconstructorBase):
         rgb = obs["rgb"]
         depth = obs["depth"]
         intrinsic_k = obs["intrinsic_k"]
-        camera_pose = obs["camera_pose"]
+        camera_pose = obs["camera_pose"].cpu().numpy()
 
         if self._mode == "text":
-            concepts = ["block", "robot arm"]
+            concepts = ["block"]
             # TODO: sometimes SAM segments the tops of the cubes as well
             # This sometimes gets the apriltag as well
             # Want to filter this based on cubes being close to each other
@@ -78,22 +80,18 @@ class SAMReconstructor(ReconstructorBase):
             raise ValueError(f"Invalid mode: {self._mode}")
 
         # Might want to filter
-        dc = find_cube_centers(masks.cpu().numpy(), depth, intrinsic_k, cube_size=0.036)
+        dc = find_cube_centers(masks.cpu().numpy(), depth.cpu().numpy(), intrinsic_k.cpu().numpy(), cube_size=0.041)
         centers = transform_cube_centers_to_world(
             dc["centers"], camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7]
         )
-        centers = filter_cube_centers(centers, max_cubes=4)  # TODO: change according to scene
-        for i, c in enumerate(centers):
-            if c[0] < 0.1:  # This is the large apriltag
-                continue
-            self._scene.objects[i].pose = torch.as_tensor(c, device=self._device)
 
-        np.set_printoptions(suppress=True, precision=3)
-        for c in centers:
-            if c[0] < 0.1:  # This is the large apriltag
-                continue
-            print(c)
-        print()
+        poses, ids = get_sorted_object_poses(self._scene, Cube)
+        cube_idx, det_idx = assign_objects_to_id(poses[:, 0:3], centers)
+
+        assign_poses_to_objects(self._scene, Cube, centers, ids, cube_idx, det_idx)
+
+        if self._display:  # TODO: This might be blocking..
+            show_masks(rgb.cpu().numpy(), masks.cpu().numpy(), concept_indices=concept_indices, concepts=concepts)
 
     def get_observation(self) -> Scene:
         """Return the scene."""

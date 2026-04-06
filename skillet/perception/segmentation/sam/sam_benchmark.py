@@ -155,6 +155,7 @@ def main(
                 masks, boxes, scores, concept_indices = sam_model.segment_from_concepts(rgb, concepts)
                 _sync_cuda()
                 t1 = time.perf_counter()
+                print(masks.shape)
                 vis_rgb = overlay_masks_bgr(
                     cv2.cvtColor(rgb.transpose((1, 2, 0)), cv2.COLOR_RGB2BGR),
                     masks,
@@ -211,9 +212,9 @@ def main(
             depth = depth_to_colormap_np(obs["depth"][0])
             combined = np.concatenate([vis_rgb, depth], axis=1)
             print(f"Latency: {latency_ms:.2f} ms, FPS: {1000.0 / latency_ms:.2f}, GPU mem: {_gpu_mem_mb():.0f} MB")
-            # cv2.imshow("SAM benchmark (segmentation | depth) — q to quit", combined)
-            # if cv2.waitKey(1) & 0xFF == ord("q"):
-            #     break
+            cv2.imshow("SAM benchmark (segmentation | depth) — q to quit", combined)
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                break
     finally:
         env.close()
         cv2.destroyAllWindows()

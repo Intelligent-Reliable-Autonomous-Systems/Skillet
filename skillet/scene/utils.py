@@ -5,7 +5,7 @@ import torch
 from jaxtyping import Int
 
 from skillet.core.math import transform_points, unproject_depth
-from skillet.scene.base import SceneObject
+from skillet.scene.base import SceneObject, Scene
 from skillet.scene.cube import Cube
 
 _PALETTE_BGR: list[tuple[int, int, int]] = [
@@ -438,3 +438,61 @@ def create_camera_model(
     )
 
     return [face, body, marker]
+
+
+def get_sorted_object_poses(scene: Scene, obj: SceneObject) -> np.ndarray:
+    """Return a list of scene objects of a specific type sorted by their ID.
+
+    Args:
+        scene: The scene to get poses from
+        obj: Object instance to grab all instances of
+
+    Returns:
+        np.ndarray of shape (N, 7) of the object poses
+
+    """
+    id_list = []
+    pose_list = []
+    for ob in scene.objects:
+        if not isinstance(ob, obj):
+            continue
+        id_list.append(ob.object_id)
+        pose_list.append(ob.pose.cpu().numpy())
+
+    sorted_ids = np.argsort(id_list)
+
+    return np.asarray(pose_list)[sorted_ids], sorted_ids
+
+
+def assign_poses_to_objects(
+    scene: Scene,
+    obj: SceneObject,
+    poses: np.ndarray,
+    ids: np.ndarray,
+    obj_idx: np.ndarray,
+    det_idx: np.ndarray,
+    device: str = "cuda",
+) -> None:
+    """Return a list of scene objects of a specific type sorted by their ID.
+
+    Args:
+        scene: The scene to get poses from
+        obj: Object instance to grab all instances of
+        poses: np.ndarray of poses for SceneObjects
+        ids: np.ndarray of sorted object ids
+        obj_idx: Sorted indexes of object scene ids according to poses
+        det_idx: The detection index of which pose to assign to which object
+        device: CUDA device to create tensor on
+
+    """
+    for ob in scene.objects:
+        if not isinstance(ob, obj):
+            continue
+        idx = np.where(ob.object_id == ids[obj_idx])[0]
+        if idx.size > 0:
+            idx = idx[0]
+        else:
+            # TODO handle occlusion more robustly. The object closest to the camera
+            # Should be the one that is not occluded
+            continue
+        ob.pose = torch.as_tensor(np.concatenate((poses[det_idx[idx]], [1, 0, 0, 0])), device=device)
