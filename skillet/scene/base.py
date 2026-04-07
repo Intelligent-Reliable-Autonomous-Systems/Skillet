@@ -8,7 +8,7 @@ import numpy as np
 class SceneObject:
     """A scene object is a 3D object in a scene."""
 
-    def __init__(self, object_id: int) -> None:
+    def __init__(self, object_id: int | None = None) -> None:
         """Initialize the scene object.
 
         Args:
@@ -87,6 +87,7 @@ class Scene:
         objects: list[SceneObject] | None = None,
         closed_set: bool = True,
         bounds: tuple[float, float, float, float, float, float] | None = None,
+        contains_objects: bool = False,
     ) -> None:
         """Initialize the scene.
 
@@ -106,6 +107,16 @@ class Scene:
             self._type_id_autoincrement[object.type_name] += 1
         self.closed_set = closed_set
         self.bounds = bounds
+        self.contains_objects = contains_objects
+
+    def add_objects(self, objects: list[SceneObject] | None = None) -> None:
+        """Add objects to the scene."""
+        [self.objects.append(o) for o in objects]
+        for object in self.objects:
+            object._object_id = self._object_id_autoincrement
+            self._object_id_autoincrement += 1
+            object._type_id = self._type_id_autoincrement[object.type_name]
+            self._type_id_autoincrement[object.type_name] += 1
 
     def reset(self, task: str) -> None:
         """Reset the scene."""
@@ -127,8 +138,8 @@ class Scene:
 
     def __str__(self) -> str:
         """Print the scene."""
-        print_str = "### Scene ###\n"
+        print_str = ""
         np.set_printoptions(suppress=True, precision=3)
         for ob in self.objects:
-            print_str += f"{type(ob)} | ID: {ob.object_id} | Pose: {ob.pose.cpu().numpy()}\n"
+            print_str += f"{ob.name} | ID: {ob.object_id} | Pose: {ob.pose.cpu().numpy()}\n"
         return print_str

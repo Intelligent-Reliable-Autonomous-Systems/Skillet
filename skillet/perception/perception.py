@@ -9,10 +9,11 @@ import threading
 import time
 from collections.abc import Mapping
 from dataclasses import replace
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import torch
 
+from skillet.perception.reconstruction.apriltag_reconstructor import ApriltagStateReconstructor
 from skillet.perception.reconstruction.sam_reconstructor import SAMReconstructor
 from skillet.scene.utils import segmented_rgbd_to_point_cloud
 
@@ -22,7 +23,6 @@ if TYPE_CHECKING:
     from skillet.core import BatchedEnvironment
     from skillet.core.env import Environment
     from skillet.core.spaces import ObservationSpec
-    from skillet.perception.reconstruction.reconstructor_base import ReconstructorBase
     from skillet.scene.base import Scene
 
 
@@ -37,7 +37,7 @@ class SkilletPerception:
         env: Environment | BatchedEnvironment,
         scene: Scene,
         obs_spec: ObservationSpec,
-        reconstructor: ReconstructorBase,
+        reconstructor: Literal["sam", "april"] = "april",
         poll_rate: float = 8,
         device: str | torch.device | None = None,
         max_depth_m: float | None = None,
@@ -53,7 +53,8 @@ class SkilletPerception:
         self.max_depth_m = max_depth_m
 
         # Scene reconstructor
-        self._reconstructor = reconstructor
+        self._reconstructor_type = reconstructor
+        self._reconstructor = None
 
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
@@ -64,6 +65,10 @@ class SkilletPerception:
         self.latest_segment_indices: torch.Tensor | None = None
 
         self._last_depth_debug_t = 0.0
+
+    @property
+    def scene(self) -> Scene:
+        return self._scene or (self._reconstructor.scene if self._reconstructor is not None else None)
 
     @staticmethod
     def _maybe_unbatch(obs: Mapping[str, Any]) -> dict[str, torch.Tensor]:
@@ -153,8 +158,15 @@ class SkilletPerception:
     def run(self) -> None:
         """Run the SkilletPerception pipeline."""
         if self._reconstructor is None:
-            print("[INFO][PERCEPTION] Loading SAM reconstructor")
-            self._reconstructor = SAMReconstructor(scene=self._scene)
+            if self._reconstructor_type == "sam":
+                print("[INFO][PERCEPTION] Loading SAM reconstructor")
+                self._reconstructor = SAMReconstructor(scene=self._scene)
+            elif self._reconstructor_type == "april":
+                print("[INFO][PERCEPTION] Loading AprilTag reconstructor")
+                assert (
+                    self._scene is not None
+                ), "[ERROR] Perception Scene cannot be None when using AprilTagStateReconstructor."
+                ApriltagStateReconstructor(self._scene)
         poll_period_s = 1.0 / self.poll_rate
         next_poll_t = time.perf_counter()
 

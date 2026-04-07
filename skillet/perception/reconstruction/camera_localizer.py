@@ -41,6 +41,7 @@ class CameraLocalizer:
             The camera pose in the world frame.
 
         """
+        # TODO: Make this rolling or something so that we filter out noise
         camera_params = (intrinsic_k[0, 0], intrinsic_k[1, 1], intrinsic_k[0, 2], intrinsic_k[1, 2])
         tag_size_m = self._apriltag_size_m
         gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)

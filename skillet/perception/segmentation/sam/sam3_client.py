@@ -2,11 +2,14 @@
 
 import pathlib
 from collections.abc import Sequence
-
+import os
 import numpy as np
 import torch
 from jaxtyping import Float, Int, UInt8
 from PIL import Image
+import sam3
+from sam3.model.sam3_image_processor import Sam3Processor
+from sam3.model_builder import build_sam3_image_model
 from typing_extensions import override
 
 from skillet.perception.segmentation.sam.sam_base import SAMClient
@@ -47,8 +50,8 @@ class SAM3Client(SAMClient):
             if isinstance(rgb, np.ndarray):
                 rgb = torch.as_tensor(rgb, device=self.device)
 
-            state = self.sam_model.set_image(rgb)
             for idx, box in enumerate(boxes):
+                state = self.sam_model.set_image(rgb)
                 box_state = self.sam_model.add_geometric_prompt(box, True, state)
 
                 if len(box_state["masks"]) == 0:
@@ -150,12 +153,6 @@ class SAM3Client(SAMClient):
 
     def _load_sam_model(self, checkpoint: pathlib.Path | None = None, confidence: float = 0.5):  # noqa: ANN202
         """Load and cache the SAM2 image predictor."""
-        # import sam3
-        from sam3.model.sam3_image_processor import Sam3Processor
-        from sam3.model_builder import build_sam3_image_model
-
-        # sam3_root = pathlib.Path(sam3.__file__).parent
-        # bpe_path = f"{sam3_root}/assets/bpe_simple_vocab_16e6.txt.gz"
 
         if checkpoint is not None and not checkpoint.exists():
             # Let sam3 download the checkpoint if it doesn't exist
@@ -167,18 +164,6 @@ class SAM3Client(SAMClient):
 
 
 if __name__ == "__main__":
-    import os
-
-    import matplotlib.pyplot as plt
-    import numpy as np
-
-    import sam3
-    from PIL import Image
-    from sam3 import build_sam3_image_model
-    from sam3.model.box_ops import box_xywh_to_cxcywh
-    from sam3.model.sam3_image_processor import Sam3Processor
-    from sam3.visualization_utils import draw_box_on_image, normalize_bbox, plot_results
-
     sam3_root = os.path.join(os.path.dirname(sam3.__file__), "..")
 
     import torch
@@ -186,18 +171,7 @@ if __name__ == "__main__":
     image_path = f"{sam3_root}/assets/images/test_image.jpg"
     image = Image.open(image_path)
     width, height = image.size
-    # turn on tfloat32 for Ampere GPUs
-    # https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices
-    # torch.backends.cuda.matmul.allow_tf32 = True
-    # torch.backends.cudnn.allow_tf32 = True
 
-    # use bfloat16 for the entire notebook
-    # torch.autocast("cuda", dtype=torch.bfloat16).__enter__()
-
-    # model = build_sam3_image_model()
-
-    # processor = Sam3Processor(model, confidence_threshold=0.5)
-    # inference_state = processor.set_image(image)
     image.show()
     sam3_client = SAM3Client()
     masks, boxes, scores, concept_indices = sam3_client.segment_from_concepts(

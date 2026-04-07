@@ -47,8 +47,6 @@ class VLMReconstructor(ReconstructorBase):
         self._goal_atoms = seg_out["grounded_goal_atoms"]
         self._scene_atoms = seg_out["grounded_scene_atoms"]
 
-        self.compute_cube_centers(obs["depth"], self._masks)
-
         return seg_out
 
     def get_observation(self) -> Scene:

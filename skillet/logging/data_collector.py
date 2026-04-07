@@ -10,16 +10,16 @@ import h5py
 import numpy as np
 
 from skillet.envs import SkilletEnv
-from skillet.perception.reconstruction.reconstructor_base import ReconstructorBase
+from skillet.perception.perception import SkilletPerception
 from skillet.scene.abstract.abstract_model import AbstractModel
 from pathlib import Path
 
 
 class SkilletDataLogger:
-    def __init__(self, log_dir: str, env: SkilletEnv, reconstructor: ReconstructorBase, abs_model: AbstractModel):
+    def __init__(self, log_dir: str, env: SkilletEnv, perception: SkilletPerception, abs_model: AbstractModel):
         self._log_dir = log_dir
         self._env = env
-        self._reconstructor = reconstructor
+        self._perception = perception
         self._abs_model = abs_model
 
         self._num_points = 0
@@ -55,7 +55,7 @@ class SkilletDataLogger:
         time_stamp = time.perf_counter()
         twist_obs = self._env.get_observation(self._env.unwrapped.obs_spec_twist_tcp)
         rgbd_obs = self._env.get_observation(self._env.unwrapped.obs_spec_rgbd)
-        scene_obs: Scene = self._reconstructor.get_observation()
+        scene_obs: Scene = self._perception.scene
         scene_dict = scene_obs.serialize_scene_poses()
         # abstract_state = self._abs_model.get_abstract_state()
         if self._time_stamps is None:

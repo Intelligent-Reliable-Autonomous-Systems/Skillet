@@ -1,9 +1,9 @@
 """Run a tabletop block stacking task."""
 
 import argparse
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-import sys
 
 import gymnasium as gym
 import torch
@@ -14,9 +14,9 @@ from skillet.core.env import BatchToSingleWrapper
 from skillet.envs.skillet_env import SkilletEnv
 from skillet.logging import SkilletDataLogger
 from skillet.perception import SkilletPerception
+from skillet.perception.realsense import RealsenseEnv
 from skillet.perception.reconstruction import ApriltagStateReconstructor
 from skillet.perception.reconstruction.sam_reconstructor import SAMReconstructor
-from skillet.perception.realsense import RealsenseEnv
 from skillet.policy.dummy import FixedSequencePolicy
 from skillet.policy.ik_ee import PoseAbsIKEEPolicy
 from skillet.policy.moveit import MoveItTcpQuatPolicy
@@ -67,12 +67,12 @@ def main() -> None:
     # cube_0 = Cube(size=0.041, face_apriltags=[{"face": "top", "size": 0.036, "id": 1}])
     # cube_1 = Cube(size=0.041, face_apriltags=[{"face": "front", "size": 0.036, "id": 2}])
     # cube_2 = Cube(size=0.041, face_apriltags=[{"face": "front", "size": 0.036, "id": 5}])
-    cube_0 = Cube(size=0.041, init_pose=torch.as_tensor([0.26, 0.041, 0.016, 1, 0, 0, 0], device="cuda"))
-    cube_1 = Cube(size=0.041, init_pose=torch.as_tensor([0.44, 0.041, 0.016, 1, 0, 0, 0], device="cuda"))
-    cube_2 = Cube(size=0.041, init_pose=torch.as_tensor([0.35, 0.041, 0.016, 1, 0, 0, 0], device="cuda"))
+    # cube_0 = Cube(size=0.041, init_pose=torch.as_tensor([0.26, 0.041, 0.016, 1, 0, 0, 0], device="cuda"))
+    # cube_1 = Cube(size=0.041, init_pose=torch.as_tensor([0.44, 0.041, 0.016, 1, 0, 0, 0], device="cuda"))
+    # cube_2 = Cube(size=0.041, init_pose=torch.as_tensor([0.35, 0.041, 0.016, 1, 0, 0, 0], device="cuda"))
 
     world_bounds = (TABLE_X0, TABLE_Y0, 0, TABLE_X0 + TABLE_DX, TABLE_Y0 + TABLE_DY, 1)
-    scene = Scene(objects=[cube_0, cube_1, cube_2], closed_set=True, bounds=world_bounds)
+    scene = Scene(objects=[], closed_set=False, bounds=world_bounds, contains_objects=False)
 
     if args_cli.realsense_env:
         env = RealsenseEnv(apriltag_size_m=0.1, apriltag_id=3)
@@ -92,6 +92,16 @@ def main() -> None:
     rgbd_spec: ObservationSpec[RGBD_Obs] = env.coerce_obs_spec("rgb-d")
 
     poll_rate_hz = 1.0 / max(args_cli.period_s, 1e-6)
+    perception = SkilletPerception(
+        env=env,
+        scene=scene,
+        obs_spec=rgbd_spec,
+        reconstructor="sam",
+        poll_rate=poll_rate_hz,
+        device=args_cli.device,
+    )
+    perception.run_thread()
+
     visualizer = SkilletVisualizer(
         env=env,
         obs_spec=rgbd_spec,
@@ -99,27 +109,15 @@ def main() -> None:
         poll_rate=poll_rate_hz,
         device=args_cli.device,
     )
-    # reconstructor = ApriltagStateReconstructor(scene=scene)
-
-    perception = SkilletPerception(
-        env=env,
-        scene=scene,
-        obs_spec=rgbd_spec,
-        reconstructor=None,  # reconstructor = SAMReconstructor()
-        poll_rate=poll_rate_hz,
-        device=args_cli.device,
-    )
 
     visualizer.run_thread()
+
     import time
 
     if args_cli.realsense_env:
         while True:
             perception.run()
             time.sleep(0.2)
-        sys.exit(0)
-
-    perception.run_thread()
 
     # Low-level policies
     if args_cli.use_moveit:
@@ -135,9 +133,9 @@ def main() -> None:
     rotate_y_skill = RotateYawSkill(
         reach_policy=arm_policy, gripper_policy=None, lift_height=0.23, lift_delta=0.04, length=skill_length
     )
-    pick_block_skill = PickBlockSkill(scene, pick_skill, vis_target_pos=visualizer.set_target_pos)
-    place_block_skill = PlaceBlockSkill(scene, place_skill, vis_target_pos=visualizer.set_target_pos)
-    rotate_block_skill = RotateBlockSkill(scene, rotate_y_skill, vis_target_pos=visualizer.set_target_pos)
+    pick_block_skill = PickBlockSkill(perception.scene, pick_skill, vis_target_pos=visualizer.set_target_pos)
+    place_block_skill = PlaceBlockSkill(perception.scene, place_skill, vis_target_pos=visualizer.set_target_pos)
+    rotate_block_skill = RotateBlockSkill(perception.scene, rotate_y_skill, vis_target_pos=visualizer.set_target_pos)
     skills = [pick_block_skill, place_block_skill, rotate_block_skill]
 
     # High-level policy
@@ -174,7 +172,7 @@ def main() -> None:
 
     # simulate environment
     abs_model = None  # AbstractModel(Path("skillet/scene/abstract/assets/3-block-table-restack.problem.pddl"))
-    logger = None  # SkilletDataLogger("data/test/", env, reconstructor, abs_model)
+    logger = SkilletDataLogger("data/test/", env, perception, abs_model)
 
     if not args_cli.realsense_env:
         input("Press Enter to start the skill execution...")

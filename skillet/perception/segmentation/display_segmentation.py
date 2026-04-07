@@ -10,7 +10,7 @@ from jaxtyping import UInt8
 from matplotlib.gridspec import GridSpec
 from PIL import Image
 
-from skillet.perception.segmentation.sam import SAM2Client
+from skillet.perception.segmentation.sam import get_sam_client
 from skillet.perception.segmentation.vlm import GeminiClient
 
 
@@ -18,7 +18,7 @@ class SegmentationPipeline:
     """Segmentation Pipeline using VLM and SAM."""
 
     def __init__(self) -> None:
-        self.sam_client = SAM2Client()
+        self.sam_client = get_sam_client(model="sam2")
         self.vlm_client = GeminiClient()
 
     def _segmentation(self, rgb: UInt8[np.ndarray, "h w 3"], task_instruction: str) -> dict:
@@ -231,7 +231,7 @@ def main():
     else:
         with pathlib.Path(f"{args.dir}/out.pkl").open("rb") as f:
             out = pickle.load(f)
-    # display_segmentation_output(args.ti, rgb, out, args.dir)
+    display_segmentation_output(args.ti, rgb, out, args.dir)
 
     display_depth(args.dir, out)
 

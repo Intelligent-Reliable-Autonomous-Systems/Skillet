@@ -61,6 +61,7 @@ class Cube(SceneObject):
                     For "bottom", 0 means the bottom of the tag is near the front side.
 
         """
+        super().__init__()
         self._size = size
         self._pose = init_pose
         self._face_apriltags = face_apriltags or []

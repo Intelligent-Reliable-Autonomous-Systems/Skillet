@@ -4,7 +4,7 @@ import numpy as np
 from jaxtyping import UInt8
 from PIL import Image
 
-from skillet.perception.segmentation.sam import SAM2Client
+from skillet.perception.segmentation.sam import get_sam_client
 from skillet.perception.segmentation.vlm import GeminiClient
 
 
@@ -14,7 +14,7 @@ class SegmentationClient:
     def __init__(
         self,
     ) -> None:
-        self.sam_client = SAM2Client()
+        self.sam_client = get_sam_client(model="sam2")
         self.vlm_client = GeminiClient()
 
     def run_perception(self) -> dict:
