@@ -11,6 +11,7 @@ from collections.abc import Mapping
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any, Literal
 
+import numpy as np
 import torch
 
 from skillet.perception.reconstruction.apriltag_reconstructor import ApriltagStateReconstructor
@@ -69,6 +70,10 @@ class SkilletPerception:
     @property
     def scene(self) -> Scene:
         return self._scene or (self._reconstructor.scene if self._reconstructor is not None else None)
+
+    @property
+    def mask_frame(self) -> np.ndarray:
+        return self._reconstructor._mask_frame if self._reconstructor is not None else None
 
     @staticmethod
     def _maybe_unbatch(obs: Mapping[str, Any]) -> dict[str, torch.Tensor]:

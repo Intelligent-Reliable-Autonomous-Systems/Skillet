@@ -42,7 +42,7 @@ class SAMReconstructor(ReconstructorBase):
         mode: Literal["text", "bboxes"] = "text",
         device: str = "cuda",
         build_scene: bool = True,
-        visualize: bool = False,
+        visualize: bool = True,
     ) -> None:
         super().__init__(scene)
         self._model = model
@@ -52,6 +52,8 @@ class SAMReconstructor(ReconstructorBase):
         self._build_scene_flag = build_scene
         self._vlm_client = GeminiClient() if build_scene else None
         self._visualize = visualize
+
+        self._mask_frame = None
 
     @property
     def scene(self) -> None:
@@ -127,7 +129,9 @@ class SAMReconstructor(ReconstructorBase):
         assign_poses_to_objects(self._scene, Cube, centers, ids, cube_idx, det_idx)
 
         if self._visualize:
-            SAMReconstructor.show_masks(rgb, masks, concept_indices=concept_indices, concepts=concepts)
+            self._mask_frame = SAMReconstructor.show_masks(
+                rgb, masks, concept_indices=concept_indices, concepts=concepts
+            )
 
     def get_observation(self) -> Scene:
         """Return the scene."""
@@ -626,8 +630,7 @@ class SAMReconstructor(ReconstructorBase):
             False if the user pressed 'q' or closed the window, True otherwise.
 
         """
-        frame = SAMReconstructor.draw_overlay(rgb_image, masks, concept_indices=concept_indices, concepts=concepts)
-        cv2.imshow(window_name, frame)
+        return SAMReconstructor.draw_overlay(rgb_image, masks, concept_indices=concept_indices, concepts=concepts)
 
 
 def main() -> None:

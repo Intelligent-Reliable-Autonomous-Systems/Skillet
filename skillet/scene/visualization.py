@@ -30,6 +30,7 @@ from skillet.scene.utils import (
     tilt_from_quat_wxyz,
 )
 from skillet.perception.realsense import RealsenseEnv
+from skillet.perception import SkilletPerception
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -65,13 +66,15 @@ class SkilletVisualizer:
         env: Environment | BatchedEnvironment,
         obs_spec: ObservationSpec,
         scene: Scene,
+        perception: SkilletPerception,
         poll_rate: float = 8,
         device: str | torch.device | None = None,
-        width: int = 1024,
-        height: int = 768,
+        width: int = 640,
+        height: int = 480,
     ) -> None:
         self.scene = scene
         self.env = env
+        self.perception = perception
         self._width = width
         self._height = height
         if isinstance(device, str):
@@ -88,6 +91,7 @@ class SkilletVisualizer:
         self._mat_unlit: Any | None = None
         self._mat_lit: Any | None = None
         self._mat_line: Any | None = None
+        self._open3d_scene: np.ndarray | None = None
 
         self._added_geometries: set[str] = set()
         self._needs_camera_setup = True
@@ -108,13 +112,20 @@ class SkilletVisualizer:
         # CV2 visualization variables
         self._display_rgb = True
         self._display_depth = True
-        self._segment_rgb = True
-        self._segment_depth = True
-        self._rgbd_window_name = "Raw RGB-D Scene"
+        self._segment_rgb = False
+        self._segment_depth = False
+        self._rgbd_window_name = "Perception Scene"
         self._rgbd_active = False
+        self._rgbd_height = 800
+        self._rgbd_width = 1200
+
+        self._video_writer = cv2.VideoWriter(
+            "output.mp4", cv2.VideoWriter_fourcc(*"mp4v"), 30.0, (self._rgbd_width, self._rgbd_height)
+        )
 
         self._rgbd_thread: threading.Thread | None = None
         self._rgbd_stop_event = threading.Event()
+        self._render_event = threading.Event()
 
     def _setup(self) -> None:
         """Initialize gui.Application, create window / scene / HUD / static geometry."""
@@ -171,7 +182,7 @@ class SkilletVisualizer:
         self._scene_window_enabled = False
         return True
 
-    # ── Geometry helpers (GUI thread only)
+    # Geometry helpers (GUI thread only)
     def _add_geometry(self, name: str, geom: Any, mat: Any) -> None:
         """Add or replace a named geometry in the scene."""
         scene = self._scene_widget.scene
@@ -305,7 +316,17 @@ class SkilletVisualizer:
                 self._scene_widget.scene.camera.look_at(center, eye, up)
                 self._needs_camera_setup = False
 
+        def _on_image(img):
+            self._open3d_scene = np.asarray(img)
+            self._render_event.set()
+
+        def _render() -> None:
+            self._scene_widget.scene.scene.render_to_image(_on_image)
+            self._scene_widget.force_redraw()
+            self._render_event.wait(timeout=1.0)
+
         self._app.post_to_main_thread(self._window, _apply_to_scene)
+        self._app.post_to_main_thread(self._window, _render)
 
     def run_scene(self) -> None:
         """Set up the window and block on the GUI event loop (call on main thread)."""
@@ -343,6 +364,25 @@ class SkilletVisualizer:
             if sleep_s > 0:
                 time.sleep(sleep_s)
         self._stop_rgbd()
+
+    def _write_frame(self, frame: np.ndarray) -> None:
+        """Write a video frame."""
+        if not hasattr(self, "_video_writer") or self._video_writer is None:
+            h, w = frame.shape[:2]
+            fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+            self._video_writer = cv2.VideoWriter("output.mp4", fourcc, 30.0, (w, h))
+        if frame.shape[2] != 3:
+            print(f"Bad channels: {frame.shape}")
+            return
+
+        expected_h, expected_w = (
+            self._video_writer.get(cv2.CAP_PROP_FRAME_HEIGHT),
+            self._video_writer.get(cv2.CAP_PROP_FRAME_WIDTH),
+        )
+        if frame.shape[0] != expected_h or frame.shape[1] != expected_w:
+            print(f"Size mismatch: writer={expected_w}x{expected_h}, frame={frame.shape[1]}x{frame.shape[0]}")
+            return
+        self._video_writer.write(frame)
 
     def run_thread(self) -> None:
         """Run the visualizer in a thread."""
@@ -467,12 +507,69 @@ class SkilletVisualizer:
             if self._segment_depth:
                 depth_bgr = self._colorize_segmented_depth(depth_bgr, masks, segment_ids)
             panels.append(depth_bgr)
-
+        panels.append(self.perception.mask_frame) if self.perception.mask_frame is not None else None
+        panels.append(self._open3d_scene) if self._open3d_scene is not None else None
         if not panels:
             return
-        frame = panels[0] if len(panels) == 1 else np.concatenate(panels, axis=1)
+        frame = self._arrange_panels(panels)
         cv2.imshow(self._rgbd_window_name, frame)
+        # self._write_frame(frame)
         cv2.waitKey(1)
+
+    def _arrange_panels(self, panels: list[np.ndarray], gap: int = 10) -> np.ndarray:
+        """Arrange panels in a grid with whitespace gaps between them."""
+        n = len(panels)
+        if n == 0:
+            return None
+        if n == 1:
+            return panels[0]
+        if n == 2:
+            # Side by side
+            h = max(p.shape[0] for p in panels)
+            padded = []
+            for p in panels:
+                if p.shape[0] < h:
+                    pad = np.zeros((h - p.shape[0], p.shape[1], p.shape[2]), dtype=p.dtype)
+                    p = np.concatenate([p, pad], axis=0)
+                padded.append(p)
+            divider = np.zeros((h, gap, 3), dtype=np.uint8)
+            return np.concatenate([padded[0], divider, padded[1]], axis=1)
+
+        # 2x2 grid for 3 or 4 panels
+        if n == 3:
+            # Pad with a blank panel
+            blank = np.zeros_like(panels[0])
+            panels = panels + [blank]
+
+        top_left, top_right, bot_left, bot_right = panels[0], panels[1], panels[2], panels[3]
+
+        # Normalize all panels to the same size (max dims across all)
+        target_h = max(p.shape[0] for p in panels)
+        target_w = max(p.shape[1] for p in panels)
+
+        def resize_pad(p):
+            """Ensure 3-channel BGR and pad to target size."""
+            if p.ndim == 2:
+                p = cv2.cvtColor(p, cv2.COLOR_GRAY2BGR)
+            elif p.shape[2] == 1:
+                p = cv2.cvtColor(p[:, :, 0], cv2.COLOR_GRAY2BGR)
+            out = np.zeros((target_h, target_w, 3), dtype=np.uint8)
+            h, w = p.shape[:2]
+            out[:h, :w] = p[:target_h, :target_w]
+            return out
+
+        tl = resize_pad(top_left)
+        tr = resize_pad(top_right)
+        bl = resize_pad(bot_left)
+        br = resize_pad(bot_right)
+
+        h_gap = np.full((target_h, gap, 3), 255, dtype=np.uint8)
+        v_gap = np.full((gap, target_w * 2 + gap, 3), 255, dtype=np.uint8)
+
+        top_row = np.concatenate([tl, h_gap, tr], axis=1)
+        bot_row = np.concatenate([bl, h_gap, br], axis=1)
+
+        return np.concatenate([top_row, v_gap, bot_row], axis=0)
 
     def _stop_rgbd(self) -> None:
         """Tear down the CV2 window."""
@@ -490,6 +587,7 @@ class SkilletVisualizer:
         if not (self._display_rgb or self._display_depth):
             return
         cv2.namedWindow(self._rgbd_window_name, cv2.WINDOW_NORMAL)
+        cv2.resizeWindow(self._rgbd_window_name, self._rgbd_width, self._rgbd_height)
         self._rgbd_active = True
 
     def _maybe_unbatch(self, obs: Mapping[str, Any]) -> dict[str, torch.Tensor]:

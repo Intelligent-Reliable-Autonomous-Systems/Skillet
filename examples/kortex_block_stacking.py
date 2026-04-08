@@ -48,7 +48,7 @@ parser.add_argument(
     "--viz", type=str, default="rgb,depth,pointcloud", help="Visualization modes to display, as comma-separated string."
 )
 parser.add_argument("--robot_ip", type=str, default="192.168.1.10", help="Robot IP.")
-parser.add_argument("--period_s", type=float, default=1.0, help="Seconds between service requests.")
+parser.add_argument("--poll_rate_hz", type=int, default=10, help="Seconds between service requests.")
 parser.add_argument("--max_depth_m", type=float, default=None, help="Optional far-plane clipping depth in meters.")
 parser.add_argument("--task", type=str, default="Kortex-Gen3Lite-v0", help="Kortex Environment")
 
@@ -89,13 +89,12 @@ def main() -> None:
         env.reset()
     rgbd_spec: ObservationSpec[RGBD_Obs] = env.coerce_obs_spec("rgb-d")
 
-    poll_rate_hz = 1.0 / max(args_cli.period_s, 1e-6)
     perception = SkilletPerception(
         env=env,
         scene=scene,
         obs_spec=rgbd_spec,
         reconstructor="sam",
-        poll_rate=poll_rate_hz,
+        poll_rate=args_cli.poll_rate_hz,
         device=args_cli.device,
     )
     perception.run_thread()
@@ -104,7 +103,8 @@ def main() -> None:
         env=env,
         obs_spec=rgbd_spec,
         scene=scene,
-        poll_rate=poll_rate_hz,
+        perception=perception,
+        poll_rate=args_cli.poll_rate_hz,
         device=args_cli.device,
     )
 
