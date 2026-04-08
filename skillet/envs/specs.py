@@ -50,7 +50,7 @@ RGBD_SPEC_BATCHED: ObservationSpec[RGBD_Obs] = ObservationSpec[RGBD_Obs[TNPOrTen
             "depth": ParameterizedBox(low=0.0, high=10.0, shape=(1, "height", "width"), dtype=np.float32),
             "intrinsic_k": gym.spaces.Box(low=0.0, high=2000.0, shape=(3, 3), dtype=np.float32),
             "camera_pose": gym.spaces.Box(low=-10.0, high=10.0, shape=(7,), dtype=np.float32),
-            "timestamp": gym.spaces.Box(low=0.0, high=1e10, shape=(), dtype=np.float64),
+            "timestamp": gym.spaces.Box(low=0.0, high=1e10, shape=(), dtype=np.float32),
         }
     ),
     name="rgb-d",

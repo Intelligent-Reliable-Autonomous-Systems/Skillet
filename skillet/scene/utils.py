@@ -262,7 +262,7 @@ def point_cloud_to_open3d(
         rgb = x[:, 3:6]
         if rgb.size > 0 and rgb.max() > 1.0:
             rgb = np.clip(rgb / 255.0, 0.0, 1.0)
-        pcd.colors = o3d.utility.Vector3dVector(rgb.astype(np.float64))
+        pcd.colors = o3d.utility.Vector3dVector(rgb.astype(np.float32))
 
     return pcd
 

@@ -97,7 +97,6 @@ class Gen3KortexEnv(KortexEnv):
             float("-inf"), float("inf"), shape=(2 * len(self.joint_names),)
         )
         self.single_action_space = gym.spaces.Box(float("-inf"), float("inf"), shape=(len(self.cfg.joint_ids),))
-
         self.observation_space = gym.vector.utils.batch_space(self.single_observation_space, self.num_envs)
         self.action_space = gym.vector.utils.batch_space(self.single_action_space, self.num_envs)
 

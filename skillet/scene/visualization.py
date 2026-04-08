@@ -29,6 +29,7 @@ from skillet.scene.utils import (
     segmented_rgbd_to_point_cloud,
     tilt_from_quat_wxyz,
 )
+from skillet.perception.realsense import RealsenseEnv
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -96,8 +97,10 @@ class SkilletVisualizer:
         # Marker state (written from any thread, read on GUI thread)
         self._target_pos: np.ndarray | None = None
         self._target_size: float = 0.007
-        self._tcp_pos: np.ndarray | None = None
-        self._get_tcp_pos = None
+        self._tcp_pose: np.ndarray | None = None
+        self._gripper_pos: np.ndarray | None = None
+        self._get_tcp_pose = self.get_tcp_pose if not isinstance(env, RealsenseEnv) else None
+        self._get_gripper_pos = self.get_gripper_pos if not isinstance(env, RealsenseEnv) else None
 
         self._scene_thread: threading.Thread | None = None
         self._scene_stop_event = threading.Event()
@@ -135,7 +138,8 @@ class SkilletVisualizer:
 
         # Materials
         self._mat_unlit = _rendering.MaterialRecord()
-        self._mat_unlit.shader = "defaultUnlit"
+        self._mat_unlit.shader = "defaultLitTransparency"
+        self._mat_unlit.base_color = [1.0, 0.0, 0.0, 0.7]
         self._mat_unlit.point_size = 3 * self._window.scaling
 
         self._mat_lit = _rendering.MaterialRecord()
@@ -257,19 +261,33 @@ class SkilletVisualizer:
                 self._remove_geometry("target_pos")
 
             # TCP position sphere
-            if self._get_tcp_pos is not None:
-                xyz = self._get_tcp_pos()
-                if isinstance(xyz, torch.Tensor):
-                    xyz = xyz.detach().cpu().numpy().astype(np.float64)
-                if xyz is not None:
-                    self._tcp_pos = np.asarray(xyz, dtype=np.float64)
-                    if self._tcp_pos.ndim > 1:
-                        self._tcp_pos = self._tcp_pos[0]
-            if self._tcp_pos is not None:
-                sphere = make_point_marker(self._tcp_pos[:3], radius=0.007, color=(1, 0, 1))
+            if self._get_tcp_pose is not None:
+                pose = self._get_tcp_pose()
+                if isinstance(pose, torch.Tensor):
+                    pose = pose.detach().cpu().numpy().astype(np.float64)
+                if pose is not None:
+                    self._tcp_pose = np.asarray(pose, dtype=np.float64)
+                    if self._tcp_pose.ndim > 1:
+                        self._tcp_pose = self._tcp_pose[0]
+            if self._get_gripper_pos is not None:
+                pos = self._get_gripper_pos()
+                if isinstance(pose, torch.Tensor):
+                    pos = pos.detach().cpu().numpy().astype(np.float64)
+                if pos is not None:
+                    self._gripper_pos = np.asarray(pos, dtype=np.float64)
+                    if self._gripper_pos.ndim > 1:
+                        self._gripper_pos = self._gripper_pos[0]
+
+            if self._tcp_pose is not None:
+                sphere = make_point_marker(self._tcp_pose[:3], radius=0.007, color=(1, 0, 1))
                 self._add_geometry("tcp_pos", sphere, self._mat_lit)
+                width = (0.1 if self._gripper_pos < 0.5 else 0.03) if self._gripper_pos is not None else 0.08
+                gripper = self.gripper_mesh(self._tcp_pose[0:3], self._tcp_pose[3:7], width=width)
+                gripper.compute_vertex_normals()
+                self._add_geometry("gripper", gripper, self._mat_unlit)
             else:
                 self._remove_geometry("tcp_pos")
+                self._remove_geometry("gripper")
 
             # HUD
             if hud_text:
@@ -279,7 +297,12 @@ class SkilletVisualizer:
             # Auto-fit view on first valid point cloud
             if do_camera_setup and pcd is not None:
                 bounds = self._scene_widget.scene.bounding_box
-                self._scene_widget.setup_camera(60, bounds, bounds.get_center())
+                center = bounds.get_center()
+                self._scene_widget.setup_camera(60, bounds, center)
+                eye = center + [1.2, -0.8, 0.0]
+                up = [0.0, 0.0, 1.0]
+
+                self._scene_widget.scene.camera.look_at(center, eye, up)
                 self._needs_camera_setup = False
 
         self._app.post_to_main_thread(self._window, _apply_to_scene)
@@ -503,10 +526,75 @@ class SkilletVisualizer:
             segment_indices = segment_ids[segment_indices]
         return point_cloud, segment_indices
 
-    def get_tcp_pos(self) -> Sequence[float]:
-        return (
-            self.env.get_observation(self.env.unwrapped.obs_spec_ikee.unbatched())["tcp_pose_b"][:3]
-            .detach()
-            .cpu()
-            .numpy()
+    def gripper_mesh(self, xyz, quat_wxyz, width=0.08, depth=0.02, height=0.02, finger_len=0.06):
+        """Create a simple parallel-jaw gripper mesh with the pose at the finger tips midpoint.
+
+        Args:
+            xyz: (3,) position of the midpoint between the fingers
+            quat_wxyz: (4,) quaternion [w, x, y, z]
+            width: distance between fingers
+            depth: base depth
+            height: thickness
+            finger_len: finger length
+
+        Returns:
+            open3d.geometry.TriangleMesh
+        """
+        # --- Helper: quaternion → rotation matrix ---
+        w, x, y, z = quat_wxyz
+        R = np.array(
+            [
+                [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+                [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+                [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+            ]
         )
+
+        # --- Base ---
+        base = o3d.geometry.TriangleMesh.create_box(width=width, height=height, depth=depth)
+        base.translate([-width / 2, -height / 2, -depth / 2])
+
+        # --- Fingers ---
+        finger_w = 0.01
+        finger_h = height
+        finger_d = finger_len
+
+        left_finger = o3d.geometry.TriangleMesh.create_box(finger_w, finger_h, finger_d)
+        right_finger = o3d.geometry.TriangleMesh.create_box(finger_w, finger_h, finger_d)
+
+        # Position fingers relative to base
+        left_finger.translate([-width / 2, -height / 2, depth / 2])
+        right_finger.translate([width / 2 - finger_w, -height / 2, depth / 2])
+
+        # --- Combine meshes ---
+        gripper = base + left_finger + right_finger
+
+        # --- Compute offset to move pose to finger tips midpoint ---
+        # Finger tips are at z = depth/2 + finger_len
+        # x coordinates of tips: left = -width/2 + finger_w/2, right = width/2 - finger_w/2
+        tip_left_local = np.array([-width / 2 + finger_w / 2, 0, depth / 2 + finger_d])
+        tip_right_local = np.array([width / 2 - finger_w / 2, 0, depth / 2 + finger_d])
+        midpoint_local = (tip_left_local + tip_right_local) / 2.0
+
+        # Apply rotation first, then translate to xyz
+        gripper.translate(-midpoint_local)  # move midpoint to origin
+        T = np.eye(4)
+        T[:3, :3] = R
+        T[:3, 3] = xyz
+        gripper.transform(T)
+
+        # --- Color ---
+        gripper.paint_uniform_color([0.8, 0.2, 0.2])
+
+        # --- Compute normals for lighting ---
+        gripper.compute_vertex_normals()
+
+        return gripper
+
+    def get_tcp_pose(self) -> Sequence[float]:
+        return (
+            self.env.get_observation(self.env.unwrapped.obs_spec_ikee.unbatched())["tcp_pose_b"].detach().cpu().numpy()
+        )
+
+    def get_gripper_pos(self) -> Sequence[float]:
+        return self.env.get_observation(self.env.unwrapped.obs_spec_ikee.unbatched())["gripper"].detach().cpu().numpy()

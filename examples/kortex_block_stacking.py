@@ -1,8 +1,6 @@
 """Run a tabletop block stacking task."""
 
 import argparse
-import sys
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import gymnasium as gym

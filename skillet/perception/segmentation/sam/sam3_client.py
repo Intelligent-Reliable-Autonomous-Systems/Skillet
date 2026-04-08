@@ -52,7 +52,7 @@ class SAM3Client(SAMClient):
 
             for idx, box in enumerate(boxes):
                 state = self.sam_model.set_image(rgb)
-                box_state = self.sam_model.add_geometric_prompt(box, True, state)
+                box_state = self.sam_model.add_geometric_prompt(box.tolist(), True, state)
 
                 if len(box_state["masks"]) == 0:
                     masks.append(torch.zeros((0, 1, *rgb.shape[-2:]), dtype=torch.float32, device=self.device))
