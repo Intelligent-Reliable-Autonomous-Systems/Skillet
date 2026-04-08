@@ -125,7 +125,7 @@ class SkilletVisualizer:
 
         self._rgbd_thread: threading.Thread | None = None
         self._rgbd_stop_event = threading.Event()
-        self._render_event = threading.Event()
+        # self._render_event = threading.Event()
 
     def _setup(self) -> None:
         """Initialize gui.Application, create window / scene / HUD / static geometry."""
@@ -337,7 +337,7 @@ class SkilletVisualizer:
             self._render_event.wait(timeout=1.0)
 
         self._app.post_to_main_thread(self._window, _apply_to_scene)
-        self._app.post_to_main_thread(self._window, _render)
+        # self._app.post_to_main_thread(self._window, _render) # TODO this might be the problem with crashing
 
     def run_scene(self) -> None:
         """Set up the window and block on the GUI event loop (call on main thread)."""
@@ -518,9 +518,9 @@ class SkilletVisualizer:
             if self._segment_depth:
                 depth_bgr = self._colorize_segmented_depth(depth_bgr, masks, segment_ids)
             panels.append(depth_bgr)
-        panels.append(self._open3d_scene) if self._open3d_scene is not None else None
-        panels.append(self.perception.bbox_frame) if self.perception.bbox_frame is not None else None
-        panels.append(self.perception.mask_frame) if self.perception.mask_frame is not None else None
+        # panels.append(self._open3d_scene) if self._open3d_scene is not None else None
+        # panels.append(self.perception.bbox_frame) if self.perception.bbox_frame is not None else None
+        # panels.append(self.perception.mask_frame) if self.perception.mask_frame is not None else None
         if not panels:
             return
         frame = self._arrange_panels(panels)

@@ -46,6 +46,7 @@ class SkilletDataLogger:
         self._abs_state: np.ndarray = None
         self._obj_poses: np.ndarray = None
         self._obj_ids: np.ndarray = None
+        self._obj_names: np.ndarray = None
         self._intrinsic_k: np.ndarray = None
         self._world_bounds: np.ndarray = None
 
@@ -68,6 +69,7 @@ class SkilletDataLogger:
             # self._abs_state = np.array([abstract_state])
             self._obj_ids = scene_dict["ids"][None, ...]
             self._obj_poses = scene_dict["poses"][None, ...]
+            self._obj_names = scene_dict["names"][None, ...]
             self._world_bounds = scene_dict["bounds"][None, ...]
         else:
             self._time_stamps = np.concatenate((self._time_stamps, np.array([time_stamp])), axis=0)
@@ -89,6 +91,7 @@ class SkilletDataLogger:
             # self._abs_state = np.concatenate((self._abs_state, np.array([abstract_state])), axis=-1)
             self._obj_ids = np.concatenate((self._obj_ids, scene_dict["ids"][None, ...]), axis=0)
             self._obj_poses = np.concatenate((self._obj_poses, scene_dict["poses"][None, ...]), axis=0)
+            self._obj_names = np.concatenate((self._obj_names, scene_dict["names"][None, ...]), axis=0)
             self._world_bounds = np.concatenate((self._world_bounds, scene_dict["bounds"][None, ...]), axis=0)
 
         self._num_points += 1
@@ -109,4 +112,10 @@ class SkilletDataLogger:
             # ep.create_dataset("abs_state", data=self._abs_state, compression="gzip")
             ep.create_dataset("obj_ids", data=self._obj_ids, compression="gzip")
             ep.create_dataset("obj_poses", data=self._obj_poses, compression="gzip")
+            ep.create_dataset(
+                "obj_names",
+                data=self._obj_names.astype(object),
+                compression="gzip",
+                dtype=h5py.string_dtype(encoding="utf-8"),
+            )
             ep.create_dataset("world_bounds", data=self._world_bounds, compression="gzip")

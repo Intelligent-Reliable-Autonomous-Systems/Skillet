@@ -443,13 +443,97 @@ class SkilletPlaybackVisualizer:
         self.request_close()
 
 
+class SkilletPlaybackEnv:
+    """Environment for playing back observations."""
+
+    def __init__(self, log_file: str, device: str = "cuda"):
+
+        self._load_log_file(log_file)
+        self._curr_obs_id = 0
+        self.device = device
+
+    def step(self, action=None) -> tuple[dict, float, bool, bool, dict]:
+        """Step through the observations."""
+        obs = self._get_obs_at(self._curr_obs_id)
+        self._curr_obs = obs
+        self._curr_obs_id += 1
+
+        term = self._curr_obs_id >= len(self._time_stamps)
+        return (obs, 0, term, term, {})
+
+    def reset(self) -> tuple[dict, dict]:
+
+        return self._curr_obs, {}
+
+    def get_observation(self, obs_spec=None):
+        return self._curr_obs
+
+    def _load_log_file(self, log_file: str) -> None:
+        with h5py.File(log_file, "r") as f:
+
+            def print_datasets(name, obj):
+                if isinstance(obj, h5py.Dataset):
+                    print(f"{name}: shape={obj.shape}, dtype={obj.dtype}")
+
+            f.visititems(print_datasets)
+            self._rgb_obs = f["episode/rgb"][:]
+            self._depth_obs = f["episode/depth"][:]
+            self._camera_pose = f["episode/camera_pose"][:]
+            self._tcp_pose = f["episode/tcp_pose"][:]
+            self._time_stamps = f["episode/time_stamps"][:]
+            # self._abs_state = f["episode/abs_state"][:]
+            self._intrinsic_k = f["episode/intrinsic_k"][:]  # (3, 3)
+            self._obj_poses = f["episode/obj_poses"][:]
+            self._obj_ids = f["episode/obj_ids"][:]
+            self._obj_names = f["episode/obj_names"][:]
+            self._world_bounds = f["episode/world_bounds"][:]
+
+        self._n_frames = self._rgb_obs.shape[0]
+        print(f"[Playback] Loaded {self._n_frames} frames from {log_file}")
+
+    def _get_obs_at(self, idx: int) -> dict[str, torch.Tensor]:
+        """Build an obs dict (matching env observation format) for frame idx."""
+        # rgb: stored as (H, W, 3) uint8 -> (3, H, W) float32 in [0,1]
+        rgb = torch.from_numpy(self._rgb_obs[idx]).to(self.device) / 255.0
+        depth = torch.from_numpy(self._depth_obs[idx]).to(self.device).unsqueeze(0)
+        camera_pose = torch.from_numpy(self._camera_pose[idx]).to(self.device)
+        tcp_pose = torch.from_numpy(self._tcp_pose[idx]).to(self.device)
+        intrinsic_k = torch.from_numpy(self._intrinsic_k[idx]).to(self.device)
+        cube_poses = torch.from_numpy(self._obj_poses[idx]).to(self.device)
+        cube_names = self._obj_names[idx].astype(str)
+        cube_ids = torch.from_numpy(self._obj_ids[idx]).to(self.device)
+        world_bounds = self._world_bounds[idx]
+        scene_objs = [Cube(size=0.036, init_pose=cube_poses[i], name=cube_names[i]) for i in range(cube_ids.shape[0])]
+        self.scene = Scene(scene_objs, bounds=world_bounds, closed_set=True)
+
+        return {
+            "rgb": rgb,
+            "depth": depth,
+            "camera_pose": camera_pose,
+            "tcp_pose_b": tcp_pose,
+            "intrinsic_k": intrinsic_k,
+            "scene": self.scene,
+        }
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--log_file", type=str, default="data/test/20260403_140731/exp_0/data.h5")
+    parser.add_argument("--env", action=argparse.BooleanOptionalAction, default=False)
     args = parser.parse_args()
+    if args.env:
+        env = SkilletPlaybackEnv(log_file=args.log_file)
+        term = False
+        i = 0
+        while not term:
+            obs, _, term, _, _ = env.step()
+            print(f"Scene at step: {i}")
+            print(f"{obs['scene']}\n")
+            i += 1
 
-    viz = SkilletPlaybackVisualizer(log_file=args.log_file)
-    viz.run()
+    else:
+        viz = SkilletPlaybackVisualizer(log_file=args.log_file)
+        viz.run()
 
 
 if __name__ == "__main__":

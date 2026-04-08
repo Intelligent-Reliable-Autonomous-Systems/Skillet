@@ -8,7 +8,7 @@ import numpy as np
 class SceneObject:
     """A scene object is a 3D object in a scene."""
 
-    def __init__(self, object_id: int | None = None) -> None:
+    def __init__(self, object_id: int | None = None, name: str | None = None) -> None:
         """Initialize the scene object.
 
         Args:
@@ -17,7 +17,7 @@ class SceneObject:
         """
         self._object_id = object_id
         self._type_id = -1
-        self._name = None
+        self._name = name
 
     @property
     @abstractmethod
@@ -130,11 +130,18 @@ class Scene:
         """Return a numpy array of poses for all the objects in the scene."""
         poses = []
         obj_ids = []
+        names = []
         for obj in self.objects:
             poses.append(obj.pose.cpu().numpy())
             obj_ids.append(obj.object_id)
+            names.append(obj.name)
 
-        return {"poses": np.asarray(poses), "ids": np.asarray(obj_ids), "bounds": np.asarray(self.bounds)}
+        return {
+            "poses": np.asarray(poses),
+            "ids": np.asarray(obj_ids),
+            "bounds": np.asarray(self.bounds),
+            "names": np.asarray(names),
+        }
 
     def __str__(self) -> str:
         """Print the scene."""

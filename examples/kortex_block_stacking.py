@@ -108,7 +108,7 @@ def main() -> None:
         device=args_cli.device,
     )
 
-    visualizer.run_thread()
+    # visualizer.run_thread()
 
     import time
 

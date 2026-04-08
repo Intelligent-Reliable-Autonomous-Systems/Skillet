@@ -46,6 +46,7 @@ class Cube(SceneObject):
         size: float,
         init_pose: torch.Tensor | None = None,  # (x, y, z, w, x, y, z)
         face_apriltags: list[dict[str, Any]] | None = None,
+        name: str | None = None,
     ) -> None:
         """Initialize the cube.
 
@@ -61,7 +62,7 @@ class Cube(SceneObject):
                     For "bottom", 0 means the bottom of the tag is near the front side.
 
         """
-        super().__init__()
+        super().__init__(name=name)
         self._size = size
         self._pose = init_pose
         self._face_apriltags = face_apriltags or []

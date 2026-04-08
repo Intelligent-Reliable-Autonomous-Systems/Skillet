@@ -174,7 +174,7 @@ class SAMReconstructor(ReconstructorBase):
                 bbox["label"] = bbox["label"].replace(" ", "_")
             for atom in grounded_goal_atoms:
                 atom["args"] = [arg.replace(" ", "_") for arg in atom["args"]]
-            with open("data/test/vlm_out.pkl", "wb") as f:
+            with open("data/test/vlm_out_2.pkl", "wb") as f:
                 pickle.dump(bboxes, f)
         with open("data/test/vlm_out.pkl", "rb") as f:
             out = pickle.load(f)
