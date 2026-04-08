@@ -53,6 +53,7 @@ class SAMReconstructor(ReconstructorBase):
         self._vlm_client = GeminiClient() if build_scene else None
         self._visualize = visualize
 
+        self._bbox_frame = None
         self._mask_frame = None
 
     @property
@@ -85,8 +86,6 @@ class SAMReconstructor(ReconstructorBase):
             concepts = ["block", "robot_arm"]  # Can potentially segment on "cube face" for redundancy
             masks, boxes, scores, concept_indices = self._sam_model.segment_from_concepts(rgb, concepts)
         elif self._mode == "bboxes":
-            # TODO: Get this from VLM?
-            # If so, get in format 0-1000 regardless of image scale
             bboxes = [
                 [100, 100, 150, 150],
                 [200, 200, 250, 250],
@@ -104,11 +103,12 @@ class SAMReconstructor(ReconstructorBase):
             intrinsic_k = intrinsic_k.cpu().numpy()
             camera_pose = camera_pose.cpu().numpy()
         # TODO make sure we are always grabbing the blocks
-        masks = masks[concept_indices == 0].cpu().numpy()
+        cube_masks = masks[concept_indices == 0].cpu().numpy()
+        masks = masks.cpu().numpy()
 
         # Find cube centers in the camera frame
         dc = find_cube_centers(
-            masks,
+            cube_masks,
             depth,
             intrinsic_k,
             cube_size=0.041,
@@ -129,9 +129,10 @@ class SAMReconstructor(ReconstructorBase):
         assign_poses_to_objects(self._scene, Cube, centers, ids, cube_idx, det_idx)
 
         if self._visualize:
-            self._mask_frame = SAMReconstructor.show_masks(
+            self._bbox_frame = SAMReconstructor.show_bounding_boxes(
                 rgb, masks, concept_indices=concept_indices, concepts=concepts
             )
+            self._mask_frame = SAMReconstructor.show_cube_masks(rgb, cube_masks, self._scene, ids, cube_idx, det_idx)
 
     def get_observation(self) -> Scene:
         """Return the scene."""
@@ -547,7 +548,73 @@ class SAMReconstructor(ReconstructorBase):
         return bboxes
 
     @staticmethod
-    def draw_overlay(
+    def show_cube_masks(
+        rgb_image: np.ndarray,
+        masks: np.ndarray,
+        scene: Scene,
+        ids: np.ndarray,
+        obj_idx: np.ndarray,
+        det_idx: np.ndarray,
+    ) -> np.ndarray:
+        """Show the masks and the corresponding labels.
+
+        Args:
+            rgb_image: RGB image from camera
+            masks: masks produced by SAM
+            scene: the current scene to obtain
+            ids: np.ndarray of sorted object ids
+            obj_idx: Sorted indexes of object scene ids according to poses
+            det_idx: The detection index of which pose to assign to which object
+
+        """
+        rgb_image = rgb_image.transpose((1, 2, 0))
+        display = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2BGR).copy()
+
+        # Generate distinct colors for each object
+        colors = [(int(c[0]), int(c[1]), int(c[2])) for c in np.random.randint(100, 255, size=(len(scene.objects), 3))]
+
+        for color_idx, ob in enumerate(scene.objects):
+            if not isinstance(ob, Cube):
+                continue
+
+            idx = np.where(ob.object_id == ids[obj_idx])[0]
+            if idx.size > 0:
+                idx = idx[0]
+            else:
+                continue
+
+            mask = masks[det_idx[idx]]  # shape (H, W), bool or 0/1
+            color = colors[color_idx]
+
+            # Overlay colored mask with transparency
+            overlay = display.copy()
+            overlay[mask.astype(bool)] = color
+            cv2.addWeighted(overlay, 0.4, display, 0.6, 0, display)
+
+            # Draw contour around mask
+            contours, _ = cv2.findContours(mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            cv2.drawContours(display, contours, -1, color, 2)
+
+            # Place label at centroid of mask
+            padding = 3
+            baseline = 3
+            ys, xs = np.where(mask.astype(bool))
+            if len(xs) > 0:
+                cx, cy = int(xs.mean()), int(ys.mean())
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                font_scale = 0.5
+                thickness = 1
+                (text_w, text_h), _ = cv2.getTextSize(ob.name, font, font_scale, thickness)
+                tx, ty = cx - text_w // 2, int(ys.min()) - padding
+                tx = max(0, min(tx, display.shape[1] - text_w))
+                ty = max(text_h + padding, ty)
+
+                cv2.putText(display, ob.name, (tx, ty), font, font_scale, (255, 255, 255), thickness)
+
+        return display
+
+    @staticmethod
+    def show_bounding_boxes(
         rgb_image: np.ndarray,
         masks: np.ndarray,
         concept_indices: np.ndarray | None = None,
@@ -608,29 +675,6 @@ class SAMReconstructor(ReconstructorBase):
         # Blend fill at 35 % opacity
         cv2.addWeighted(overlay, 0.35, display, 0.65, 0, display)
         return display
-
-    @staticmethod
-    def show_masks(
-        rgb_image: np.ndarray,
-        masks: np.ndarray,
-        concept_indices: np.ndarray | None = None,
-        concepts: list | None = None,
-        window_name: str = "SAM Detections",
-    ) -> bool:
-        """Display the image + mask overlay. Call this each time new masks arrive.
-
-        Args:
-            rgb_image:   HxWx3 RGB numpy array.
-            masks:       NxHxW binary numpy array (SAM output).
-            concept_indices: mask indices of each concept
-            concepts: list of concepts from segmentation
-            window_name: OpenCV window title.
-
-        Returns:
-            False if the user pressed 'q' or closed the window, True otherwise.
-
-        """
-        return SAMReconstructor.draw_overlay(rgb_image, masks, concept_indices=concept_indices, concepts=concepts)
 
 
 def main() -> None:

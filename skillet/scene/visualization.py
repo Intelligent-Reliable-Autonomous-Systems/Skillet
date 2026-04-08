@@ -12,6 +12,8 @@ import cv2
 import numpy as np
 import torch
 
+from skillet.perception import SkilletPerception
+from skillet.perception.realsense import RealsenseEnv
 from skillet.scene.utils import (
     _BBOX_THICKNESS,
     _FONT,
@@ -29,8 +31,6 @@ from skillet.scene.utils import (
     segmented_rgbd_to_point_cloud,
     tilt_from_quat_wxyz,
 )
-from skillet.perception.realsense import RealsenseEnv
-from skillet.perception import SkilletPerception
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -111,7 +111,7 @@ class SkilletVisualizer:
 
         # CV2 visualization variables
         self._display_rgb = True
-        self._display_depth = True
+        self._display_depth = False
         self._segment_rgb = False
         self._segment_depth = False
         self._rgbd_window_name = "Perception Scene"
@@ -181,6 +181,16 @@ class SkilletVisualizer:
         self._closed = True
         self._scene_window_enabled = False
         return True
+
+    def _add_text_3d(self, name: str, text: str, position: np.ndarray, scale: float = 0.02) -> None:
+        """Add 3D text mesh above a geometry position."""
+        text_mesh = o3d.t.geometry.TriangleMesh.create_text(text, depth=0.005)
+        text_mesh.scale(scale, center=[0, 0, 0])
+        text_mesh.translate(position)
+        mat = o3d.visualization.rendering.MaterialRecord()
+        mat.shader = "defaultUnlit"
+        mat.base_color = [1.0, 1.0, 1.0, 1.0]
+        self._add_geometry(name + "_label", text_mesh, mat)
 
     # Geometry helpers (GUI thread only)
     def _add_geometry(self, name: str, geom: Any, mat: Any) -> None:
@@ -261,6 +271,7 @@ class SkilletVisualizer:
                 geometry = get_object_geometry(obj)
                 if geometry is not None and len(geometry) > 0:
                     self._add_geometry(obj.identifier, geometry, self._mat_line)
+
                 else:
                     self._remove_geometry(obj.identifier)
 
@@ -507,8 +518,9 @@ class SkilletVisualizer:
             if self._segment_depth:
                 depth_bgr = self._colorize_segmented_depth(depth_bgr, masks, segment_ids)
             panels.append(depth_bgr)
-        panels.append(self.perception.mask_frame) if self.perception.mask_frame is not None else None
         panels.append(self._open3d_scene) if self._open3d_scene is not None else None
+        panels.append(self.perception.bbox_frame) if self.perception.bbox_frame is not None else None
+        panels.append(self.perception.mask_frame) if self.perception.mask_frame is not None else None
         if not panels:
             return
         frame = self._arrange_panels(panels)

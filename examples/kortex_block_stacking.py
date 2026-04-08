@@ -48,7 +48,7 @@ parser.add_argument(
     "--viz", type=str, default="rgb,depth,pointcloud", help="Visualization modes to display, as comma-separated string."
 )
 parser.add_argument("--robot_ip", type=str, default="192.168.1.10", help="Robot IP.")
-parser.add_argument("--poll_rate_hz", type=int, default=10, help="Seconds between service requests.")
+parser.add_argument("--poll_rate_hz", type=int, default=8, help="Seconds between service requests.")
 parser.add_argument("--max_depth_m", type=float, default=None, help="Optional far-plane clipping depth in meters.")
 parser.add_argument("--task", type=str, default="Kortex-Gen3Lite-v0", help="Kortex Environment")
 

@@ -72,6 +72,10 @@ class SkilletPerception:
         return self._scene or (self._reconstructor.scene if self._reconstructor is not None else None)
 
     @property
+    def bbox_frame(self) -> np.ndarray:
+        return self._reconstructor._bbox_frame if self._reconstructor is not None else None
+
+    @property
     def mask_frame(self) -> np.ndarray:
         return self._reconstructor._mask_frame if self._reconstructor is not None else None
 
