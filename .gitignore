@@ -12,6 +12,8 @@ __pycache__/
 **/build*/
 **/*.so
 **/*.log*
+*.mp4
+*.avi
 
 # Distribution / packaging
 .Python
