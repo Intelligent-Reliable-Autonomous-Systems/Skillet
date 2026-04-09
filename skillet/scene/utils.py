@@ -440,6 +440,38 @@ def create_camera_model(
     return [face, body, marker]
 
 
+def draw_instance_annotations(image: np.ndarray, masks: torch.Tensor, segment_ids: torch.Tensor) -> np.ndarray:
+    """Draw semi-transparent overlays, bounding boxes, and prompt labels."""
+    out = image.copy()
+    overlay = image.copy()
+    masks_np = masks.detach().cpu().numpy()
+    ids_np = segment_ids.detach().cpu().numpy()
+    n = masks_np.shape[0]
+
+    for i in range(n):
+        color = _PALETTE_BGR[i % len(_PALETTE_BGR)]
+        overlay[masks_np[i] > 0] = color
+    cv2.addWeighted(overlay, _OVERLAY_ALPHA, out, 1.0 - _OVERLAY_ALPHA, 0, out)
+
+    for i in range(n):
+        seg_mask = masks_np[i] > 0
+        color = _PALETTE_BGR[i % len(_PALETTE_BGR)]
+
+        ys, xs = np.where(seg_mask)
+        if len(ys) == 0:
+            continue
+        x1, y1, x2, y2 = int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())
+        cv2.rectangle(out, (x1, y1), (x2, y2), color, _BBOX_THICKNESS)
+
+        label = f"#{i} obj_{int(ids_np[i])}"
+        (tw, th), _ = cv2.getTextSize(label, _FONT, _FONT_SCALE, _FONT_THICKNESS)
+        tx, ty = x1, y1 - 6 if y1 - 6 - th >= 0 else y1 + th + 6
+        cv2.rectangle(out, (tx - 1, ty - th - 4), (tx + tw + 5, ty + 4), color, cv2.FILLED)
+        cv2.putText(out, label, (tx + 2, ty), _FONT, _FONT_SCALE, (255, 255, 255), _FONT_THICKNESS, cv2.LINE_AA)
+
+    return out
+
+
 def get_sorted_object_poses(scene: Scene, obj: SceneObject) -> np.ndarray:
     """Return a list of scene objects of a specific type sorted by their ID.
 
@@ -496,3 +528,59 @@ def assign_poses_to_objects(
             # Should be the one that is not occluded
             continue
         ob.pose = torch.as_tensor(np.concatenate((poses[det_idx[idx]], [1, 0, 0, 0])), device=device)
+
+
+def _arrange_panels(panels: list[np.ndarray], gap: int = 10) -> np.ndarray:
+    """Arrange panels in a grid with whitespace gaps between them."""
+    n = len(panels)
+    if n == 0:
+        return None
+    if n == 1:
+        return panels[0]
+    if n == 2:
+        # Side by side
+        h = max(p.shape[0] for p in panels)
+        padded = []
+        for p in panels:
+            if p.shape[0] < h:
+                pad = np.zeros((h - p.shape[0], p.shape[1], p.shape[2]), dtype=p.dtype)
+                p = np.concatenate([p, pad], axis=0)
+            padded.append(p)
+        divider = np.zeros((h, gap, 3), dtype=np.uint8)
+        return np.concatenate([padded[0], divider, padded[1]], axis=1)
+
+    # 2x2 grid for 3 or 4 panels
+    if n == 3:
+        # Pad with a blank panel
+        blank = np.zeros_like(panels[0])
+        panels = panels + [blank]
+
+    top_left, top_right, bot_left, bot_right = panels[0], panels[1], panels[2], panels[3]
+
+    # Normalize all panels to the same size (max dims across all)
+    target_h = max(p.shape[0] for p in panels)
+    target_w = max(p.shape[1] for p in panels)
+
+    def resize_pad(p):
+        """Ensure 3-channel BGR and pad to target size."""
+        if p.ndim == 2:
+            p = cv2.cvtColor(p, cv2.COLOR_GRAY2BGR)
+        elif p.shape[2] == 1:
+            p = cv2.cvtColor(p[:, :, 0], cv2.COLOR_GRAY2BGR)
+        out = np.zeros((target_h, target_w, 3), dtype=np.uint8)
+        h, w = p.shape[:2]
+        out[:h, :w] = p[:target_h, :target_w]
+        return out
+
+    tl = resize_pad(top_left)
+    tr = resize_pad(top_right)
+    bl = resize_pad(bot_left)
+    br = resize_pad(bot_right)
+
+    h_gap = np.full((target_h, gap, 3), 255, dtype=np.uint8)
+    v_gap = np.full((gap, target_w * 2 + gap, 3), 255, dtype=np.uint8)
+
+    top_row = np.concatenate([tl, h_gap, tr], axis=1)
+    bot_row = np.concatenate([bl, h_gap, br], axis=1)
+
+    return np.concatenate([top_row, v_gap, bot_row], axis=0)

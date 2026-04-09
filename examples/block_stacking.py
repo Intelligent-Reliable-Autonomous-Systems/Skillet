@@ -22,7 +22,7 @@ from skillet.policy.moveit import MoveItTcpQuatPolicy
 from skillet.policy.twist import TwistPIDPosePolicy
 from skillet.scene.base import Scene
 from skillet.scene.cube import Cube
-from skillet.scene.visualization import Open3DVisualizer
+from skillet.scene.visualization_old import Open3DVisualizer
 from skillet.skill.high_level.pick import PickSkill
 from skillet.skill.high_level.place import PlaceSkill
 from skillet.skill.high_level.rotate_yaw import RotateYawSkill

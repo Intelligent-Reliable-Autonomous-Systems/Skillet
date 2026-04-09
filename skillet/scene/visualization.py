@@ -3,42 +3,28 @@
 from __future__ import annotations
 
 import threading
-import time
-from contextlib import suppress
-from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
-import cv2
 import numpy as np
 import torch
 
-from skillet.perception import SkilletPerception
 from skillet.perception.realsense import RealsenseEnv
+from skillet.scene.base import Scene, SceneObject
+from skillet.scene.cube import Cube
 from skillet.scene.utils import (
-    _BBOX_THICKNESS,
-    _FONT,
-    _FONT_SCALE,
-    _FONT_THICKNESS,
-    _OVERLAY_ALPHA,
-    _PALETTE_BGR,
     create_aabb_lineset,
     create_camera_model,
-    depth_to_colormap_np,
     get_object_geometry,
     make_point_marker,
     point_cloud_to_open3d,
     quat_to_roll_pitch_yaw,
-    segmented_rgbd_to_point_cloud,
     tilt_from_quat_wxyz,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Callable, Sequence
 
-    from skillet.core import BatchedEnvironment
-    from skillet.core.env import Environment
-    from skillet.core.spaces import ObservationSpec
-    from skillet.scene.base import Scene
+    from skillet.core import BatchedEnvironment, Environment
 
 try:
     import open3d as o3d
@@ -50,8 +36,8 @@ except ImportError:
     _rendering = None  # type: ignore[assignment]
 
 
-class SkilletVisualizer:
-    """Stateful visualizer for Open3D using the ``gui.Application`` API and cv2 window for raw RGB-D images.
+class Open3DVisualizer:
+    """Stateful Open3D visualizer using the ``gui.Application`` API.
 
     Renders a point cloud with optional world-bounds wireframe, camera model,
     and a HUD label showing the current camera pose.  Designed to ``run()`` on
@@ -63,27 +49,19 @@ class SkilletVisualizer:
 
     def __init__(
         self,
-        env: Environment | BatchedEnvironment,
-        obs_spec: ObservationSpec,
         scene: Scene,
-        perception: SkilletPerception,
-        poll_rate: float = 8,
-        device: str | torch.device | None = None,
+        env: Environment | BatchedEnvironment,
+        window_name: str = "Skillet Table Scene",
         width: int = 640,
         height: int = 480,
+        get_tcp_pos: Callable[[], Sequence[float]] | None = None,
     ) -> None:
         self.scene = scene
         self.env = env
-        self.perception = perception
+        self._window_name = window_name
         self._width = width
         self._height = height
-        if isinstance(device, str):
-            device = torch.device(device)
-        self.device = device or obs_spec.device
-        self.obs_spec = replace(obs_spec, device=self.device, is_torch=True)
-        self.poll_rate = poll_rate
 
-        # Open3D state
         self._app: Any | None = None
         self._window: Any | None = None
         self._scene_widget: Any | None = None
@@ -91,41 +69,25 @@ class SkilletVisualizer:
         self._mat_unlit: Any | None = None
         self._mat_lit: Any | None = None
         self._mat_line: Any | None = None
-        self._open3d_scene: np.ndarray | None = None
 
         self._added_geometries: set[str] = set()
         self._needs_camera_setup = True
         self._closed = False
-        self._scene_window_enabled = False
-
-        # Marker state (written from any thread, read on GUI thread)
         self._target_pos: np.ndarray | None = None
         self._target_size: float = 0.007
+        self._open3d_scene: np.ndarray | None = None
         self._tcp_pose: np.ndarray | None = None
         self._gripper_pos: np.ndarray | None = None
         self._get_tcp_pose = self.get_tcp_pose if not isinstance(env, RealsenseEnv) else None
         self._get_gripper_pos = self.get_gripper_pos if not isinstance(env, RealsenseEnv) else None
 
-        self._scene_thread: threading.Thread | None = None
-        self._scene_stop_event = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._stop_event = threading.Event()
+        self._render_event = threading.Event()
 
-        # CV2 visualization variables
-        self._display_rgb = True
-        self._display_depth = False
-        self._segment_rgb = False
-        self._segment_depth = False
-        self._rgbd_window_name = "Perception Scene"
-        self._rgbd_active = False
-        self._rgbd_height = 800
-        self._rgbd_width = 1200
-
-        self._video_writer = cv2.VideoWriter(
-            "output.mp4", cv2.VideoWriter_fourcc(*"mp4v"), 30.0, (self._rgbd_width, self._rgbd_height)
-        )
-
-        self._rgbd_thread: threading.Thread | None = None
-        self._rgbd_stop_event = threading.Event()
-        # self._render_event = threading.Event()
+    @property
+    def open3d_scene(self) -> np.ndarray:
+        return self._open3d_scene
 
     def _setup(self) -> None:
         """Initialize gui.Application, create window / scene / HUD / static geometry."""
@@ -133,7 +95,7 @@ class SkilletVisualizer:
         self._app.initialize()
 
         self._window = self._app.create_window(
-            "Processed Table Scene",
+            self._window_name,
             self._width,
             self._height,
         )
@@ -164,35 +126,11 @@ class SkilletVisualizer:
         coord = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.2, origin=[0, 0, 0])
         self._add_geometry("coord_frame", coord, self._mat_lit)
 
-        if self.scene.bounds is not None:
+        if self.scene is not None and self.scene.bounds is not None:
             bounds_ls = create_aabb_lineset(self.scene.bounds)
             if bounds_ls is not None:
                 self._add_geometry("scene_bounds", bounds_ls, self._mat_line)
 
-        self._scene_window_enabled = True
-
-    def _on_layout(self, layout_context: Any) -> None:
-        r = self._window.content_rect
-        self._scene_widget.frame = r
-        pref = self._hud_label.calc_preferred_size(layout_context, _gui.Widget.Constraints())
-        self._hud_label.frame = _gui.Rect(r.x + 10, r.y + 10, pref.width, pref.height)
-
-    def _on_close(self) -> bool:
-        self._closed = True
-        self._scene_window_enabled = False
-        return True
-
-    def _add_text_3d(self, name: str, text: str, position: np.ndarray, scale: float = 0.02) -> None:
-        """Add 3D text mesh above a geometry position."""
-        text_mesh = o3d.t.geometry.TriangleMesh.create_text(text, depth=0.005)
-        text_mesh.scale(scale, center=[0, 0, 0])
-        text_mesh.translate(position)
-        mat = o3d.visualization.rendering.MaterialRecord()
-        mat.shader = "defaultUnlit"
-        mat.base_color = [1.0, 1.0, 1.0, 1.0]
-        self._add_geometry(name + "_label", text_mesh, mat)
-
-    # Geometry helpers (GUI thread only)
     def _add_geometry(self, name: str, geom: Any, mat: Any) -> None:
         """Add or replace a named geometry in the scene."""
         scene = self._scene_widget.scene
@@ -210,6 +148,24 @@ class SkilletVisualizer:
             self._scene_widget.scene.remove_geometry(name)
             self._added_geometries.discard(name)
 
+    def _on_layout(self, layout_context: Any) -> None:
+        r = self._window.content_rect
+        self._scene_widget.frame = r
+        pref = self._hud_label.calc_preferred_size(
+            layout_context,
+            _gui.Widget.Constraints(),
+        )
+        self._hud_label.frame = _gui.Rect(
+            r.x + 10,
+            r.y + 10,
+            pref.width,
+            pref.height,
+        )
+
+    def _on_close(self) -> bool:
+        self._closed = True
+        return True
+
     def update(
         self,
         point_cloud: torch.Tensor,
@@ -220,7 +176,7 @@ class SkilletVisualizer:
         if self._closed or self._app is None or self._window is None:
             return
 
-        # Prepare heavy geometry conversion on the calling (RGBD) thread.
+        # Prepare heavy geometry conversion on the calling (perception) thread.
         pcd = point_cloud_to_open3d(
             point_cloud,
             segment_indices=segment_indices,
@@ -245,7 +201,7 @@ class SkilletVisualizer:
 
         do_camera_setup = self._needs_camera_setup
 
-        def _apply_to_scene() -> None:
+        def _do_update() -> None:
             if self._closed:
                 return
 
@@ -271,7 +227,6 @@ class SkilletVisualizer:
                 geometry = get_object_geometry(obj)
                 if geometry is not None and len(geometry) > 0:
                     self._add_geometry(obj.identifier, geometry, self._mat_line)
-
                 else:
                     self._remove_geometry(obj.identifier)
 
@@ -305,7 +260,6 @@ class SkilletVisualizer:
                 self._add_geometry("tcp_pos", sphere, self._mat_lit)
                 width = (0.1 if self._gripper_pos < 0.5 else 0.03) if self._gripper_pos is not None else 0.08
                 gripper = self.gripper_mesh(self._tcp_pose[0:3], self._tcp_pose[3:7], width=width)
-                gripper.compute_vertex_normals()
                 self._add_geometry("gripper", gripper, self._mat_unlit)
             else:
                 self._remove_geometry("tcp_pos")
@@ -336,87 +290,30 @@ class SkilletVisualizer:
             self._scene_widget.force_redraw()
             self._render_event.wait(timeout=1.0)
 
-        self._app.post_to_main_thread(self._window, _apply_to_scene)
-        # self._app.post_to_main_thread(self._window, _render) # TODO this might be the problem with crashing
+        self._app.post_to_main_thread(self._window, _do_update)
+        self._app.post_to_main_thread(self._window, _render)
 
-    def run_scene(self) -> None:
+    def run(self) -> None:
         """Set up the window and block on the GUI event loop (call on main thread)."""
         if o3d is None:
             raise ImportError("Open3D is required for visualization. Install with: pip install open3d")
         self._setup()
         self._app.run()
 
-    def run_rgbd(self) -> None:
-        """Run the RGBD window visualizer of the SkilletVisualizer Pipeline."""
-        poll_period_s = 1.0 / self.poll_rate
-        next_poll_t = time.perf_counter()
-
-        while not self._rgbd_stop_event.is_set():
-            obs = self.env.get_observation(self.obs_spec)
-            obs_unbatched = self._maybe_unbatch(obs)
-
-            # NOTE: No meaningful masks currently, this will all happen in scene
-            depth = obs_unbatched["depth"]
-            masks = torch.ones((1, depth.shape[-2], depth.shape[-1]), dtype=torch.bool, device=depth.device)
-            segment_ids = torch.zeros((1,), dtype=torch.int64, device=depth.device)
-            point_cloud, segment_indices = self._observation_to_point_cloud(obs_unbatched, masks, segment_ids)
-
-            if self._scene_window_enabled:
-                self.update(
-                    point_cloud,
-                    segment_indices=segment_indices,
-                    camera_pose=obs_unbatched["camera_pose"],
-                )
-
-            self._update_rgbd_window(obs_unbatched, masks, segment_ids)
-
-            next_poll_t += poll_period_s
-            sleep_s = max(0.0, next_poll_t - time.perf_counter())
-            if sleep_s > 0:
-                time.sleep(sleep_s)
-        self._stop_rgbd()
-
-    def _write_frame(self, frame: np.ndarray) -> None:
-        """Write a video frame."""
-        if not hasattr(self, "_video_writer") or self._video_writer is None:
-            h, w = frame.shape[:2]
-            fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-            self._video_writer = cv2.VideoWriter("output.mp4", fourcc, 30.0, (w, h))
-        if frame.shape[2] != 3:
-            print(f"Bad channels: {frame.shape}")
-            return
-
-        expected_h, expected_w = (
-            self._video_writer.get(cv2.CAP_PROP_FRAME_HEIGHT),
-            self._video_writer.get(cv2.CAP_PROP_FRAME_WIDTH),
-        )
-        if frame.shape[0] != expected_h or frame.shape[1] != expected_w:
-            print(f"Size mismatch: writer={expected_w}x{expected_h}, frame={frame.shape[1]}x{frame.shape[0]}")
-            return
-        self._video_writer.write(frame)
-
     def run_thread(self) -> None:
         """Run the visualizer in a thread."""
-        if self._scene_thread is not None and self._scene_thread.is_alive():
+        if self._thread is not None and self._thread.is_alive():
             return
-        self._scene_stop_event.clear()
-        self._rgbd_stop_event.clear()
-        self._scene_thread = threading.Thread(target=self.run_scene, name="SceneVisualizerThread", daemon=True)
-        self._rgbd_thread = threading.Thread(target=self.run_rgbd, name="RGBDVisualizerThread", daemon=True)
-        self._rgbd_thread.start()
-        self._scene_thread.start()
+        self._stop_event.clear()
+        self._thread = threading.Thread(target=self.run, name="VisualizerThread", daemon=True)
+        self._thread.start()
 
     def stop_thread(self) -> None:
         """Stop the visualizer thread."""
-        if self._scene_thread is not None and self._scene_thread.is_alive():
-            self._scene_stop_event.set()
-            self._scene_thread.join(timeout=2.0)
-            self._scene_thread = None
-        if self._rgbd_thread is not None and self._rgbd_thread.is_alive():
-            self._rgbd_stop_event.set()
-            self._rgbd_thread.join(timeout=2.0)
-            self._rgbd_thread = None
-        self._stop_rgbd()
+        if self._thread is not None and self._thread.is_alive():
+            self._stop_event.set()
+            self._thread.join(timeout=2.0)
+            self._thread = None
 
     def request_close(self) -> None:
         """Request the GUI to shut down (safe to call from any thread)."""
@@ -433,210 +330,15 @@ class SkilletVisualizer:
             self._target_pos = self._target_pos[0]
         self._target_size = size
 
-    def start_rgbd_visualization(
+    def gripper_mesh(
         self,
-        display_rgb: bool = False,
-        display_depth: bool = False,
-        segment_rgb: bool = False,
-        segment_depth: bool = False,
-        rgbd_window_name: str = "Raw RGB-D Scene",
-    ) -> None:
-        """Enable the CV2 RGB-D preview window."""
-        self._display_rgb = display_rgb
-        self._display_depth = display_depth
-        self._segment_rgb = segment_rgb
-        self._segment_depth = segment_depth
-        self._rgbd_window_name = rgbd_window_name
-
-    def _draw_instance_annotations(
-        self, image: np.ndarray, masks: torch.Tensor, segment_ids: torch.Tensor
-    ) -> np.ndarray:
-        """Draw semi-transparent overlays, bounding boxes, and prompt labels."""
-        out = image.copy()
-        overlay = image.copy()
-        masks_np = masks.detach().cpu().numpy()
-        ids_np = segment_ids.detach().cpu().numpy()
-        n = masks_np.shape[0]
-
-        for i in range(n):
-            color = _PALETTE_BGR[i % len(_PALETTE_BGR)]
-            overlay[masks_np[i] > 0] = color
-        cv2.addWeighted(overlay, _OVERLAY_ALPHA, out, 1.0 - _OVERLAY_ALPHA, 0, out)
-
-        for i in range(n):
-            seg_mask = masks_np[i] > 0
-            color = _PALETTE_BGR[i % len(_PALETTE_BGR)]
-
-            ys, xs = np.where(seg_mask)
-            if len(ys) == 0:
-                continue
-            x1, y1, x2, y2 = int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())
-            cv2.rectangle(out, (x1, y1), (x2, y2), color, _BBOX_THICKNESS)
-
-            label = f"#{i} obj_{int(ids_np[i])}"
-            (tw, th), _ = cv2.getTextSize(label, _FONT, _FONT_SCALE, _FONT_THICKNESS)
-            tx, ty = x1, y1 - 6 if y1 - 6 - th >= 0 else y1 + th + 6
-            cv2.rectangle(out, (tx - 1, ty - th - 4), (tx + tw + 5, ty + 4), color, cv2.FILLED)
-            cv2.putText(out, label, (tx + 2, ty), _FONT, _FONT_SCALE, (255, 255, 255), _FONT_THICKNESS, cv2.LINE_AA)
-
-        return out
-
-    def _colorize_segmented_rgb(
-        self, rgb_bgr: np.ndarray, masks: torch.Tensor, segment_ids: torch.Tensor
-    ) -> np.ndarray:
-        """Annotate RGB image with per-type overlays, bounding boxes, and labels."""
-        return self._draw_instance_annotations(rgb_bgr, masks, segment_ids)
-
-    def _colorize_segmented_depth(
-        self, depth_bgr: np.ndarray, masks: torch.Tensor, segment_ids: torch.Tensor
-    ) -> np.ndarray:
-        """Annotate depth colormap with per-type overlays, bounding boxes, and labels."""
-        return self._draw_instance_annotations(depth_bgr, masks, segment_ids)
-
-    def _update_rgbd_window(
-        self, obs_unbatched: Mapping[str, Any], masks: torch.Tensor, segment_ids: torch.Tensor
-    ) -> None:
-        """Update side-by-side RGB/Depth CV2 preview."""
-        if not (self._display_rgb or self._display_depth):
-            return
-
-        self._ensure_rgbd_window()
-
-        panels: list[np.ndarray] = []
-        if self._display_rgb:
-            rgb = obs_unbatched["rgb"].detach().to("cpu").numpy().transpose((1, 2, 0))
-            rgb_bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
-            if self._segment_rgb:
-                rgb_bgr = self._colorize_segmented_rgb(rgb_bgr, masks, segment_ids)
-            panels.append(rgb_bgr)
-        if self._display_depth:
-            depth = obs_unbatched["depth"].detach().to("cpu").numpy()[0]
-            depth_vis = depth
-            if depth.dtype != np.uint16:
-                depth_vis = (depth * 1000.0).astype(np.uint16)
-            depth_bgr = depth_to_colormap_np(depth_vis)
-            if self._segment_depth:
-                depth_bgr = self._colorize_segmented_depth(depth_bgr, masks, segment_ids)
-            panels.append(depth_bgr)
-        # panels.append(self._open3d_scene) if self._open3d_scene is not None else None
-        # panels.append(self.perception.bbox_frame) if self.perception.bbox_frame is not None else None
-        # panels.append(self.perception.mask_frame) if self.perception.mask_frame is not None else None
-        if not panels:
-            return
-        frame = self._arrange_panels(panels)
-        cv2.imshow(self._rgbd_window_name, frame)
-        # self._write_frame(frame)
-        cv2.waitKey(1)
-
-    def _arrange_panels(self, panels: list[np.ndarray], gap: int = 10) -> np.ndarray:
-        """Arrange panels in a grid with whitespace gaps between them."""
-        n = len(panels)
-        if n == 0:
-            return None
-        if n == 1:
-            return panels[0]
-        if n == 2:
-            # Side by side
-            h = max(p.shape[0] for p in panels)
-            padded = []
-            for p in panels:
-                if p.shape[0] < h:
-                    pad = np.zeros((h - p.shape[0], p.shape[1], p.shape[2]), dtype=p.dtype)
-                    p = np.concatenate([p, pad], axis=0)
-                padded.append(p)
-            divider = np.zeros((h, gap, 3), dtype=np.uint8)
-            return np.concatenate([padded[0], divider, padded[1]], axis=1)
-
-        # 2x2 grid for 3 or 4 panels
-        if n == 3:
-            # Pad with a blank panel
-            blank = np.zeros_like(panels[0])
-            panels = panels + [blank]
-
-        top_left, top_right, bot_left, bot_right = panels[0], panels[1], panels[2], panels[3]
-
-        # Normalize all panels to the same size (max dims across all)
-        target_h = max(p.shape[0] for p in panels)
-        target_w = max(p.shape[1] for p in panels)
-
-        def resize_pad(p):
-            """Ensure 3-channel BGR and pad to target size."""
-            if p.ndim == 2:
-                p = cv2.cvtColor(p, cv2.COLOR_GRAY2BGR)
-            elif p.shape[2] == 1:
-                p = cv2.cvtColor(p[:, :, 0], cv2.COLOR_GRAY2BGR)
-            out = np.zeros((target_h, target_w, 3), dtype=np.uint8)
-            h, w = p.shape[:2]
-            out[:h, :w] = p[:target_h, :target_w]
-            return out
-
-        tl = resize_pad(top_left)
-        tr = resize_pad(top_right)
-        bl = resize_pad(bot_left)
-        br = resize_pad(bot_right)
-
-        h_gap = np.full((target_h, gap, 3), 255, dtype=np.uint8)
-        v_gap = np.full((gap, target_w * 2 + gap, 3), 255, dtype=np.uint8)
-
-        top_row = np.concatenate([tl, h_gap, tr], axis=1)
-        bot_row = np.concatenate([bl, h_gap, br], axis=1)
-
-        return np.concatenate([top_row, v_gap, bot_row], axis=0)
-
-    def _stop_rgbd(self) -> None:
-        """Tear down the CV2 window."""
-        if self._rgbd_active:
-            with suppress(cv2.error):
-                cv2.destroyWindow(self._rgbd_window_name)
-            self._rgbd_active = False
-        self._display_rgb = False
-        self._display_depth = False
-
-    def _ensure_rgbd_window(self) -> None:
-        """Create the CV2 RGBD window lazily on the run-loop thread."""
-        if self._rgbd_active:
-            return
-        if not (self._display_rgb or self._display_depth):
-            return
-        cv2.namedWindow(self._rgbd_window_name, cv2.WINDOW_NORMAL)
-        cv2.resizeWindow(self._rgbd_window_name, self._rgbd_width, self._rgbd_height)
-        self._rgbd_active = True
-
-    def _maybe_unbatch(self, obs: Mapping[str, Any]) -> dict[str, torch.Tensor]:
-        """Convert observations to unbatched torch tensors."""
-        rgb = obs["rgb"]
-        depth = obs["depth"]
-        intrinsic_k = obs["intrinsic_k"]
-        camera_pose = obs["camera_pose"]
-
-        if rgb.dim() == 4:
-            rgb = rgb[0]
-        if depth.dim() == 4:
-            depth = depth[0]
-        if intrinsic_k.dim() == 3:
-            intrinsic_k = intrinsic_k[0]
-        if camera_pose.dim() == 2:
-            camera_pose = camera_pose[0]
-
-        return {"rgb": rgb, "depth": depth, "intrinsic_k": intrinsic_k, "camera_pose": camera_pose}
-
-    def _observation_to_point_cloud(
-        self, obs_unbatched: Mapping[str, Any], masks: torch.Tensor, segment_ids: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Build a point cloud from an unbatched RGB-D observation."""
-        point_cloud, segment_indices = segmented_rgbd_to_point_cloud(
-            obs_unbatched["depth"],
-            masks,
-            obs_unbatched["intrinsic_k"],
-            obs_unbatched["camera_pose"],
-            rgb=obs_unbatched["rgb"],
-            use_perspective=False,
-        )
-        if segment_ids.numel() > 0 and segment_indices.numel() > 0:
-            segment_indices = segment_ids[segment_indices]
-        return point_cloud, segment_indices
-
-    def gripper_mesh(self, xyz, quat_wxyz, width=0.08, depth=0.02, height=0.02, finger_len=0.06):
+        xyz: np.ndarray,
+        quat_wxyz: np.ndarray,
+        width: float = 0.08,
+        depth: float = 0.02,
+        height: float = 0.02,
+        finger_len: float = 0.06,
+    ) -> object:
         """Create a simple parallel-jaw gripper mesh with the pose at the finger tips midpoint.
 
         Args:
@@ -649,6 +351,7 @@ class SkilletVisualizer:
 
         Returns:
             open3d.geometry.TriangleMesh
+
         """
         # --- Helper: quaternion → rotation matrix ---
         w, x, y, z = quat_wxyz
@@ -660,11 +363,11 @@ class SkilletVisualizer:
             ]
         )
 
-        # --- Base ---
+        # Base
         base = o3d.geometry.TriangleMesh.create_box(width=width, height=height, depth=depth)
         base.translate([-width / 2, -height / 2, -depth / 2])
 
-        # --- Fingers ---
+        # Fingers
         finger_w = 0.01
         finger_h = height
         finger_d = finger_len
@@ -676,10 +379,9 @@ class SkilletVisualizer:
         left_finger.translate([-width / 2, -height / 2, depth / 2])
         right_finger.translate([width / 2 - finger_w, -height / 2, depth / 2])
 
-        # --- Combine meshes ---
         gripper = base + left_finger + right_finger
 
-        # --- Compute offset to move pose to finger tips midpoint ---
+        # Compute offset to move fingers to midpoint
         # Finger tips are at z = depth/2 + finger_len
         # x coordinates of tips: left = -width/2 + finger_w/2, right = width/2 - finger_w/2
         tip_left_local = np.array([-width / 2 + finger_w / 2, 0, depth / 2 + finger_d])
@@ -693,18 +395,18 @@ class SkilletVisualizer:
         T[:3, 3] = xyz
         gripper.transform(T)
 
-        # --- Color ---
+        # Lighting and color
         gripper.paint_uniform_color([0.8, 0.2, 0.2])
-
-        # --- Compute normals for lighting ---
         gripper.compute_vertex_normals()
 
         return gripper
 
     def get_tcp_pose(self) -> Sequence[float]:
+        """Get the TCP post from the environment."""
         return (
             self.env.get_observation(self.env.unwrapped.obs_spec_ikee.unbatched())["tcp_pose_b"].detach().cpu().numpy()
         )
 
     def get_gripper_pos(self) -> Sequence[float]:
+        """Get the gripper position from the environment."""
         return self.env.get_observation(self.env.unwrapped.obs_spec_ikee.unbatched())["gripper"].detach().cpu().numpy()

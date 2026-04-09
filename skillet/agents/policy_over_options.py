@@ -91,7 +91,6 @@ class PolicyOverOptionsAgent(Generic[THighLevelObs, TLowLevelObs, TAction, TSkil
             skill_done = selected_skill.is_terminated(env.get_observation(selected_skill.obs_spec))
             if data_logger is not None:
                 data_logger.add_datapoint()
-                data_logger.save_log()
             while not skill_done and not bool(terminated):
                 # 4a. Get the next action with the low-level observation
                 action = selected_skill.get_action(env.get_observation(selected_skill.obs_spec))

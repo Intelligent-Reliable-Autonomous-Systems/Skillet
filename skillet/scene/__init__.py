@@ -1,1 +1,1 @@
-from .visualization import SkilletVisualizer as SkilletVisualizer
+from .visualization import Open3DVisualizer

@@ -19,6 +19,8 @@ class ReconstructorBase(ABC):
 
         """
         self._scene = scene
+        self._bbox_frame = None
+        self._mask_frame = None
 
     @abstractmethod
     def update_state(self, obs: dict[str, torch.Tensor], update: bool = True) -> None:
@@ -40,3 +42,11 @@ class ReconstructorBase(ABC):
     def scene(self) -> Scene:
         """Return the scene."""
         return self._scene
+
+    @property
+    def masks(self) -> torch.Tensor:
+        return None
+
+    @property
+    def segment_indices(self) -> torch.Tensor:
+        return None

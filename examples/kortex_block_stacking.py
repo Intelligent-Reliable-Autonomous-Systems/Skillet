@@ -19,7 +19,7 @@ from skillet.policy.dummy import FixedSequencePolicy
 from skillet.policy.ik_ee import PoseAbsIKEEPolicy
 from skillet.policy.moveit import MoveItTcpQuatPolicy
 from skillet.policy.twist import TwistPIDPosePolicy
-from skillet.scene import SkilletVisualizer
+from skillet.scene import Open3DVisualizer
 from skillet.scene.abstract.abstract_model import AbstractModel
 from skillet.scene.base import Scene
 from skillet.scene.cube import Cube
@@ -48,7 +48,7 @@ parser.add_argument(
     "--viz", type=str, default="rgb,depth,pointcloud", help="Visualization modes to display, as comma-separated string."
 )
 parser.add_argument("--robot_ip", type=str, default="192.168.1.10", help="Robot IP.")
-parser.add_argument("--poll_rate_hz", type=int, default=8, help="Seconds between service requests.")
+parser.add_argument("--poll_rate_hz", type=int, default=10, help="Seconds between service requests.")
 parser.add_argument("--max_depth_m", type=float, default=None, help="Optional far-plane clipping depth in meters.")
 parser.add_argument("--task", type=str, default="Kortex-Gen3Lite-v0", help="Kortex Environment")
 
@@ -71,6 +71,7 @@ def main() -> None:
 
     world_bounds = (TABLE_X0, TABLE_Y0, 0, TABLE_X0 + TABLE_DX, TABLE_Y0 + TABLE_DY, 1)
     scene = Scene(objects=[], closed_set=False, bounds=world_bounds, contains_objects=False)
+    # scene = Scene(objects=[cube_0, cube_1, cube_2], closed_set=False, bounds=world_bounds, contains_objects=False)
 
     if args_cli.realsense_env:
         env = RealsenseEnv(apriltag_size_m=0.1, apriltag_id=3)
@@ -94,21 +95,13 @@ def main() -> None:
         scene=scene,
         obs_spec=rgbd_spec,
         reconstructor="sam",
-        poll_rate=args_cli.poll_rate_hz,
+        poll_rate_hz=args_cli.poll_rate_hz,
         device=args_cli.device,
     )
+    visualizer = Open3DVisualizer(scene, env)
+    perception.set_visualizer(visualizer, segment_point_cloud=True)
     perception.run_thread()
-
-    visualizer = SkilletVisualizer(
-        env=env,
-        obs_spec=rgbd_spec,
-        scene=scene,
-        perception=perception,
-        poll_rate=args_cli.poll_rate_hz,
-        device=args_cli.device,
-    )
-
-    # visualizer.run_thread()
+    visualizer.run_thread()
 
     import time
 

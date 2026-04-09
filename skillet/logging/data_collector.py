@@ -8,6 +8,7 @@ import time
 from skillet.scene.base import Scene
 import h5py
 import numpy as np
+import cv2
 
 from skillet.envs import SkilletEnv
 from skillet.perception.perception import SkilletPerception
@@ -25,6 +26,13 @@ class SkilletDataLogger:
         self._num_points = 0
         self._exp_id = -1
         self._start_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self._write_video = False
+
+        if self._write_video:
+            self._cap = cv2.VideoCapture(0)
+            self.fps = self._cap.get(cv2.CAP_PROP_FPS)
+            self._fourcc = cv2.VideoWriter_fourcc(*"mp4v")  # .mp4 output
+            self._writer = None
 
         self.reset_logging()
         Path(self._log_dir).mkdir(exist_ok=True, parents=True)
@@ -66,6 +74,7 @@ class SkilletDataLogger:
             self._camera_pose = rgbd_obs["camera_pose"].cpu().numpy().squeeze()[None, ...]
             self._intrinsic_k = rgbd_obs["intrinsic_k"].cpu().numpy().squeeze()[None, ...]
             self._tcp_pose = twist_obs["tcp_pose_b"].cpu().numpy().squeeze()[None, ...]
+            self._perception_frame = self._perception.perception_frame[None, ...]
             # self._abs_state = np.array([abstract_state])
             self._obj_ids = scene_dict["ids"][None, ...]
             self._obj_poses = scene_dict["poses"][None, ...]
@@ -88,12 +97,20 @@ class SkilletDataLogger:
             self._tcp_pose = np.concatenate(
                 (self._tcp_pose, twist_obs["tcp_pose_b"].cpu().numpy().squeeze()[None, ...]), axis=0
             )
+            self._perception_frame = np.concatenate(
+                (self._perception_frame, self._perception.perception_frame[None, ...]), axis=0
+            )
             # self._abs_state = np.concatenate((self._abs_state, np.array([abstract_state])), axis=-1)
             self._obj_ids = np.concatenate((self._obj_ids, scene_dict["ids"][None, ...]), axis=0)
             self._obj_poses = np.concatenate((self._obj_poses, scene_dict["poses"][None, ...]), axis=0)
             self._obj_names = np.concatenate((self._obj_names, scene_dict["names"][None, ...]), axis=0)
             self._world_bounds = np.concatenate((self._world_bounds, scene_dict["bounds"][None, ...]), axis=0)
 
+        if self._write_video:
+            if self._writer is None:
+                h, w = self._perception_frame.shape[1:3]
+                self._writer = cv2.VideoWriter("output.mp4", self._fourcc, self.fps, (w, h))
+            self._writer.write(self._perception.perception_frame)
         self._num_points += 1
 
     def save_log(self) -> None:
@@ -101,6 +118,9 @@ class SkilletDataLogger:
         print("[INFO][LOGGER] Saving datafile")
         fpath = Path(f"{self._log_dir}/{self._start_time}/exp_{self._exp_id}")
         fpath.mkdir(exist_ok=True, parents=True)
+        if self._write_video:
+            self._cap.release()
+            self._writer.release()
         with h5py.File(f"{fpath}/data.h5", "w") as f:
             ep = f.create_group("episode")
             ep.create_dataset("time_stamps", data=self._time_stamps, compression="gzip")
@@ -109,6 +129,7 @@ class SkilletDataLogger:
             ep.create_dataset("camera_pose", data=self._camera_pose, compression="gzip")
             ep.create_dataset("intrinsic_k", data=self._intrinsic_k, compression="gzip")
             ep.create_dataset("tcp_pose", data=self._tcp_pose, compression="gzip")
+            ep.create_dataset("perception_frame", data=self._perception_frame, compression="gzip")
             # ep.create_dataset("abs_state", data=self._abs_state, compression="gzip")
             ep.create_dataset("obj_ids", data=self._obj_ids, compression="gzip")
             ep.create_dataset("obj_poses", data=self._obj_poses, compression="gzip")
@@ -119,3 +140,4 @@ class SkilletDataLogger:
                 dtype=h5py.string_dtype(encoding="utf-8"),
             )
             ep.create_dataset("world_bounds", data=self._world_bounds, compression="gzip")
+        f.close()

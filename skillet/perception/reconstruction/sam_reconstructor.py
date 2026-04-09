@@ -55,10 +55,20 @@ class SAMReconstructor(ReconstructorBase):
 
         self._bbox_frame = None
         self._mask_frame = None
+        self._masks = None
+        self._segment_indices = None
 
     @property
-    def scene(self) -> None:
+    def scene(self) -> Scene:
         return self._scene
+
+    @property
+    def masks(self) -> torch.Tensor:
+        return self._masks
+
+    @property
+    def segment_indices(self) -> torch.Tensor:
+        return self._segment_indices
 
     def update_state(
         self, obs: dict[str, Any], update: bool = True, frame: Literal["world", "camera"] = "camera"
@@ -97,11 +107,15 @@ class SAMReconstructor(ReconstructorBase):
         else:
             raise ValueError(f"Invalid mode: {self._mode}")
 
+        self._masks = masks
+        self._segment_indices = torch.arange(masks.shape[0], device=masks.device)
+
         if isinstance(depth, torch.Tensor):
             rgb = rgb.cpu().numpy()
             depth = depth.cpu().numpy()
             intrinsic_k = intrinsic_k.cpu().numpy()
             camera_pose = camera_pose.cpu().numpy()
+
         # TODO make sure we are always grabbing the blocks
         cube_masks = masks[concept_indices == 0].cpu().numpy()
         masks = masks.cpu().numpy()
