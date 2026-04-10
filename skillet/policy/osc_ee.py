@@ -10,7 +10,7 @@ from skillet.core.policy import BatchedPolicy, TBAction, TBPolicyObs
 from skillet.core.spaces import ActionSpec, ObservationSpec
 
 
-class OSCEEPolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[TBPolicyObs, TBAction]):
+class OscEePolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[TBPolicyObs, TBAction]):
     """Base class for Operational Space Control End Effector Policy."""
 
     osc: OperationalSpaceController
@@ -138,7 +138,7 @@ class OSCEEPolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[TB
         return command, task_frame_pose_b
 
 
-class PoseAbsOSCEEPolicy(OSCEEPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, TBAction]):
+class PoseAbsOscEePolicy(OscEePolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, TBAction]):
     """A policy that produces pose ."""
 
     def __init__(self, obs_spec: ObservationSpec[TBPolicyObs], action_spec: ActionSpec[TBAction]) -> None:

@@ -14,14 +14,12 @@ from typing import Any
 import numpy as np
 import pinocchio as pin
 import torch
-from kortex_api.autogen.client_stubs.BaseClientRpc import BaseClient
-from kortex_api.autogen.client_stubs.BaseCyclicClientRpc import BaseCyclicClient
-from skillet.envs.kortex.kortex_bridge import DeviceConnection
 from kortex_api.autogen.messages import Base_pb2
 
 from skillet.core.math import convert_quat
 from skillet.core.spaces import ActionSpec
 from skillet.envs.compatibility import SkilletGymEnv
+from skillet.envs.kortex.kortex_bridge import DeviceConnection
 from skillet.envs.util import configure_seed
 
 from .kortex_env_cfg import KortexEnvCfg
@@ -283,9 +281,6 @@ class KortexEnv(SkilletGymEnv):
             A tuple containing the observations, rewards, resets (terminated and truncated) and extras.
 
         """
-        assert self._supports_action_spec(
-            action_spec
-        ), f"Action specification `{action_spec.name}: {action_spec}` not supported by environment {self}."
         if self._next_step_time is None:
             self._next_step_time = time.monotonic()
 
@@ -362,11 +357,6 @@ class KortexEnv(SkilletGymEnv):
     """
     Implementation-specific functions.
     """
-
-    @abstractmethod
-    def _supports_action_spec(self, action_spec: ActionSpec) -> bool:
-        """Return if the action specification is supported by the environment."""
-        raise NotImplementedError(f"Please implement the 'supports_action_spec' method for {self.__class__.__name__}.")
 
     @abstractmethod
     def _pre_process_action(self, actions: torch.Tensor, action_spec: ActionSpec[Any] | None = None) -> np.ndarray:

@@ -8,9 +8,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import torch
 
-from skillet.perception.realsense import RealsenseEnv
-from skillet.scene.base import Scene, SceneObject
-from skillet.scene.cube import Cube
+from skillet.envs.realsense import RealsenseEnv
 from skillet.scene.utils import (
     create_aabb_lineset,
     create_camera_model,
@@ -25,6 +23,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
     from skillet.core import BatchedEnvironment, Environment
+    from skillet.scene.base import Scene
 
 try:
     import open3d as o3d

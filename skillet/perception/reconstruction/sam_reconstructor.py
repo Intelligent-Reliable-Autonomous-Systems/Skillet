@@ -13,7 +13,6 @@ import numpy as np
 import torch
 from PIL import Image
 
-from skillet.perception.realsense import RealsenseEnv
 from skillet.perception.reconstruction.reconstructor_base import ReconstructorBase
 from skillet.perception.reconstruction.utils import (
     assign_objects_to_id,
@@ -22,8 +21,8 @@ from skillet.perception.reconstruction.utils import (
 )
 from skillet.perception.segmentation.sam import get_sam_client
 from skillet.perception.segmentation.vlm import GeminiClient
+from skillet.scene import THREE_CUBE_APRIL_SCENE, Cube
 from skillet.scene.base import Scene
-from skillet.scene.cube import Cube
 from skillet.scene.utils import assign_poses_to_objects, get_sorted_object_poses
 
 
@@ -693,18 +692,7 @@ class SAMReconstructor(ReconstructorBase):
 
 def main() -> None:
     """Run live SAM benchmark with RGB/depth view and mask overlay."""
-    TABLE_X0 = -0.0889
-    TABLE_Y0 = -0.577
-    TABLE_DX = 0.762
-    TABLE_DY = 1.2446
-
-    """Visualize RGB + depth color map from _get_latest_rgbd()."""
-    cube_0 = Cube(size=0.041, face_apriltags=[{"face": "top", "size": 0.036, "id": 1}])
-    cube_1 = Cube(size=0.041, face_apriltags=[{"face": "front", "size": 0.036, "id": 2}])
-    cube_2 = Cube(size=0.041, face_apriltags=[{"face": "front", "size": 0.036, "id": 5}])
-
-    world_bounds = (TABLE_X0, TABLE_Y0, 0, TABLE_X0 + TABLE_DX, TABLE_Y0 + TABLE_DY, 1)
-    scene = Scene(objects=[cube_0, cube_1, cube_2], closed_set=True, bounds=world_bounds)
+    scene = THREE_CUBE_APRIL_SCENE
 
     env = RealsenseEnv()
     reconstructor = SAMReconstructor(scene=None, build_scene=True)

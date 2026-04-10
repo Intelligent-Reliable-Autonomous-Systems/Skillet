@@ -22,7 +22,7 @@ from skillet.skill.specs import (
 )
 
 
-class IKEEPolicy(BatchedPolicy[IKEE_Obs, TBAction, TBPolicyParams], Generic[TBAction, TBPolicyParams]):
+class IkEePolicy(BatchedPolicy[IKEE_Obs, TBAction, TBPolicyParams], Generic[TBAction, TBPolicyParams]):
     """Abstract base class for Inverse Kinematics End Effector Policy.
 
     Generic Args:
@@ -104,7 +104,7 @@ class IKEEPolicy(BatchedPolicy[IKEE_Obs, TBAction, TBPolicyParams], Generic[TBAc
         return torch.cat((p_be, q_be), dim=1)
 
 
-class PosAbsIKEEPolicy(IKEEPolicy[TBAction, XYZ_Params], Generic[TBAction]):
+class PosAbsIkEePolicy(IkEePolicy[TBAction, XYZ_Params], Generic[TBAction]):
     """A policy that produces ."""
 
     def __init__(self, obs_spec: ObservationSpec[IKEE_Obs], action_spec: ActionSpec[TBAction]) -> None:
@@ -146,7 +146,7 @@ class PosAbsIKEEPolicy(IKEEPolicy[TBAction, XYZ_Params], Generic[TBAction]):
         self.diff_ik.set_command(goal_ee_pose[:, 0:3], ee_quat=goal_ee_pose[:, 3:7], env_ids=env_ids)
 
 
-class PoseAbsIKEEPolicy(IKEEPolicy[TBAction, XYZ_QUAT_Params], Generic[TBAction]):
+class PoseAbsIkEePolicy(IkEePolicy[TBAction, XYZ_QUAT_Params], Generic[TBAction]):
     """A policy that produces pose ."""
 
     def __init__(self, obs_spec: ObservationSpec[IKEE_Obs], action_spec: ActionSpec[TBAction]) -> None:
@@ -184,7 +184,7 @@ class PoseAbsIKEEPolicy(IKEEPolicy[TBAction, XYZ_QUAT_Params], Generic[TBAction]
         self.diff_ik.set_command(goal_pose, env_ids=env_ids)
 
 
-class XYZRPYAbsIKEEPolicy(IKEEPolicy[TBAction, XYZ_RPY_Params], Generic[TBAction]):
+class XYZRPYAbsIkEePolicy(IkEePolicy[TBAction, XYZ_RPY_Params], Generic[TBAction]):
     """A policy that produces pose ."""
 
     def __init__(self, obs_spec: ObservationSpec[IKEE_Obs], action_spec: ActionSpec[TBAction]) -> None:
@@ -224,7 +224,7 @@ class XYZRPYAbsIKEEPolicy(IKEEPolicy[TBAction, XYZ_RPY_Params], Generic[TBAction
         self.diff_ik.set_command(goal_pose, env_ids=env_ids)
 
 
-class OrientAbsIKEEPolicy(IKEEPolicy[TBAction, ROLL_PITCH_YAW_Params], Generic[TBAction]):
+class OrientAbsIkEePolicy(IkEePolicy[TBAction, ROLL_PITCH_YAW_Params], Generic[TBAction]):
     """A policy that produces pose ."""
 
     def __init__(self, obs_spec: ObservationSpec[IKEE_Obs], action_spec: ActionSpec[TBAction]) -> None:
@@ -266,7 +266,7 @@ class OrientAbsIKEEPolicy(IKEEPolicy[TBAction, ROLL_PITCH_YAW_Params], Generic[T
         self.diff_ik.set_command(goal_ee_pose, env_ids=env_ids)
 
 
-class PoseRelIKEEPolicy(IKEEPolicy[TBAction, XYZ_QUAT_Params], Generic[TBAction]):
+class PoseRelIkEePolicy(IkEePolicy[TBAction, XYZ_QUAT_Params], Generic[TBAction]):
     """A policy that produces pose ."""
 
     def __init__(self, obs_spec: ObservationSpec[IKEE_Obs], action_spec: ActionSpec[TBAction]) -> None:

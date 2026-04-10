@@ -9,70 +9,34 @@ import torch
 from skillet.agents.policy_over_options import PolicyOverOptionsAgent, SelectedSkill
 from skillet.core import ActionSpec, ObservationSpec
 from skillet.core.env import BatchToSingleWrapper
-from skillet.envs.skillet_env import SkilletEnv
+from skillet.envs import RealsenseEnv, SkilletEnv
 from skillet.logging import SkilletDataLogger
 from skillet.perception import SkilletPerception
-from skillet.perception.realsense import RealsenseEnv
-from skillet.perception.reconstruction import ApriltagStateReconstructor
-from skillet.perception.reconstruction.sam_reconstructor import SAMReconstructor
-from skillet.policy.dummy import FixedSequencePolicy
-from skillet.policy.ik_ee import PoseAbsIKEEPolicy
-from skillet.policy.moveit import MoveItTcpQuatPolicy
-from skillet.policy.twist import TwistPIDPosePolicy
-from skillet.scene import Open3DVisualizer
+from skillet.policy import FixedSequencePolicy, TwistPidPosePolicy
+from skillet.scene import EMPTY_SCENE, Open3DVisualizer
 from skillet.scene.abstract.abstract_model import AbstractModel
-from skillet.scene.base import Scene
-from skillet.scene.cube import Cube
-from skillet.skill.high_level.pick import PickSkill
-from skillet.skill.high_level.place import PlaceSkill
-from skillet.skill.high_level.rotate_yaw import RotateYawSkill
-from skillet.skill.object_level.pick_block import PickBlockSkill
-from skillet.skill.object_level.place_block import PlaceBlockSkill
-from skillet.skill.object_level.rotate_block import RotateBlockSkill
+from skillet.skill import PickBlockSkill, PickSkill, PlaceBlockSkill, PlaceSkill, RotateBlockSkill, RotateYawSkill
 from skillet_tasks.kortex_tasks.factory import create_kortex_env
 
 if TYPE_CHECKING:
-    from skillet.envs.specs import BxM_Action, IKEE_Obs, RGBD_Obs
+    from skillet.envs.specs import RGBD_Obs
 
 parser = argparse.ArgumentParser(description="Visualize latest RGB-D frame from ROS2 service.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
 parser.add_argument("--device", type=str, default="cuda", help="Device to use")
 parser.add_argument(
-    "--use_moveit", action=argparse.BooleanOptionalAction, default=False, help="Use MoveIt for motion planning."
-)
-parser.add_argument("--use_twist", action=argparse.BooleanOptionalAction, default=False, help="Use cartesian servoing.")
-parser.add_argument(
     "--realsense_env", action=argparse.BooleanOptionalAction, default=False, help="Use RealSense camera environment."
-)
-parser.add_argument(
-    "--viz", type=str, default="rgb,depth,pointcloud", help="Visualization modes to display, as comma-separated string."
 )
 parser.add_argument("--robot_ip", type=str, default="192.168.1.10", help="Robot IP.")
 parser.add_argument("--poll_rate_hz", type=int, default=10, help="Seconds between service requests.")
-parser.add_argument("--max_depth_m", type=float, default=None, help="Optional far-plane clipping depth in meters.")
 parser.add_argument("--task", type=str, default="Kortex-Gen3Lite-v0", help="Kortex Environment")
 
 args_cli = parser.parse_args()
 
-TABLE_X0 = -0.0889
-TABLE_Y0 = -0.577
-TABLE_DX = 0.762
-TABLE_DY = 1.2446
-
 
 def main() -> None:
     """Visualize RGB + depth color map from _get_latest_rgbd()."""
-    # cube_0 = Cube(size=0.041, face_apriltags=[{"face": "top", "size": 0.036, "id": 1}])
-    # cube_1 = Cube(size=0.041, face_apriltags=[{"face": "front", "size": 0.036, "id": 2}])
-    # cube_2 = Cube(size=0.041, face_apriltags=[{"face": "front", "size": 0.036, "id": 5}])
-    # cube_0 = Cube(size=0.041, init_pose=torch.as_tensor([0.26, 0.041, 0.016, 1, 0, 0, 0], device="cuda"))
-    # cube_1 = Cube(size=0.041, init_pose=torch.as_tensor([0.44, 0.041, 0.016, 1, 0, 0, 0], device="cuda"))
-    # cube_2 = Cube(size=0.041, init_pose=torch.as_tensor([0.35, 0.041, 0.016, 1, 0, 0, 0], device="cuda"))
-
-    world_bounds = (TABLE_X0, TABLE_Y0, 0, TABLE_X0 + TABLE_DX, TABLE_Y0 + TABLE_DY, 1)
-    scene = Scene(objects=[], closed_set=False, bounds=world_bounds, contains_objects=False)
-    # scene = Scene(objects=[cube_0, cube_1, cube_2], closed_set=False, bounds=world_bounds, contains_objects=False)
-
+    scene = EMPTY_SCENE
     if args_cli.realsense_env:
         env = RealsenseEnv(apriltag_size_m=0.1, apriltag_id=3)
     else:
@@ -84,8 +48,6 @@ def main() -> None:
 
         env = create_kortex_env(args_cli.task, env_cfg)
         env = SkilletEnv(env)
-        ikee_spec: ObservationSpec[IKEE_Obs] = env.coerce_obs_spec("ik_ee").batched()
-        low_action_spec: ActionSpec[BxM_Action] = env.coerce_action_spec("joints").batched()
         env = BatchToSingleWrapper(env)
         env.reset()
     rgbd_spec: ObservationSpec[RGBD_Obs] = env.coerce_obs_spec("rgb-d")
@@ -111,12 +73,7 @@ def main() -> None:
             time.sleep(0.2)
 
     # Low-level policies
-    if args_cli.use_moveit:
-        arm_policy = MoveItTcpQuatPolicy(env.batched_env.obs_spec_ikee, env.batched_env.action_spec_moveit_tcp_quat)
-    elif args_cli.use_twist:
-        arm_policy = TwistPIDPosePolicy(env.batched_env.obs_spec_twist_tcp, env.batched_env.action_spec_twist_tcp)
-    else:
-        arm_policy = PoseAbsIKEEPolicy(env.obs_spec_ikee, low_action_spec)
+    arm_policy = TwistPidPosePolicy(env.batched_env.obs_spec_twist_tcp, env.batched_env.action_spec_twist_tcp)
     # Skills
     skill_length = 1e9
     place_skill = PlaceSkill(reach_policy=arm_policy, gripper_policy=None, lift_height=0.23, length=skill_length)

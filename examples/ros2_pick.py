@@ -16,8 +16,8 @@ import skillet_tasks.ros2_tasks  # noqa: F401
 from skillet.agents.policy_over_options import PolicyOverOptionsBatchedAgent
 from skillet.envs.skillet_env import SkilletEnv
 from skillet.policy.dummy import FixedSequencePolicy, RandomPolicy
-from skillet.policy.ik_ee import PoseAbsIKEEPolicy
-from skillet.policy.twist import TwistPIDPosePolicy
+from skillet.policy.ik_ee import PoseAbsIkEePolicy
+from skillet.policy.twist import TwistPidPosePolicy
 from skillet.skill.high_level.pick import PickSkill
 from skillet.skill.specs import SELECT_OPTIONS_SPEC_BATCHED, XYZ_YAW_Params
 from skillet_tasks.ros2_tasks.factory import create_ros2_env
@@ -68,8 +68,8 @@ def main() -> None:
     print(f"[INFO][Main] Gym action space: {env.action_space}")
 
     # Low-level policies
-    ik_ee_pose_policy = PoseAbsIKEEPolicy(env.obs_spec_ikee, env.action_spec)
-    ik_ee_pose_policy = TwistPIDPosePolicy(env.obs_spec_twist_tcp, env.action_spec_twist_tcp)
+    ik_ee_pose_policy = PoseAbsIkEePolicy(env.obs_spec_ikee, env.action_spec)
+    ik_ee_pose_policy = TwistPidPosePolicy(env.obs_spec_twist_tcp, env.action_spec_twist_tcp)
     # Skills
     skill_length = 1e9
     pick_skill = PickSkill(reach_policy=ik_ee_pose_policy, gripper_policy=None, lift_height=0.23, length=skill_length)

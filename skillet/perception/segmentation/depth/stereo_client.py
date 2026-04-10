@@ -8,7 +8,7 @@ import numpy as np
 import requests
 from jaxtyping import Float, UInt8
 
-from skillet.perception.realsense import RealsenseFrame, RealsenseIntrinsics
+from skillet.envs.realsense import RealsenseFrame, RealsenseIntrinsics
 
 
 class StereoClient:

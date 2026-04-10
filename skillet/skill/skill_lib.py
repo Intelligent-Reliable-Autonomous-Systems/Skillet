@@ -6,9 +6,9 @@ Written by Will Solow, 2026
 from skillet.core.skill import Skill
 from skillet.envs.compatibility import GymVectorInterface
 from skillet.envs.specs import BxM_Action, BxN_Obs
-from skillet.policy.ik_ee import IKEEPolicy, PosAbsIKEEPolicy, PoseAbsIKEEPolicy, PoseRelIKEEPolicy, XYZRPYAbsIKEEPolicy
+from skillet.policy.ik_ee import IkEePolicy, PosAbsIkEePolicy, PoseAbsIkEePolicy, PoseRelIkEePolicy, XYZRPYAbsIkEePolicy
 from skillet.policy.joint_pos import GripperPolicy, JointPosPolicy
-from skillet.policy.osc_ee import PoseAbsOSCEEPolicy
+from skillet.policy.osc_ee import PoseAbsOscEePolicy
 from skillet.skill.high_level import GraspXYZSkill, PickSkill, PlaceSkill, PushSkill
 from skillet.skill.low_level import (
     GripperGraspSkill,
@@ -22,28 +22,28 @@ from skillet.skill.low_level import (
 )
 
 
-def make_osc_ee_pose_policy(env: GymVectorInterface) -> IKEEPolicy:
-    return PoseAbsOSCEEPolicy[BxN_Obs, BxM_Action](env.coerce_obs_spec("osc_ee"), env.action_spec)
+def make_osc_ee_pose_policy(env: GymVectorInterface) -> IkEePolicy:
+    return PoseAbsOscEePolicy[BxN_Obs, BxM_Action](env.coerce_obs_spec("osc_ee"), env.action_spec)
 
 
-def make_ik_ee_xyzrpy_policy(env: GymVectorInterface) -> IKEEPolicy:
-    return XYZRPYAbsIKEEPolicy[BxM_Action](env.coerce_obs_spec("ik_ee"), env.action_spec)
+def make_ik_ee_xyzrpy_policy(env: GymVectorInterface) -> IkEePolicy:
+    return XYZRPYAbsIkEePolicy[BxM_Action](env.coerce_obs_spec("ik_ee"), env.action_spec)
 
 
-def make_ik_ee_pose_policy(env: GymVectorInterface) -> IKEEPolicy:
-    return PoseAbsIKEEPolicy[BxM_Action](env.coerce_obs_spec("ik_ee"), env.action_spec)
+def make_ik_ee_pose_policy(env: GymVectorInterface) -> IkEePolicy:
+    return PoseAbsIkEePolicy[BxM_Action](env.coerce_obs_spec("ik_ee"), env.action_spec)
 
 
-def make_ik_ee_pos_policy(env: GymVectorInterface) -> IKEEPolicy:
-    return PosAbsIKEEPolicy[BxM_Action](env.coerce_obs_spec("ik_ee"), env.action_spec)
+def make_ik_ee_pos_policy(env: GymVectorInterface) -> IkEePolicy:
+    return PosAbsIkEePolicy[BxM_Action](env.coerce_obs_spec("ik_ee"), env.action_spec)
 
 
-def make_rel_ik_ee_pose_policy(env: GymVectorInterface) -> IKEEPolicy:
-    return PoseRelIKEEPolicy[BxM_Action](env.coerce_obs_spec("ik_ee"), env.action_spec)
+def make_rel_ik_ee_pose_policy(env: GymVectorInterface) -> IkEePolicy:
+    return PoseRelIkEePolicy[BxM_Action](env.coerce_obs_spec("ik_ee"), env.action_spec)
 
 
-def make_rel_ik_ee_pose_policy(env: GymVectorInterface) -> IKEEPolicy:
-    return PoseRelIKEEPolicy[BxM_Action](env.coerce_obs_spec("ik_ee"), env.action_spec)
+def make_rel_ik_ee_pose_policy(env: GymVectorInterface) -> IkEePolicy:
+    return PoseRelIkEePolicy[BxM_Action](env.coerce_obs_spec("ik_ee"), env.action_spec)
 
 
 def make_gripper_policy(env: GymVectorInterface) -> GripperPolicy:

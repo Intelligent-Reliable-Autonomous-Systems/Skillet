@@ -124,8 +124,8 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         self._default_quat = self._default_quat.to(self.obs_spec.device)
         goal_quat = quat_mul(quat_from_yaw(params[:, 3]), self._default_quat.repeat(self.n_envs, 1))
 
-        self._pos_threshold = 0.01
-        self._quat_threshold = 0.1
+        self._pos_threshold = 0.005
+        self._quat_threshold = 0.08
         self._vel_threshold = 0.001
         self._joint_threshold = 0.001
         self._prev_gripper_pos = None
@@ -196,7 +196,7 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         reach_actions[:, -1] = torch.where(
             self._pick_status >= PickStatusCodes.GRASP,
             torch.ones_like(reach_actions[:, -1]) * 0.8,  # Close gripper
-            torch.zeros_like(reach_actions[:, -1]) + 0.2,  # Open gripper
+            torch.zeros_like(reach_actions[:, -1]) + 0.4,  # Open gripper
         )
 
         self._prev_gripper_pos = obs["joint_pos"][:, -1]

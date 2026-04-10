@@ -9,7 +9,7 @@ import cv2
 import numpy as np
 import torch
 
-from skillet.perception.realsense import RealsenseEnv
+from skillet.envs.realsense import RealsenseEnv
 from skillet.perception.segmentation.sam import get_sam_client
 from skillet.scene.utils import depth_to_colormap_np
 

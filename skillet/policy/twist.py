@@ -69,7 +69,7 @@ class TwistFramePolicy(BatchedPolicy[MOVEIT_TCP_Obs, TBAction, XYZ_RPY_Params], 
         self.start_gripper_pos = (obs["gripper"] - gripper_lim[:, :1]) / (gripper_lim[:, 1:] - gripper_lim[:, :1])
 
 
-class TwistPIDPosePolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[TBPolicyObs, TBAction]):
+class TwistPidPosePolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[TBPolicyObs, TBAction]):
     """Policy for end effector position and orientation using PID control."""
 
     _params: torch.Tensor

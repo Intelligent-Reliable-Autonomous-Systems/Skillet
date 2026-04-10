@@ -21,7 +21,7 @@ from skillet.core.spaces import ActionSpec
 from skillet.envs.kortex import KortexEnv, KortexEnvCfg
 from skillet.envs.kortex.kortex_bridge import DeviceConnection, check_for_end_or_abort
 from skillet.envs.util import configclass
-from skillet.perception.realsense import RealsenseCameraLocalizer
+from skillet.perception.reconstruction.camera_localizer import RealsenseCameraLocalizer
 from skillet.policy.specs import JOINTS_SPEC
 
 
@@ -100,27 +100,13 @@ class Gen3KortexEnv(KortexEnv):
         self.observation_space = gym.vector.utils.batch_space(self.single_observation_space, self.num_envs)
         self.action_space = gym.vector.utils.batch_space(self.single_action_space, self.num_envs)
 
-        self._action_specs = [
-            JOINTS_SPEC.bind(
-                n_joints=len(self.cfg.joint_ids),
-            ).replace(device=self.device),
-            ActionSpec(
-                name="twist_tcp",
-                space=gym.spaces.Box(
-                    low=-float("inf"), high=float("inf"), shape=(6 + len(self.cfg.gripper_joint_names),)
-                ),
-                is_torch=True,
-                is_batched=True,
-                n_envs=-1,
-                device=self.device,
-            ),
-        ]
-
         self._current_joint_positions = np.zeros(shape=len(self.joint_names))
         self._current_joint_velocities = np.zeros(shape=len(self.joint_names))
         self._current_joint_efforts = np.zeros(shape=len(self.joint_names))
 
-        self.curr_gripper_goal = None
+        self._curr_gripper_goal = None
+        self._new_gripper_goal = False
+        self._gripper_goal_start = None
 
         self._rs_cam_localizer = RealsenseCameraLocalizer(apriltag_size_m=0.1, apriltag_id=self.cfg.base_apriltag_id)
 
@@ -153,7 +139,7 @@ class Gen3KortexEnv(KortexEnv):
         """
         # Publish BLOCKING gripper command. To keep the gripper stationary
         # Assumes we can either move joints or close gripper, not both
-        if self._publish_gripper(action, action_spec, close_time=2.0):
+        if self._publish_gripper(action, action_spec, close_time=1.5):
             return
 
         if action_spec is None or action_spec.name == "joints":
@@ -183,11 +169,6 @@ class Gen3KortexEnv(KortexEnv):
     def _get_rewards(self) -> np.ndarray:
         """Compute the rewards."""
         return np.array([0.0])
-
-    def _supports_action_spec(self, action_spec: ActionSpec[Any] | None = None) -> bool:
-        if action_spec is None:
-            return True
-        return action_spec.name in [s.name for s in self._action_specs]
 
     def _get_latest_rgbd(self) -> dict[str, Any]:
         """Grab the latest RGB-D snapshot in the raw Realsense format.
@@ -221,11 +202,10 @@ class Gen3KortexEnv(KortexEnv):
             close_time: time the gripper takes to close
 
         """
-        new_gripper_goal = False
         gripper_val = float(joint_pos[-1])
         gripper_goal = max(0, min(gripper_val, 1))
 
-        if gripper_goal != self.curr_gripper_goal:
+        if gripper_goal != self._curr_gripper_goal:
             gripper_command = Base_pb2.GripperCommand()
             finger = gripper_command.gripper.finger.add()
             gripper_command.mode = Base_pb2.GRIPPER_POSITION
@@ -238,12 +218,15 @@ class Gen3KortexEnv(KortexEnv):
                 self._publish_twist_tcp_spec(np.zeros_like(joint_pos))
 
             self.kortex.SendGripperCommand(gripper_command)
+            self._curr_gripper_goal = gripper_goal
+            self._new_gripper_goal = True
+            self._gripper_goal_start = time.perf_counter()
+        elif (time.perf_counter() - self._gripper_goal_start) < close_time:
+            self._new_gripper_goal = True
+        else:
+            self._new_gripper_goal = False
 
-            self.curr_gripper_goal = gripper_goal
-            new_gripper_goal = True
-            time.sleep(close_time)
-
-        return new_gripper_goal
+        return self._new_gripper_goal
 
     def _publish_joint_spec(self, joint_pos: np.ndarray, duration: float = 20) -> None:
         """Publish a joint position trajectory to the kortex API.

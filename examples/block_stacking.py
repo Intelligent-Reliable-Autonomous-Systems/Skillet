@@ -14,12 +14,12 @@ from skillet.core import ActionSpec, ObservationSpec
 from skillet.core.env import BatchToSingleWrapper
 from skillet.envs.skillet_env import SkilletEnv
 from skillet.perception.perception import Perception
-from skillet.perception.realsense import RealsenseEnv
+from skillet.envs.realsense import RealsenseEnv
 from skillet.perception.sam3_text.sam3_text import SAMConcept
 from skillet.policy.dummy import FixedSequencePolicy
-from skillet.policy.ik_ee import PoseAbsIKEEPolicy
+from skillet.policy.ik_ee import PoseAbsIkEePolicy
 from skillet.policy.moveit import MoveItTcpQuatPolicy
-from skillet.policy.twist import TwistPIDPosePolicy
+from skillet.policy.twist import TwistPidPosePolicy
 from skillet.scene.base import Scene
 from skillet.scene.cube import Cube
 from skillet.scene.visualization_old import Open3DVisualizer
@@ -134,9 +134,9 @@ def main() -> None:
     if args_cli.use_moveit:
         arm_policy = MoveItTcpQuatPolicy(env.batched_env.obs_spec_ikee, env.batched_env.action_spec_moveit_tcp_quat)
     elif args_cli.use_twist:
-        arm_policy = TwistPIDPosePolicy(env.batched_env.obs_spec_twist_tcp, env.batched_env.action_spec_twist_tcp)
+        arm_policy = TwistPidPosePolicy(env.batched_env.obs_spec_twist_tcp, env.batched_env.action_spec_twist_tcp)
     else:
-        arm_policy = PoseAbsIKEEPolicy(ikee_spec, low_action_spec)
+        arm_policy = PoseAbsIkEePolicy(ikee_spec, low_action_spec)
     # Skills
     skill_length = 1e9
     place_skill = PlaceSkill(reach_policy=arm_policy, gripper_policy=None, lift_height=0.23, length=skill_length)

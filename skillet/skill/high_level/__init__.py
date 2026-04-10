@@ -4,3 +4,4 @@ from .grasp_xyz import GraspXYZSkill as GraspXYZSkill
 from .pick import PickSkill as PickSkill
 from .place import PlaceSkill as PlaceSkill
 from .push import PushSkill as PushSkill
+from .rotate_yaw import RotateYawSkill as RotateYawSkill
