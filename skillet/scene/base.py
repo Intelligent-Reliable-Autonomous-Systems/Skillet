@@ -126,6 +126,30 @@ class Scene:
         """Perceive the scene."""
         pass
 
+    def get_target_by_spec(self, spec: str | int) -> SceneObject:
+        """Return the target by the specification, either string or int."""
+        if isinstance(spec, str) or isinstance(spec, np.ndarray):  # TODO make this better
+            spec = str(spec)
+            for obj in self.objects:
+                if spec in obj.name:  # Need to make sure this wont overlap with other names
+                    return obj
+        elif isinstance(spec, int):
+            return self.objects[spec]
+        else:
+            raise ValueError(f"`{spec}` not found in Scene.")
+
+        return None
+
+    @property
+    def table(self) -> SceneObject | None:
+        """Return the table."""
+        from skillet.scene.cube import Table
+
+        for obj in self.objects:
+            if isinstance(obj, Table):
+                return obj
+        return None
+
     def serialize_scene_poses(self) -> None:
         """Return a numpy array of poses for all the objects in the scene."""
         poses = []
@@ -148,5 +172,7 @@ class Scene:
         print_str = ""
         np.set_printoptions(suppress=True, precision=3)
         for ob in self.objects:
-            print_str += f"{ob.name} | ID: {ob.object_id} | Pose: {ob.pose.cpu().numpy()}\n"
+            print_str += (
+                f"{ob.name} | ID: {ob.object_id} | Pose: {ob.pose.cpu().numpy() if ob.pose is not None else None}\n"
+            )
         return print_str

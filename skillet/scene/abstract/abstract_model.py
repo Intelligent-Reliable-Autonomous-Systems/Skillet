@@ -1,15 +1,16 @@
 """An abstract model of the scene."""
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, TypeAlias
 
+import re
 from unified_planning.engines import PlanGenerationResultStatus as PGResultStatus
 from unified_planning.io import PDDLReader
 from unified_planning.plans import ActionInstance
 from unified_planning.shortcuts import OneshotPlanner
+from unified_planning.model import Fluent, Object, Problem
 
-from skillet.scene.abstract.spatial_grounding import ground_on_relations
+from skillet.scene.abstract.spatial_grounding import ground_cube_on_relations
 from skillet.scene.abstract.up_utils import UPDictState
 from skillet.scene.base import Scene, SceneObject
 
@@ -17,70 +18,152 @@ AbstractState: TypeAlias = Any
 AbstractTask: TypeAlias = Any
 
 
-# AbstractAction = tuple[str, *tuple[SceneObject]]
-@dataclass(frozen=True)
+@dataclass
 class AbstractAction:
-    """An abstract action."""
+    action: str
+    parameters: list[str]
 
-    name: str
-    args: tuple[SceneObject]
-    up_action: ActionInstance
+
+def parse_action(action_str: str) -> AbstractAction:
+    match = re.match(r"([\w-]+)\((.*)\)", action_str.strip())
+
+    action = match.group(1).replace("-", "_")
+    parameters = [p.strip() for p in match.group(2).split(",")]
+
+    return AbstractAction(action=action, parameters=parameters)
 
 
 class AbstractModel:
     """An abstract model of the scene."""
 
-    def __init__(self, domain_file: Path) -> None:
+    def __init__(self, domain_file: str, task_file: str | None = None, scene: Scene | None = None) -> None:
         """Initialize the abstract model.
 
         Args:
             domain_file: The path to the PDDL domain file.
+            task_file: The path to the PDDL task file
+            scene: The scene object
 
         """
-        self.domain_file = domain_file
-        self.domain = PDDLReader(domain_file).parse_domain()
+        self._pddl_reader = PDDLReader()
 
-    def initialize(self, scene: Scene, task: str) -> None:
-        """Initialize the abstract model with the given scene and task."""
+        self._domain_file = domain_file
+        self._task_file = task_file
         self._scene = scene
-        self._task = task
+        self._prefixes = ["block", "cube"]
+        self._problem: Problem = None
 
-        # TODO: Support getting the problem from a VLM
+        if self._scene is not None and self._task_file is not None:
+            self.initialize()
+
+    def initialize(self, scene: Scene | None = None, task_file: str | None = None) -> None:
+        """Initialize the abstract model with the given scene and task."""
+        if scene is not None:
+            self._scene = scene
+        if task_file is not None:
+            self._task_file = task_file
+        # TODO: Support getting the task file from VLM
         try:
-            PDDLReader().parse_problem_string(self.domain_file.read_text(), task)
+            self._problem: Problem = self._pddl_reader.parse_problem(self._domain_file, self._task_file)
         except Exception as e:
             raise PDDLParsingError(f"Error parsing PDDL file: {e}") from e
 
-    def get_abstract_state(self) -> UPDictState:
+    def get_abstract_state(self) -> UPDictState | None:
         """Get the current abstract state of the scene."""
         # TODO: Get state from VLM or predicate grounding
+        if self._scene is None:
+            return
         abstract_state = {}
-        if "on" in [f.name for f in self.domain.fluents]:
-            on_fluent = self.domain.fluent("on")
-            for on_pred in ground_on_relations(self._scene):
-                abstract_state[on_fluent(on_pred[1].identifier, on_pred[2].identifier)] = True
+        on_pred, clear_pred = ground_cube_on_relations(self._scene)
+        if "on" in [f.name for f in self._problem.fluents]:
+            for op in on_pred:
+                o_fluent = self._problem.fluent(op[0])(
+                    *(self._problem.object(stripw(op[1].name)), self._problem.object(stripw(op[2].name)))
+                )
+                abstract_state[o_fluent] = True
+
+        if "clear" in [f.name for f in self._problem.fluents]:
+            for cp in clear_pred:
+                fluent = self._problem.fluent(cp[0])(*(self._problem.object(stripw(cp[1].name)),))
+                abstract_state[fluent] = True
         return abstract_state
 
-    def plan(
-        self, abstract_state: UPDictState, task: str | None = None, timeout: float = 10.0
-    ) -> tuple[bool, list[AbstractAction] | None]:
-        """Plan the sequence of actions to execute to complete the task."""
-        if task is None:
-            task = self._task
+    def update_initial_state(self, problem: Problem, abstract_state: UPDictState) -> None:
+        """Update the initial state of a problem based on a list of true fluent tuples.
 
-        problem = self.domain.clone()
+        Sets all provided fluents to True and infers which previously-true fluents
+        should now be False based on conflicts.
+
+        """
+        # Pop all references to "clear" and "on" from the initial values
+        # which are grounded by the abstract state
+        for fnode, _ in list(problem.explicit_initial_values.items()):
+            if fnode.is_fluent_exp():
+                fluent = fnode.fluent()
+                if fluent.name == "on" or fluent.name == "clear":
+                    problem.explicit_initial_values.pop(fnode)
+
+        # Add in the new values from the grounding
         for fluent, value in abstract_state.items():
             problem.set_initial_value(fluent, value)
 
-        # TODO: Convert the task into a PDDL problem
+        return problem
 
-        with OneshotPlanner(name="fast-downward", problem_kind=problem.kind) as planner:
-            result = planner.solve(problem, timeout=timeout)
+    def plan(
+        self,
+        abstract_state: UPDictState | None = None,
+        timeout: float = 10.0,
+    ) -> tuple[bool, list[AbstractAction] | None]:
+        """Plan the sequence of actions to execute to complete the task.
+
+        Args:
+            abstract_state: Unified planning dict of current abstract state.
+
+        """
+        if abstract_state is not None:
+            self._problem = self.update_initial_state(self._problem, abstract_state)
+
+        with OneshotPlanner(name="fast-downward") as planner:
+            result = planner.solve(self._problem, timeout=timeout)
 
             status = result.status
+
             if status not in (PGResultStatus.SOLVED_SATISFICING, PGResultStatus.SOLVED_OPTIMALLY):
                 return (False, None)
-        return True, [AbstractAction(action.action.name, action.args, action) for action in result.plan]
+        return True, [parse_action(str(action)) for action in result.plan.actions]
+
+    def get_fluent(self, name: str) -> Fluent:
+        """Return a problem fluent."""
+        for fl in self._problem.fluents:
+            if fl._name == name:
+                return fl
+        raise ValueError(f"No fluent `{name}` found in {self._problem}")
+
+
+def stripw(name: str, words: list[str] = ["block", "cube"]) -> str:
+    """Strip words from a name."""
+    for word in words:
+        if word in name:
+            name = name.replace(word, "").strip("_")
+    return name
+
+
+def strip_words(result: list[tuple[str]], words: list[str]) -> list[tuple[str]]:
+    """Strip words from the objects and remove underscores.
+
+    Args:
+        result: list of predicates from abstract model state grounding.
+        words: words to remove
+
+    """
+
+    def clean(s):
+        for word in words:
+            if word in s:
+                s = s.replace(word, "").strip("_")
+        return s
+
+    return [tuple(clean(item) for item in entry) for entry in result]
 
 
 class PDDLParsingError(Exception):

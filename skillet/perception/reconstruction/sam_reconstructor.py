@@ -21,7 +21,7 @@ from skillet.perception.reconstruction.utils import (
 )
 from skillet.perception.segmentation.sam import get_sam_client
 from skillet.perception.segmentation.vlm import GeminiClient
-from skillet.scene import THREE_CUBE_APRIL_SCENE, Cube
+from skillet.scene import THREE_CUBE_APRIL_SCENE, Cube, CUBE_SIZE
 from skillet.scene.base import Scene
 from skillet.scene.utils import assign_poses_to_objects, get_sorted_object_poses
 
@@ -81,7 +81,7 @@ class SAMReconstructor(ReconstructorBase):
         """
         if not self._scene.contains_objects:
             print("[INFO][SAM RECONSTRUCTOR] Building scene...")
-            self._build_scene(obs)
+            self._build_scene(obs, frame=frame)
             print("[INFO][SAM RECONSTRUCTOR] Successfully built scene.")
 
         if not update:
@@ -124,7 +124,7 @@ class SAMReconstructor(ReconstructorBase):
             cube_masks,
             depth,
             intrinsic_k,
-            cube_size=0.041,
+            cube_size=CUBE_SIZE,
             camera_pos=camera_pose[0:3],
             camera_quat=camera_pose[3:7],
             frame=frame,
@@ -157,6 +157,7 @@ class SAMReconstructor(ReconstructorBase):
         call_vlm: bool = False,
         vis_scene: bool = False,
         task_instruction: str = "Put the red block on the purple block.",
+        frame: Literal["world", "camera"] = "camera",
     ) -> None:
         """Build the scene using an API call to a VLM by creating bounding boxes for each object.
 
@@ -165,6 +166,7 @@ class SAMReconstructor(ReconstructorBase):
             call_vlm: If to call VLM or load scene from defaults
             vis_scene: If to visualize the scene after parsing
             task_instruction: string for the task instruction to seed the VLM with
+            frame: the frame in which to compute centers in
 
         """
         rgb = obs["rgb"]
@@ -214,17 +216,22 @@ class SAMReconstructor(ReconstructorBase):
             masks.cpu().numpy(),
             depth,
             intrinsic_k,
-            cube_size=0.041,
+            cube_size=CUBE_SIZE,
             camera_pos=camera_pose[0:3],
             camera_quat=camera_pose[3:7],
+            frame=frame,
         )
-        centers = transform_xyz_to_world(dc["centers"], camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7])
-
+        centers = (
+            transform_xyz_to_world(dc["centers"], camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7])
+            if frame == "camera"
+            else dc["centers"]
+        )
         # Reconstruct scene
         cubes = []
         for i, l in enumerate(labels):
             c = Cube(
-                size=0.036, init_pose=torch.as_tensor(np.concatenate((centers[i], [1, 0, 0, 0])), device=self._device)
+                size=CUBE_SIZE,
+                init_pose=torch.as_tensor(np.concatenate((centers[i], [1, 0, 0, 0])), device=self._device),
             )
             c.name = l
             cubes.append(c)

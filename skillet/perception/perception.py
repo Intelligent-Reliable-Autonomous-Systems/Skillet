@@ -263,7 +263,7 @@ class SkilletPerception:
             depth_bgr = depth_to_colormap_np(depth_vis)
             panels.append(depth_bgr)
         (
-            panels.append(self._viz.open3d_scene)
+            panels.append(self._viz.open3d_scene)  # TODO resize to 480 by 640
             if (self._viz is not None and self._viz.open3d_scene is not None)
             else None
         )

@@ -493,7 +493,7 @@ def get_sorted_object_poses(scene: Scene, obj: SceneObject) -> np.ndarray:
 
     sorted_ids = np.argsort(id_list)
 
-    return np.asarray(pose_list)[sorted_ids], sorted_ids
+    return np.asarray(pose_list)[sorted_ids], np.asarray(id_list)[sorted_ids]
 
 
 def assign_poses_to_objects(

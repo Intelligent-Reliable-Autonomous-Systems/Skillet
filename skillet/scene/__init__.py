@@ -1,4 +1,5 @@
 from .cube import Cube as Cube
+from .scenes import CUBE_SIZE as CUBE_SIZE
 from .scenes import (
     EMPTY_SCENE as EMPTY_SCENE,
 )

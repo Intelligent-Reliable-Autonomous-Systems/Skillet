@@ -1,8 +1,9 @@
 from collections.abc import Callable, Sequence
-from typing import TypeAlias
+from typing import TypeAlias, Literal
 
 import gymnasium as gym
 import torch
+import numpy as np
 from typing_extensions import override
 
 from skillet.core import SkillParamsSpec
@@ -26,14 +27,20 @@ class PlaceBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
         scene: Scene,
         place_skill: PlaceSkill[BxM_Action],
         vis_target_pos: Callable[[Sequence[float]], None] | None = None,
+        dtype: Literal["str", "int"] = "int",
     ) -> None:
         """Initialize the place block skill."""
         self._scene = scene
         self._place_skill = place_skill
         max_objects = len(scene.objects) if scene.closed_set else 100
-        self._block_params_spec = SkillParamsSpec(
-            space=gym.spaces.Discrete(n=max_objects), name="block_id", is_torch=False, is_batched=False
-        )
+        if dtype == "int":
+            self._block_params_spec = SkillParamsSpec(
+                space=gym.spaces.Discrete(n=max_objects, dtype=dtype), name="block_id", is_torch=False, is_batched=False
+            )
+        elif dtype == "str":
+            self._block_params_spec = SkillParamsSpec(
+                space=gym.spaces.Text(max_length=25), name="block_name", is_torch=False, is_batched=False
+            )
         self._status = None
         self._offset = torch.tensor([0, 0.0, 0.035], device=self.obs_spec.device)
 
@@ -68,10 +75,8 @@ class PlaceBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
         """Initiate the skill with the given observation and parameters."""
         self._status = None
         params = self.params_spec.cast(params)
-        if params < 0 or params >= len(self._scene.objects):
-            self._status = SkillStatusCodes.FAILED.value
-            return
-        self._target_block = self._scene.objects[params]
+
+        self._target_block = self._scene.get_target_by_spec(params)
         if not self._target_block.is_pose_known():
             self._status = SkillStatusCodes.FAILED.value
             return

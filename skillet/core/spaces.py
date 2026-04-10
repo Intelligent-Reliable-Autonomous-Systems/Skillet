@@ -362,6 +362,8 @@ size.")
                     arr = np.broadcast_to(arr, (self.n_envs, *expected_shape[1:]))
                 elif self.is_batched and self.n_envs == -1 and arr.shape[1:] == expected_shape:
                     pass  # arr is already batched
+                elif not self.is_batched and len(arr.shape) == 0:
+                    arr = arr  # TODO find a better fix for name params?
                 elif not self.is_batched and arr.shape[0] == 1 and arr.shape[1:] == expected_shape:
                     arr = np.squeeze(arr, 0)  # can remove a singleton dimension
                 else:

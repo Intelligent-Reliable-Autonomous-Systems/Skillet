@@ -46,8 +46,8 @@ def find_cube_centers(
     camera_pos: np.ndarray,
     camera_quat: np.ndarray,
     depth_scale: float = 1.0,
-    cube_size: float = 0.041,
-    frame: Literal["world", "camera"] = "world",
+    cube_size: float = 0.044,
+    frame: Literal["world", "camera"] = "camera",
 ) -> dict[str, np.ndarray]:
     """Find cube centers from segmentation masks and depth map in the camera frame.
 

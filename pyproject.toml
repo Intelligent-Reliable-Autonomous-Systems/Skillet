@@ -33,7 +33,8 @@ dependencies = [
     "pynput",
     "tensordict",
     "scipy",
-    "unified_planning"
+    "unified_planning",
+    "unified-planning[pyperplan,tamer,fast-downward]"
 ]
 
 [project.optional-dependencies]

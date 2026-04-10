@@ -8,27 +8,20 @@ from typing import TYPE_CHECKING, Any
 
 import gymnasium as gym
 import torch
+from skillet.perception.sam3_text.sam3_text import SAMConcept
 
 from skillet.agents.policy_over_options import PolicyOverOptionsAgent, SelectedSkill
 from skillet.core import ActionSpec, ObservationSpec
 from skillet.core.env import BatchToSingleWrapper
-from skillet.envs.skillet_env import SkilletEnv
-from skillet.perception.perception import Perception
 from skillet.envs.realsense import RealsenseEnv
-from skillet.perception.sam3_text.sam3_text import SAMConcept
+from skillet.envs.skillet_env import SkilletEnv
+from skillet.perception import SkilletPerception
 from skillet.policy.dummy import FixedSequencePolicy
 from skillet.policy.ik_ee import PoseAbsIkEePolicy
 from skillet.policy.moveit import MoveItTcpQuatPolicy
 from skillet.policy.twist import TwistPidPosePolicy
-from skillet.scene.base import Scene
-from skillet.scene.cube import Cube
-from skillet.scene.visualization_old import Open3DVisualizer
-from skillet.skill.high_level.pick import PickSkill
-from skillet.skill.high_level.place import PlaceSkill
-from skillet.skill.high_level.rotate_yaw import RotateYawSkill
-from skillet.skill.object_level.pick_block import PickBlockSkill
-from skillet.skill.object_level.place_block import PlaceBlockSkill
-from skillet.skill.object_level.rotate_block import RotateBlockSkill
+from skillet.scene import THREE_CUBE_APRIL_SCENE, Open3DVisualizer
+from skillet.skill import PickBlockSkill, PickSkill, PlaceBlockSkill, PlaceSkill, RotateBlockSkill, RotateYawSkill
 from skillet_tasks.ros2_tasks.factory import create_ros2_env
 
 if TYPE_CHECKING:
@@ -61,21 +54,11 @@ if args_cli.ros2_ws is None:
     if args_cli.ros2_ws is None:
         raise ValueError("ROS2 workspace path must be provided via --ros2_ws argument or ROS2_WS environment variable.")
 
-TABLE_X0 = -0.0889
-TABLE_Y0 = -0.577
-TABLE_DX = 0.762
-TABLE_DY = 1.2446
-
 
 def main() -> None:
     """Visualize RGB + depth color map from _get_latest_rgbd()."""
-    cube_0 = Cube(size=0.041, face_apriltags=[{"face": "top", "size": 0.036, "id": 1}])
-    cube_1 = Cube(size=0.041, face_apriltags=[{"face": "front", "size": 0.036, "id": 2}])
-    cube_2 = Cube(size=0.041, face_apriltags=[{"face": "front", "size": 0.036, "id": 5}])
 
-    world_bounds = (TABLE_X0, TABLE_Y0, 0, TABLE_X0 + TABLE_DX, TABLE_Y0 + TABLE_DY, 1)
-    scene = Scene(objects=[cube_0, cube_1, cube_2], closed_set=True, bounds=world_bounds)
-
+    scene = THREE_CUBE_APRIL_SCENE
     sam3_prompts = [
         SAMConcept(name="wooden_block", prompt="a wooden block"),
         SAMConcept(name="plastic_block", prompt="a plastic block"),
@@ -101,7 +84,7 @@ def main() -> None:
     rgbd_spec: ObservationSpec[RGBD_Obs] = env.coerce_obs_spec("rgb-d")
 
     poll_rate_hz = 1.0 / max(args_cli.period_s, 1e-6)
-    perception = Perception(
+    perception = SkilletPerception(
         env=env,
         obs_spec=rgbd_spec,
         scene=scene,

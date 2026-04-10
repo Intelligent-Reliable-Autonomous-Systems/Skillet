@@ -51,7 +51,7 @@ class Cube(SceneObject):
         """Initialize the cube.
 
         Args:
-            size: The side length of the cube.
+            size: The side length of the cube in meters.
             init_pose: The initial pose of the cube in the world frame.
             face_to_apriltag: The mapping from the cube's faces to the AprilTag IDs.
                 - id: The ID of the AprilTag.
@@ -190,3 +190,59 @@ class Cube(SceneObject):
 
         R = torch.stack([x, y, z], dim=1)  # noqa: N806
         return quat_from_matrix(R)
+
+    def __str__(self) -> str:
+        """Return a printable string."""
+        return f"Cube | ID: {self.object_id} | Name: {self.name} | Center: {self.pose.cpu().numpy()[:3]}"
+
+
+class Table(SceneObject):
+    """A table in a scene."""
+
+    def __init__(
+        self,
+        height: float = 0.0,
+        init_pose: torch.Tensor | None = None,  # (x, y, z, w, x, y, z)
+        name: str | None = None,
+    ) -> None:
+        """Initialize the table.
+
+        Args:
+            height: the height of the top of the table surface in the world frame
+            init_pose: The initial pose of the Table in the world frame.
+
+        """
+        super().__init__(name=name)
+        self._height = height
+        self._pose = init_pose
+
+    @property
+    def pose(self) -> torch.Tensor:
+        """The pose of the table in the world frame."""
+        return self._pose
+
+    @pose.setter
+    def pose(self, pose: torch.Tensor) -> None:
+        """Set the pose of the table in the world frame."""
+        self._pose = pose
+
+    @property
+    def object_type(self) -> str:
+        """The type of the table."""
+        return "table"
+
+    def is_pose_known(self) -> bool:
+        """If the pose of the table is known.
+
+        Return false to avoid plotting.
+        """
+        return False
+
+    @property
+    def height(self) -> float:
+        """The height of the top of the table in the world frame."""
+        return self._height
+
+    def __str__(self) -> str:
+        """Return a printable string."""
+        return f"Table | ID: {self.object_id} | Name: {self.name} | Height: {self.height}"
