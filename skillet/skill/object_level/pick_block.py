@@ -9,7 +9,7 @@ from typing_extensions import override
 from skillet.core import SkillParamsSpec
 from skillet.core.skill import SingleSkill, SkillStatus, SkillStatusCodes
 from skillet.envs.specs import BxM_Action, IKEE_Obs, M_Action
-from skillet.scene.base import Scene
+from skillet.scene.base import Scene, SceneObject
 from skillet.skill.high_level.pick import PickSkill
 
 Object_Params: TypeAlias = int
@@ -27,21 +27,15 @@ class PickBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
         scene: Scene,
         pick_skill: PickSkill[BxM_Action],
         vis_target_pos: Callable[[Sequence[float]], None] | None = None,
-        dtype: Literal["str", "int"] = "int",
     ) -> None:
         """Initialize the pick block skill."""
         self._scene = scene
         self._pick_skill = pick_skill
-        max_objects = len(scene.objects) if scene.closed_set else 100
+        self.max_objects = len(scene.objects) if scene.closed_set else 100
 
-        if dtype == "int":
-            self._block_params_spec = SkillParamsSpec(
-                space=gym.spaces.Discrete(n=max_objects, dtype=dtype), name="block_id", is_torch=False, is_batched=False
-            )
-        elif dtype == "str":
-            self._block_params_spec = SkillParamsSpec(
-                space=gym.spaces.Text(max_length=25), name="block_name", is_torch=False, is_batched=False
-            )
+        self._block_params_spec = SkillParamsSpec(
+            space=gym.spaces.Discrete(n=self.max_objects), name="block_id", is_torch=False, is_batched=False
+        )
         self._status = None
         self._offset = torch.tensor([0, 0.0, 0], device=self.obs_spec.device)
 
@@ -77,7 +71,7 @@ class PickBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
         self._status = None
         params = self.params_spec.cast(params)
 
-        self._target_block = self._scene.get_target_by_spec(params)
+        self._target_block: SceneObject = self._scene.objects(params)
         if not self._target_block.is_pose_known():
             self._status = SkillStatusCodes.FAILED.value
             return
@@ -101,3 +95,34 @@ class PickBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
         if self._status is not None:
             return self._status
         return self._pick_skill.status[0]
+
+
+class PickBlock2Skill(PickBlockSkill):
+    def __init__(
+        self,
+        scene: Scene,
+        pick_skill: PickSkill[BxM_Action],
+        vis_target_pos: Callable[[Sequence[float]], None] | None = None,
+    ) -> None:
+        """Initialize the pick block skill."""
+        super().__init__(scene, pick_skill, vis_target_pos)
+        self._block_params_spec = SkillParamsSpec(
+            space=gym.spaces.MultiDiscrete((self.max_objects, 2)), name="block_id", is_torch=False, is_batched=False
+        )
+
+    def initiate(self, obs, params):
+        """Initiate the skill with the given observation and parameters."""
+        self._status = None
+        params = self.params_spec.cast(params)
+
+        self._target_block: SceneObject = self._scene.get_objects_from_id(params)[0]
+        if not self._target_block.is_pose_known():
+            self._status = SkillStatusCodes.FAILED.value
+            return
+        target_xyz = self._target_block.pose[:3] + self._offset
+        if self._vis_target_pos is not None:
+            self._vis_target_pos(target_xyz)
+        yaw = 0  # TODO: get yaw from target block
+        target_pose = torch.tensor([target_xyz[0], target_xyz[1], target_xyz[2], yaw])
+        target_pose = self._pick_skill.params_spec.with_n_envs(1).cast(target_pose)
+        self._pick_skill.initiate(obs, target_pose)

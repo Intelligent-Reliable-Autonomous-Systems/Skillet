@@ -21,6 +21,19 @@ class ReconstructorBase(ABC):
         self._scene = scene
         self._bbox_frame = None
         self._mask_frame = None
+        self._build_scene_flag = False
+
+    @property
+    def build_scene(self) -> bool:
+        return self._build_scene_flag
+
+    @build_scene.setter
+    def build_scene(self, build_flag: bool) -> None:
+        self._build_scene_flag = build_flag
+
+    @property
+    def scene(self) -> Scene:
+        return self._scene
 
     @abstractmethod
     def update_state(self, obs: dict[str, torch.Tensor], update: bool = True) -> None:

@@ -59,6 +59,25 @@ RGBD_SPEC_BATCHED: ObservationSpec[RGBD_Obs] = ObservationSpec[RGBD_Obs[TNPOrTen
     n_envs=-1,
 )
 
+RGBD_GRIPPER_SPEC_BATCHED: ObservationSpec[RGBD_Obs] = ObservationSpec[RGBD_Obs[TNPOrTensor]](
+    space=gym.spaces.Dict(
+        {
+            "rgb": ParameterizedBox(low=0, high=255, shape=(3, "height", "width"), dtype=np.uint8),
+            # Depth is normalized to float32 meters for downstream perception.
+            "depth": ParameterizedBox(low=0.0, high=10.0, shape=(1, "height", "width"), dtype=np.float32),
+            "intrinsic_k": gym.spaces.Box(low=0.0, high=2000.0, shape=(3, 3), dtype=np.float32),
+            "camera_pose": gym.spaces.Box(low=-10.0, high=10.0, shape=(7,), dtype=np.float32),
+            "timestamp": gym.spaces.Box(low=0.0, high=1e10, shape=(), dtype=np.float32),
+            "tcp_pose_b": gym.spaces.Box(low=-1.0, high=1.0, shape=(7,)),
+            "gripper": ParameterizedBox(low=0.0, high=1.0, shape=("n_gripper_joints",)),
+        }
+    ),
+    name="rgbd-gripper",
+    is_torch=True,
+    is_batched=True,
+    n_envs=-1,
+)
+
 IKEE_Obs = Mapping[str, Float[torch.Tensor, "b ..."]]
 OSC_Obs = Mapping[str, Float[torch.Tensor, "b ..."]]
 TWIST_TCP_Obs = Mapping[str, Float[torch.Tensor, "b ..."]]
@@ -78,6 +97,19 @@ IK_EE_SPEC_BATCHED = ObservationSpec[IKEE_Obs](
         }
     ),
     name="ik_ee",
+    is_torch=True,
+    is_batched=True,
+    n_envs=-1,
+)
+
+GRIPPER_SPEC_BATCHED = ObservationSpec[IKEE_Obs](
+    space=gym.spaces.Dict(
+        {
+            "tcp_pose_b": gym.spaces.Box(low=-1.0, high=1.0, shape=(7,)),
+            "gripper": ParameterizedBox(low=0.0, high=1.0, shape=("n_gripper_joints",)),
+        }
+    ),
+    name="gripper",
     is_torch=True,
     is_batched=True,
     n_envs=-1,

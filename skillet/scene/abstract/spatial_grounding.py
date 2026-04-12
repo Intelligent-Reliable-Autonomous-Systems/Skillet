@@ -41,7 +41,7 @@ def _is_on(a: Cube, b: Cube, height_tol_frac: float = 0.3, xy_slack_frac: float 
     return bool(within_x and within_y)
 
 
-def _is_on_table(a: Cube, table: Table, height_tol_frac: float = 0.3) -> bool:
+def _is_on_table(a: Cube, table: Table, height_tol_frac: float = 0.5) -> bool:
     """Return True if cube *a* is resting on the table.
 
     Args:
@@ -87,3 +87,11 @@ def ground_cube_on_relations(scene: Scene) -> list[tuple[Literal["on"], SceneObj
             cube_list.remove(o[2])
     [clear_relations.append(("clear", obj)) for obj in cube_list]
     return on_relations, clear_relations
+
+
+def ground_gripper_relations(scene: Scene) -> tuple[bool, list[tuple[Literal["holding"], SceneObject]]]:
+    """Grounding for if the gripper hand is empty.
+
+    TODO: Compare against cube centers and tcp pose. Add TCP pose to scene.
+    """
+    return True, []

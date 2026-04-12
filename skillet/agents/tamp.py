@@ -27,7 +27,7 @@ class PlanningAgent:
             action_to_skill_map: A map of actions to skills.
 
         """
-        self.scene = scene
+        self._scene = scene
         self.abstract_model = abstract_model
         self.action_to_skill_map = action_to_skill_map
 
@@ -41,23 +41,21 @@ class PlanningAgent:
             task: The task to execute.
 
         """
-        # Initialize our scene model. NOTE: May remove...
-        self.scene.reset(task)
-        self.scene.perceive()
-
         # Get the current symbolic state
-        self.abstract_model.initialize(self.scene, task)
-        result, plan = self.abstract_model.plan()
+        self.abstract_model.initialize(self._scene, task)
+
+        abstract_state = self.abstract_model.get_abstract_state()
+        result, plan = self.abstract_model.plan(abstract_state=abstract_state)
 
         terminated = False
         cum_reward = 0.0
 
+        if not result:
+            print("[WARNING][TAMP] Failed to find plan.")
+        print(plan)
         for ab_action in plan:
             selected_skill = self.action_to_skill_map[ab_action.action]
-            if ab_action.action == "pick_block":
-                args = ab_action.parameters[0]
-            elif ab_action.action == "place_block":
-                args = ab_action.parameters[1]
+            args = self._scene.resolve_names_to_ids(ab_action.parameters)
 
             obs = env.get_observation(selected_skill.obs_spec)
             selected_skill.initiate(obs, args)
@@ -71,10 +69,6 @@ class PlanningAgent:
                 terminated = terminated | term | trunc
                 # Check if the skill is terminated
                 skill_done = selected_skill.is_terminated(env.get_observation(selected_skill.obs_spec))
-
-            # Update the scene state
-            self.scene.perceive()
-
             # Check if the skill was successful
             if selected_skill.status != SkillStatusCodes.SUCCESS:
                 break

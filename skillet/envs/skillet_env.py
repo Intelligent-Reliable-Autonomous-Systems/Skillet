@@ -27,9 +27,11 @@ from skillet.core.math import (
 from skillet.core.spaces import ActionSpec
 from skillet.envs.compatibility import DirectRlInterface, SkilletGymEnv
 from skillet.envs.specs import (
+    GRIPPER_SPEC_BATCHED,
     IK_EE_SPEC_BATCHED,
     MOVEIT_TCP_QUAT_SPEC,
     OSC_SPEC_BATCHED,
+    RGBD_GRIPPER_SPEC_BATCHED,
     RGBD_SPEC_BATCHED,
     TWIST_SPEC_BATCHED,
     TWIST_TCP_SPEC,
@@ -103,6 +105,12 @@ class SkilletEnv(
         ).replace(**spec_args)
         """Specification of the raw dictionary environment state"""
         self.obs_spec_rgbd = RGBD_SPEC_BATCHED.bind(height=480, width=640).replace(device=self.device)
+        self.obs_spec_rgbd_grip = RGBD_GRIPPER_SPEC_BATCHED.bind(
+            height=480, width=640, n_gripper_joints=len(self._gripper_joint_names)
+        ).replace(device=self.device)
+        self.obs_spec_gripper = GRIPPER_SPEC_BATCHED.bind(n_gripper_joints=len(self._gripper_joint_names)).replace(
+            device=self.device
+        )
         """Specification of RGB-D observations and metadata. Bound to the height and width of the RGB-D camera."""
         self.obs_spec_ikee = IK_EE_SPEC_BATCHED.bind(
             n_joints=len(self._joint_ids),
@@ -199,6 +207,8 @@ class SkilletEnv(
             self.obs_spec_rgbd.name,
             self.obs_spec_ikee.name,
             self.obs_spec_osc.name,
+            self.obs_spec_gripper.name,
+            self.obs_spec_rgbd_grip.name,
         ]
 
     @override
@@ -218,6 +228,8 @@ class SkilletEnv(
             self.obs_spec_rgbd,
             self.obs_spec_ikee,
             self.obs_spec_osc,
+            self.obs_spec_gripper,
+            self.obs_spec_rgbd_grip,
         ]:
             if spec.name == obs_spec:
                 return spec
@@ -250,10 +262,10 @@ class SkilletEnv(
         if obs_spec.name == "policy":
             return obs_spec.cast(self._last_obs["policy"])
         if (
-            obs_spec.name == "rgb-d"
+            obs_spec.name == "rgb-d" or obs_spec.name == "rgbd-gripper"
         ):  # TODO(Will) convert this in ROS2 env with torch.tensor + no quat roll (handle this in lower env)
             latest = self._env._get_latest_rgbd()
-            # ROS xyzw format -> IsaacLab wxyz format
+            # ROS/realsense xyzw format -> IsaacLab wxyz format
             q = latest["camera_pose"][3:7]
             latest["camera_pose"][3:7] = q[[3, 0, 1, 2]]
             # RGB is (H, W, 3) -> (3, H, W)
@@ -263,6 +275,10 @@ class SkilletEnv(
             if depth.dtype == np.uint16:
                 depth = depth.astype(np.float32) / 1000.0
             latest["depth"] = depth
+            if obs_spec.name == "rgbd-gripper":
+                latest["tcp_pose_b"] = self._get_tcp_pose_b(ee_link=self._ee_link_name)
+                latest["gripper"] = self._get_gripper_state(gripper_joints=self._gripper_joint_names)
+
             return obs_spec.cast(latest)
         if obs_spec.name == "state":
             return obs_spec.cast(self._last_obs)
@@ -311,6 +327,13 @@ class SkilletEnv(
                     "joint_vel": self._get_joint_velocities(joint_ids=self._joint_ids),
                     "joint_pos": self._get_joint_positions(joint_ids=self._joint_ids),
                     "joint_eff": self._get_joint_efforts(joint_ids=self._joint_ids),
+                }
+            )
+        if obs_spec.name == "gripper":
+            return obs_spec.cast(
+                {
+                    "tcp_pose_b": self._get_tcp_pose_b(ee_link=self._ee_link_name),
+                    "gripper": self._get_gripper_state(gripper_joints=self._gripper_joint_names),
                 }
             )
         raise ValueError(f"Observation spec {obs_spec} not supported by environment.")

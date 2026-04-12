@@ -122,6 +122,7 @@ class PlaceSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAct
         self._quat_threshold = 0.08
         self._vel_threshold = 0.001  #
         self._joint_threshold = 0.001
+        self._joint_effort_threshold = 10
         self._prev_gripper_pos = None
 
         ee_pose_b = obs["tcp_pose_b"]
@@ -172,11 +173,18 @@ class PlaceSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAct
         ee_vel = (obs["ee_vel_b"][:, 0:3] < self._vel_threshold).any(dim=-1)
         self._n_lower_steps = self._n_lower_steps + (self._place_status == PlaceStatusCodes.LOWER)
         next_pose = (reached_pose & ee_vel) | (
-            (torch.abs(joint_efforts) > 7).any(dim=-1)
+            (torch.abs(joint_efforts) > self._joint_effort_threshold).any(dim=-1)
             & (self._place_status == PlaceStatusCodes.LOWER)
-            & (self._n_lower_steps > 10)
+            & (self._n_lower_steps > 20)
         )  # Avoids dropping due to initial acceleration
 
+        flag = (
+            (torch.abs(joint_efforts) > self._joint_effort_threshold).any(dim=-1)
+            & (self._place_status == PlaceStatusCodes.LOWER)
+            & (self._n_lower_steps > 20)
+        )
+        if flag.item():
+            print(joint_efforts)
         if next_pose.any():
             idx = torch.arange(self.n_envs, device=next_pose.device)
             valid_idx = (self._status == SkillStatusCodes.RUNNING) & (next_pose)

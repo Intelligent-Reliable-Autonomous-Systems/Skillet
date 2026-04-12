@@ -7,10 +7,10 @@ from skillet.scene.base import Scene
 
 CUBE_SIZE = 0.044
 SM_APRIL_SZ = 0.036
-TABLE_X0 = -0.0889
-TABLE_Y0 = -0.577
-TABLE_DX = 0.762
-TABLE_DY = 1.2446
+TABLE_X0 = 0.17
+TABLE_Y0 = -0.48
+TABLE_DX = 0.33
+TABLE_DY = 0.96
 WORLD_BOUNDS = (TABLE_X0, TABLE_Y0, 0, TABLE_X0 + TABLE_DX, TABLE_Y0 + TABLE_DY, 1)
 
 table_0 = Table(height=0.0, name="table0", init_pose=torch.as_tensor([0.35, 0.0, 0.0, 1, 0, 0, 0], device=DEVICE))
@@ -25,7 +25,7 @@ cube_1 = Cube(
     size=CUBE_SIZE, init_pose=torch.as_tensor([0.44, 0.042, 0.016, 1, 0, 0, 0], device=DEVICE), name="blue_block"
 )
 cube_2 = Cube(
-    size=CUBE_SIZE, init_pose=torch.as_tensor([0.35, 0.042, 0.016, 1, 0, 0, 0], device=DEVICE), name="green_block"
+    size=CUBE_SIZE, init_pose=torch.as_tensor([0.35, 0.042, 0.016, 1, 0, 0, 0], device=DEVICE), name="purple_block"
 )
 
 

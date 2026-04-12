@@ -1,6 +1,7 @@
 """Unified Planning utility functions."""
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Literal, Protocol
 
 from unified_planning.model import Fluent as UPFluent
@@ -10,8 +11,22 @@ from unified_planning.model import State as UPState
 from unified_planning.model import Type as UPType
 from unified_planning.shortcuts import Bool as UPBool
 
-UPDictState = dict["FluentExpLike", bool]
+UPDictFluent = dict["FluentExpLike", bool]
 """A dictionary of assignments to Unified Planning fluents."""
+
+UPDictObject = dict[str, "ObjectExpLike"]
+"""A dictionary of of Unified Planning objects."""
+
+UPListGoal = list["FluentExpLike"]
+
+
+@dataclass
+class ParsedUpProblem:
+    """Parsed problem class for Unified Planning Problem."""
+
+    fluents: UPDictFluent
+    objects: UPDictObject
+    goals: UPListGoal
 
 
 class ObjectExpLike(Protocol):

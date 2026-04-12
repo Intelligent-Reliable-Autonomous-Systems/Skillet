@@ -40,7 +40,6 @@ class SAMReconstructor(ReconstructorBase):
         model: Literal["sam2", "sam3", "sam3_streaming"] = "sam3",
         mode: Literal["text", "bboxes"] = "text",
         device: str = "cuda",
-        build_scene: bool = True,
         visualize: bool = True,
     ) -> None:
         super().__init__(scene)
@@ -48,8 +47,7 @@ class SAMReconstructor(ReconstructorBase):
         self._mode = mode
         self._sam_model = get_sam_client(model)
         self._device = device
-        self._build_scene_flag = build_scene
-        self._vlm_client = GeminiClient() if build_scene else None
+        self._vlm_client = GeminiClient()
         self._visualize = visualize
 
         self._bbox_frame = None
@@ -57,9 +55,9 @@ class SAMReconstructor(ReconstructorBase):
         self._masks = None
         self._segment_indices = None
 
-    @property
-    def scene(self) -> Scene:
-        return self._scene
+        # Scene reconstruction
+        self._vlm_bboxes = None
+        self._vlm_goal_atoms = None
 
     @property
     def masks(self) -> torch.Tensor:
@@ -79,7 +77,7 @@ class SAMReconstructor(ReconstructorBase):
             update: If to update the state of the scene or not
 
         """
-        if not self._scene.contains_objects:
+        if not self._scene.contains_objects and self._build_scene_flag:
             print("[INFO][SAM RECONSTRUCTOR] Building scene...")
             self._build_scene(obs, frame=frame)
             print("[INFO][SAM RECONSTRUCTOR] Successfully built scene.")
@@ -137,15 +135,19 @@ class SAMReconstructor(ReconstructorBase):
         )
 
         poses, ids = get_sorted_object_poses(self._scene, Cube)
-        cube_idx, det_idx = assign_objects_to_id(poses[:, 0:3], centers)
-
-        assign_poses_to_objects(self._scene, Cube, centers, ids, cube_idx, det_idx)
+        cube_idx, det_idx = None, None
+        if poses.ndim == 2:  # only assign poses when there are cubes in the scene
+            cube_idx, det_idx = assign_objects_to_id(poses[:, 0:3], centers)
+            assign_poses_to_objects(self._scene, Cube, centers, ids, cube_idx, det_idx)
 
         if self._visualize:
             self._bbox_frame = SAMReconstructor.show_bounding_boxes(
                 rgb, masks, concept_indices=concept_indices, concepts=concepts
             )
-            self._mask_frame = SAMReconstructor.show_cube_masks(rgb, cube_masks, self._scene, ids, cube_idx, det_idx)
+            if cube_idx is not None and det_idx is not None:
+                self._mask_frame = SAMReconstructor.show_cube_masks(
+                    rgb, cube_masks, self._scene, ids, cube_idx, det_idx
+                )
 
     def get_observation(self) -> Scene:
         """Return the scene."""
@@ -154,7 +156,7 @@ class SAMReconstructor(ReconstructorBase):
     def _build_scene(
         self,
         obs: dict[str, torch.Tensor],
-        call_vlm: bool = False,
+        call_vlm: bool = True,
         vis_scene: bool = False,
         task_instruction: str = "Put the red block on the purple block.",
         frame: Literal["world", "camera"] = "camera",
@@ -183,20 +185,19 @@ class SAMReconstructor(ReconstructorBase):
             rgb_pil_resized = rgb_pil.resize(
                 (800, int(800 * rgb_pil.size[1] / rgb_pil.size[0])), Image.Resampling.LANCZOS
             )
-            bboxes, grounded_goal_atoms, _ = self._vlm_client.detect_and_translate(rgb_pil_resized, task_instruction)
+            self._vlm_bboxes, self._vlm_goal_atoms, _ = self._vlm_client.detect_and_translate(
+                rgb_pil_resized, task_instruction
+            )
 
-            for bbox in bboxes:
+            for bbox in self._vlm_bboxes:
                 bbox["label"] = bbox["label"].replace(" ", "_")
-            for atom in grounded_goal_atoms:
+            for atom in self._vlm_goal_atoms:
                 atom["args"] = [arg.replace(" ", "_") for arg in atom["args"]]
-            with open("data/test/vlm_out_2.pkl", "wb") as f:
-                pickle.dump(bboxes, f)
-        with open("data/test/vlm_out.pkl", "rb") as f:
-            out = pickle.load(f)
+
         labels = []
         boxes = []
         # Parse boxes + labels from VLM
-        for d in out:
+        for d in self._vlm_bboxes:
             if "block" in d["label"]:
                 labels.append(d["label"])
                 # BBoxes in format  [ymin, xmin, ymax, xmax]
@@ -237,6 +238,8 @@ class SAMReconstructor(ReconstructorBase):
             cubes.append(c)
         self._scene.add_objects(cubes)
         self._scene.contains_objects = True
+        self._scene.goal = self._vlm_goal_atoms
+
         print(f"[INFO] Reconstructed Scene with VLM.\n{self._scene}")
 
     @staticmethod

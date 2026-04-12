@@ -17,7 +17,7 @@ import torch
 
 from skillet.perception.reconstruction.apriltag_reconstructor import ApriltagStateReconstructor
 from skillet.perception.reconstruction.sam_reconstructor import SAMReconstructor
-from skillet.scene.utils import segmented_rgbd_to_point_cloud, depth_to_colormap_np, _arrange_panels
+from skillet.scene.utils import segmented_rgbd_to_point_cloud, depth_to_colormap_np, arrange_panels
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -43,6 +43,7 @@ class SkilletPerception:
         poll_rate_hz: float = 10,
         device: str | torch.device | None = None,
         max_depth_m: float | None = None,
+        build_scene: bool = False,
     ) -> None:
         """Initialize the perception pipeline."""
         self.env = env
@@ -66,6 +67,7 @@ class SkilletPerception:
         self._perception_window_active = False
         self._perception_frame: np.ndarray = None
         self._write_video = False
+        self._build_scene = build_scene
 
         if self._write_video:
             self._cap = cv2.VideoCapture(0)
@@ -82,6 +84,16 @@ class SkilletPerception:
         self.latest_segment_indices: torch.Tensor | None = None
 
         self._last_depth_debug_t = 0.0
+
+    @property
+    def build_scene(self) -> bool:
+        return self._build_scene
+
+    @build_scene.setter
+    def build_scene(self, build_scene: bool) -> None:
+        self._build_scene = build_scene
+        if self._reconstructor is not None:
+            self._reconstructor.build_scene = build_scene
 
     @property
     def scene(self) -> Scene:
@@ -106,6 +118,8 @@ class SkilletPerception:
         depth = obs["depth"]
         intrinsic_k = obs["intrinsic_k"]
         camera_pose = obs["camera_pose"]
+        tcp_pose = None
+        gripper_pos = None
 
         if rgb.dim() == 4:
             rgb = rgb[0]
@@ -115,12 +129,18 @@ class SkilletPerception:
             intrinsic_k = intrinsic_k[0]
         if camera_pose.dim() == 2:
             camera_pose = camera_pose[0]
+        if "tcp_pose" in obs and obs["tcp_pose"].dim() == 2:
+            tcp_pose = obs["tcp_pose"][0]
+        if "gripper_pos" in obs and obs["tcp_pose"].dim() == 2:
+            tcp_pose = obs["tcp_pose"][0]
 
         return {
             "rgb": rgb,
             "depth": depth,
             "intrinsic_k": intrinsic_k,
             "camera_pose": camera_pose,
+            "tcp_pose": tcp_pose,
+            "gripper_pos": gripper_pos,
         }
 
     def set_visualizer(
@@ -216,6 +236,8 @@ class SkilletPerception:
 
             # Update the state based on reconstruction
             self._reconstructor.update_state(obs_unbatched, update=True)
+            self.scene.tcp_pose = obs_unbatched["tcp_pose"]
+            self.scene.gripper_pos = obs_unbatched["gripper_pos"]
 
             point_cloud, segment_indices = self._observation_to_point_cloud(
                 obs_unbatched, self._reconstructor.masks, self._reconstructor.segment_indices
@@ -271,7 +293,7 @@ class SkilletPerception:
         panels.append(self.mask_frame) if self.mask_frame is not None else None
         if not panels:
             return
-        frame = _arrange_panels(panels)
+        frame = arrange_panels(panels)
         self._perception_frame = frame
 
         if self._write_video:

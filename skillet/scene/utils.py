@@ -530,7 +530,7 @@ def assign_poses_to_objects(
         ob.pose = torch.as_tensor(np.concatenate((poses[det_idx[idx]], [1, 0, 0, 0])), device=device)
 
 
-def _arrange_panels(panels: list[np.ndarray], gap: int = 10) -> np.ndarray:
+def arrange_panels(panels: list[np.ndarray], gap: int = 10) -> np.ndarray:
     """Arrange panels in a grid with whitespace gaps between them."""
     n = len(panels)
     if n == 0:
@@ -584,3 +584,42 @@ def _arrange_panels(panels: list[np.ndarray], gap: int = 10) -> np.ndarray:
     bot_row = np.concatenate([bl, h_gap, br], axis=1)
 
     return np.concatenate([top_row, v_gap, bot_row], axis=0)
+
+
+def find_valid_table_xy(scene: Scene, buffer: float = 0.10, max_attempts: int = 200) -> torch.Tensor:
+    """Find a valid clear position on the table to place an object.
+
+    Args:
+        scene: scene object containing cube positions
+        buffer: safe distance around each cube in m where no place is possible.
+        max_attempts: maximum number of attempts to find a valid position.
+
+    """
+    x_min, y_min, _, x_max, y_max, _ = scene.bounds
+
+    # Collect all existing cube XY positions
+    occupied_positions = [obj.pose[:2] for obj in scene.objects if isinstance(obj, Cube)]
+
+    for _ in range(max_attempts):
+        # Sample a random XY within table bounds
+        candidate = torch.tensor(
+            [
+                torch.FloatTensor(1).uniform_(x_min * 1.25, x_max * 0.75).item(),
+                torch.FloatTensor(1).uniform_(y_min * 0.75, y_max * 0.75).item(),
+            ]
+        )
+
+        # Check buffer distance against all cubes
+        valid = True
+        for pos in occupied_positions:
+            dist = torch.norm(candidate.to(pos.device) - pos)
+            if dist < buffer:
+                valid = False
+                break
+
+        if valid:
+            return torch.cat((candidate, torch.as_tensor([0.0], device=candidate.device)))
+
+    raise RuntimeError(
+        f"Could not find a valid table position after {max_attempts} attempts. Table may be too crowded."
+    )
