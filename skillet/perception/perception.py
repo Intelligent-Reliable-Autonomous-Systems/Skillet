@@ -111,6 +111,10 @@ class SkilletPerception:
     def perception_frame(self) -> np.ndarray:
         return self._perception_frame
 
+    def set_goal(self, goal: str) -> None:
+        """Set the goal for the reconstructor."""
+        self._reconstructor.task_instruction = goal
+
     @staticmethod
     def _maybe_unbatch(obs: Mapping[str, Any]) -> dict[str, torch.Tensor]:
         """Convert observations to unbatched torch tensors."""

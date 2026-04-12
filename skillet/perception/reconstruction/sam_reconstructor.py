@@ -79,7 +79,7 @@ class SAMReconstructor(ReconstructorBase):
         """
         if not self._scene.contains_objects and self._build_scene_flag:
             print("[INFO][SAM RECONSTRUCTOR] Building scene...")
-            self._build_scene(obs, frame=frame)
+            self._build_scene(obs, frame=frame, task_instruction=self._task_instruction)
             print("[INFO][SAM RECONSTRUCTOR] Successfully built scene.")
 
         if not update:

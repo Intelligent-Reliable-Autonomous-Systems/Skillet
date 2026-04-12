@@ -22,6 +22,7 @@ class ReconstructorBase(ABC):
         self._bbox_frame = None
         self._mask_frame = None
         self._build_scene_flag = False
+        self._task_instruction = None
 
     @property
     def build_scene(self) -> bool:
@@ -30,6 +31,14 @@ class ReconstructorBase(ABC):
     @build_scene.setter
     def build_scene(self, build_flag: bool) -> None:
         self._build_scene_flag = build_flag
+
+    @property
+    def task_instruction(self) -> bool:
+        return self._task_instruction
+
+    @task_instruction.setter
+    def task_instruction(self, task_instruction: str) -> None:
+        self._task_instruction = task_instruction
 
     @property
     def scene(self) -> Scene:

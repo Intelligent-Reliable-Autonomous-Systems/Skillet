@@ -104,8 +104,9 @@ def main() -> None:
     # simulate environment
     logger = SkilletDataLogger("data/test/", env, perception, abs_model)
 
-    if not args_cli.realsense_env:
+    if not args_cli.realsense_env and args_cli.build_scene:
         input("Press Enter to start the scene building...")
+        perception.set_goal(args_cli.goal)
         perception.build_scene = args_cli.build_scene
 
     if not args_cli.realsense_env:

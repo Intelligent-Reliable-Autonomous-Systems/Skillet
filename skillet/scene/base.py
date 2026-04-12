@@ -216,6 +216,6 @@ class Scene:
         np.set_printoptions(suppress=True, precision=3)
         for ob in self._objects:
             print_str += (
-                f"{ob.name} | ID: {ob.object_id} | Pose: {ob.pose.cpu().numpy() if ob.pose is not None else None}\n"
+                f"{ob.name} | ID: {ob.object_id} | Pose: {ob.pose.cpu().numpy()[:3] if ob.pose is not None else None}\n"
             )
         return print_str

@@ -50,10 +50,10 @@ class PlanningAgent:
         terminated = False
         cum_reward = 0.0
 
-        if not result:
+        if plan is None:
             print("[WARNING][TAMP] Failed to find plan.")
-        print(plan)
-        for ab_action in plan:
+            return
+        for ab_action in plan.actions:
             selected_skill = self.action_to_skill_map[ab_action.action]
             args = self._scene.resolve_names_to_ids(ab_action.parameters)
 

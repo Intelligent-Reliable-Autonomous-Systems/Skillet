@@ -25,6 +25,23 @@ class AbstractAction:
     action: str
     parameters: list[str]
 
+    def __str__(self) -> str:
+        print_str = f"{self.action}: |"
+        for p in self.parameters:
+            print_str += f" {p} |"
+        return print_str
+
+
+@dataclass
+class AbstractPlan:
+    actions: list[AbstractAction]
+
+    def __str__(self) -> str:
+        print_str = "Plan:\n"
+        for ac in self.actions:
+            print_str += f"{ac}\n"
+        return print_str
+
 
 def parse_action(action_str: str) -> AbstractAction:
     match = re.match(r"([\w-]+)\((.*)\)", action_str.strip())
@@ -125,7 +142,7 @@ class AbstractModel:
         self,
         abstract_state: ParsedUpProblem | None = None,
         timeout: float = 10.0,
-    ) -> tuple[bool, list[AbstractAction] | None]:
+    ) -> tuple[bool, AbstractPlan | None]:
         """Plan the sequence of actions to execute to complete the task.
 
         Args:
@@ -142,7 +159,7 @@ class AbstractModel:
 
             if status not in (PGResultStatus.SOLVED_SATISFICING, PGResultStatus.SOLVED_OPTIMALLY):
                 return (False, None)
-        return True, [parse_action(str(action)) for action in result.plan.actions]
+        return True, AbstractPlan(actions=[parse_action(str(action)) for action in result.plan.actions])
 
     def _create_goal(self, goal: dict[str, Any], object_state: list[Object]) -> None:
         """Parse the output of the VLM goal into the problem.
