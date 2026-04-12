@@ -152,16 +152,20 @@ class Scene:
         self._gripper_pos = pos
 
     @property
-    def goal(self) -> dict[str, Any]:
+    def goal(self) -> list[dict[str, Any]]:
         return self._goal
 
     @goal.setter
-    def goal(self, goal: dict[str, Any]) -> None:
+    def goal(self, goal: list[dict[str, Any]]) -> None:
         self._goal = goal
 
     def get_objects_from_id(self, id_list: list[int] | np.ndarray) -> list[SceneObject]:
         """Get a list of objects from the scene by ID."""
         return [self._objects[self.object_ids.index(i)] for i in id_list]
+
+    def get_objects_from_name(self, name_list: list[str] | np.ndarray) -> list[SceneObject]:
+        """Get a list of objects from the scene by name."""
+        return [self._objects[self.object_names.index(n)] for n in name_list]
 
     def add_objects(self, objects: list[SceneObject] | None = None) -> None:
         """Add objects to the scene."""

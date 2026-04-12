@@ -62,6 +62,35 @@ def _is_on_table(a: Cube, table: Table, height_tol_frac: float = 0.5) -> bool:
     return abs(aabb_a[2] - table.height) < tol
 
 
+def _is_holding(a: Cube, scene: Scene, xyz_slack_frac: float = 0.5, gripper_thresh: float = 0.5) -> bool:
+    """Test if the gripper is holding a cube.
+
+    The cube xyz position must be sufficiently close to the tcp pose
+    in the scene and the gripper must be closed.
+
+    Args:
+        a: Cube to test against
+        scene: scene containing tcp pose and gripper position
+        xyz_slack_frac: slack around xyz to still be considered holding
+        gripper_thresh: threshold for gripper to be considered closed
+
+    """
+    # Check that the scene has both gripper and tcp pose
+    if scene.tcp_pose is None or scene.gripper_pos is None or not a.is_pose_known():
+        return False
+
+    aabb_a = a.aabb  # [xmin, ymin, zmin, xmax, ymax, zmax]
+    slack = a.size * xyz_slack_frac
+
+    # tcp pose should be within a's footprint (plus a little slack)
+    within_x = (aabb_a[0] - slack) <= scene.tcp_pose[0] <= (aabb_a[3] + slack)
+    within_y = (aabb_a[1] - slack) <= scene.tcp_pose[1] <= (aabb_a[4] + slack)
+    within_z = (aabb_a[1] - slack) <= scene.tcp_pose[2] <= (aabb_a[5] + slack)
+
+    # To be holding must be within footprint and gripper must be closed
+    return bool(within_x and within_y and within_z and scene.gripper_pos > gripper_thresh)
+
+
 def ground_cube_on_relations(scene: Scene) -> list[tuple[Literal["on"], SceneObject, SceneObject]]:
     """Ground the on relations in the scene."""
     on_relations = []
@@ -90,8 +119,11 @@ def ground_cube_on_relations(scene: Scene) -> list[tuple[Literal["on"], SceneObj
 
 
 def ground_gripper_relations(scene: Scene) -> tuple[bool, list[tuple[Literal["holding"], SceneObject]]]:
-    """Grounding for if the gripper hand is empty.
-
-    TODO: Compare against cube centers and tcp pose. Add TCP pose to scene.
-    """
-    return True, []
+    """Grounding for if the gripper hand is empty and the object it is holding."""
+    holding_relations = []
+    for obj in scene.objects:
+        if not isinstance(obj, Cube):
+            continue
+        if _is_holding(obj, scene):
+            holding_relations.append(("holding", obj))
+    return len(holding_relations) == 0, holding_relations

@@ -17,7 +17,7 @@ import torch
 
 from skillet.perception.reconstruction.apriltag_reconstructor import ApriltagStateReconstructor
 from skillet.perception.reconstruction.sam_reconstructor import SAMReconstructor
-from skillet.scene.utils import segmented_rgbd_to_point_cloud, depth_to_colormap_np, arrange_panels
+from skillet.scene.utils import arrange_panels, depth_to_colormap_np, segmented_rgbd_to_point_cloud
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from skillet.core.env import Environment
     from skillet.core.spaces import ObservationSpec
     from skillet.scene.base import Scene
+    from skillet.scene.visualization import Open3DVisualizer
 
 
 class SkilletPerception:
@@ -44,6 +45,7 @@ class SkilletPerception:
         device: str | torch.device | None = None,
         max_depth_m: float | None = None,
         build_scene: bool = False,
+        vis_perception: bool = False,
     ) -> None:
         """Initialize the perception pipeline."""
         self.env = env
@@ -58,7 +60,8 @@ class SkilletPerception:
         # Scene reconstructor
         self._reconstructor_type = reconstructor
         self._reconstructor = None
-        self._viz = None
+        self._viz: Open3DVisualizer = None
+        self._visualize_perception = vis_perception
         self._display_rgb = True
         self._display_depth = False
         self._perception_window_name = "Skillet Perception Scene"
@@ -66,14 +69,8 @@ class SkilletPerception:
         self._perception_height = 900
         self._perception_window_active = False
         self._perception_frame: np.ndarray = None
-        self._write_video = False
         self._build_scene = build_scene
-
-        if self._write_video:
-            self._cap = cv2.VideoCapture(0)
-            self._fps = self._cap.get(cv2.CAP_PROP_FPS) or poll_rate_hz
-            self._fourcc = cv2.VideoWriter_fourcc(*"mp4v")  # .mp4 output
-            self._writer = None
+        self._task_instruction = None
 
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
@@ -108,12 +105,25 @@ class SkilletPerception:
         return self._reconstructor._mask_frame if self._reconstructor is not None else None
 
     @property
+    def open3d_scene(self) -> np.ndarray:
+        return self._viz.open3d_scene if self._viz is not None else None
+
+    @property
+    def vlm_frame(self) -> np.ndarray:
+        return self._reconstructor._vlm_frame if self._reconstructor is not None else None
+
+    @property
     def perception_frame(self) -> np.ndarray:
         return self._perception_frame
 
-    def set_goal(self, goal: str) -> None:
-        """Set the goal for the reconstructor."""
-        self._reconstructor.task_instruction = goal
+    @property
+    def task_instruction(self) -> str:
+        return self._task_instruction
+
+    @task_instruction.setter
+    def task_instruction(self, task: str) -> None:
+        """Set the task for the reconstructor."""
+        self._task_instruction = task
 
     @staticmethod
     def _maybe_unbatch(obs: Mapping[str, Any]) -> dict[str, torch.Tensor]:
@@ -212,10 +222,6 @@ class SkilletPerception:
     def stop(self) -> None:
         """Signal the polling loop to stop and wait for the worker thread."""
         self._stop_event.set()
-        if self._write_video:
-            self._cap.release()
-            self._writer.release()
-            cv2.destroyAllWindows()
         if self._thread is not None and self._thread.is_alive():
             self._thread.join(timeout=2.0)
 
@@ -235,6 +241,7 @@ class SkilletPerception:
         next_poll_t = time.perf_counter()
 
         while not self._stop_event.is_set():
+            self._reconstructor.task_instruction = self._task_instruction
             obs = self.env.get_observation(self.obs_spec)
             obs_unbatched = self._apply_far_plane(self._maybe_unbatch(obs))
 
@@ -260,7 +267,8 @@ class SkilletPerception:
                     camera_pose=obs_unbatched["camera_pose"],
                 )
 
-            self._update_perception_window(obs_unbatched)
+            if self._visualize_perception:
+                self._update_perception_window(obs_unbatched)
 
             next_poll_t += poll_period_s
             sleep_s = max(0.0, next_poll_t - time.perf_counter())
@@ -288,8 +296,9 @@ class SkilletPerception:
                 depth_vis = (depth * 1000.0).astype(np.uint16)
             depth_bgr = depth_to_colormap_np(depth_vis)
             panels.append(depth_bgr)
+        h, w, _ = rgb.shape
         (
-            panels.append(self._viz.open3d_scene)  # TODO resize to 480 by 640
+            panels.append(cv2.resize(self._viz.open3d_scene, (w, h)))
             if (self._viz is not None and self._viz.open3d_scene is not None)
             else None
         )
@@ -300,14 +309,6 @@ class SkilletPerception:
         frame = arrange_panels(panels)
         self._perception_frame = frame
 
-        if self._write_video:
-            if self._writer is None:
-                h, w = frame.shape[:2]
-                self._writer = cv2.VideoWriter("output.mp4", self._fourcc, self._fps, (w, h))
-            self._writer.write(frame)
-        if False:
-            self._cap.release()
-            self._writer.release()
         cv2.imshow(self._perception_window_name, frame)
         cv2.waitKey(1)
 

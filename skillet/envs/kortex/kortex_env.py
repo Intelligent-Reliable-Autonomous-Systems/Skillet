@@ -292,9 +292,9 @@ class KortexEnv(SkilletGymEnv):
         self._next_step_time += self.step_dt
         sleep_time = self._next_step_time - time.monotonic()
         if sleep_time > 0:
-            time.sleep(sleep_time)
+            time.sleep(sleep_time)  # tODO this doesnt always enforce the same sleeping
         else:
-            # print(f"[WARN] full loop overran by {-sleep_time * 1000:.1f}ms")
+            print(f"[WARN] full loop overran by {-sleep_time * 1000:.1f}ms")
             ...
 
         self._episode_length_buf += 1

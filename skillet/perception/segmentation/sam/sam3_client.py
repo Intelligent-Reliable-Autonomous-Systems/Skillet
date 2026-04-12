@@ -36,6 +36,7 @@ class SAM3Client(SAMClient):
         model_path = get_skillet_model_cache_dir() / model_name
         super().__init__(model_path, device)
         self.sam_model = self._load_sam_model(checkpoint=model_path)
+        print("[INFO][SAM3] Successfully loaded SAM3 Model")
 
     @override
     def segment_from_bboxes(

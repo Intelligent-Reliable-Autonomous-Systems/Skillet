@@ -109,13 +109,14 @@ class PickBlock2Skill(PickBlockSkill):
         self._block_params_spec = SkillParamsSpec(
             space=gym.spaces.MultiDiscrete((self.max_objects, 2)), name="block_id", is_torch=False, is_batched=False
         )
+        self._params = None
 
     def initiate(self, obs, params):
         """Initiate the skill with the given observation and parameters."""
         self._status = None
-        params = self.params_spec.cast(params)
+        self._params = self.params_spec.cast(params)
 
-        self._target_block: SceneObject = self._scene.get_objects_from_id(params)[0]
+        self._target_block: SceneObject = self._scene.get_objects_from_id(self._params)[0]
         if not self._target_block.is_pose_known():
             self._status = SkillStatusCodes.FAILED.value
             return
@@ -126,3 +127,6 @@ class PickBlock2Skill(PickBlockSkill):
         target_pose = torch.tensor([target_xyz[0], target_xyz[1], target_xyz[2], yaw])
         target_pose = self._pick_skill.params_spec.with_n_envs(1).cast(target_pose)
         self._pick_skill.initiate(obs, target_pose)
+
+    def __str__(self) -> str:
+        return f"Pick Block: {self._params}"

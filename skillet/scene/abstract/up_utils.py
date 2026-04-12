@@ -1,5 +1,6 @@
 """Unified Planning utility functions."""
 
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal, Protocol
@@ -27,6 +28,93 @@ class ParsedUpProblem:
     fluents: UPDictFluent
     objects: UPDictObject
     goals: UPListGoal
+
+    def __str__(self) -> str:
+        print_str = "Abstract State:\n"
+        for f in self.fluents:
+            print_str += f"{parse_value(str(f))!s}\n"
+        return print_str
+
+
+@dataclass
+class AbstractAction:
+    action: str
+    parameters: list[str]
+
+    def __str__(self) -> str:
+        print_str = f"{self.action}: |"
+        for p in self.parameters:
+            print_str += f" {p} |"
+        return print_str
+
+
+@dataclass
+class AbstractValue:
+    value: str
+    parameters: list[str]
+
+    def __str__(self) -> str:
+        print_str = f"{self.value}: |"
+        for p in self.parameters:
+            print_str += f" {p} |"
+        return print_str
+
+
+@dataclass
+class AbstractPlan:
+    actions: list[AbstractAction]
+
+    def __str__(self) -> str:
+        print_str = "Plan:\n"
+        for ac in self.actions:
+            print_str += f"{ac}\n"
+        return print_str
+
+
+@dataclass
+class AbstractState:
+    states: list[AbstractValue]
+
+    def __str__(self) -> str:
+        print_str = "Abstract State:\n"
+        for s in self.states:
+            print_str += f"{s}\n"
+        return print_str
+
+
+@dataclass
+class AbstractGoal:
+    goals: list[AbstractValue]
+
+    def __str__(self) -> str:
+        print_str = "Abstract Goal:\n"
+        for g in self.goals:
+            print_str += f"{g}\n"
+        return print_str
+
+
+def parse_action(action_str: str) -> AbstractAction:
+    """Parse an UP FNode into a string for an AbstractAction."""
+    match = re.match(r"([\w-]+)\((.*)\)", action_str.strip())
+
+    action = match.group(1).replace("-", "_")
+    parameters = [p.strip() for p in match.group(2).split(",")]
+
+    return AbstractAction(action=action, parameters=parameters)
+
+
+def parse_value(value_str: str) -> AbstractValue:
+    """Parse a UP FNode into a string for an AbstractValue."""
+    match = re.match(r"([\w-]+)\((.*)\)", value_str.strip())
+
+    if match:
+        value = match.group(1).replace("-", "_")
+        parameters = [p.strip() for p in match.group(2).split(",")]
+    else:
+        value = value_str.strip().replace("-", "_")
+        parameters = []
+
+    return AbstractValue(value=value, parameters=parameters)
 
 
 class ObjectExpLike(Protocol):

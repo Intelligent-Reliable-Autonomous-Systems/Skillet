@@ -41,6 +41,25 @@ class RGBD_Obs(Protocol, Generic[TNPOrTensor]):  # noqa: N801
     """A timestamp. Float[TNPOrTensor, '']"""
 
 
+class RGBD_Gripper_Obs(Protocol, Generic[TNPOrTensor]):  # noqa: N801
+    """An RGB-D + TCP observation with intrinsics, camera pose tcp pose and gripper."""
+
+    rgb: UInt8[TNPOrTensor, "... 3 h w"]
+    """An RGB CHW image. UInt8[torch.Tensor | np.ndarray, '... 3 h w']"""
+    depth: Float[TNPOrTensor, "... 1 h w"]
+    """A depth HW image. Float[TNPOrTensor, '... 1 h w']"""
+    intrinsic_k: Float[TNPOrTensor, "3 3"]
+    """A 3x3 camera intrinsic matrix. Float[TNPOrTensor, '3 3']"""
+    camera_pose: Float[TNPOrTensor, "7"]
+    """A 7D camera pose. Float[TNPOrTensor, '7']"""
+    timestamp: Float[TNPOrTensor, ""]
+    """A timestamp. Float[TNPOrTensor, '']"""
+    gripper: Float[TNPOrTensor, " ... n_gripper_joints"]
+    """A N-d array of gripper positions"""
+    tcp_pose: Float[TNPOrTensor, "... 7"]
+    """A 7D tool frame pose. Float[TNPOrTensor, '7']"""
+
+
 """Type of RGB-D observation."""
 RGBD_SPEC_BATCHED: ObservationSpec[RGBD_Obs] = ObservationSpec[RGBD_Obs[TNPOrTensor]](
     space=gym.spaces.Dict(
@@ -59,7 +78,7 @@ RGBD_SPEC_BATCHED: ObservationSpec[RGBD_Obs] = ObservationSpec[RGBD_Obs[TNPOrTen
     n_envs=-1,
 )
 
-RGBD_GRIPPER_SPEC_BATCHED: ObservationSpec[RGBD_Obs] = ObservationSpec[RGBD_Obs[TNPOrTensor]](
+RGBD_GRIPPER_SPEC_BATCHED: ObservationSpec[RGBD_Gripper_Obs] = ObservationSpec[RGBD_Gripper_Obs[TNPOrTensor]](
     space=gym.spaces.Dict(
         {
             "rgb": ParameterizedBox(low=0, high=255, shape=(3, "height", "width"), dtype=np.uint8),

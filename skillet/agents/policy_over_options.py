@@ -5,6 +5,7 @@ from typing import Any, Generic, TypeAlias, TypeVar, cast
 import torch
 from jaxtyping import Bool, Int
 
+from skillet.agents.base_agent import Agent
 from skillet.core import SingleSkill
 from skillet.core.env import BatchedEnvironment, Environment
 from skillet.core.policy import BatchedUPolicy, UPolicy
@@ -16,7 +17,6 @@ from skillet.core.spaces import (
     BatchedSkillParams,
     SkillParams,
 )
-from skillet.logging import SkilletDataLogger
 
 THighLevelObs = TypeVar("THighLevelObs", bound=BatchedObservation)
 """The type of the high level observation, batched."""
@@ -33,7 +33,7 @@ SelectedSkills = Int[torch.Tensor, "b"]
 """The indices of the selected skills for each environment according to the order of the skills."""
 
 
-class PolicyOverOptionsAgent(Generic[THighLevelObs, TLowLevelObs, TAction, TSkillParams]):
+class PolicyOverOptionsAgent(Agent):
     """A high level model-free agent that selects options/skills to execute in parallel.
 
     Generic type parameters:
@@ -55,6 +55,7 @@ class PolicyOverOptionsAgent(Generic[THighLevelObs, TLowLevelObs, TAction, TSkil
         high_level_policy: UPolicy[THighLevelObs, SelectedSkill],
         params_policy: UPolicy[THighLevelObs, TSkillParams] | None = None,
     ) -> None:
+        super().__init__()
         self.skills = skills
         self.high_level_policy = high_level_policy
         self.params_policy = params_policy
@@ -67,46 +68,37 @@ class PolicyOverOptionsAgent(Generic[THighLevelObs, TLowLevelObs, TAction, TSkil
         """Get low level policyobservations."""
         return env.get_observation(self.skills[0].obs_spec)
 
-    def execute(self, env: Environment[Any, TAction], data_logger: SkilletDataLogger) -> None:
+    def execute(self, env: Environment[Any, TAction]) -> None:
         """Execute the policy over the options configured."""
         terminated = False
-        i = 0
         while not terminated:
             # High level execution
             high_level_obs = self.get_high_level_obs(env)
             # 1. Select the skill to execute
             selected_skill_id = self.high_level_policy.get_action(high_level_obs)
-            selected_skill = self.skills[selected_skill_id]
+            self._selected_skill = self.skills[selected_skill_id]
             # 2. Sample the parameters for the skills
             if self.params_policy is not None:
                 params = self.params_policy.get_action(high_level_obs)
             else:
-                params = selected_skill.params_spec.zeros()
+                params = self._selected_skill.params_spec.zeros()
             # override_grip = 0
             # Low level execution
             # 3. Initiate the composite skill with the selected skills and parameters
-            selected_skill.initiate(env.get_observation(selected_skill.obs_spec), params)
-            print("initiating skill:", (selected_skill.name, params))
+            self._selected_skill.initiate(env.get_observation(self._selected_skill.obs_spec), params)
+            print("initiating skill:", (self._selected_skill.name, params))
             # 4. While not terminated, get the next action and take a step in the environment
-            skill_done = selected_skill.is_terminated(env.get_observation(selected_skill.obs_spec))
-            if data_logger is not None:
-                data_logger.add_datapoint()
+            skill_done = self._selected_skill.is_terminated(env.get_observation(self._selected_skill.obs_spec))
+
             while not skill_done and not bool(terminated):
                 # 4a. Get the next action with the low-level observation
-                action = selected_skill.get_action(env.get_observation(selected_skill.obs_spec))
+                action = self._selected_skill.get_action(env.get_observation(self._selected_skill.obs_spec))
                 # action[:, -1] = override_grip
                 # 4b. Take a step in the environment
-                _, r, term, trunc, _ = env.step(action, action_spec=selected_skill.action_spec)
+                _, r, term, trunc, _ = env.step(action, action_spec=self._selected_skill.action_spec)
                 terminated = terminated | term | trunc
                 # 4c. Check if the composite skill is terminated
-                skill_done = selected_skill.is_terminated(env.get_observation(selected_skill.obs_spec))
-
-            i += 1
-            if i > 4:
-                break
-        if data_logger is not None:
-            data_logger.save_log()
-            data_logger.reset_logging()
+                skill_done = self._selected_skill.is_terminated(env.get_observation(self._selected_skill.obs_spec))
 
 
 TBHighLevelObs = TypeVar("TBHighLevelObs", bound=BatchedObservation)

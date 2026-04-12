@@ -50,8 +50,6 @@ class SAMReconstructor(ReconstructorBase):
         self._vlm_client = GeminiClient()
         self._visualize = visualize
 
-        self._bbox_frame = None
-        self._mask_frame = None
         self._masks = None
         self._segment_indices = None
 
@@ -79,7 +77,7 @@ class SAMReconstructor(ReconstructorBase):
         """
         if not self._scene.contains_objects and self._build_scene_flag:
             print("[INFO][SAM RECONSTRUCTOR] Building scene...")
-            self._build_scene(obs, frame=frame, task_instruction=self._task_instruction)
+            self._build_scene(obs, frame=frame)
             print("[INFO][SAM RECONSTRUCTOR] Successfully built scene.")
 
         if not update:
@@ -158,7 +156,6 @@ class SAMReconstructor(ReconstructorBase):
         obs: dict[str, torch.Tensor],
         call_vlm: bool = True,
         vis_scene: bool = False,
-        task_instruction: str = "Put the red block on the purple block.",
         frame: Literal["world", "camera"] = "camera",
     ) -> None:
         """Build the scene using an API call to a VLM by creating bounding boxes for each object.
@@ -167,10 +164,11 @@ class SAMReconstructor(ReconstructorBase):
             obs: RGBD obs spec observation
             call_vlm: If to call VLM or load scene from defaults
             vis_scene: If to visualize the scene after parsing
-            task_instruction: string for the task instruction to seed the VLM with
             frame: the frame in which to compute centers in
 
         """
+        if self._task_instruction is None:
+            self._task_instruction = "Put the red block on the purple block."
         rgb = obs["rgb"]
         depth = obs["depth"]
         camera_pose = obs["camera_pose"]
@@ -186,7 +184,7 @@ class SAMReconstructor(ReconstructorBase):
                 (800, int(800 * rgb_pil.size[1] / rgb_pil.size[0])), Image.Resampling.LANCZOS
             )
             self._vlm_bboxes, self._vlm_goal_atoms, _ = self._vlm_client.detect_and_translate(
-                rgb_pil_resized, task_instruction
+                rgb_pil_resized, self._task_instruction
             )
 
             for bbox in self._vlm_bboxes:
@@ -212,7 +210,11 @@ class SAMReconstructor(ReconstructorBase):
         masks, scores = self._sam_model.segment_from_bboxes(rgb, np.asarray(boxes))
 
         if vis_scene:
+            # TODO: convert into vlm frame
             SAMReconstructor.show_image_and_masks(rgb.transpose(1, 2, 0), masks.cpu().numpy(), labels)
+
+        self._vlm_frame = SAMReconstructor.show_vlm_image_and_masks(rgb.transpose(1, 2, 0), masks.cpu().numpy(), labels)
+
         dc = find_cube_centers(
             masks.cpu().numpy(),
             depth,
@@ -240,6 +242,8 @@ class SAMReconstructor(ReconstructorBase):
         self._scene.contains_objects = True
         self._scene.goal = self._vlm_goal_atoms
 
+        with open("data/test/vlm_out_multi.pkl", "wb") as f:
+            pickle.dump(self._scene, f)
         print(f"[INFO] Reconstructed Scene with VLM.\n{self._scene}")
 
     @staticmethod
@@ -309,6 +313,58 @@ class SAMReconstructor(ReconstructorBase):
 
         plt.tight_layout()
         plt.show()
+
+    @staticmethod
+    def show_vlm_image_and_masks(
+        image: np.ndarray,
+        masks: np.ndarray,
+        labels: list[str],
+    ) -> np.ndarray:
+        """Show a single overlay image with all masks + labels.
+
+        Args:
+            image: (H, W, 3) RGB image, uint8 or float
+            masks: (N, H, W) boolean or {0,1} masks
+            labels: list of length N containing labels for each mask
+
+        """
+        num_masks = masks.shape[0]
+        if len(labels) != num_masks:
+            raise ValueError(f"Expected {num_masks} labels, got {len(labels)}")
+
+        # Normalize to uint8 BGR
+        if image.dtype != np.uint8:
+            image = (image * 255).astype(np.uint8)
+        overlay = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+
+        rng = np.random.default_rng(0)
+        colors = rng.integers(64, 255, size=(num_masks, 3)).tolist()
+        alpha = 0.5
+
+        for i in range(num_masks):
+            mask = masks[i].astype(bool)
+            if mask.sum() == 0:
+                continue
+
+            color = colors[i]
+
+            # Blend color into masked region
+            colored = overlay.copy()
+            colored[mask] = color
+            overlay = cv2.addWeighted(overlay, 1 - alpha, colored, alpha, 0)
+
+            # Label at centroid
+            ys, xs = np.where(mask)
+            cx = int(np.mean(xs))
+            cy = max(int(np.mean(ys)) - 10, 0)
+
+            (tw, th), baseline = cv2.getTextSize(labels[i], cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+            cv2.rectangle(overlay, (cx - tw // 2 - 2, cy - th - 4), (cx + tw // 2 + 2, cy + baseline), (0, 0, 0), -1)
+            cv2.putText(
+                overlay, labels[i], (cx - tw // 2, cy), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA
+            )
+
+        return overlay
 
     @staticmethod
     def visualize_cube_detection(

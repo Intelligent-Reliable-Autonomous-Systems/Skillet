@@ -1,55 +1,26 @@
 """An abstract model of the scene."""
 
-import copy
-import re
-from dataclasses import dataclass
-from typing import Any, TypeAlias
+from typing import Any
 
 from unified_planning.engines import PlanGenerationResultStatus as PGResultStatus
 from unified_planning.io import PDDLReader
-from unified_planning.model import Fluent, Object, Problem
-from unified_planning.plans import ActionInstance
+from unified_planning.model import Object, Problem
+from unified_planning.shortcuts import And
 from unified_planning.shortcuts import OneshotPlanner
 
 from skillet.scene.abstract.spatial_grounding import ground_cube_on_relations, ground_gripper_relations
-from skillet.scene.abstract.up_utils import UPDictFluent, UPDictObject, UPListGoal, ParsedUpProblem
-from skillet.scene.base import Scene, SceneObject
-from skillet.scene.cube import Cube, Table
-
-AbstractState: TypeAlias = Any
-AbstractTask: TypeAlias = Any
-
-
-@dataclass
-class AbstractAction:
-    action: str
-    parameters: list[str]
-
-    def __str__(self) -> str:
-        print_str = f"{self.action}: |"
-        for p in self.parameters:
-            print_str += f" {p} |"
-        return print_str
-
-
-@dataclass
-class AbstractPlan:
-    actions: list[AbstractAction]
-
-    def __str__(self) -> str:
-        print_str = "Plan:\n"
-        for ac in self.actions:
-            print_str += f"{ac}\n"
-        return print_str
-
-
-def parse_action(action_str: str) -> AbstractAction:
-    match = re.match(r"([\w-]+)\((.*)\)", action_str.strip())
-
-    action = match.group(1).replace("-", "_")
-    parameters = [p.strip() for p in match.group(2).split(",")]
-
-    return AbstractAction(action=action, parameters=parameters)
+from skillet.scene.abstract.up_utils import (
+    AbstractGoal,
+    AbstractPlan,
+    AbstractState,
+    ParsedUpProblem,
+    UPDictFluent,
+    UPListGoal,
+    parse_action,
+    parse_value,
+)
+from skillet.scene.base import Scene
+from skillet.scene.cube import Cube
 
 
 class AbstractModel:
@@ -70,6 +41,16 @@ class AbstractModel:
         self._task_file = task_file
         self._scene = scene
         self._problem: Problem = None
+        self._init_state: AbstractState = None
+        self._goal: UPListGoal = None
+
+    @property
+    def init_state(self) -> AbstractState:
+        return self._init_state
+
+    @property
+    def goal(self) -> UPListGoal:
+        return self._goal
 
     def initialize(self, scene: Scene | None = None, task_file: str | None = None) -> None:
         """Initialize the abstract model with the given scene and task."""
@@ -80,7 +61,6 @@ class AbstractModel:
         try:
             # If task file is none, will return an incomplete problem which can be filled in get_abstract_state
             self._problem: Problem = self._pddl_reader.parse_problem(self._domain_file, self._task_file)
-            self._init_problem = copy.deepcopy(self._problem)  # For resetting
         except Exception as e:
             raise PDDLParsingError(f"Error parsing PDDL file: {e}") from e
 
@@ -115,11 +95,13 @@ class AbstractModel:
             fluent_state[fluent] = empty_pred
         if "holding" in [f.name for f in self._problem.fluents]:
             for hp in holding_pred:
-                fluent = self._problem.fluent(hp[0])(*(hp[1],))
+                fluent = self._problem.fluent(hp[0])(*(object_state[hp[1].name],))
+                fluent_state[fluent] = True
 
         # Parse the goal
         if goal is not None:
             self._scene.goal = goal
+
         goals = (
             self._create_goal(self._scene.goal, object_state) if self._scene.goal is not None else self._problem.goals
         )
@@ -133,7 +115,7 @@ class AbstractModel:
         TODO: Support non-empty problems?
         """
         problem.add_objects(list(state.objects.values()))
-        [problem.add_goal(g) for g in state.goals]
+        problem.add_goal(And(*list(state.goals)))
         [problem.set_initial_value(fluent, value) for fluent, value in state.fluents.items()]
 
         return problem
@@ -152,6 +134,11 @@ class AbstractModel:
         if abstract_state is not None:
             self._problem = self.reset_abstract_state(self._problem, abstract_state)
 
+        self._init_state = AbstractState(
+            states=[parse_value(str(v)) for v in list(self._problem.explicit_initial_values.keys())]
+        )
+        self._goal = AbstractGoal(goals=[parse_value(str(g)) for g in abstract_state.goals])
+
         with OneshotPlanner(name="fast-downward") as planner:
             result = planner.solve(self._problem, timeout=timeout)
 
@@ -159,9 +146,10 @@ class AbstractModel:
 
             if status not in (PGResultStatus.SOLVED_SATISFICING, PGResultStatus.SOLVED_OPTIMALLY):
                 return (False, None)
+
         return True, AbstractPlan(actions=[parse_action(str(action)) for action in result.plan.actions])
 
-    def _create_goal(self, goal: dict[str, Any], object_state: list[Object]) -> None:
+    def _create_goal(self, goal: dict[str, Any], object_state: list[Object]) -> list[UPDictFluent]:
         """Parse the output of the VLM goal into the problem.
 
         Note: currently only supports parsing one `on` goal.

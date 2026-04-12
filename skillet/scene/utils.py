@@ -586,7 +586,7 @@ def arrange_panels(panels: list[np.ndarray], gap: int = 10) -> np.ndarray:
     return np.concatenate([top_row, v_gap, bot_row], axis=0)
 
 
-def find_valid_table_xy(scene: Scene, buffer: float = 0.10, max_attempts: int = 200) -> torch.Tensor:
+def find_valid_table_xy(scene: Scene, buffer: float = 0.15, max_attempts: int = 200) -> torch.Tensor:
     """Find a valid clear position on the table to place an object.
 
     Args:

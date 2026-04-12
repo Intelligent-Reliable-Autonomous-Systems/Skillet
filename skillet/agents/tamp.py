@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from skillet.agents.base_agent import Agent
 from skillet.core.env import Environment
 from skillet.core.policy import Unparameterized
 from skillet.core.skill import SingleSkill, SkillStatusCodes
@@ -10,7 +11,7 @@ from skillet.scene.abstract.abstract_model import AbstractModel
 from skillet.scene.base import Scene
 
 
-class PlanningAgent:
+class PlanningAgent(Agent):
     """A Task-Planning agent that plans a sequence of skills to execute to complete a task."""
 
     def __init__(
@@ -27,12 +28,14 @@ class PlanningAgent:
             action_to_skill_map: A map of actions to skills.
 
         """
+        super().__init__()
+
         self._scene = scene
         self.abstract_model = abstract_model
         self.action_to_skill_map = action_to_skill_map
 
     def execute(
-        self, env: Environment[Any, Any], task: str | None = None, data_logger: SkilletDataLogger | None = None
+        self, env: Environment[Any, Any], task: str | None = None, logger: SkilletDataLogger | None = None
     ) -> None:
         """Execute the policy over the options configured.
 
@@ -45,32 +48,36 @@ class PlanningAgent:
         self.abstract_model.initialize(self._scene, task)
 
         abstract_state = self.abstract_model.get_abstract_state()
-        result, plan = self.abstract_model.plan(abstract_state=abstract_state)
+        self._result, self._plan = self.abstract_model.plan(abstract_state=abstract_state)
 
         terminated = False
         cum_reward = 0.0
 
-        if plan is None:
+        if self._plan is None:
             print("[WARNING][TAMP] Failed to find plan.")
             return
-        for ab_action in plan.actions:
-            selected_skill = self.action_to_skill_map[ab_action.action]
+        for ab_action in self._plan.actions:
+            self._selected_skill = self.action_to_skill_map[ab_action.action]
             args = self._scene.resolve_names_to_ids(ab_action.parameters)
 
-            obs = env.get_observation(selected_skill.obs_spec)
-            selected_skill.initiate(obs, args)
-            skill_done = selected_skill.is_terminated(env.get_observation(selected_skill.obs_spec))
+            obs = env.get_observation(self._selected_skill.obs_spec)
+            self._selected_skill.initiate(obs, args)
+            skill_done = self._selected_skill.is_terminated(env.get_observation(self._selected_skill.obs_spec))
+            i = 0
             while not skill_done and not bool(terminated):
                 # Get the next action with the low-level observation
-                action = selected_skill.get_action(env.get_observation(selected_skill.obs_spec))
+                action = self._selected_skill.get_action(env.get_observation(self._selected_skill.obs_spec))
                 # Take a step in the environment
-                _, r, term, trunc, _ = env.step(action, action_spec=selected_skill.action_spec)
+                _, r, term, trunc, _ = env.step(action, action_spec=self._selected_skill.action_spec)
                 cum_reward += r
                 terminated = terminated | term | trunc
                 # Check if the skill is terminated
-                skill_done = selected_skill.is_terminated(env.get_observation(selected_skill.obs_spec))
+                skill_done = self._selected_skill.is_terminated(env.get_observation(self._selected_skill.obs_spec))
+                if logger is not None and (i % 1) == 0:
+                    logger.update_visualization()
+                i += 1
             # Check if the skill was successful
-            if selected_skill.status != SkillStatusCodes.SUCCESS:
+            if self._selected_skill.status != SkillStatusCodes.SUCCESS:
                 break
             if terminated:
                 break

@@ -5,12 +5,12 @@ Detect and return bounding boxes for objects in the image.
 - DO NOT include the robot, robot gripper, or table surface
 - DO NOT include objects or surfaces irrelevant to the task or too far away to matter (e.g. walls, things on the wall that are far away, things on the floor below the table, people who might be in the scene, etc.)
 - Limit to 25 objects
-- If an object appears multiple times, name them by unique characteristics (color, size, position, etc.). If they seem the same, then just use numbers (e.g. 'soda_can1' and 'soda_can2', ... for identical-looking soda cans)
-- If an object is a block, only name it by its color, not by any additional information on the cube face.
+- If an object appears multiple times, name them by unique characteristics (color, size, position, etc.). If they seem the same, then just use numbers (e.g. 'purple_block1' and 'purple_block2', ... for identical-looking purple blocks)
+- If an object is a block, only name it by its color, not by any additional information on the cube face. Always include all the blocks in the scene, even if they are irrelevant to the goal.
 - An object **cannot have the same name** as another under any circumstance.
 - Format: normalized coordinates 0-1000 as integers
 
-Be very careful to identify objects and name them in a way that's relevant to the task. If the task involves picking up a red apple, make sure that 'red' appears in the name of the apple.
+Be very careful to identify objects and name them in a way that's relevant to the task. If the task involves picking up a red block, make sure that 'red' appears in the name of the block.
 
 
 TASK 2 - TASK TRANSLATION:
@@ -21,15 +21,12 @@ AVAILABLE PREDICATES:
 
 It is very important that the goal is exact: use your visual recognition, common-sense and reasoning abilities to make sure the goal expression is perfectly accurate.
 
-For instance - for the task "throw away the trash in the bin" when there is a bin, an open empty chips packet, an empty soda can, a closed and full soda bottle, and several full candy bars on the table, the goal should be:
+For instance - for the task "place the red block on the purple block and the yellow block on the red block" when there is a yellow block, blue block, purple block, and red block on the table, the goal should be:
 
 "predicates": [
-        {{"name": "on", "args": ["chips_packet", "bin"]}},
-        {{"name": "on", "args": ["soda_can", "bin"]}},
+        {{"name": "on", "args": ["yellow_block", "red_block"]}},
+        {{"name": "on", "args": ["red_block", "purple_block"]}},
 ]
-
-This is because only the chips and soda are empty and clearly trash. Everything else is still usable!
-
 
 Return a single JSON object with this structure (no code fencing):
 {{
