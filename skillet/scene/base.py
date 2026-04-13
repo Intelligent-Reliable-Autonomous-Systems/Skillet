@@ -188,6 +188,18 @@ class Scene:
         """
         return [self._objects[self.object_names.index(n)].object_id for n in obj_names]
 
+    def resolve_ids_to_names(self, obj_ids: list[int]) -> list[str]:
+        """Resolve object ids to object names for a list of object ids.
+
+        Args:
+            obj_ids: list of object ids (integers)
+
+        Returns:
+            list of object names as strings
+
+        """
+        return [self._objects[self.object_ids.index(i)].name for i in obj_ids]
+
     def get_object_names(self, obj_type: SceneObject) -> list[str]:
         """Get the name of all objecs of a specific type."""
         ob_names = []

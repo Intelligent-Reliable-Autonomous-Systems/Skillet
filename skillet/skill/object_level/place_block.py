@@ -138,4 +138,5 @@ class PlaceBlock2Skill(PlaceBlockSkill):
         self._place_skill.initiate(obs, target_pose)
 
     def __str__(self) -> str:
-        return f"Place Block: {self._params}"
+        names = self._scene.resolve_ids_to_names(self._params)
+        return f"Place Block: | {names[0]} | {names[1]} |"

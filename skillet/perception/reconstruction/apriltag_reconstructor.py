@@ -21,7 +21,15 @@ class ApriltagStateReconstructor(ReconstructorBase):
 
         """
         super().__init__(scene)
-        self._detector = apriltags.Detector()
+        self._detector = apriltags.Detector(
+            families="tag36h11",  # or whatever family you're printing
+            nthreads=4,
+            quad_decimate=1.0,  # Don't downsample — critical for small tags
+            quad_sigma=0.0,
+            refine_edges=1,
+            decode_sharpening=0.25,
+            debug=0,
+        )
 
     def update_state(self, obs: dict[str, torch.Tensor], update: bool = True) -> None:
         """Update the state estimator with a new observation.
@@ -40,6 +48,7 @@ class ApriltagStateReconstructor(ReconstructorBase):
         camera_params = (intrinsic_k[0, 0], intrinsic_k[1, 1], intrinsic_k[0, 2], intrinsic_k[1, 2])
         cam_pos = obs["camera_pose"][:3]
         cam_quat = obs["camera_pose"][3:7]
+        cam_quat = cam_quat / cam_quat.norm()
 
         id_sizes: dict[float, list[int]] = defaultdict(list)
         id_to_cube: dict[int, Cube] = {}

@@ -12,7 +12,7 @@ from skillet.envs import SkilletEnv
 from skillet.logging import SkilletDataLogger
 from skillet.perception import SkilletPerception
 from skillet.policy import TwistPidPosePolicy
-from skillet.scene import EMPTY_SCENE, Open3DVisualizer
+from skillet.scene import EMPTY_SCENE, SIX_CUBE_APRIL_SCENE, Open3DVisualizer
 from skillet.scene.abstract.abstract_model import AbstractModel
 from skillet.skill import PickBlock2Skill, PickSkill, PlaceBlock2Skill, PlaceSkill
 from skillet_tasks.kortex_tasks.factory import create_kortex_env
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 parser = argparse.ArgumentParser(description="Visualize latest RGB-D frame from ROS2 service.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
-parser.add_argument("--device", type=str, default="cuda", help="Device to use")
+parser.add_argument("--device", type=str, default="cpu", help="Device to use")
 parser.add_argument("--robot_ip", type=str, default="192.168.1.10", help="Robot IP.")
 parser.add_argument("--poll_rate_hz", type=int, default=10, help="Seconds between service requests.")
 parser.add_argument("--task", type=str, default="Kortex-Gen3Lite-v0", help="Kortex Environment")
@@ -41,7 +41,7 @@ def main() -> None:
     """Visualize RGB + depth color map from _get_latest_rgbd()."""
     import pickle
 
-    scene = EMPTY_SCENE
+    scene = SIX_CUBE_APRIL_SCENE
     env_cfg = {
         "robot_ip": args_cli.robot_ip,
         "device": args_cli.device,
@@ -58,16 +58,16 @@ def main() -> None:
         env=env,
         scene=scene,
         obs_spec=rgbd_grip_spec,
-        reconstructor="sam",
+        reconstructor="april",
         poll_rate_hz=args_cli.poll_rate_hz,
         device=args_cli.device,
-        vis_perception=False,
+        vis_perception=True,
     )
     visualizer = Open3DVisualizer(scene, env)
-    # perception.set_visualizer(visualizer, segment_point_cloud=True)
+    perception.set_visualizer(visualizer, segment_point_cloud=True)
     if args_cli.perception:
         perception.run_thread()
-        # visualizer.run_thread()
+        visualizer.run_thread()
     else:
         with open("data/test/vlm_out_multi.pkl", "rb") as f:
             scene = pickle.load(f)
@@ -93,7 +93,9 @@ def main() -> None:
     planning_agent = PlanningAgent(scene, abstract_model=abs_model, action_to_skill_map=ACTION_MAP)
 
     # simulate environment
-    logger = SkilletDataLogger("data/test/", env, scene, perception, abs_model, planning_agent, obs_spec=rgbd_grip_spec)
+    logger = SkilletDataLogger(
+        "data/test/", env, scene, perception, abs_model, planning_agent, obs_spec=rgbd_grip_spec, visualize=False
+    )
     if args_cli.build_scene:
         input("Press Enter to start the scene building...\n")
         perception.task_instruction = args_cli.goal

@@ -87,7 +87,7 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
 
     @property
     def params_spec(self) -> SkillParamsSpec[XYZ_YAW_Params]:
-        return XYZ_YAW_Params_Spec
+        return XYZ_YAW_Params_Spec.replace(device=self.obs_spec.device)
 
     @property
     def name(self) -> str:  # noqa: D102

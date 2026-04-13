@@ -28,11 +28,15 @@ class ParsedUpProblem:
     fluents: UPDictFluent
     objects: UPDictObject
     goals: UPListGoal
+    exclude_list = ["clear", "small"]
 
     def __str__(self) -> str:
         print_str = "Abstract State:\n"
         for f in self.fluents:
-            print_str += f"{parse_value(str(f))!s}\n"
+            f = parse_value(str(f))
+            if f.value in self.exclude_list:
+                continue
+            print_str += f"{f!s}\n"
         return print_str
 
 
@@ -63,10 +67,13 @@ class AbstractValue:
 @dataclass
 class AbstractPlan:
     actions: list[AbstractAction]
+    exclude_list = []
 
     def __str__(self) -> str:
         print_str = "Plan:\n"
         for ac in self.actions:
+            if ac.action in self.exclude_list:
+                continue
             print_str += f"{ac}\n"
         return print_str
 
@@ -74,10 +81,13 @@ class AbstractPlan:
 @dataclass
 class AbstractState:
     states: list[AbstractValue]
+    exclude_list = ["clear", "small"]
 
     def __str__(self) -> str:
         print_str = "Abstract State:\n"
         for s in self.states:
+            if s.value in self.exclude_list:
+                continue
             print_str += f"{s}\n"
         return print_str
 

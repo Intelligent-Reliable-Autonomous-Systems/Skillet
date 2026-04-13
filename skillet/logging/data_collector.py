@@ -35,6 +35,7 @@ class SkilletDataLogger:
         abs_model: AbstractModel | None = None,
         agent: Agent | None = None,
         obs_spec: ObservationSpec | None = None,
+        visualize: bool = False,
     ):
         self._log_dir = log_dir
         self._scene = scene
@@ -58,7 +59,7 @@ class SkilletDataLogger:
         self._writer = None
         self._data_window_name = "Skillet Visualization"
         self._window_active = False
-        self._visualize = False
+        self._visualize = visualize
         self._width = 1920
         self._height = 1080
         matplotlib.use("Agg")
