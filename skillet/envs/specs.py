@@ -101,6 +101,7 @@ IKEE_Obs = Mapping[str, Float[torch.Tensor, "b ..."]]
 OSC_Obs = Mapping[str, Float[torch.Tensor, "b ..."]]
 TWIST_TCP_Obs = Mapping[str, Float[torch.Tensor, "b ..."]]
 MOVEIT_TCP_Obs = Mapping[str, Float[torch.Tensor, "b ..."]]
+JOINT_Obs = Mapping[str, Float[torch.Tensor, "b ..."]]
 IK_EE_SPEC_BATCHED = ObservationSpec[IKEE_Obs](
     space=gym.spaces.Dict(
         {
@@ -192,7 +193,36 @@ MOVEIT_SPEC_BATCHED = ObservationSpec[MOVEIT_TCP_Obs](
     n_envs=-1,
 )
 
+JOINT_SPEC_BATCHED = ObservationSpec[JOINT_Obs](
+    space=gym.spaces.Dict(
+        {
+            "tcp_pose_b": gym.spaces.Box(low=-1.0, high=1.0, shape=(7,)),
+            "gripper_lim": gym.spaces.Box(low=0.0, high=1.0, shape=(2,)),
+            "gripper": ParameterizedBox(low=0.0, high=1.0, shape=("n_gripper_joints",)),
+            "dt": gym.spaces.Box(low=0.0, high=1.0, shape=(1,)),
+            "ee_vel_b": gym.spaces.Box(low=-10, high=10, shape=(6,)),
+            "joint_vel": ParameterizedBox(low=-10, high=10, shape=("n_joints",)),
+            "joint_pos": ParameterizedBox(low=-np.pi, high=np.pi, shape=("n_joints",)),
+            "joint_eff": ParameterizedBox(low=-np.pi, high=np.pi, shape=("n_joints",)),
+        }
+    ),
+    name="twist_tcp",
+    is_torch=True,
+    is_batched=True,
+    n_envs=-1,
+)
+
 # ========= Action specifications =========
+
+JOINT_Action = Float[torch.Tensor, "b n_joints"]
+"""Action type for Joint Commands"""
+JOINT_SPEC = ActionSpec[JOINT_Action](
+    space=ParameterizedBox(low=-float("inf"), high=float("inf"), shape=("n_joints",)),
+    name="joints",
+    is_torch=True,
+    is_batched=True,
+    n_envs=-1,
+)
 
 TWIST_TCP_Action = Float[torch.Tensor, "b 6+n_gripper_joints"]
 """Action type for Twist TCP commands."""
@@ -206,7 +236,7 @@ TWIST_TCP_SPEC = ActionSpec[TWIST_TCP_Action](
 
 MOVEIT_Joint_Action = Float[torch.Tensor, "b n_joints"]
 """Action type for MoveIt joint commands."""
-MOVEIT_Joint_SPEC = ActionSpec[MOVEIT_Joint_Action](
+MOVEIT_JOINT_SPEC = ActionSpec[MOVEIT_Joint_Action](
     space=ParameterizedBox(low=-float("inf"), high=float("inf"), shape=("n_joints",)),
     name="moveit_joint",
     is_torch=True,

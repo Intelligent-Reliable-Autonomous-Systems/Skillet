@@ -147,13 +147,7 @@ class TwistPidPosePolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Gen
 
         # Rotate position and rotation error into the frame the twist controller expects
         error_pos = quat_apply(quat_inv(tcp_pose_b[:, 3:7]), error_pos)
-        error_rot = (
-            quat_apply(quat_inv(tcp_pose_b[:, 3:7]), error_rot) * 10
-        )  # Scale rotation error to make it move faster
-
-        # print(f"########")
-        # print(tcp_pose_b.squeeze()[0:3])
-        # print(self._tcp_quat_des_b.squeeze()[0:3])
+        error_rot = quat_apply(quat_inv(tcp_pose_b[:, 3:7]), error_rot) * 10
 
         self.integral_pos += error_pos * dt
         self.integral_rot += error_rot * dt

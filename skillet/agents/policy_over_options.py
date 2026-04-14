@@ -1,36 +1,29 @@
 """A high level model-free agent that selects options/skills to execute in parallel."""
 
-from typing import Any, Generic, TypeAlias, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Generic, cast
 
 import torch
-from jaxtyping import Bool, Int
 
-from skillet.agents.base_agent import Agent
+from skillet.agents.base_agent import (
+    Agent,
+    SelectedSkill,
+    SelectedSkills,
+    TAction,
+    TBAction,
+    TBHighLevelObs,
+    TBLowLevelObs,
+    TBSkillParams,
+    THighLevelObs,
+    TLowLevelObs,
+    TSkillParams,
+)
 from skillet.core import SingleSkill
 from skillet.core.env import BatchedEnvironment, Environment
 from skillet.core.policy import BatchedUPolicy, UPolicy
 from skillet.core.skill import BatchedSkill, CompositeSkill
-from skillet.core.spaces import (
-    Action,
-    BatchedAction,
-    BatchedObservation,
-    BatchedSkillParams,
-    SkillParams,
-)
 
-THighLevelObs = TypeVar("THighLevelObs", bound=BatchedObservation)
-"""The type of the high level observation, batched."""
-TLowLevelObs = TypeVar("TLowLevelObs", bound=BatchedObservation)
-"""The type of the low level observation, batched."""
-TSkillParams = TypeVar("TSkillParams", bound=SkillParams)
-"""The type of the skill parameters, unbatched."""
-TAction = TypeVar("TAction", bound=Action)
-"""The type of the action, unbatched."""
-
-SelectedSkill: TypeAlias = int
-"""The type of a selected skill. Alias of int."""
-SelectedSkills = Int[torch.Tensor, "b"]
-"""The indices of the selected skills for each environment according to the order of the skills."""
+if TYPE_CHECKING:
+    from jaxtyping import Bool
 
 
 class PolicyOverOptionsAgent(Agent):
@@ -55,6 +48,7 @@ class PolicyOverOptionsAgent(Agent):
         high_level_policy: UPolicy[THighLevelObs, SelectedSkill],
         params_policy: UPolicy[THighLevelObs, TSkillParams] | None = None,
     ) -> None:
+        """Initialize the policy over options agent."""
         super().__init__()
         self.skills = skills
         self.high_level_policy = high_level_policy
@@ -95,20 +89,10 @@ class PolicyOverOptionsAgent(Agent):
                 action = self._selected_skill.get_action(env.get_observation(self._selected_skill.obs_spec))
                 # action[:, -1] = override_grip
                 # 4b. Take a step in the environment
-                _, r, term, trunc, _ = env.step(action, action_spec=self._selected_skill.action_spec)
+                _, _, term, trunc, _ = env.step(action, action_spec=self._selected_skill.action_spec)
                 terminated = terminated | term | trunc
                 # 4c. Check if the composite skill is terminated
                 skill_done = self._selected_skill.is_terminated(env.get_observation(self._selected_skill.obs_spec))
-
-
-TBHighLevelObs = TypeVar("TBHighLevelObs", bound=BatchedObservation)
-"""The type of the high level observation, batched."""
-TBLowLevelObs = TypeVar("TBLowLevelObs", bound=BatchedObservation)
-"""The type of the low level observation, batched."""
-TBAction = TypeVar("TBAction", bound=BatchedAction)
-"""The type of the batched action, batched."""
-TBSkillParams = TypeVar("TBSkillParams", bound=BatchedSkillParams)
-"""The type of the skill parameters, batched."""
 
 
 class PolicyOverOptionsBatchedAgent(Generic[TBHighLevelObs, TBLowLevelObs, TBAction, TBSkillParams]):
@@ -133,6 +117,7 @@ class PolicyOverOptionsBatchedAgent(Generic[TBHighLevelObs, TBLowLevelObs, TBAct
         high_level_policy: BatchedUPolicy[TBHighLevelObs, SelectedSkills],
         params_policy: BatchedUPolicy[TBHighLevelObs, TBSkillParams] | None = None,
     ) -> None:
+        """Iinitialize the policy over options batched agent."""
         self.skills = skills
         self.high_level_policy = high_level_policy
         self.params_policy = params_policy
@@ -167,7 +152,9 @@ class PolicyOverOptionsBatchedAgent(Generic[TBHighLevelObs, TBLowLevelObs, TBAct
             # Low level execution
             # 3. Initiate the composite skill with the selected skills and parameters
             composite_skill.initiate(env.get_observation(composite_skill.obs_spec), params, env_ids=selected_skills)
-            print("initiating skills:", [(self.skills[i].name, p) for i, p in zip(selected_skills, params)])
+            print(
+                "initiating skills:", [(self.skills[i].name, p) for i, p in zip(selected_skills, params, strict=False)]
+            )
             # 4. While not terminated, get the next action and take a step in the environment
             skill_dones = composite_skill.is_terminated(env.get_observation(composite_skill.obs_spec))
             while not skill_dones.all() and not bool(terminated.all()):
@@ -175,7 +162,7 @@ class PolicyOverOptionsBatchedAgent(Generic[TBHighLevelObs, TBLowLevelObs, TBAct
                 action = composite_skill.get_action(env.get_observation(composite_skill.obs_spec))
                 # action[:, -1] = override_grip
                 # 4b. Take a step in the environment
-                _, r, term, trunc, _ = env.step(action, action_spec=composite_skill.action_spec)
+                _, _, term, trunc, _ = env.step(action, action_spec=composite_skill.action_spec)
                 terminated = terminated | term | trunc
                 # 4c. Check if the composite skill is terminated
                 skill_dones = composite_skill.is_terminated(self.get_low_level_obs(env))

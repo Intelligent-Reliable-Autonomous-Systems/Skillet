@@ -7,7 +7,15 @@ import numpy as np
 import torch
 from jaxtyping import Float, Int
 
-from skillet.core.spaces import ActionSpec, ParameterizedDiscrete
+from skillet.core.spaces import ActionSpec, ParameterizedBox, ParameterizedDiscrete
+
+JOINT_Params = Float[torch.Tensor, "b n_joints"]
+JOINT_Params_Spec = ActionSpec[JOINT_Params](
+    space=ParameterizedBox(low=-np.pi, high=np.pi, shape=("n_joints",)),
+    name="joints",
+    is_torch=True,
+    n_envs=-1,
+)
 
 XYZ_Params = Float[torch.Tensor, "b 3"]
 """XYZ parameters: torch.Tensor[(b, 3), float]"""

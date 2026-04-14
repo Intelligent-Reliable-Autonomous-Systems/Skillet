@@ -34,9 +34,7 @@ class PlanningAgent(Agent):
         self.abstract_model = abstract_model
         self.action_to_skill_map = action_to_skill_map
 
-    def execute(
-        self, env: Environment[Any, Any], task: str | None = None, logger: SkilletDataLogger | None = None
-    ) -> None:
+    def execute(self, env: Environment[Any, Any], task: str | None = None) -> None:
         """Execute the policy over the options configured.
 
         Args:
@@ -63,7 +61,6 @@ class PlanningAgent(Agent):
             obs = env.get_observation(self._selected_skill.obs_spec)
             self._selected_skill.initiate(obs, args)
             skill_done = self._selected_skill.is_terminated(env.get_observation(self._selected_skill.obs_spec))
-            i = 0
             while not skill_done and not bool(terminated):
                 # Get the next action with the low-level observation
                 action = self._selected_skill.get_action(env.get_observation(self._selected_skill.obs_spec))
@@ -73,9 +70,6 @@ class PlanningAgent(Agent):
                 terminated = terminated | term | trunc
                 # Check if the skill is terminated
                 skill_done = self._selected_skill.is_terminated(env.get_observation(self._selected_skill.obs_spec))
-                if logger is not None and (i % 1) == 0:
-                    logger.update_visualization()
-                i += 1
             # Check if the skill was successful
             if self._selected_skill.status != SkillStatusCodes.SUCCESS:
                 break
