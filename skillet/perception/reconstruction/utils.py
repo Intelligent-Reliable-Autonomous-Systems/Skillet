@@ -99,7 +99,7 @@ def assign_poses_to_objects(
         ob.pose = torch.as_tensor(np.concatenate((poses[det_idx[idx]], [1, 0, 0, 0])), device=device)
 
 
-def find_cube_centers(
+def find_cube_centers_ransac(
     masks: np.ndarray,
     depth: np.ndarray,
     camera_matrix: np.ndarray,

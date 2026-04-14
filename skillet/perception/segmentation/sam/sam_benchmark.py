@@ -155,7 +155,6 @@ def main(
                 masks, boxes, scores, concept_indices = sam_model.segment_from_concepts(rgb, concepts)
                 _sync_cuda()
                 t1 = time.perf_counter()
-                print(masks.shape)
                 vis_rgb = overlay_masks_bgr(
                     cv2.cvtColor(rgb.transpose((1, 2, 0)), cv2.COLOR_RGB2BGR),
                     masks,

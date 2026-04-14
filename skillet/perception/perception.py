@@ -247,6 +247,7 @@ class SkilletPerception:
 
             # Update the state based on reconstruction
             self._reconstructor.update_state(obs_unbatched, update=True)
+
             self.scene.tcp_pose = obs_unbatched["tcp_pose"]
             self.scene.gripper_pos = obs_unbatched["gripper_pos"]
 
@@ -270,10 +271,12 @@ class SkilletPerception:
             if self._visualize_perception:
                 self._update_perception_window(obs_unbatched)
 
-            next_poll_t += poll_period_s
-            sleep_s = max(0.0, next_poll_t - time.perf_counter())
-            if sleep_s > 0:
-                time.sleep(sleep_s)
+            sleep_time = (time.perf_counter() - next_poll_t) - poll_period_s
+            if sleep_time < 0:
+                time.sleep(min(-sleep_time, poll_period_s))
+            else:
+                print(f"[WARN][PERCEPT] full loop overran by {sleep_time * 1000:.1f}ms")
+            next_poll_t = time.perf_counter()
 
         self.stop()
 

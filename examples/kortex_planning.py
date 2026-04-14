@@ -24,11 +24,14 @@ parser = argparse.ArgumentParser(description="Visualize latest RGB-D frame from 
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
 parser.add_argument("--device", type=str, default="cpu", help="Device to use")
 parser.add_argument("--robot_ip", type=str, default="192.168.1.10", help="Robot IP.")
-parser.add_argument("--poll_rate_hz", type=int, default=10, help="Seconds between service requests.")
+parser.add_argument("--poll_rate_hz", type=int, default=10, help="Tick rate of the perception")
 parser.add_argument("--task", type=str, default="Kortex-Gen3Lite-v0", help="Kortex Environment")
 parser.add_argument("--build_scene", type=argparse.BooleanOptionalAction, default=True, help="If to build the scene")
 parser.add_argument("--reconstruction", type=str, choices=["sam", "april"], default="sam")
-parser.add_argument("--perception", type=argparse.BooleanOptionalAction, default=True, help="If to build the scene")
+parser.add_argument(
+    "--perception", type=argparse.BooleanOptionalAction, default=True, help="If to run the perception pipeline"
+)
+parser.add_argument("--o3d", type=argparse.BooleanOptionalAction, default=False, help="If to visualize with open3d")
 parser.add_argument(
     "--goal",
     type=str,
@@ -45,7 +48,7 @@ def main() -> None:
     scene = SIX_CUBE_APRIL_SCENE if args_cli.reconstruction == "april" else EMPTY_SCENE
     env_cfg = {
         "robot_ip": args_cli.robot_ip,
-        "device": args_cli.device,
+        "device": "cpu",
         "num_envs": args_cli.num_envs,
     }
 
@@ -62,13 +65,16 @@ def main() -> None:
         reconstructor=args_cli.reconstruction,
         poll_rate_hz=args_cli.poll_rate_hz,
         device="cuda",
-        vis_perception=True,
+        vis_perception=False,
     )
-    visualizer = Open3DVisualizer(scene, env)
-    perception.set_visualizer(visualizer, segment_point_cloud=True)
+    target_pose_func = None
+    if args_cli.o3d:
+        visualizer = Open3DVisualizer(scene, env)
+        perception.set_visualizer(visualizer, segment_point_cloud=True)
+        visualizer.run_thread()
+        target_pose_func = visualizer.set_target_pos
     if args_cli.perception:
         perception.run_thread()
-        visualizer.run_thread()
     else:
         with open("data/test/vlm_out_multi.pkl", "rb") as f:
             scene = pickle.load(f)
@@ -83,8 +89,8 @@ def main() -> None:
     place_skill = PlaceSkill(reach_policy=arm_policy, gripper_policy=None, lift_height=0.23, length=skill_length)
     pick_skill = PickSkill(reach_policy=arm_policy, gripper_policy=None, lift_height=0.23, length=skill_length)
 
-    pick_block_skill = PickBlock2Skill(scene, pick_skill, vis_target_pos=visualizer.set_target_pos)
-    place_block_skill = PlaceBlock2Skill(scene, place_skill, vis_target_pos=visualizer.set_target_pos)
+    pick_block_skill = PickBlock2Skill(scene, pick_skill, vis_target_pos=target_pose_func)
+    place_block_skill = PlaceBlock2Skill(scene, place_skill, vis_target_pos=target_pose_func)
 
     ACTION_MAP = {"place_block": place_block_skill, "pick_block": pick_block_skill}
     block_domain = "skillet/scene/abstract/assets/blocks.domain.pddl"
@@ -103,15 +109,15 @@ def main() -> None:
         perception.build_scene = args_cli.build_scene
 
     input("Press Enter to start the skill execution...\n")
-    logger.write_video = True
-    logger.run_thread()
+    # logger.write_video = True
+    # logger.run_thread()
 
     while True:
         with torch.inference_mode():
             env.reset()
             planning_agent.execute(env)
             print("[INFO][Main] finished run of skill executor, resetting")
-            logger.save_video()
+            # logger.save_video()
             break
 
 

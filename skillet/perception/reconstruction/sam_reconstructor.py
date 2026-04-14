@@ -16,7 +16,7 @@ from skillet.perception.reconstruction.reconstructor_base import ReconstructorBa
 from skillet.perception.reconstruction.utils import (
     assign_objects_to_id,
     assign_poses_to_objects,
-    find_cube_centers,
+    find_cube_centers_ransac,
     get_sorted_object_poses,
     transform_xyz_to_world,
 )
@@ -118,7 +118,7 @@ class SAMReconstructor(ReconstructorBase):
         masks = masks.cpu().numpy()
 
         # Find cube centers in the camera frame
-        dc = find_cube_centers(
+        dc = find_cube_centers_ransac(  # TODO: this function takes 800ms to run, way too slow
             cube_masks,
             depth,
             intrinsic_k,
@@ -211,7 +211,7 @@ class SAMReconstructor(ReconstructorBase):
 
         self._vlm_frame = SAMReconstructor.show_vlm_image_and_masks(rgb.transpose(1, 2, 0), masks.cpu().numpy(), labels)
 
-        dc = find_cube_centers(
+        dc = find_cube_centers_ransac(
             masks.cpu().numpy(),
             depth,
             intrinsic_k,
@@ -308,13 +308,13 @@ class SAMReconstructor(ReconstructorBase):
         """Visualize cube detection results with live streaming at ~2Hz.
 
         Args:
-            results:        Output dict from find_cube_centers().
+            results:        Output dict from find_cube_centers_ransac().
             masks:          Binary masks (N, H, W).
             depth:          Depth map (1, H, W) or (H, W).
             camera_matrix:  3x3 intrinsics.
             camera_pose:    Pose of camera in xyz wxyz (quat) in world frame
             frame:          Frame to visualize in (world or camera)
-            depth_scale:    Same scale used in find_cube_centers().
+            depth_scale:    Same scale used in find_cube_centers_ransac().
             max_points:     Max depth cloud points to render (downsampled for speed).
 
         """
