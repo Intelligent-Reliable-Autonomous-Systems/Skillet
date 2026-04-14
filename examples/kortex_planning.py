@@ -27,6 +27,7 @@ parser.add_argument("--robot_ip", type=str, default="192.168.1.10", help="Robot 
 parser.add_argument("--poll_rate_hz", type=int, default=10, help="Seconds between service requests.")
 parser.add_argument("--task", type=str, default="Kortex-Gen3Lite-v0", help="Kortex Environment")
 parser.add_argument("--build_scene", type=argparse.BooleanOptionalAction, default=True, help="If to build the scene")
+parser.add_argument("--reconstruction", type=str, choices=["sam", "april"], default="sam")
 parser.add_argument("--perception", type=argparse.BooleanOptionalAction, default=True, help="If to build the scene")
 parser.add_argument(
     "--goal",
@@ -41,7 +42,7 @@ def main() -> None:
     """Visualize RGB + depth color map from _get_latest_rgbd()."""
     import pickle
 
-    scene = SIX_CUBE_APRIL_SCENE
+    scene = SIX_CUBE_APRIL_SCENE if args_cli.reconstruction == "april" else EMPTY_SCENE
     env_cfg = {
         "robot_ip": args_cli.robot_ip,
         "device": args_cli.device,
@@ -58,9 +59,9 @@ def main() -> None:
         env=env,
         scene=scene,
         obs_spec=rgbd_grip_spec,
-        reconstructor="april",
+        reconstructor=args_cli.reconstruction,
         poll_rate_hz=args_cli.poll_rate_hz,
-        device=args_cli.device,
+        device="cuda",
         vis_perception=True,
     )
     visualizer = Open3DVisualizer(scene, env)

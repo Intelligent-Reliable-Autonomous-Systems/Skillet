@@ -78,7 +78,7 @@ class RotateBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
         target_xyz = self._target_block.pose[:3] + self._offset
         if self._vis_target_pos is not None:
             self._vis_target_pos(target_xyz)
-        yaw = 0  k
+        yaw = 0
         target_pose = torch.tensor([target_xyz[0], target_xyz[1], target_xyz[2], yaw])
         target_pose = self._rotate_skill.params_spec.with_n_envs(1).cast(target_pose)
         target_pose = torch.cat((target_pose, torch.ones(size=(1, 1), device="cuda") * -torch.pi / 2), dim=-1)

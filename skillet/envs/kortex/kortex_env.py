@@ -87,7 +87,7 @@ class KortexEnv(SkilletGymEnv):
         self.extras: dict[str, Any] = {}
 
         # setup the action and observation spaces for Gym
-        self._next_step_time = time.monotonic()
+        self._next_step_time = time.perf_counter()
 
         print("[INFO][KortexEnv] Completed Environment Setup")
 
@@ -283,20 +283,19 @@ class KortexEnv(SkilletGymEnv):
             A tuple containing the observations, rewards, resets (terminated and truncated) and extras.
 
         """
-        # if self._next_step_time is None:
-        #    self._next_step_time = time.monotonic()
 
         # Pre process the robot action
         action = self._pre_process_action(action, action_spec=action_spec)
 
         # Send the robot action to hardware
         self._publish_action_to_kortex(action, duration=self.step_dt, action_spec=action_spec)
-        sleep_time = (self._next_step_time - time.monotonic()) - self.step_dt
+        sleep_time = (time.perf_counter() - self._next_step_time) - self.step_dt
+
         if sleep_time < 0:
-            time.sleep(min(-sleep_time, self.step_dt))  # tODO this doesnt always enforce the same sleeping
+            time.sleep(min(-sleep_time, self.step_dt))
         else:
             print(f"[WARN] full loop overran by {sleep_time * 1000:.1f}ms")
-        self._next_step_time = time.monotonic()
+        self._next_step_time = time.perf_counter()
 
         self._episode_length_buf += 1
         self._common_step_counter += 1

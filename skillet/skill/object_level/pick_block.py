@@ -120,7 +120,7 @@ class PickBlock2Skill(PickBlockSkill):
         if not self._target_block.is_pose_known():
             self._status = SkillStatusCodes.FAILED.value
             return
-        target_xyz = self._target_block.pose[:3] + self._offset
+        target_xyz = self._target_block.pose[:3].to(self.obs_spec.device) + self._offset
         if self._vis_target_pos is not None:
             self._vis_target_pos(target_xyz)
         yaw = 0

@@ -76,7 +76,7 @@ class ROS2Env(SkilletGymEnv):
         self.extras: dict[str, Any] = {}
 
         # setup the action and observation spaces for Gym
-        self._next_step_time = None
+        self._next_step_time = time.perf_counter()
 
         print("[INFO][ROS2Env] Completed Environment Setup")
 
@@ -240,7 +240,7 @@ class ROS2Env(SkilletGymEnv):
 
         self._episode_length_buf += 1  # step in current episode (per env)
         self._common_step_counter += 1  # total step (common for all envs)
-
+        self._next_step_time = time.perf_counter()
         # return observations
         return self._get_observations(), self.extras
 
@@ -272,21 +272,18 @@ class ROS2Env(SkilletGymEnv):
         assert self._supports_action_spec(
             action_spec
         ), f"Action specification `{action_spec.name}: {action_spec}` not supported by environment {self}."
-        if self._next_step_time is None:
-            self._next_step_time = time.monotonic()
 
         # Pre process the robot action
         action = self._pre_process_action(action, action_spec=action_spec)
 
         # Send the robot action to hardware
         self._publish_action_to_ros(action, duration=self.step_dt, action_spec=action_spec)
-        self._next_step_time += self.step_dt
-        sleep_time = self._next_step_time - time.monotonic()
-        if sleep_time > 0:
-            time.sleep(sleep_time)
+        sleep_time = (time.perf_counter() - self._next_step_time) - self.step_dt
+        if sleep_time < 0:
+            time.sleep(min(-sleep_time, self.step_dt))
         else:
-            # print(f"[WARN] full loop overran by {-sleep_time * 1000:.1f}ms")
-            ...
+            print(f"[WARN] full loop overran by {sleep_time * 1000:.1f}ms")
+        self._next_step_time = time.perf_counter()
 
         self._episode_length_buf += 1
         self._common_step_counter += 1
@@ -295,7 +292,7 @@ class ROS2Env(SkilletGymEnv):
         self.reset_buf = self.reset_terminated | self.reset_time_outs
         self.reward_buf = self._get_rewards()
 
-        # -- reset envs that terminated/timed-out and log the episode information
+        # reset envs that terminated/timed-out and log the episode information
         if self.reset_buf:
             self._reset_idx()
 

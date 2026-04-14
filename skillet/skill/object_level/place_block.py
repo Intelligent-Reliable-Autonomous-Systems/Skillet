@@ -124,9 +124,9 @@ class PlaceBlock2Skill(PlaceBlockSkill):
             if not self._target.is_pose_known():
                 self._status = SkillStatusCodes.FAILED.value
                 return
-            target_xyz = self._target.pose[:3] + self._offset
+            target_xyz = self._target.pose[:3].to(self.obs_spec.device) + self._offset
         elif isinstance(self._target, Table):
-            target_xyz = find_valid_table_xy(self._scene).to(self._offset.device) + (self._offset / 2)
+            target_xyz = find_valid_table_xy(self._scene).to(self.obs_spec.device) + (self._offset / 2)
         else:
             raise ValueError(f"Unknown place object: {self._target}.")
 
