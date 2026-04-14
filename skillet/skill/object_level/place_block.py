@@ -80,7 +80,7 @@ class PlaceBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
         target_xyz = self._target_block.pose[:3] + self._offset
         if self._vis_target_pos is not None:
             self._vis_target_pos(target_xyz)
-        yaw = 0  # TODO: get yaw from target block
+        yaw = 0
         target_pose = torch.tensor([target_xyz[0], target_xyz[1], target_xyz[2], yaw])
         target_pose = self._place_skill.params_spec.with_n_envs(1).cast(target_pose)
         self._place_skill.initiate(obs, target_pose)
@@ -132,7 +132,7 @@ class PlaceBlock2Skill(PlaceBlockSkill):
 
         if self._vis_target_pos is not None:
             self._vis_target_pos(target_xyz)
-        yaw = 0  # TODO: get yaw from target block
+        yaw = 0
         target_pose = torch.tensor([target_xyz[0], target_xyz[1], target_xyz[2], yaw])
         target_pose = self._place_skill.params_spec.with_n_envs(1).cast(target_pose)
         self._place_skill.initiate(obs, target_pose)

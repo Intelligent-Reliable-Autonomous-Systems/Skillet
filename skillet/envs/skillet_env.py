@@ -261,20 +261,8 @@ class SkilletEnv(
 
         if obs_spec.name == "policy":
             return obs_spec.cast(self._last_obs["policy"])
-        if (
-            obs_spec.name == "rgb-d" or obs_spec.name == "rgbd-gripper"
-        ):  # TODO(Will) convert this in ROS2 env with torch.tensor + no quat roll (handle this in lower env)
+        if obs_spec.name == "rgb-d" or obs_spec.name == "rgbd-gripper":
             latest = self._env._get_latest_rgbd()
-            # ROS/realsense xyzw format -> IsaacLab wxyz format
-            q = latest["camera_pose"][3:7]
-            latest["camera_pose"][3:7] = q[[3, 0, 1, 2]]
-            # RGB is (H, W, 3) -> (3, H, W)
-            latest["rgb"] = latest["rgb"].transpose((2, 0, 1))
-            # Depth is (H, W) -> (1, H, W), always float32 meters.
-            depth = np.expand_dims(latest["depth"], axis=0)
-            if depth.dtype == np.uint16:
-                depth = depth.astype(np.float32) / 1000.0
-            latest["depth"] = depth
             if obs_spec.name == "rgbd-gripper":
                 latest["tcp_pose_b"] = self._get_tcp_pose_b(ee_link=self._ee_link_name)
                 latest["gripper"] = self._get_gripper_state(gripper_joints=self._gripper_joint_names)
@@ -343,7 +331,9 @@ class SkilletEnv(
         return self.get_observation(self.obs_spec_state)
 
     @override
-    def step(self, action: BxM_Action, action_spec: ActionSpec[Any] | None = None) -> tuple[
+    def step(
+        self, action: BxM_Action, action_spec: ActionSpec[Any] | None = None
+    ) -> tuple[
         BxN_Obs,
         Float[torch.Tensor, "b"],  # noqa: F821
         Bool[torch.Tensor, "b"],  # noqa: F821

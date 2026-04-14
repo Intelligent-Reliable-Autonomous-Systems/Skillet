@@ -365,7 +365,6 @@
   <gazebo reference="right_finger_prox_link">
     <material>Kortex/Gray</material>
   </gazebo>
-  <!-- TODO(MarqRazz) look into why the joint and limits needed to be flipped and modified -->
   <joint name="right_finger_bottom_joint" type="revolute">
     <origin rpy="1.571 0.611 1.571" xyz="0 -0.030501 0.070003"/>
     <parent link="gripper_base_link"/>

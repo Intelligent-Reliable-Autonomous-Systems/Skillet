@@ -5,7 +5,7 @@ import torch
 from jaxtyping import Int
 
 from skillet.core.math import transform_points, unproject_depth
-from skillet.scene.base import SceneObject, Scene
+from skillet.scene.base import Scene, SceneObject
 from skillet.scene.cube import Cube
 
 _PALETTE_BGR: list[tuple[int, int, int]] = [
@@ -150,7 +150,6 @@ def get_object_geometry(obj: SceneObject) -> list[object]:
 
     Defaults to an AABB wireframe. Unknown poses are ignored.
     """
-    # TODO: add object-specific geometry visualization.
     if not obj.is_pose_known():
         return []
     if isinstance(obj, Cube):
@@ -472,64 +471,6 @@ def draw_instance_annotations(image: np.ndarray, masks: torch.Tensor, segment_id
     return out
 
 
-def get_sorted_object_poses(scene: Scene, obj: SceneObject) -> np.ndarray:
-    """Return a list of scene objects of a specific type sorted by their ID.
-
-    Args:
-        scene: The scene to get poses from
-        obj: Object instance to grab all instances of
-
-    Returns:
-        np.ndarray of shape (N, 7) of the object poses
-
-    """
-    id_list = []
-    pose_list = []
-    for ob in scene.objects:
-        if not isinstance(ob, obj):
-            continue
-        id_list.append(ob.object_id)
-        pose_list.append(ob.pose.cpu().numpy())
-
-    sorted_ids = np.argsort(id_list)
-
-    return np.asarray(pose_list)[sorted_ids], np.asarray(id_list)[sorted_ids]
-
-
-def assign_poses_to_objects(
-    scene: Scene,
-    obj: SceneObject,
-    poses: np.ndarray,
-    ids: np.ndarray,
-    obj_idx: np.ndarray,
-    det_idx: np.ndarray,
-    device: str = "cuda",
-) -> None:
-    """Return a list of scene objects of a specific type sorted by their ID.
-
-    Args:
-        scene: The scene to get poses from
-        obj: Object instance to grab all instances of
-        poses: np.ndarray of poses for SceneObjects
-        ids: np.ndarray of sorted object ids
-        obj_idx: Sorted indexes of object scene ids according to poses
-        det_idx: The detection index of which pose to assign to which object
-        device: CUDA device to create tensor on
-
-    """
-    for ob in scene.objects:
-        if not isinstance(ob, obj):
-            continue
-        idx = np.where(ob.object_id == ids[obj_idx])[0]
-        if idx.size > 0:
-            idx = idx[0]
-        else:
-            # TODO handle occlusion more robustly. The object closest to the camera
-            # Should be the one that is not occluded
-            continue
-        ob.pose = torch.as_tensor(np.concatenate((poses[det_idx[idx]], [1, 0, 0, 0])), device=device)
-
-
 def arrange_panels(panels: list[np.ndarray], gap: int = 10) -> np.ndarray:
     """Arrange panels in a grid with whitespace gaps between them."""
     n = len(panels)
@@ -553,7 +494,7 @@ def arrange_panels(panels: list[np.ndarray], gap: int = 10) -> np.ndarray:
     if n == 3:
         # Pad with a blank panel
         blank = np.zeros_like(panels[0])
-        panels = panels + [blank]
+        panels = [*panels, blank]
 
     top_left, top_right, bot_left, bot_right = panels[0], panels[1], panels[2], panels[3]
 
@@ -561,7 +502,7 @@ def arrange_panels(panels: list[np.ndarray], gap: int = 10) -> np.ndarray:
     target_h = max(p.shape[0] for p in panels)
     target_w = max(p.shape[1] for p in panels)
 
-    def resize_pad(p):
+    def resize_pad(p: np.ndarray) -> np.ndarray:
         """Ensure 3-channel BGR and pad to target size."""
         if p.ndim == 2:
             p = cv2.cvtColor(p, cv2.COLOR_GRAY2BGR)

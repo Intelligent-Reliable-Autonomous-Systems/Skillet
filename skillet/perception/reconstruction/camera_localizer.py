@@ -1,12 +1,14 @@
 """File for handling camera localization."""
 
 import time
+from collections import deque
 from typing import Any
 
 import cv2
 import numpy as np
 import pupil_apriltags as apriltags
 import pyrealsense2 as rs
+from scipy.spatial.transform import Rotation
 
 DEFAULT_APRILTAG_POSE = np.array([0.12, 0.005, 0.0, 0.0, 0.0, 0.7071068, 0.7071068])
 DEFAULT_APRILTAG_SIZE_M = 0.100
@@ -21,24 +23,38 @@ class CameraLocalizer:
         apriltag_pose: np.ndarray = np.array([0.12, 0.005, 0.0, 0.0, 0.0, 0.7071068, 0.7071068]),
         apriltag_size_m: float = 0.100,
         apriltag_id: int = 3,
+        pose_buffer_size: int = 10,
     ) -> None:
         """Initialize the camera localizer.
 
         Args:
             apriltag_pose: The pose of the AprilTag in the world frame.
             apriltag_size_m: The size of the AprilTag in meters.
-            apriltag_id: The ID of the AprilTag.
+            apriltag_id: The ID of the AprilTag
+            pose_buffer_size: the length of the camera pose buffer
 
         """
         self._apriltag_pose = apriltag_pose
         self._apriltag_size_m = apriltag_size_m
         self._apriltag_id = apriltag_id
 
-        self._detector = apriltags.Detector()
+        self._detector = apriltags.Detector(
+            families="tag36h11",
+            nthreads=4,
+            quad_decimate=1.0,
+            quad_sigma=0.0,
+            refine_edges=1,
+            decode_sharpening=0.25,
+            debug=0,
+        )
         self._T_base_to_tag = _make_T(_quat_xyzw_to_R(*list(apriltag_pose[3:7])), list(apriltag_pose[:3]))
         self._roll_180 = _make_T(_quat_xyzw_to_R(1.0, 0.0, 0.0, 0.0), [0.0, 0.0, 0.0])
         self._T_base_to_tag = self._T_base_to_tag @ self._roll_180
         self._latest_camera_pose = _T_to_xyz_quat_xyzw(self._T_base_to_tag)
+
+        self._pose_buffer: deque[np.ndarray] = deque(maxlen=pose_buffer_size)
+        self._outlier_pos_threshold_m = 0.05
+        self._outlier_rot_threshold_rad = 0.1
 
     def get_camera_pose(self, rgb: np.ndarray, intrinsic_k: np.ndarray) -> np.ndarray:
         """Get the camera pose from the ROS observation.
@@ -51,12 +67,10 @@ class CameraLocalizer:
             The camera pose in the world frame.
 
         """
-        # TODO: Make this rolling or something so that we filter out noise
-        # TOOD: check
         camera_params = (intrinsic_k[0, 0], intrinsic_k[1, 1], intrinsic_k[0, 2], intrinsic_k[1, 2])
         tag_size_m = self._apriltag_size_m
         gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
-        detections = self._detector.detect(
+        detections: list[apriltags.Detection] = self._detector.detect(
             gray, estimate_tag_pose=True, camera_params=camera_params, tag_size=tag_size_m
         )
         if detections:
@@ -65,7 +79,30 @@ class CameraLocalizer:
                     t_tag_cam = _make_T(detection.pose_R, detection.pose_t.reshape(3))
                     t_cam_tag = _inv_T(t_tag_cam)
                     t_base_cam = self._T_base_to_tag @ t_cam_tag
-                    self._latest_camera_pose = _T_to_xyz_quat_xyzw(t_base_cam)
+                    new_pose = _T_to_xyz_quat_xyzw(t_base_cam)
+
+                    # Outlier rejection against current buffer mean
+                    if len(self._pose_buffer) >= 3:
+                        buf = np.array(self._pose_buffer)
+                        mean_pos = buf[:, :3].mean(axis=0)
+
+                        pos_err = np.linalg.norm(new_pose[:3] - mean_pos)
+                        if pos_err > self._outlier_pos_threshold_m:
+                            break
+
+                    self._pose_buffer.append(new_pose)
+
+                    # Average over the poses in the queue
+                    if len(self._pose_buffer) > 0:
+                        buf = np.array(self._pose_buffer)
+
+                        mean_pos = buf[:, :3].mean(axis=0)
+
+                        # Average quaternions using scipy rotation
+                        quats = buf[:, 3:]  # xyzw
+                        mean_quat = Rotation.from_quat(quats).mean().as_quat()
+                        self._latest_camera_pose = np.concatenate([mean_pos, mean_quat])
+
                     break
 
         return self._latest_camera_pose
@@ -97,7 +134,6 @@ class RealsenseCameraLocalizer:
         self._config.enable_stream(rs.stream.color, self.width, self.height, rs.format.bgr8, self.fps)
         self._config.enable_stream(rs.stream.depth, self.width, self.height, rs.format.z16, self.fps)
 
-        self._tag_detector = apriltags.Detector()
         self._T_base_to_tag = _make_T(_quat_xyzw_to_R(*list(apriltag_pose[3:7])), list(apriltag_pose[:3]))
         self._roll_180 = _make_T(_quat_xyzw_to_R(1.0, 0.0, 0.0, 0.0), [0.0, 0.0, 0.0])
         self._T_base_to_tag = self._T_base_to_tag @ self._roll_180

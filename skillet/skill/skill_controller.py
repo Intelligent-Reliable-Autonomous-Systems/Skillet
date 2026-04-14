@@ -96,9 +96,9 @@ class SkillController(BatchedSkill):
             action: A torch Tensor of shape (num_envs, num_skills+max_param_dim).
 
         """
-        assert (
-            action.shape[-1] == self.action_dim
-        ), f"Action dimension {action.shape[-1]} does not match expected skill dimension {self.action_dim}"
+        assert action.shape[-1] == self.action_dim, (
+            f"Action dimension {action.shape[-1]} does not match expected skill dimension {self.action_dim}"
+        )
         self._skills_idx = self.get_skill_from_action(action)
         self._skills_params = self.get_params_from_action(action)
 
@@ -152,7 +152,7 @@ class SkillController(BatchedSkill):
             reward: Tensor of shape (num_envs,) for the reward accumulated during the skill.
 
         """
-        success_pen_fac = 1.0  # TODO scale as needed
+        success_pen_fac = 1.0
         sk_penalty_fac = 0.2
         sk_success = self.successes
         reward = torch.where(sk_success, reward, reward / success_pen_fac)

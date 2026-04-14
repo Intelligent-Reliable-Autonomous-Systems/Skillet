@@ -146,7 +146,7 @@ def make_osc_reach_xyz_skill(env: GymVectorInterface, skill_length: int = 15) ->
     )
 
 
-def make_osc_orient_rpy_skill(env: GymVectorInterface, skill_length: int = 15) -> Skill:  # TODO Change
+def make_osc_orient_rpy_skill(env: GymVectorInterface, skill_length: int = 15) -> Skill:
     return OrientRPYSkill[BxN_Obs, BxM_Action, None](
         name="orient_rpy_skill_osc", policy=make_osc_ee_pose_policy(env), length=skill_length
     )

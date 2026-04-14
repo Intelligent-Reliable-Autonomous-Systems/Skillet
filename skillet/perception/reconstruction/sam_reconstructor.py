@@ -4,7 +4,6 @@ Reconstruct the scene from SAM bounding boxes.
 """
 
 import pickle
-import time
 from typing import Any, Literal
 
 import cv2
@@ -16,14 +15,15 @@ from PIL import Image
 from skillet.perception.reconstruction.reconstructor_base import ReconstructorBase
 from skillet.perception.reconstruction.utils import (
     assign_objects_to_id,
+    assign_poses_to_objects,
     find_cube_centers,
+    get_sorted_object_poses,
     transform_xyz_to_world,
 )
 from skillet.perception.segmentation.sam import get_sam_client
 from skillet.perception.segmentation.vlm import GeminiClient
-from skillet.scene import THREE_CUBE_APRIL_SCENE, Cube, CUBE_SIZE
+from skillet.scene import CUBE_SIZE, Cube
 from skillet.scene.base import Scene
-from skillet.scene.utils import assign_poses_to_objects, get_sorted_object_poses
 
 
 class SAMReconstructor(ReconstructorBase):
@@ -42,6 +42,7 @@ class SAMReconstructor(ReconstructorBase):
         device: str = "cuda",
         visualize: bool = True,
     ) -> None:
+        """Initialize the SAM reconstructor."""
         super().__init__(scene)
         self._model = model
         self._mode = mode
@@ -73,6 +74,7 @@ class SAMReconstructor(ReconstructorBase):
         Args:
             obs: RGB-D obs spec from the environment
             update: If to update the state of the scene or not
+            frame: the frame to perform the scene update from
 
         """
         if not self._scene.contains_objects and self._build_scene_flag:
@@ -89,7 +91,7 @@ class SAMReconstructor(ReconstructorBase):
 
         if self._mode == "text":
             concepts = ["block", "robot_arm"]  # Can potentially segment on "cube face" for redundancy
-            masks, boxes, scores, concept_indices = self._sam_model.segment_from_concepts(rgb, concepts)
+            masks, _, _, concept_indices = self._sam_model.segment_from_concepts(rgb, concepts)
         elif self._mode == "bboxes":
             bboxes = [
                 [100, 100, 150, 150],
@@ -98,7 +100,7 @@ class SAMReconstructor(ReconstructorBase):
                 [200, 100, 250, 150],
                 [100, 200, 150, 250],
             ]
-            masks, scores = self._sam_model.segment_from_bboxes(rgb, bboxes)
+            masks, _ = self._sam_model.segment_from_bboxes(rgb, bboxes)
         else:
             raise ValueError(f"Invalid mode: {self._mode}")
 
@@ -111,7 +113,7 @@ class SAMReconstructor(ReconstructorBase):
             intrinsic_k = intrinsic_k.cpu().numpy()
             camera_pose = camera_pose.cpu().numpy()
 
-        # TODO make sure we are always grabbing the blocks
+        # Grab only the cubes
         cube_masks = masks[concept_indices == 0].cpu().numpy()
         masks = masks.cpu().numpy()
 
@@ -155,7 +157,6 @@ class SAMReconstructor(ReconstructorBase):
         self,
         obs: dict[str, torch.Tensor],
         call_vlm: bool = True,
-        vis_scene: bool = False,
         frame: Literal["world", "camera"] = "camera",
     ) -> None:
         """Build the scene using an API call to a VLM by creating bounding boxes for each object.
@@ -163,7 +164,6 @@ class SAMReconstructor(ReconstructorBase):
         Args:
             obs: RGBD obs spec observation
             call_vlm: If to call VLM or load scene from defaults
-            vis_scene: If to visualize the scene after parsing
             frame: the frame in which to compute centers in
 
         """
@@ -207,11 +207,7 @@ class SAMReconstructor(ReconstructorBase):
                 boxes.append(box)
 
         # Find cube centers from SAM3 with bounding boxes
-        masks, scores = self._sam_model.segment_from_bboxes(rgb, np.asarray(boxes))
-
-        if vis_scene:
-            # TODO: convert into vlm frame
-            SAMReconstructor.show_image_and_masks(rgb.transpose(1, 2, 0), masks.cpu().numpy(), labels)
+        masks, _ = self._sam_model.segment_from_bboxes(rgb, np.asarray(boxes))
 
         self._vlm_frame = SAMReconstructor.show_vlm_image_and_masks(rgb.transpose(1, 2, 0), masks.cpu().numpy(), labels)
 
@@ -245,74 +241,6 @@ class SAMReconstructor(ReconstructorBase):
         with open("data/test/vlm_out_multi.pkl", "wb") as f:
             pickle.dump(self._scene, f)
         print(f"[INFO] Reconstructed Scene with VLM.\n{self._scene}")
-
-    @staticmethod
-    def show_image_and_masks(
-        image: np.ndarray,
-        masks: np.ndarray,
-        labels: list[str],
-    ) -> None:
-        """Show RGB image and a single overlay image with all masks + labels.
-
-        Args:
-            image: (H, W, 3) RGB image, uint8 or float
-            masks: (N, H, W) boolean or {0,1} masks
-            labels: list of length N containing labels for each mask
-
-        """
-        num_masks = masks.shape[0]
-        if len(labels) != num_masks:
-            raise ValueError(f"Expected {num_masks} labels, got {len(labels)}")
-
-        fig, axes = plt.subplots(1, 2, figsize=(12, 6))
-
-        axes[0].imshow(image)
-        axes[0].set_title("RGB Image")
-        axes[0].axis("off")
-
-        overlay = image.copy().astype(float)
-
-        # Generate distinct colors
-        rng = np.random.default_rng(0)
-        colors = rng.integers(0, 255, size=(num_masks, 3))
-
-        alpha = 0.7
-        for i in range(num_masks):
-            mask = masks[i].astype(bool)
-            if mask.sum() == 0:
-                continue
-
-            color = colors[i].astype(float)
-            overlay[mask] = (1 - alpha) * overlay[mask] + alpha * color
-
-            # Compute centroid for placing label
-            ys, xs = np.where(mask)
-            cy = int(np.mean(ys))
-            cx = int(np.mean(xs))
-            cy = max(cy - 10, 0)
-
-            axes[1].text(
-                cx,
-                cy,
-                labels[i],
-                color="white",
-                fontsize=10,
-                ha="center",
-                va="bottom",
-                bbox={"facecolor": "black", "alpha": 0.6, "pad": 2},
-            )
-
-        if image.dtype == np.uint8:
-            overlay = overlay.astype(np.uint8)
-        else:
-            overlay = overlay / 255.0 if overlay.max() > 1 else overlay
-
-        axes[1].imshow(overlay)
-        axes[1].set_title("Masks + Labels")
-        axes[1].axis("off")
-
-        plt.tight_layout()
-        plt.show()
 
     @staticmethod
     def show_vlm_image_and_masks(
@@ -754,19 +682,3 @@ class SAMReconstructor(ReconstructorBase):
         # Blend fill at 35 % opacity
         cv2.addWeighted(overlay, 0.35, display, 0.65, 0, display)
         return display
-
-
-def main() -> None:
-    """Run live SAM benchmark with RGB/depth view and mask overlay."""
-    scene = THREE_CUBE_APRIL_SCENE
-
-    env = RealsenseEnv()
-    reconstructor = SAMReconstructor(scene=None, build_scene=True)
-    while True:
-        rgbd_obs = env.get_observation()
-        reconstructor.update_state(rgbd_obs)
-        time.sleep(0.1)
-
-
-if __name__ == "__main__":
-    main()

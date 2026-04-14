@@ -22,9 +22,9 @@ class ApriltagStateReconstructor(ReconstructorBase):
         """
         super().__init__(scene)
         self._detector = apriltags.Detector(
-            families="tag36h11",  # or whatever family you're printing
+            families="tag36h11",
             nthreads=4,
-            quad_decimate=1.0,  # Don't downsample — critical for small tags
+            quad_decimate=1.0,
             quad_sigma=0.0,
             refine_edges=1,
             decode_sharpening=0.25,
@@ -61,7 +61,9 @@ class ApriltagStateReconstructor(ReconstructorBase):
                     id_to_cube_spec[apriltag["id"]] = apriltag
 
         for size, ids in id_sizes.items():
-            detections = self._detector.detect(gray, estimate_tag_pose=True, camera_params=camera_params, tag_size=size)
+            detections: list[apriltags.Detection] = self._detector.detect(
+                gray, estimate_tag_pose=True, camera_params=camera_params, tag_size=size
+            )
             if detections:
                 for detection in detections:
                     if detection.tag_id in ids and detection.tag_id in id_to_cube_spec:

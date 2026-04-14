@@ -20,7 +20,6 @@ def create_isaac_env(task_name: str, cfg: dict[str, Any]) -> DirectRlInterface |
 
 def _create_isaac_env(task_name: str, cfg: dict[str, Any]) -> IsaacDirectRlEnv | IsaacManagerBasedRlEnv:
     # Cabinet
-    # TODO: construct configs explicitly for each task
     env_cfg = parse_env_cfg(task_name, **cfg)
     if task_name == "Gen3-Cabinet-Direct-v0":
         from skillet_tasks.isaac_tasks.direct.gen3_cabinet.gen3_cabinet_env import (

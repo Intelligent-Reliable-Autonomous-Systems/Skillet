@@ -182,7 +182,18 @@ class Gen3KortexEnv(KortexEnv):
               - ``timestamp``: float timestamp in seconds
 
         """
-        return self._rs_cam_localizer._get_latest_rgbd_raw()
+        latest = self._rs_cam_localizer._get_latest_rgbd_raw()
+        # Realsense xyzw format -> IsaacLab wxyz format
+        q = latest["camera_pose"][3:7]
+        latest["camera_pose"][3:7] = q[[3, 0, 1, 2]]
+        # RGB is (H, W, 3) -> (3, H, W)
+        latest["rgb"] = latest["rgb"].transpose((2, 0, 1))
+        # Depth is (H, W) -> (1, H, W), always float32 meters.
+        depth = np.expand_dims(latest["depth"], axis=0)
+        if depth.dtype == np.uint16:
+            depth = depth.astype(np.float32) / 1000.0
+        latest["depth"] = depth
+        return latest
 
     def _publish_gripper(
         self,

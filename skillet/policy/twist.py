@@ -86,7 +86,7 @@ class TwistPidPosePolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Gen
         """
         self._obs_spec = obs_spec
         self._action_spec = action_spec
-        self.num_envs = obs_spec.n_envs if obs_spec.n_envs > 0 else 1  # NOTE this won't work for batched envs
+        self.num_envs = obs_spec.n_envs if obs_spec.n_envs > 0 else 1
         self._device = obs_spec.device
         self._frame = frame
 

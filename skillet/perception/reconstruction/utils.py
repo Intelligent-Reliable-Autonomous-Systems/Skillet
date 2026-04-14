@@ -1,9 +1,11 @@
-from typing import Any, Literal
+from typing import Literal
 
 import numpy as np
+import torch
 from scipy.linalg import svd
 from scipy.optimize import linear_sum_assignment
-from scipy.spatial.distance import cdist
+
+from skillet.scene.base import Scene, SceneObject
 
 
 def assign_objects_to_id(
@@ -37,6 +39,64 @@ def assign_objects_to_id(
             valid_det_idx.append(d)
 
     return np.asarray(valid_cube_idx), np.asarray(valid_det_idx)
+
+
+def get_sorted_object_poses(scene: Scene, obj: SceneObject) -> np.ndarray:
+    """Return a list of scene objects of a specific type sorted by their ID.
+
+    Args:
+        scene: The scene to get poses from
+        obj: Object instance to grab all instances of
+
+    Returns:
+        np.ndarray of shape (N, 7) of the object poses
+
+    """
+    id_list = []
+    pose_list = []
+    for ob in scene.objects:
+        if not isinstance(ob, obj):
+            continue
+        id_list.append(ob.object_id)
+        pose_list.append(ob.pose.cpu().numpy())
+
+    sorted_ids = np.argsort(id_list)
+
+    return np.asarray(pose_list)[sorted_ids], np.asarray(id_list)[sorted_ids]
+
+
+def assign_poses_to_objects(
+    scene: Scene,
+    obj: SceneObject,
+    poses: np.ndarray,
+    ids: np.ndarray,
+    obj_idx: np.ndarray,
+    det_idx: np.ndarray,
+    device: str = "cuda",
+) -> None:
+    """Return a list of scene objects of a specific type sorted by their ID.
+
+    Args:
+        scene: The scene to get poses from
+        obj: Object instance to grab all instances of
+        poses: np.ndarray of poses for SceneObjects
+        ids: np.ndarray of sorted object ids
+        obj_idx: Sorted indexes of object scene ids according to poses
+        det_idx: The detection index of which pose to assign to which object
+        device: CUDA device to create tensor on
+
+    """
+    for ob in scene.objects:
+        if not isinstance(ob, obj):
+            continue
+        idx = np.where(ob.object_id == ids[obj_idx])[0]
+        if idx.size > 0:
+            idx = idx[0]
+        else:
+            # TODO handle occlusion more robustly. The object closest to the camera
+            # Should be the one that is not occluded
+            continue
+        ob.pose = torch.as_tensor(np.concatenate((poses[det_idx[idx]], [1, 0, 0, 0])), device=device)
 
 
 def find_cube_centers(
@@ -74,7 +134,7 @@ def find_cube_centers(
 
     results = {"centers": [], "normals": [], "plane_equations": [], "valid": [], "details": [], "plane_centers": []}
 
-    for i, mask in enumerate(masks):
+    for mask in masks:
         mask = mask.astype(bool)
 
         if np.sum(mask) < 10:  # Skip if too few pixels
@@ -292,6 +352,7 @@ def transform_plane_to_world(plane_eq: np.ndarray, camera_pos: np.ndarray, camer
         plane_eq: (4,) array [a, b, c, d] where ax + by + cz + d = 0 in camera frame
         camera_pos:      Camera position in the world frame, shape (3,).
         camera_quat:     Camera orientation as quaternion (w, x, y, z), shape (4,).
+
     Returns:
         (4,) array [a', b', c', d'] in world frame
 

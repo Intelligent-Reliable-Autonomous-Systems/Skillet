@@ -356,6 +356,16 @@ class Gen3ROS2Env(ROS2Env):
         stamp = data.get("stamp", {"sec": 0, "nanosec": 0})
         timestamp = float(stamp.get("sec", 0)) + float(stamp.get("nanosec", 0)) * 1e-9
 
+        # ROS/realsense xyzw format -> IsaacLab wxyz format
+        q_cam = camera_pos_quat[3:7]
+        camera_pos_quat[3:7] = q_cam[[3, 0, 1, 2]]
+        # RGB is (H, W, 3) -> (3, H, W)
+        rgb = rgb.transpose((2, 0, 1))
+        # Depth is (H, W) -> (1, H, W), always float32 meters.
+        depth = np.expand_dims(depth, axis=0)
+        if depth.dtype == np.uint16:
+            depth = depth.astype(np.float32) / 1000.0
+
         return {
             "rgb": rgb,
             "depth": depth,
@@ -469,9 +479,9 @@ class Gen3ROS2Env(ROS2Env):
 
         """
         if not self.cfg.use_fake_hardware and self.active_controller != "twist_controller":
-            # print("[INFO] Switching controller to `twist_controller`") # TODO uncomment
+            print("[INFO] Switching controller to `twist_controller`")
             if not self.switch_controllers(activate=["twist_controller"], deactivate=["joint_trajectory_controller"]):
-                # print("[INFO] Unable to switch controller to `twist_controller`. Aborting trajectory.")
+                print("[INFO] Unable to switch controller to `twist_controller`. Aborting trajectory.")
                 return
             self.active_controller = "twist_controller"
             print("[INFO] Successfully switched controller to `twist_controller`")
