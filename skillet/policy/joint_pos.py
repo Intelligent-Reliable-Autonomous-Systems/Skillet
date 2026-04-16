@@ -131,7 +131,7 @@ class JointPosPidPosePolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], 
         return JOINT_Params_Spec
 
     def get_action(self, obs: TBPolicyObs, params: Any = None) -> TBAction:
-        """Get the next gripper position."""
+        """Get the next joint position."""
         joint_pos = obs["joint_pos"]
         dt = obs["dt"]
 
@@ -148,17 +148,14 @@ class JointPosPidPosePolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], 
         )
         self._delta_joints = torch.clip(delta_joints, -self.joint_sensitivity, self.joint_sensitivity)
 
-        # Combine translation + rotation for twist command
-        command = self._delta_joints
-
         # Save last errors
         self.last_error_joints = error_joints
-        return torch.cat((command, self.start_gripper_pos), dim=-1)
+        return torch.cat((self._delta_joints, self.start_gripper_pos), dim=-1)
 
     def reset(self, obs: TBPolicyObs, params: Any = None, env_ids: torch.Tensor = None) -> None:
         """Reset the policy. Useful if policy is stateful."""
         self._params = params
-        self._tcp_quat_des_b = params[:, :7]
+        self._joint_pos_des = params
 
         # PID integrals
         self.integral_joints = self._selected_skill.params_spec.zeros()
