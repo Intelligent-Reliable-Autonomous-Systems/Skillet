@@ -99,6 +99,102 @@ def assign_poses_to_objects(
         ob.pose = torch.as_tensor(np.concatenate((poses[det_idx[idx]], [1, 0, 0, 0])), device=device)
 
 
+def fit_plane_pca(points: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Fit a plane using principle component analysis (PCA).
+
+    Note: This is sensitive to outliers
+
+    Args:
+        points: pointcloud points in (N,3)
+
+    Returns:
+        Centroid (3,) and normal vector (3.)
+
+    """
+    centroid = points.mean(axis=0)
+    centered = points - centroid
+    _, _, vt = np.linalg.svd(centered, full_matrices=False)
+    return centroid, vt[-1]  # smallest singular value = normal
+
+
+def face_center_direct(points: np.ndarray) -> np.ndarray:
+    """Compute the face center directly from points.
+
+    Args:
+        points: np.ndarray in (N,3) from mask.
+
+    Returns:
+        centroid: (3,)
+
+    """
+    return points.mean(axis=0)  # or np.median for outlier robustness
+
+
+# TODO fit this into a function
+# Idea: if we have two faces, (top and front), then we can split by height/percentile (this isnt as robust)
+# or cluster/base off the normal in that the points on the top of the cube should have a very different
+# normal vs the points on the front of the cube
+# we can potentially use DBSCAN, but this might be slow...
+if False:
+    centroid, normal = fit_plane_pca(points)
+    face_center = centroid
+    cube_center = face_center + normal * (side_length / 2.0)
+
+    def voxel_downsample(points, voxel_size=0.01):  # If there are many points in the point cloud
+        voxel_ids = np.floor(points / voxel_size).astype(int)
+        _, unique_idx = np.unique(voxel_ids, axis=0, return_index=True)
+        return points[unique_idx]
+
+    # Then run PCA on the reduced set
+    points_ds = voxel_downsample(masked_points)
+    centroid, normal = fit_plane_pca(points_ds)
+
+    # We can use this to resolve the normals as two faces should generally be visible
+    def estimate_point_normals(points, k=10):
+        nbrs = NearestNeighbors(n_neighbors=k).fit(points)
+        _, indices = nbrs.kneighbors(points)
+
+        normals = np.zeros_like(points)
+        for i, idx in enumerate(indices):
+            neighbors = points[idx]
+            centered = neighbors - neighbors.mean(axis=0)
+            _, _, Vt = np.linalg.svd(centered, full_matrices=False)
+            normals[i] = Vt[-1]
+
+        # Resolve normal flipping — force all normals to same hemisphere
+        reference = normals[0]
+        flip_mask = normals @ reference < 0
+        normals[flip_mask] *= -1
+
+        return normals
+
+    def split_faces(points, gravity_axis=2):
+        """Split a mixed mask into front-face and top-face point clusters
+        using per-point normals and gravity alignment.
+        """
+        normals = estimate_point_normals(points)
+
+        up = np.zeros(3)
+        up[gravity_axis] = 1.0
+
+        # Score each point: how much does its normal align with 'up'?
+        alignment = np.abs(normals @ up)  # ~1.0 = top face, ~0.0 = front face
+
+        threshold = 0.5  # cos(60°) — tune based on your setup
+
+        top_face_pts = points[alignment >= threshold]
+        front_face_pts = points[alignment < threshold]
+
+    return front_face_pts, top_face_pts
+
+
+def project_to_plane(points: np.ndarray, centroid: np.ndarray, normal: np.ndarray) -> np.ndarray:
+    """Project points onto the plane with the normal vector."""
+    dists = (points - centroid) @ normal
+    projected = points - np.outer(dists, normal)
+    return projected.mean(axis=0)  # center estimate
+
+
 def find_cube_centers_ransac(
     masks: np.ndarray,
     depth: np.ndarray,
