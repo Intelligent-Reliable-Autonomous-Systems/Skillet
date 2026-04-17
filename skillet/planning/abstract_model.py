@@ -5,25 +5,26 @@ from typing import Any
 from unified_planning.engines import PlanGenerationResultStatus as PGResultStatus
 from unified_planning.io import PDDLReader
 from unified_planning.model import Object, Problem
-from unified_planning.shortcuts import And
-from unified_planning.shortcuts import OneshotPlanner
+from unified_planning.shortcuts import And, OneshotPlanner
 
-from skillet.scene.abstract.spatial_grounding import ground_cube_on_relations, ground_gripper_relations
-from skillet.scene.abstract.up_utils import (
+from skillet.planning.abstract import (
     AbstractGoal,
     AbstractPlan,
     AbstractState,
     ParsedUpProblem,
     UPDictFluent,
     UPListGoal,
+    ground_cube_on_relations,
+    ground_gripper_relations,
     parse_action,
     parse_value,
 )
+from skillet.planning.base_planner import BasePlanner
 from skillet.scene.base import Scene
 from skillet.scene.cube import Cube
 
 
-class AbstractModel:
+class AbstractModel(BasePlanner):
     """An abstract model of the scene."""
 
     def __init__(self, domain_file: str, task_file: str | None = None, scene: Scene | None = None) -> None:

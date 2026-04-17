@@ -20,7 +20,7 @@ from skillet.agents.base_agent import Agent
 from skillet.core import ObservationSpec
 from skillet.envs import SkilletEnv
 from skillet.perception.perception import SkilletPerception
-from skillet.scene.abstract.abstract_model import AbstractModel
+from skillet.planning import AbstractModel
 from skillet.scene.base import Scene
 from skillet.scene.utils import depth_to_colormap_np
 

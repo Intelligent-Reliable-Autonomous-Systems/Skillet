@@ -6,8 +6,7 @@ from skillet.agents.base_agent import Agent
 from skillet.core.env import Environment
 from skillet.core.policy import Unparameterized
 from skillet.core.skill import SingleSkill, SkillStatusCodes
-from skillet.logging import SkilletDataLogger
-from skillet.scene.abstract.abstract_model import AbstractModel
+from skillet.planning import AbstractModel
 from skillet.scene.base import Scene
 
 
