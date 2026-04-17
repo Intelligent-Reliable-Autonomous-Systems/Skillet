@@ -39,7 +39,7 @@ class PlaceBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
         )
 
         self._status = None
-        self._offset = torch.tensor([0, 0.0, 0.035], device=self.obs_spec.device)
+        self._offset = torch.tensor([0, 0.0, 0.055], device=self.obs_spec.device)
 
         self._vis_target_pos = vis_target_pos
 
