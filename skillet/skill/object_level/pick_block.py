@@ -71,7 +71,7 @@ class PickBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
         self._status = None
         params = self.params_spec.cast(params)
 
-        self._target_block: SceneObject = self._scene.objects(params)
+        self._target_block: SceneObject = self._scene.get_objects_from_id([int(params)])[0]
         if not self._target_block.is_pose_known():
             self._status = SkillStatusCodes.FAILED.value
             return

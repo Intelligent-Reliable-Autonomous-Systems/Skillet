@@ -46,8 +46,18 @@ class SkilletPerception:
         max_depth_m: float | None = None,
         build_scene: bool = False,
         vis_perception: bool = False,
+        vlm_cache_path: str | None = None,
     ) -> None:
-        """Initialize the perception pipeline."""
+        """Initialize the perception pipeline.
+
+        Args:
+            vlm_cache_path: Optional path to a pickle file caching the SAM
+                reconstructor's VLM output (image + bboxes + goal atoms). Only
+                used when ``reconstructor="sam"``. If the file exists it is
+                loaded and the Gemini API call is skipped; otherwise the VLM
+                output is saved to this path on first run.
+
+        """
         self.env = env
         self._scene = scene
         if isinstance(device, str):
@@ -60,6 +70,7 @@ class SkilletPerception:
         # Scene reconstructor
         self._reconstructor_type = reconstructor
         self._reconstructor = None
+        self._vlm_cache_path = vlm_cache_path
         self._viz: Open3DVisualizer = None
         self._visualize_perception = vis_perception
         self._display_rgb = True
@@ -143,10 +154,10 @@ class SkilletPerception:
             intrinsic_k = intrinsic_k[0]
         if camera_pose.dim() == 2:
             camera_pose = camera_pose[0]
-        if "tcp_pose" in obs and obs["tcp_pose"].dim() == 2:
-            tcp_pose = obs["tcp_pose"][0]
-        if "gripper_pos" in obs and obs["tcp_pose"].dim() == 2:
-            tcp_pose = obs["tcp_pose"][0]
+        if "tcp_pose_b" in obs and obs["tcp_pose_b"].dim() == 2:
+            tcp_pose = obs["tcp_pose_b"][0]
+        if "gripper" in obs and obs["gripper"].dim() == 2:
+            gripper_pos = obs["gripper"][0]
 
         return {
             "rgb": rgb,
@@ -195,10 +206,13 @@ class SkilletPerception:
         self, obs_unbatched: Mapping[str, Any], masks: torch.Tensor, segment_ids: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Build a point cloud from an unbatched RGB-D observation."""
-        if masks is None:
+        if masks is None or masks.numel() == 0 or masks.shape[0] == 0:
             depth = obs_unbatched["depth"]
             masks = torch.ones((1, depth.shape[-2], depth.shape[-1]), dtype=torch.bool, device=depth.device)
             segment_ids = torch.zeros((1,), dtype=torch.int64, device=depth.device)
+        # Squeeze extra dim: (N, 1, H, W) → (N, H, W)
+        if masks.ndim == 4:
+            masks = masks.squeeze(1)
         point_cloud, segment_indices = segmented_rgbd_to_point_cloud(
             obs_unbatched["depth"],
             masks,
@@ -222,7 +236,9 @@ class SkilletPerception:
     def stop(self) -> None:
         """Signal the polling loop to stop and wait for the worker thread."""
         self._stop_event.set()
-        if self._thread is not None and self._thread.is_alive():
+        import threading
+
+        if self._thread is not None and self._thread.is_alive() and self._thread is not threading.current_thread():
             self._thread.join(timeout=2.0)
 
     def run(self) -> None:
@@ -230,13 +246,17 @@ class SkilletPerception:
         if self._reconstructor is None:
             if self._reconstructor_type == "sam":
                 print("[INFO][PERCEPTION] Loading SAM reconstructor")
-                self._reconstructor = SAMReconstructor(scene=self._scene)
+                self._reconstructor = SAMReconstructor(
+                    scene=self._scene, vlm_cache_path=self._vlm_cache_path
+                )
             elif self._reconstructor_type == "april":
                 print("[INFO][PERCEPTION] Loading AprilTag reconstructor")
                 assert (
                     self._scene is not None
                 ), "[ERROR] Perception Scene cannot be None when using AprilTagStateReconstructor."
                 self._reconstructor = ApriltagStateReconstructor(self._scene)
+            self._reconstructor.build_scene = self._build_scene
+            self._reconstructor.task_instruction = self._task_instruction
         poll_period_s = 1.0 / self.poll_rate_hz
         next_poll_t = time.perf_counter()
 

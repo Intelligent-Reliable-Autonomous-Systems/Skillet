@@ -140,11 +140,11 @@ class SkilletEnv(
                 space=action_space,
             )
             .replace(**spec_args)
-            .replace(device=self.ddevice)
+            .replace(device=self.device)
         )
 
         self.action_spec_joints = (
-            JOINT_SPEC(**spec_args).bind(n_joints=len(self._joint_ids)).replace(device=self.device)
+            JOINT_SPEC.replace(**spec_args).bind(n_joints=len(self._joint_ids)).replace(device=self.device)
         )
         self.action_spec_twist_tcp = (
             TWIST_TCP_SPEC.replace(**spec_args)

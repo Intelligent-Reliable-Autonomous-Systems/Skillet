@@ -3,7 +3,9 @@
 Reconstruct the scene from SAM bounding boxes.
 """
 
+import copy
 import pickle
+from pathlib import Path
 from typing import Any, Literal
 
 import cv2
@@ -41,8 +43,22 @@ class SAMReconstructor(ReconstructorBase):
         mode: Literal["text", "bboxes"] = "text",
         device: str = "cuda",
         visualize: bool = True,
+        vlm_cache_path: str | Path | None = None,
     ) -> None:
-        """Initialize the SAM reconstructor."""
+        """Initialize the SAM reconstructor.
+
+        Args:
+            scene: The scene to reconstruct into.
+            model: SAM model variant to load.
+            mode: Segmentation mode.
+            device: Compute device.
+            visualize: Render debug overlays.
+            vlm_cache_path: Optional path to a pickle file caching the initial
+                VLM (Gemini) image + bboxes + goal atoms. If the file exists,
+                it is loaded and the VLM API call is skipped; otherwise the VLM
+                is called and its output is written to this path.
+
+        """
         super().__init__(scene)
         self._model = model
         self._mode = mode
@@ -50,6 +66,7 @@ class SAMReconstructor(ReconstructorBase):
         self._device = device
         self._vlm_client = GeminiClient()
         self._visualize = visualize
+        self._vlm_cache_path = Path(vlm_cache_path) if vlm_cache_path is not None else None
 
         self._masks = None
         self._segment_indices = None
@@ -136,7 +153,7 @@ class SAMReconstructor(ReconstructorBase):
 
         poses, ids = get_sorted_object_poses(self._scene, Cube)
         cube_idx, det_idx = None, None
-        if poses.ndim == 2:  # only assign poses when there are cubes in the scene
+        if poses.ndim == 2 and centers.ndim == 2 and centers.shape[0] > 0:
             cube_idx, det_idx = assign_objects_to_id(poses[:, 0:3], centers)
             assign_poses_to_objects(self._scene, Cube, centers, ids, cube_idx, det_idx)
 
@@ -152,6 +169,32 @@ class SAMReconstructor(ReconstructorBase):
     def get_observation(self) -> Scene:
         """Return the scene."""
         return self._scene
+
+    def _load_vlm_cache(self) -> bool:
+        """Load cached VLM bboxes + goal atoms from disk if available."""
+        if self._vlm_cache_path is None or not self._vlm_cache_path.exists():
+            return False
+        with open(self._vlm_cache_path, "rb") as f:
+            cached = pickle.load(f)
+        self._vlm_bboxes = copy.deepcopy(cached["bboxes"])
+        self._vlm_goal_atoms = copy.deepcopy(cached["goal_atoms"])
+        print(f"[INFO][SAM RECONSTRUCTOR] Loaded cached VLM output from {self._vlm_cache_path}")
+        return True
+
+    def _save_vlm_cache(self, image: Image.Image) -> None:
+        """Persist the VLM input image + bboxes + goal atoms to disk."""
+        if self._vlm_cache_path is None:
+            return
+        self._vlm_cache_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "image": image,
+            "bboxes": copy.deepcopy(self._vlm_bboxes),
+            "goal_atoms": copy.deepcopy(self._vlm_goal_atoms),
+            "task_instruction": self._task_instruction,
+        }
+        with open(self._vlm_cache_path, "wb") as f:
+            pickle.dump(payload, f)
+        print(f"[INFO][SAM RECONSTRUCTOR] Saved VLM output to {self._vlm_cache_path}")
 
     def _build_scene(
         self,
@@ -179,13 +222,16 @@ class SAMReconstructor(ReconstructorBase):
             camera_pose = camera_pose.cpu().numpy()
             intrinsic_k = intrinsic_k.cpu().numpy()
         if call_vlm:
-            rgb_pil = Image.fromarray(rgb.transpose(1, 2, 0))
-            rgb_pil_resized = rgb_pil.resize(
-                (800, int(800 * rgb_pil.size[1] / rgb_pil.size[0])), Image.Resampling.LANCZOS
-            )
-            self._vlm_bboxes, self._vlm_goal_atoms, _ = self._vlm_client.detect_and_translate(
-                rgb_pil_resized, self._task_instruction
-            )
+            cache_hit = self._load_vlm_cache()
+            if not cache_hit:
+                rgb_pil = Image.fromarray(rgb.transpose(1, 2, 0))
+                rgb_pil_resized = rgb_pil.resize(
+                    (800, int(800 * rgb_pil.size[1] / rgb_pil.size[0])), Image.Resampling.LANCZOS
+                )
+                self._vlm_bboxes, self._vlm_goal_atoms, _ = self._vlm_client.detect_and_translate(
+                    rgb_pil_resized, self._task_instruction
+                )
+                self._save_vlm_cache(rgb_pil_resized)
 
             for bbox in self._vlm_bboxes:
                 bbox["label"] = bbox["label"].replace(" ", "_")
