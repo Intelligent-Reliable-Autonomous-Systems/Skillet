@@ -14,7 +14,6 @@ from skillet.logging import SkilletDataLogger
 from skillet.perception import SkilletPerception
 from skillet.policy import FixedSequencePolicy, TwistPidPosePolicy
 from skillet.scene import EMPTY_SCENE, Open3DVisualizer
-from skillet.scene.abstract.abstract_model import AbstractModel
 from skillet.skill import PickBlockSkill, PickSkill, PlaceBlockSkill, PlaceSkill, RotateBlockSkill, RotateYawSkill
 from skillet_tasks.kortex_tasks.factory import create_kortex_env
 
