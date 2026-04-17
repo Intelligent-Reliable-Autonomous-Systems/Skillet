@@ -1,6 +1,7 @@
 """Run a tabletop block stacking task."""
 
 import argparse
+import pathlib
 from typing import TYPE_CHECKING
 
 import torch
@@ -11,9 +12,9 @@ from skillet.core.env import BatchToSingleWrapper
 from skillet.envs import SkilletEnv
 from skillet.logging import SkilletDataLogger
 from skillet.perception import SkilletPerception
+from skillet.planning import AbstractModel
 from skillet.policy import TwistPidPosePolicy
 from skillet.scene import EMPTY_SCENE, SIX_CUBE_APRIL_SCENE, Open3DVisualizer
-from skillet.scene.abstract.abstract_model import AbstractModel
 from skillet.skill import PickBlock2Skill, PickSkill, PlaceBlock2Skill, PlaceSkill
 from skillet_tasks.kortex_tasks.factory import create_kortex_env
 
@@ -76,7 +77,7 @@ def main() -> None:
     if args_cli.perception:
         perception.run_thread()
     else:
-        with open("data/test/vlm_out_multi.pkl", "rb") as f:
+        with pathlib.Path("data/test/vlm_out_multi.pkl").open("rb") as f:
             scene = pickle.load(f)
             b = scene.get_objects_from_name(["red_block"])[0]
             scene.tcp_pose = b.pose.clone()

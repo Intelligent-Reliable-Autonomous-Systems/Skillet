@@ -11,7 +11,7 @@ from unified_planning.model import Fluent, Object, Problem
 from unified_planning.model import Type as UPType
 from unified_planning.plans import ActionInstance
 
-from skillet.scene.abstract.up_utils import FluentExpLike, UPDictState
+from skillet.planning.abstract.up_utils import FluentExpLike, UPDictState
 
 PREDICATE_RE = re.compile(r"\(([a-zA-Z0-9_-]+)(?:[ \t]+([a-zA-Z0-9_-]+))*\)")
 
@@ -79,7 +79,7 @@ class PDDLTraceIO:
                         delta.update({x: False for x in prev_state if x not in state})
                         pred_strs = []
                         for pred, value in delta.items():
-                            pred_str = f'({pred.fluent().name} {" ".join([str(arg) for arg in pred.args])})'
+                            pred_str = f"({pred.fluent().name} {' '.join([str(arg) for arg in pred.args])})"
                             if not value:
                                 pred_str = f"(not {pred_str})"
                             pred_strs.append(pred_str)
@@ -87,14 +87,14 @@ class PDDLTraceIO:
                     else:
                         pred_strs = []
                         for pred, value in state.items():
-                            pred_str = f'({pred.fluent().name} {" ".join([str(arg) for arg in pred.args])})'
+                            pred_str = f"({pred.fluent().name} {' '.join([str(arg) for arg in pred.args])})"
                             if not value:
                                 pred_str = f"(not {pred_str})"
                             pred_strs.append(pred_str)
                         f.write(f"(:state {' '.join(pred_strs)})\n")
                     prev_state = state
                 if action is not None:
-                    action_str = f'({action.action.name} {" ".join([str(arg) for arg in action.actual_parameters])})'
+                    action_str = f"({action.action.name} {' '.join([str(arg) for arg in action.actual_parameters])})"
                     f.write(f"(:action {action_str})\n")
 
                 if execution is not None:

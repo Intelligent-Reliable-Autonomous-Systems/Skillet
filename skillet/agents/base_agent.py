@@ -8,7 +8,7 @@ from jaxtyping import Int
 
 from skillet.core.skill import Skill
 from skillet.core.spaces import Action, BatchedAction, BatchedObservation, BatchedSkillParams, SkillParams
-from skillet.scene.abstract.abstract_model import AbstractPlan
+from skillet.planning.abstract_model import AbstractPlan
 
 THighLevelObs = TypeVar("THighLevelObs", bound=BatchedObservation)
 """The type of the high level observation, batched."""
