@@ -11,9 +11,9 @@ import yaml
 
 from skillet.controllers import PidController
 from skillet.core.policy import BatchedUPolicy, TBAction, TBPolicyObs
-from skillet.core.skill import JOINT_Params, JOINT_Params_Spec, SkillParamsSpec
 from skillet.core.spaces import ActionSpec, ObservationSpec
 from skillet.envs.specs import JOINT_Obs
+from skillet.skill.specs import JOINT_Params, JOINT_Params_Spec, SkillParamsSpec
 
 
 class RlPolicy(BatchedUPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, TBAction]):

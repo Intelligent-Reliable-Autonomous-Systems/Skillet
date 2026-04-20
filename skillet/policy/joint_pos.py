@@ -5,8 +5,8 @@ from typing import Any, Generic
 import torch
 
 from skillet.core.policy import BatchedPolicy, TBAction, TBPolicyObs
-from skillet.core.skill import JOINT_Params, JOINT_Params_Spec, SkillParamsSpec
-from skillet.core.spaces import ActionSpec, ObservationSpec
+from skillet.core.spaces import ActionSpec, ObservationSpec, SkillParamsSpec
+from skillet.skill.specs import JOINT_Params, JOINT_Params_Spec
 
 
 class GripperPolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[TBPolicyObs, TBAction]):

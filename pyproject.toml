@@ -56,6 +56,14 @@ ros = [
 kortex = [
     "pin",
 ]
+isaac = [
+    "isaacsim",
+]
+mj = [
+    "mujoco",
+    "mujoco-warp",
+    "mjlab",
+]
 dev = [
     "ruff",
     "mypy",
