@@ -126,5 +126,5 @@ class Gen3LiftCubeEnv(LiftCubeEnv):
         )
 
         # Get the robot from the scene
-        self.robot = self.scene.entities["robot"]
-        self.cube = self.scene.entities["cube"]
+        self._robot = self.scene.entities["robot"]
+        self._cube = self.scene.entities["cube"]

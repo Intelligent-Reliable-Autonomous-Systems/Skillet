@@ -43,20 +43,20 @@ class LiftCubeEnv(MjDirectRlEnv):
         self.cube_goal_pose_w = torch.zeros((self.num_envs, 7), device=self.device)
 
         # create auxiliary variables for joint limits
-        self.robot_dof_lower_limits = self.robot.data.soft_joint_pos_limits[0, :, 0].to(device=self.device)[
+        self.robot_dof_lower_limits = self._robot.data.soft_joint_pos_limits[0, :, 0].to(device=self.device)[
             self.cfg.joint_ids
         ]
-        self.robot_dof_upper_limits = self.robot.data.soft_joint_pos_limits[0, :, 1].to(device=self.device)[
+        self.robot_dof_upper_limits = self._robot.data.soft_joint_pos_limits[0, :, 1].to(device=self.device)[
             self.cfg.joint_ids
         ]
-        # self.robot_effort_limits = self.robot.data.joint_effort_limits[0, :].to(device=self.device)[self.cfg.joint_ids]
+        # self.robot_effort_limits = self._robot.data.joint_effort_limits[0, :].to(device=self.device)[self.cfg.joint_ids]
         self.robot_dof_lower_limits[self.robot_dof_lower_limits == -float("inf")] = -torch.pi
         self.robot_dof_upper_limits[self.robot_dof_upper_limits == float("inf")] = torch.pi
 
-        self.default_joint_pos = self.robot.data.default_joint_pos[:, self.cfg.joint_ids]
+        self.default_joint_pos = self._robot.data.default_joint_pos[:, self.cfg.joint_ids]
         self.robot_dof_targets = torch.zeros((self.num_envs, len(self.cfg.joint_ids)), device=self.device)
 
-        self.ee_link_idx = self.robot.find_bodies(self.cfg.ee_link_name)[0][0]
+        self.ee_link_idx = self._robot.find_bodies(self.cfg.ee_link_name)[0][0]
 
         # Robot position
         self.tcp_offset = torch.as_tensor(self.cfg.tcp_offset, device=self.device).unsqueeze(0).repeat(self.num_envs, 1)
@@ -77,8 +77,8 @@ class LiftCubeEnv(MjDirectRlEnv):
         ) * 255  # Rescale gripper position to control range
 
     def _apply_action(self):
-        self.robot.set_joint_position_target(self.robot_dof_targets[:, :-1], joint_ids=self.cfg.joint_ids[:-1])
-        self.robot.set_tendon_len_target(
+        self._robot.set_joint_position_target(self.robot_dof_targets[:, :-1], joint_ids=self.cfg.joint_ids[:-1])
+        self._robot.set_tendon_len_target(
             self.robot_dof_targets[:, -1:], tendon_ids=[0]
         )  # Only one tendon in articulation
 
@@ -88,7 +88,7 @@ class LiftCubeEnv(MjDirectRlEnv):
         terminated_pos = torch.zeros(size=(self.num_envs,), device=self.device, dtype=torch.bool)
 
         terminated_pos = (self.cube_pose_w[:, 2] < -0.05).to(torch.bool) | torch.isnan(
-            self.robot.data.body_link_pose_w
+            self._robot.data.body_link_pose_w
         ).any(dim=(1, 2)).to(torch.bool)
         """| torch.any(
             self.scene["ee_ground_collision"].data.found, dim=-1
@@ -104,8 +104,8 @@ class LiftCubeEnv(MjDirectRlEnv):
             compute_rewards(
                 self.actions,
                 self.prev_actions,
-                self.robot.data.joint_pos[:, self.cfg.joint_ids],
-                self.robot.data.joint_vel[:, self.cfg.joint_ids],
+                self._robot.data.joint_pos[:, self.cfg.joint_ids],
+                self._robot.data.joint_vel[:, self.cfg.joint_ids],
                 self.robot_tcp_pose_w[:, 0:3],
                 self.cube_pose_w[:, 0:3],
                 self.cube_goal_pose_w[:, 0:3],
@@ -127,26 +127,26 @@ class LiftCubeEnv(MjDirectRlEnv):
         super()._reset_idx(env_ids)
         # robot state
         joint_pos = (
-            self.robot.data.default_joint_pos[env_ids]
+            self._robot.data.default_joint_pos[env_ids]
             + sample_uniform(
                 -0.125,
                 0.125,
-                (len(env_ids), self.robot.num_joints),
+                (len(env_ids), self._robot.num_joints),
                 self.device,
             )
         )[:, self.cfg.joint_ids]
         joint_pos = torch.clamp(joint_pos, self.robot_dof_lower_limits, self.robot_dof_upper_limits)
-        joint_vel = torch.zeros((self.num_envs, self.robot.num_joints), device=self.device)[env_ids]
-        self.robot.set_joint_position_target(joint_pos, env_ids=env_ids.unsqueeze(-1), joint_ids=self.cfg.joint_ids)
-        self.robot.set_joint_velocity_target(joint_vel, env_ids=env_ids)
-        self.robot.write_joint_position_to_sim(joint_pos, env_ids=env_ids, joint_ids=self.cfg.joint_ids)
-        self.robot.write_joint_velocity_to_sim(joint_vel, env_ids=env_ids)
+        joint_vel = torch.zeros((self.num_envs, self._robot.num_joints), device=self.device)[env_ids]
+        self._robot.set_joint_position_target(joint_pos, env_ids=env_ids.unsqueeze(-1), joint_ids=self.cfg.joint_ids)
+        self._robot.set_joint_velocity_target(joint_vel, env_ids=env_ids)
+        self._robot.write_joint_position_to_sim(joint_pos, env_ids=env_ids, joint_ids=self.cfg.joint_ids)
+        self._robot.write_joint_velocity_to_sim(joint_vel, env_ids=env_ids)
 
         # Reset the cube position
         self._reset_cube_pose(env_ids=env_ids)
 
-        self.cube.write_root_link_pose_to_sim(self.cube_pose_w[env_ids], env_ids)
-        self.cube.write_root_link_velocity_to_sim(torch.zeros((len(env_ids), 6), device=self.device), env_ids)
+        self._cube.write_root_link_pose_to_sim(self.cube_pose_w[env_ids], env_ids)
+        self._cube.write_root_link_velocity_to_sim(torch.zeros((len(env_ids), 6), device=self.device), env_ids)
 
         # Need to refresh the intermediate values so that _get_observations() can use the latest values
         self._compute_intermediate_values(env_ids)
@@ -155,9 +155,9 @@ class LiftCubeEnv(MjDirectRlEnv):
         obs = torch.nan_to_num(
             torch.cat(
                 (
-                    self.robot.data.joint_pos[:, self.cfg.joint_ids]
-                    - self.robot.data.default_joint_pos[:, self.cfg.joint_ids],
-                    self.robot.data.joint_vel[:, self.cfg.joint_ids],
+                    self._robot.data.joint_pos[:, self.cfg.joint_ids]
+                    - self._robot.data.default_joint_pos[:, self.cfg.joint_ids],
+                    self._robot.data.joint_vel[:, self.cfg.joint_ids],
                     self.cube_pose_b[:, 0:3],
                     self.cube_goal_xyz_b[:, 0:3],
                     self.prev_actions,
@@ -180,16 +180,16 @@ class LiftCubeEnv(MjDirectRlEnv):
         """
         if env_ids is None:
             env_ids = torch.arange(self.num_envs, device=self.device)
-        self.cube_pose_w[env_ids] = self.cube.data.root_link_pose_w[env_ids]
+        self.cube_pose_w[env_ids] = self._cube.data.root_link_pose_w[env_ids]
 
-        self.robot_ee_pose_w[env_ids] = self.robot.data.body_link_pose_w[env_ids, self.ee_link_idx]
+        self.robot_ee_pose_w[env_ids] = self._robot.data.body_link_pose_w[env_ids, self.ee_link_idx]
 
         self.prev_actions[env_ids] = torch.clone(self.actions[env_ids])
 
         # Object position in robot frame
         cube_pos_b, cube_quat_b = subtract_frame_transforms(
-            self.robot.data.root_link_pos_w[env_ids],
-            self.robot.data.root_link_quat_w[env_ids],
+            self._robot.data.root_link_pos_w[env_ids],
+            self._robot.data.root_link_quat_w[env_ids],
             self.cube_pose_w[:, 0:3][env_ids],
         )
         self.cube_pose_b[env_ids] = torch.cat((cube_pos_b, cube_quat_b), dim=-1)
@@ -209,8 +209,8 @@ class LiftCubeEnv(MjDirectRlEnv):
             env_ids = torch.arange(self.num_envs, device=self.device)
 
         # Set cube position and rotation
-        base_pos_w = self.robot.data.root_link_pos_w[env_ids]
-        base_quat_w = self.robot.data.root_link_quat_w[env_ids]
+        base_pos_w = self._robot.data.root_link_pos_w[env_ids]
+        base_quat_w = self._robot.data.root_link_quat_w[env_ids]
 
         self.cube_xyz_b[env_ids] = self.cube_init_ranges[:, 0] + (
             self.cube_init_ranges[:, 1] - self.cube_init_ranges[:, 0]
