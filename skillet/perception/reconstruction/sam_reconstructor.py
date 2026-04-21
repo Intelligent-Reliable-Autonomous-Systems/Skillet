@@ -3,6 +3,7 @@
 Reconstruct the scene from SAM bounding boxes.
 """
 
+import pathlib
 import pickle
 from typing import Any, Literal
 
@@ -15,11 +16,8 @@ from PIL import Image
 from skillet.perception.reconstruction.reconstructor_base import ReconstructorBase
 from skillet.perception.reconstruction.utils import (
     assign_objects_to_id_hungarian,
-    assign_objects_to_id_mean,
     assign_poses_to_objects,
-    find_cube_centers_mean,
     find_cube_centers_plane,
-    find_cube_centers_ransac,
     get_sorted_object_poses,
     transform_xyz_to_world,
 )
@@ -46,11 +44,10 @@ class SAMReconstructor(ReconstructorBase):
         visualize: bool = True,
     ) -> None:
         """Initialize the SAM reconstructor."""
-        super().__init__(scene)
+        super().__init__(scene, device=device)
         self._model = model
         self._mode = mode
         self._sam_model = get_sam_client(model)
-        self._device = device
         self._vlm_client = GeminiClient()
         self._visualize = visualize
 
@@ -121,7 +118,7 @@ class SAMReconstructor(ReconstructorBase):
         masks = masks.cpu().numpy()
 
         # Find cube centers in the camera frame
-        dc = find_cube_centers_plane(  # TODO: this function takes 800ms to run, way too slow
+        dc = find_cube_centers_plane(
             cube_masks,
             depth,
             intrinsic_k,
@@ -141,7 +138,7 @@ class SAMReconstructor(ReconstructorBase):
         cube_idx, det_idx = None, None
         if poses.ndim == 2:  # only assign poses when there are cubes in the scene
             cube_idx, det_idx = assign_objects_to_id_hungarian(poses[:, 0:3], centers)
-            assign_poses_to_objects(self._scene, Cube, centers, ids, cube_idx, det_idx)
+            assign_poses_to_objects(self._scene, Cube, centers, ids, cube_idx, det_idx, device=self._device)
 
         if self._visualize:
             self._bbox_frame = SAMReconstructor.show_bounding_boxes(
@@ -241,7 +238,7 @@ class SAMReconstructor(ReconstructorBase):
         self._scene.contains_objects = True
         self._scene.goal = self._vlm_goal_atoms
 
-        with open("data/test/vlm_out_multi.pkl", "wb") as f:
+        with pathlib.Path("data/test/vlm_out_multi.pkl").open("wb") as f:
             pickle.dump(self._scene, f)
         print(f"[INFO] Reconstructed Scene with VLM.\n{self._scene}")
 
@@ -544,7 +541,7 @@ class SAMReconstructor(ReconstructorBase):
         draw(results, masks, depth)
         plt.tight_layout()
         plt.show()
-        return None
+        return
 
     @staticmethod
     def masks_to_bboxes(masks: np.ndarray) -> list[tuple[int, int, int, int]]:

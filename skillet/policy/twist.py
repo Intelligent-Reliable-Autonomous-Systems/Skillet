@@ -13,7 +13,6 @@ from skillet.core.math import (
     compute_pose_error,
     quat_apply,
     quat_inv,
-    quat_mul,
 )
 from skillet.core.policy import BatchedPolicy, TBAction, TBPolicyObs
 from skillet.core.spaces import ActionSpec, ObservationSpec
@@ -69,7 +68,7 @@ class TwistFramePolicy(BatchedPolicy[MOVEIT_TCP_Obs, TBAction, XYZ_RPY_Params], 
         self.start_gripper_pos = (obs["gripper"] - gripper_lim[:, :1]) / (gripper_lim[:, 1:] - gripper_lim[:, :1])
 
 
-class TwistPidPosePolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Generic[TBPolicyObs, TBAction]):
+class TwistPidPosePolicy(BatchedPolicy[TBPolicyObs, TBAction, TBAction], Generic[TBPolicyObs, TBAction]):
     """Policy for end effector position and orientation using PID control."""
 
     _params: torch.Tensor
@@ -82,6 +81,7 @@ class TwistPidPosePolicy(BatchedPolicy[TBPolicyObs, torch.Tensor, TBAction], Gen
         Args:
             obs_spec: The observation specification.
             action_spec: The action specification.
+            frame: frame of the world to compute PID commands in. Defaults to base.
 
         """
         self._obs_spec = obs_spec

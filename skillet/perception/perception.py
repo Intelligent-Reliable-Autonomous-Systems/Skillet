@@ -232,7 +232,7 @@ class SkilletPerception:
         if self._reconstructor is None:
             if self._reconstructor_type == "sam":
                 print("[INFO][PERCEPTION] Loading SAM reconstructor")
-                self._reconstructor = SAMReconstructor(scene=self._scene)
+                self._reconstructor = SAMReconstructor(scene=self._scene, device=self.device)
             elif self._reconstructor_type == "april":
                 print("[INFO][PERCEPTION] Loading AprilTag reconstructor")
                 assert (

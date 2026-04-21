@@ -148,10 +148,9 @@ class ReachEnv(MjDirectRlEnv):
         obs = torch.cat(
             (
                 self.robot.data.joint_pos[:, self.cfg.joint_ids],
-                # - self.robot.data.default_joint_pos[:, self.cfg.joint_ids],
                 self.robot.data.joint_vel[:, self.cfg.joint_ids],
-                self.goal_ee_xyz_b,
                 self.prev_actions,
+                self.goal_ee_xyz_b,
             ),
             dim=-1,
         )

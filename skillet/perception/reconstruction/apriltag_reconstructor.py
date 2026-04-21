@@ -13,14 +13,15 @@ from skillet.scene.cube import Cube
 class ApriltagStateReconstructor(ReconstructorBase):
     """Parses observations for reconstructing the scene using AprilTags."""
 
-    def __init__(self, scene: Scene | None = None) -> None:
+    def __init__(self, scene: Scene | None = None, device: str = "cuda") -> None:
         """Initialize the AprilTag state estimator.
 
         Args:
             scene: The scene to update with the estimated poses of the AprilTags.
+            device: string for torch device
 
         """
-        super().__init__(scene)
+        super().__init__(scene, device=device)
         self._detector = apriltags.Detector(
             families="tag36h11",
             nthreads=4,
@@ -76,7 +77,9 @@ class ApriltagStateReconstructor(ReconstructorBase):
                         pos_world = cam_pos + quat_apply(cam_quat, pos)
 
                         # Transform directions: just rotate, no translation
-                        normal_world = quat_apply(cam_quat, normal)
+                        normal_world = quat_apply(
+                            cam_quat, normal
+                        )  # TODO check what this does for cubes on the far size
                         up_world = quat_apply(cam_quat, up)
 
                         spec = id_to_cube_spec[detection.tag_id]
@@ -84,7 +87,7 @@ class ApriltagStateReconstructor(ReconstructorBase):
                         cube_pose = Cube.pose_from_face_center(
                             spec["face"], pos_world, normal_world, up_world, cube.size
                         )
-                        cube.pose = cube_pose
+                        cube.pose = cube_pose.to(self._device)
 
     def get_observation(self) -> Scene:
         """Return the scene."""

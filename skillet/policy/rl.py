@@ -10,29 +10,35 @@ import torch
 import yaml
 
 from skillet.controllers import PidController
-from skillet.core.policy import BatchedUPolicy, TBAction, TBPolicyObs
-from skillet.core.spaces import ActionSpec, ObservationSpec, SkillParamsSpec
+from skillet.core.policy import BatchedUPolicy, TBAction, TBPolicyObs, TBPolicyParams
+from skillet.core.spaces import ActionSpec, ObservationSpec, SkillParamsSpec, TSkillParams
 from skillet.envs.specs import JOINT_Obs
-from skillet.skill.specs import JOINT_Params, JOINT_Params_Spec, XYZ_RPY_Params_Spec
+from skillet.skill.specs import JOINT_Params
 
 
 class RlPolicy(BatchedUPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, TBAction]):
     """A policy that samples actions from the action space."""
 
     def __init__(
-        self, obs_spec: ObservationSpec[TBPolicyObs], action_spec: ActionSpec[TBAction], agent_fpath: str
+        self,
+        obs_spec: ObservationSpec[TBPolicyObs],
+        action_spec: ActionSpec[TBAction],
+        params_spec: SkillParamsSpec[TBPolicyParams],
+        agent_fpath: str,
     ) -> None:
         """Initialize the policy.
 
         Args:
             obs_spec: The observation specification.
             action_spec: The action specification.
+            params_spec: The parameter specification.
             agent_fpath: A str (path) to a folder containing jit-compiled torch policy named `agent.pt` and a
                 `config.yaml` file describing the input (observation) space and the output
 
         """
         self._obs_spec = obs_spec
         self._action_spec = action_spec
+        self._params_spec = params_spec
         try:
             with Path.open(f"{agent_fpath}/agent.pt", "rb") as f:
                 file = io.BytesIO(f.read())
@@ -56,13 +62,13 @@ class RlPolicy(BatchedUPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, TBAct
         return self._action_spec
 
     @property
-    def params_spec(self) -> SkillParamsSpec[JOINT_Params]:
+    def params_spec(self) -> SkillParamsSpec[TSkillParams]:
         """The parameter specification for joint parameters."""
-        return JOINT_Params_Spec
+        return self._params_spec
 
     def get_action(self, obs: TBPolicyObs, params: Any = None) -> TBAction:
-        policy_obs = self.cat_params_and_obs(obs, params)
-        return self._policy(policy_obs)
+        """Get the action from the policy."""
+        raise NotImplementedError
 
 
 class PidRlPolicy(RlPolicy):
@@ -72,6 +78,7 @@ class PidRlPolicy(RlPolicy):
         self,
         obs_spec: ObservationSpec[TBPolicyObs],
         action_spec: ActionSpec[TBAction],
+        params_spec: SkillParamsSpec[TBPolicyParams],
         agent_fpath: str,
         poll_rate_hz: int = 20,
     ) -> None:
@@ -80,12 +87,13 @@ class PidRlPolicy(RlPolicy):
         Args:
             obs_spec: The observation specification.
             action_spec: The action specification.
+            params_spec: The parameter specification.
             agent_fpath: A str (path) to a folder containing jit-compiled torch policy named `agent.pt` and a
                 `config.yaml` file describing the input (observation) space and the output
             poll_rate_hz: The poll rate of the RL policy
 
         """
-        super().__init__(obs_spec, action_spec, agent_fpath=agent_fpath)
+        super().__init__(obs_spec, action_spec, params_spec, agent_fpath=agent_fpath)
 
         self._pid_controller = PidController()
         self._poll_rate_hz = poll_rate_hz
@@ -94,11 +102,6 @@ class PidRlPolicy(RlPolicy):
         self._curr_obs = None
         self._prev_action = None
         self.run_thread()
-
-    @property
-    def params_spec(self) -> SkillParamsSpec[JOINT_Params]:
-        """The parameter specification for joint parameters."""
-        return XYZ_RPY_Params_Spec  # TODO is this the best solution to the params spec in main.py?
 
     def get_action(self, obs: TBPolicyObs, params: Any = None) -> TBAction:
         """Get the next velocity action from the PID controller."""
@@ -116,7 +119,8 @@ class PidRlPolicy(RlPolicy):
 
         while not self._stop_event.is_set():
             if self._curr_obs is not None:
-                self._pos_desired = self._policy(self._build_policy_obs(self._curr_obs, self._params))
+                action = self._policy(self._build_policy_obs(self._curr_obs, self._params))
+                self._pos_desired = self._build_action(action)
                 self._prev_action = self._pos_desired.clone()
                 self._pid_controller.reset(self._pos_desired)
             sleep_time = (time.perf_counter() - next_poll_t) - poll_period_s
@@ -138,7 +142,16 @@ class PidRlPolicy(RlPolicy):
         """Build the observation for the policy."""
         if self._prev_action is None:
             self._prev_action = self.action_spec.with_n_envs(1).zeros()
-        # TODO can have a device mismatch
+
         return torch.cat(
-            (obs["joint_pos"], obs["joint_vel"], params.to(self._prev_action.device), self._prev_action), dim=1
+            (
+                obs["joint_pos"],
+                obs["joint_vel"],
+                self._prev_action,
+                params,
+            ),
+            dim=1,
         ).clamp(-5.0, 5.0)
+
+    def _build_action(self, action: JOINT_Params):
+        pass

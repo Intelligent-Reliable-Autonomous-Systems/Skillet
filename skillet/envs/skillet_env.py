@@ -79,7 +79,7 @@ class SkilletEnv(
         self._last_obs = None
 
         # Define the obseravation and action specifications
-        spec_args = {
+        self._spec_args = {
             "is_torch": True,
             "is_batched": True,
             "n_envs": -1,
@@ -92,72 +92,68 @@ class SkilletEnv(
             # if using batched spaces, must set n_envs to the number of environments
             obs_space = env.observation_space
             action_space = env.action_space
-            spec_args["n_envs"] = env.num_envs
+            self._spec_args["n_envs"] = env.num_envs
         assert isinstance(obs_space, gym.spaces.Dict)
         assert "policy" in obs_space.keys()  # noqa: SIM118
         self.obs_spec_policy = ObservationSpec[Float[torch.Tensor, "b ..."]](
             name="policy",
             space=obs_space["policy"],
-        ).replace(**spec_args)
+        ).replace(**self._spec_args)
         """Specification of the vector observation passed to a low level policy"""
         self.obs_spec_state = ObservationSpec[Mapping[str, Float[torch.Tensor, "b ..."]]](
             name="state",
             space=obs_space,
-        ).replace(**spec_args)
+        ).replace(**self._spec_args)
         """Specification of the raw dictionary environment state"""
-        self.obs_spec_rgbd = RGBD_SPEC_BATCHED.bind(height=480, width=640).replace(device=self.device)
+        self.obs_spec_rgbd = RGBD_SPEC_BATCHED.bind(height=480, width=640).replace(**self._spec_args)
         self.obs_spec_rgbd_grip = RGBD_GRIPPER_SPEC_BATCHED.bind(
             height=480, width=640, n_gripper_joints=len(self._gripper_joint_names)
-        ).replace(device=self.device)
+        ).replace(**self._spec_args)
         self.obs_spec_gripper = GRIPPER_SPEC_BATCHED.bind(n_gripper_joints=len(self._gripper_joint_names)).replace(
-            device=self.device
+            **self._spec_args
         )
         """Specification of RGB-D observations and metadata. Bound to the height and width of the RGB-D camera."""
         self.obs_spec_ikee = IK_EE_SPEC_BATCHED.bind(
             n_joints=len(self._joint_ids),
             n_arm_joints=len(self._joint_ids[:-1]),
             n_gripper_joints=len(self._gripper_joint_names),
-        ).replace(device=self.device)
+        ).replace(**self._spec_args)
         """Specification of IK-EE observations."""
         self.obs_spec_osc = OSC_SPEC_BATCHED.bind(
             n_joints=len(self._joint_ids),
             n_arm_joints=len(self._joint_ids[:-1]),
             n_gripper_joints=len(self._gripper_joint_names),
-        ).replace(device=self.device)
+        ).replace(**self._spec_args)
         """Specification of OSC observations."""
         self.obs_spec_twist_tcp = TWIST_SPEC_BATCHED.bind(
             n_gripper_joints=len(self._gripper_joint_names), n_joints=len(self._joint_ids)
-        ).replace(device=self.device)
+        ).replace(**self._spec_args)
         """Specification of Twist TCP observations."""
         self.obs_spec_joints = JOINT_SPEC_BATCHED.bind(
             n_gripper_joints=len(self._gripper_joint_names), n_joints=len(self._joint_ids)
-        ).replace(device=self.device)
+        ).replace(**self._spec_args)
         """Specification for joints"""
 
-        self.action_spec_state = (
-            ActionSpec[Float[torch.Tensor, "b ..."]](
-                name="state",
-                space=action_space,
-            )
-            .replace(**spec_args)
-            .replace(device=self.device)
-        )
+        self.action_spec_state = ActionSpec[Float[torch.Tensor, "b ..."]](
+            name="state",
+            space=action_space,
+        ).replace(**self._spec_args)
 
         self.action_spec_joints = (
-            JOINT_SPEC.replace(**spec_args).bind(n_joints=len(self._joint_ids)).replace(device=self.device)
+            JOINT_SPEC.replace(**self._spec_args).bind(n_joints=len(self._joint_ids)).replace(device=self.device)
         )
         self.action_spec_twist_tcp = (
-            TWIST_TCP_SPEC.replace(**spec_args)
+            TWIST_TCP_SPEC.replace(**self._spec_args)
             .bind(n_gripper_joints=len(self._env.cfg.gripper_joint_names))
             .replace(device=self.device)
         )
         self.action_spec_moveit_joint = (
-            MOVEIT_JOINT_SPEC.replace(**spec_args)
+            MOVEIT_JOINT_SPEC.replace(**self._spec_args)
             .bind(n_joints=len(self._env.cfg.joint_ids))
             .replace(device=self.device)
         )
         self.action_spec_moveit_tcp_quat = (
-            MOVEIT_TCP_QUAT_SPEC.replace(**spec_args)
+            MOVEIT_TCP_QUAT_SPEC.replace(**self._spec_args)
             .bind(n_gripper_joints=len(self._env.cfg.gripper_joint_names))
             .replace(device=self.device)
         )

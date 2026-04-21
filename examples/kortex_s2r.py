@@ -7,17 +7,17 @@ from typing import TYPE_CHECKING
 import torch
 
 from skillet.agents import S2RAgent
-from skillet.core import ObservationSpec
 from skillet.core.env import BatchToSingleWrapper
 from skillet.envs import SkilletEnv
 from skillet.perception import SkilletPerception
 from skillet.policy import FixedSequencePolicy, PidRlPolicy, RandomPolicy
 from skillet.scene import EMPTY_SCENE, SIX_CUBE_APRIL_SCENE, Open3DVisualizer
 from skillet.skill import ReachXYZRPYSkill
-from skillet.skill.specs import SELECT_OPTIONS_SPEC_BATCHED
+from skillet.skill.specs import SELECT_OPTIONS_SPEC_BATCHED, XYZ_RPY_Params_Spec
 from skillet_tasks.kortex_tasks.factory import create_kortex_env
 
 if TYPE_CHECKING:
+    from skillet.core import ObservationSpec
     from skillet.envs.specs import RGBD_Gripper_Obs
 
 parser = argparse.ArgumentParser(description="Visualize latest RGB-D frame from ROS2 service.")
@@ -83,10 +83,10 @@ def main() -> None:
             scene.gripper_pos = 0.8
 
     # Low-level policies
-    # arm_policy = JointPosPidPosePolicy(env.batched_env.obs_spec_joints, env.batched_env.action_spec_joints)
     arm_policy = PidRlPolicy(
         env.batched_env.obs_spec_joints,
         env.batched_env.action_spec_joints,
+        XYZ_RPY_Params_Spec.replace(**env.batched_env._spec_args),
         agent_fpath="data/rl/gen3lite_reach",
         poll_rate_hz=60,
     )
@@ -99,7 +99,7 @@ def main() -> None:
     # Parameters policy
     fixed_param_policy = FixedSequencePolicy(
         env.batched_env.obs_spec_policy,
-        reach_pose_skill.params_spec,  # TODO: fix this device mismatch
+        reach_pose_skill.params_spec,
         torch.as_tensor(
             [
                 [0.4, -0.1, 0.3, 0.0, 1.57, 0.0],
