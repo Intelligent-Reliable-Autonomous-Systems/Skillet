@@ -13,7 +13,7 @@ class PidController:
         kd: float = 0.1,
         ki: float = 0.0,
         dt: float = 1 / 60,
-        max_vel: float = 0.01,  # radians per sec
+        max_vel: float = 0.15,  # radians per sec
         device: str = "cuda",
     ) -> None:
         """Initialize the PID controller class."""

@@ -18,7 +18,7 @@ class BaseSceneCfg(SceneCfg):
 class Gen3LiteBaseCfg(SkillsDirectRlEnvCfg):
     # env
     episode_length_s = 6.0  # 500 timesteps
-    decimation = 2
+    decimation = 6
     action_space = 7
     observation_space = 27
     state_space = 0
@@ -36,7 +36,7 @@ class Gen3LiteBaseCfg(SkillsDirectRlEnvCfg):
         nconmax=55,
         njmax=600,
         mujoco=MujocoCfg(
-            timestep=0.01,
+            timestep=1 / 120,
             iterations=10,
             ls_iterations=20,
             impratio=10,

@@ -140,5 +140,5 @@ class PidRlPolicy(RlPolicy):
             self._prev_action = self.action_spec.with_n_envs(1).zeros()
         # TODO can have a device mismatch
         return torch.cat(
-            (obs["joint_pos"], obs["joint_vel"], self._prev_action, params.to(self._prev_action.device)), dim=1
-        )
+            (obs["joint_pos"], obs["joint_vel"], params.to(self._prev_action.device), self._prev_action), dim=1
+        ).clamp(-5.0, 5.0)

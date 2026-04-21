@@ -88,6 +88,7 @@ def main() -> None:
         env.batched_env.obs_spec_joints,
         env.batched_env.action_spec_joints,
         agent_fpath="data/rl/gen3lite_reach",
+        poll_rate_hz=60,
     )
     # Skills
     skill_length = 1e9
@@ -101,7 +102,7 @@ def main() -> None:
         reach_pose_skill.params_spec,  # TODO: fix this device mismatch
         torch.as_tensor(
             [
-                [0.3, 0.0, 0.2, 0.707, 0, 0.707],
+                [0.4, -0.1, 0.3, 0.0, 1.57, 0.0],
             ],
             device=env.batched_env.device,
         ),
@@ -129,7 +130,7 @@ def main() -> None:
         perception.task_instruction = args_cli.goal
         perception.build_scene = args_cli.build_scene
 
-    input("Press Enter to start the skill execution...\n")
+    # input("Press Enter to start the skill execution...\n")
 
     while True:
         with torch.inference_mode():

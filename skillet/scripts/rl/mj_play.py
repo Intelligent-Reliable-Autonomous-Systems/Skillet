@@ -11,7 +11,7 @@ import sys
 
 import gymnasium as gym
 import numpy as np
-from mjlab.viewer import NativeMujocoViewer, ViserPlayViewer
+from mjlab.viewer import ViserPlayViewer
 
 import skillet_tasks.mj_tasks  # noqa: F401
 from skillet.envs import SkillEnvWrapper, SkilletEnv
@@ -21,6 +21,7 @@ from skillet.envs.util.dict import print_dict
 from skillet.envs.util.hydra import hydra_task_config
 from skillet.rl.cfg import RslRlBaseRunnerCfg
 from skillet.rl.exporter import export_policy_as_jit
+from skillet.rl.mj_viewer import NativeMujocoViewer
 from skillet.rl.rsl_rl import cli_args
 from skillet.rl.rsl_rl.runners import OnPolicyRunner
 
