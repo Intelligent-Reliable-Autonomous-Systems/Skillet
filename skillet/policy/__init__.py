@@ -10,4 +10,5 @@ from .joint_pos import JointPosPidPosePolicy as JointPosPidPosePolicy
 from .joint_pos import JointPosPolicy as JointPosPolicy
 from .moveit import MoveItTcpQuatPolicy as MoveItTcpQuatPolicy
 from .osc_ee import PoseAbsOscEePolicy as PoseAbsOscEePolicy
+from .rl import PidRlPolicy as PidRlPolicy
 from .twist import TwistPidPosePolicy as TwistPidPosePolicy

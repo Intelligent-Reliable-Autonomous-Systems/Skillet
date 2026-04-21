@@ -224,7 +224,7 @@ class Gen3KortexEnv(KortexEnv):
             finger.value = gripper_goal
 
             if action_spec is None or action_spec.name == "joints":
-                self._publish_joint_spec(joint_pos, duration)
+                self._publish_joint_spec(np.zeros_like(joint_pos), duration)
             elif action_spec.name == "twist_tcp":
                 self._publish_twist_tcp_spec(np.zeros_like(joint_pos))
 
@@ -239,11 +239,11 @@ class Gen3KortexEnv(KortexEnv):
 
         return self._new_gripper_goal
 
-    def _publish_joint_spec(self, joint_pos: np.ndarray, duration: float = 20) -> None:
-        """Publish a joint position trajectory to the kortex API.
+    def _publish_joint_spec(self, joint_vel: np.ndarray, duration: float = 20) -> None:
+        """Publish a joint velocity commmand to the kortex API.
 
         Args:
-            joint_pos: Joint positions of the robot.
+            joint_vel: Joint velocities of the robot.
             duration: Max duration of trajectory
 
         """
@@ -255,64 +255,14 @@ class Gen3KortexEnv(KortexEnv):
             self.active_controller = Base_pb2.SINGLE_LEVEL_SERVOING
             print("[INFO] Successfully switched controller to `Base_pb2.SINGLE_LEVEL_SERVOING`")
 
-        print("Starting angular action movement ...")
-        action = Base_pb2.Action()
-        action.name = "Joint Trajectory"
-        action.application_data = ""
+        command = Base_pb2.JointSpeeds()
+        for i, j in enumerate(np.rad2deg(joint_vel[:-1])):  # Publish all except gripper
+            joint_speed = command.joint_speeds.add()
+            joint_speed.joint_identifier = i
+            joint_speed.value = j
+            joint_speed.duration = 0
 
-        # Place arm straight up
-        for joint_id in range(len(self.arm_joint_names)):
-            joint_angle = action.reach_joint_angles.joint_angles.joint_angles.add()
-            joint_angle.joint_identifier = joint_id
-            joint_angle.value = joint_pos[joint_id]
-
-        e = threading.Event()
-        notification_handle = self.kortex.OnNotificationActionTopic(
-            check_for_end_or_abort(e), Base_pb2.NotificationOptions()
-        )
-
-        self.kortex.ExecuteAction(action)
-        finished = e.wait(duration)
-        self.kortex.Unsubscribe(notification_handle)
-
-    def _publish_tcp_spec(self, tcp_pose: np.ndarray, duration: float = 20) -> None:
-        """Publish a TCP position to the Kortex API to be solved with its own motion planning.
-
-        Args:
-            tcp_pose: Goal TCP position of the robot
-            duration: Max duration of the trajectory
-
-        """
-        if self.active_controller != Base_pb2.SINGLE_LEVEL_SERVOING:
-            print("[INFO] Switching controller to `Base_pb2.SINGLE_LEVEL_SERVOING`")
-            if not self.switch_controllers(active_controller=Base_pb2.SINGLE_LEVEL_SERVOING):
-                print("[INFO] Unable to switch controller to `Base_pb2.SINGLE_LEVEL_SERVOING`. Aborting trajectory.")
-                return
-            self.active_controller = Base_pb2.SINGLE_LEVEL_SERVOING
-            print("[INFO] Successfully switched controller to `Base_pb2.SINGLE_LEVEL_SERVOING`")
-
-        action = Base_pb2.Action()
-        action.name = "TCP Pose"
-        action.application_data = ""
-
-        cartesian_pose = action.reach_pose.target_pose
-        cartesian_pose.x = tcp_pose[0]
-        cartesian_pose.y = tcp_pose[1]
-        cartesian_pose.z = tcp_pose[2]
-        roll, pitch, yaw = np_euler_xyz_degrees_from_quat(tcp_pose[3:7])
-        cartesian_pose.theta_x = roll
-        cartesian_pose.theta_y = pitch
-        cartesian_pose.theta_z = yaw
-
-        e = threading.Event()
-        notification_handle = self.kortex.OnNotificationActionTopic(
-            check_for_end_or_abort(e), Base_pb2.NotificationOptions()
-        )
-
-        self.kortex.ExecuteAction(action)
-
-        finished = e.wait(duration)
-        self.kortex.Unsubscribe(notification_handle)
+        self.kortex.SendJointSpeedsCommand(command)
 
     def _publish_twist_tcp_spec(self, twist: np.ndarray) -> None:
         """Publish a twist in the tcp frame to the robot twist controller.

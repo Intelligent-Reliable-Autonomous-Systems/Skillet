@@ -205,7 +205,7 @@ class SkilletEnv(
     @override
     def unwrapped(self) -> DirectRlInterface:
         # self satisfies the DirectRlInterface
-        return self
+        return self._env
 
     # ==================== Skillet Environment ====================
     @property

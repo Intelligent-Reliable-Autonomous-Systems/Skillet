@@ -58,11 +58,13 @@ kortex = [
 ]
 isaac = [
     "isaacsim",
+    "isaaclab"
 ]
 mj = [
     "mujoco",
     "mujoco-warp",
     "mjlab",
+    "hydra-core"
 ]
 dev = [
     "ruff",

@@ -20,7 +20,7 @@ class Gen3LiteBaseCfg(SkillsDirectRlEnvCfg):
     episode_length_s = 6.0  # 500 timesteps
     decimation = 2
     action_space = 7
-    observation_space = 29
+    observation_space = 27
     state_space = 0
 
     joint_ids = [0, 1, 2, 3, 4, 5, 0]
