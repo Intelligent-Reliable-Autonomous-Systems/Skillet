@@ -403,9 +403,14 @@ class Open3DVisualizer:
     def get_tcp_pose(self) -> Sequence[float]:
         """Get the TCP post from the environment."""
         return (
-            self.env.get_observation(self.env.unwrapped.obs_spec_ikee.unbatched())["tcp_pose_b"].detach().cpu().numpy()
+            self.env.get_observation(self.env.batched_env.obs_spec_ikee.unbatched())["tcp_pose_b"]
+            .detach()
+            .cpu()
+            .numpy()
         )
 
     def get_gripper_pos(self) -> Sequence[float]:
         """Get the gripper position from the environment."""
-        return self.env.get_observation(self.env.unwrapped.obs_spec_ikee.unbatched())["gripper"].detach().cpu().numpy()
+        return (
+            self.env.get_observation(self.env.batched_env.obs_spec_ikee.unbatched())["gripper"].detach().cpu().numpy()
+        )

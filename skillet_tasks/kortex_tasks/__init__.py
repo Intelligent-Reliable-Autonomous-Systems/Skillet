@@ -17,14 +17,6 @@ The package is structured as follows:
 ##
 # Register Gym environments.
 ##
-import collections
-import collections.abc
-
-collections.MutableMapping = collections.abc.MutableMapping
-collections.Mapping = collections.abc.Mapping
-collections.MutableSet = collections.abc.MutableSet
-collections.MutableSequence = collections.abc.MutableSequence
-collections.Callable = collections.abc.Callable
 
 from skillet.envs.util import import_packages
 

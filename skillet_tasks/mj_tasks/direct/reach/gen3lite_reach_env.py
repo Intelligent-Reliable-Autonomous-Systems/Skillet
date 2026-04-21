@@ -62,4 +62,4 @@ class Gen3LiteReachEnv(ReachEnv):
         )
 
         # Get the robot from the scene
-        self.robot = self.scene.entities["robot"]
+        self._robot = self.scene.entities["robot"]

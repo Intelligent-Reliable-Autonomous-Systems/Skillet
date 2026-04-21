@@ -7,29 +7,29 @@ from typing import TYPE_CHECKING
 import torch
 
 from skillet.agents import S2RAgent
-from skillet.core import ObservationSpec
 from skillet.core.env import BatchToSingleWrapper
 from skillet.envs import SkilletEnv
 from skillet.perception import SkilletPerception
-from skillet.policy import FixedSequencePolicy, JointPosPidPosePolicy, RandomPolicy
+from skillet.policy import FixedSequencePolicy, PidRlPolicy, RandomPolicy
 from skillet.scene import EMPTY_SCENE, SIX_CUBE_APRIL_SCENE, Open3DVisualizer
 from skillet.skill import ReachXYZRPYSkill
-from skillet.skill.specs import SELECT_OPTIONS_SPEC_BATCHED
+from skillet.skill.specs import SELECT_OPTIONS_SPEC_BATCHED, XYZ_RPY_Params_Spec
 from skillet_tasks.kortex_tasks.factory import create_kortex_env
 
 if TYPE_CHECKING:
+    from skillet.core import ObservationSpec
     from skillet.envs.specs import RGBD_Gripper_Obs
 
 parser = argparse.ArgumentParser(description="Visualize latest RGB-D frame from ROS2 service.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
-parser.add_argument("--device", type=str, default="cpu", help="Device to use")
+parser.add_argument("--device", type=str, default="cuda", help="Device to use")
 parser.add_argument("--robot_ip", type=str, default="192.168.1.10", help="Robot IP.")
 parser.add_argument("--poll_rate_hz", type=int, default=10, help="Tick rate of the perception")
 parser.add_argument("--task", type=str, default="Kortex-Gen3Lite-v0", help="Kortex Environment")
-parser.add_argument("--build_scene", type=argparse.BooleanOptionalAction, default=True, help="If to build the scene")
+parser.add_argument("--build_scene", type=argparse.BooleanOptionalAction, default=False, help="If to build the scene")
 parser.add_argument("--reconstruction", type=str, choices=["sam", "april"], default="sam")
 parser.add_argument(
-    "--perception", type=argparse.BooleanOptionalAction, default=True, help="If to run the perception pipeline"
+    "--perception", type=argparse.BooleanOptionalAction, default=False, help="If to run the perception pipeline"
 )
 parser.add_argument("--o3d", type=argparse.BooleanOptionalAction, default=False, help="If to visualize with open3d")
 parser.add_argument(
@@ -83,7 +83,13 @@ def main() -> None:
             scene.gripper_pos = 0.8
 
     # Low-level policies
-    arm_policy = JointPosPidPosePolicy(env.batched_env.obs_spec_joints, env.batched_env.action_spec_joints)
+    arm_policy = PidRlPolicy(
+        env.batched_env.obs_spec_joints,
+        env.batched_env.action_spec_joints,
+        XYZ_RPY_Params_Spec.replace(**env.batched_env._spec_args),
+        agent_fpath="data/rl/gen3lite_reach",
+        poll_rate_hz=60,
+    )
     # Skills
     skill_length = 1e9
 
@@ -92,15 +98,13 @@ def main() -> None:
 
     # Parameters policy
     fixed_param_policy = FixedSequencePolicy(
-        env.obs_spec_policy,
+        env.batched_env.obs_spec_policy,
         reach_pose_skill.params_spec,
         torch.as_tensor(
             [
-                [0.5, 0.5, 0.7, 0.707, 0, 0.707],
-                [0.5, -0.4, 0.6, 0.707, 0.707, 0.0],
-                [0.5, 0, 0.5, 0.0, 1.0, 0.0],
+                [0.4, -0.1, 0.3, 0.0, 1.57, 0.0],
             ],
-            device=env.device,
+            device=env.batched_env.device,
         ),
     )
 
@@ -108,11 +112,12 @@ def main() -> None:
     options_spec = (
         SELECT_OPTIONS_SPEC_BATCHED.bind(n_options=len(skills))
         .with_n_envs(args_cli.num_envs)
-        .replace(device=env.device)
+        .replace(device=env.batched_env.device)
     )
-    policy_over_options = RandomPolicy(env.obs_spec, options_spec)
+    policy_over_options = RandomPolicy(env.batched_env.obs_spec_policy, options_spec)
 
     s2r_agent = S2RAgent(
+        scene,
         skills=skills,
         high_level_policy=policy_over_options,
         params_policy=fixed_param_policy,
@@ -125,7 +130,7 @@ def main() -> None:
         perception.task_instruction = args_cli.goal
         perception.build_scene = args_cli.build_scene
 
-    input("Press Enter to start the skill execution...\n")
+    # input("Press Enter to start the skill execution...\n")
 
     while True:
         with torch.inference_mode():

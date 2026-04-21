@@ -52,6 +52,7 @@ cube_2 = Cube(
     size=CUBE_SIZE, init_pose=torch.as_tensor([0.35, 0.042, 0.016, 1, 0, 0, 0], device=DEVICE), name="purple_block"
 )
 
+
 orange_april_cube = Cube(
     size=CUBE_SIZE, face_apriltags=[{"face": "top", "size": SM_APRIL_SZ, "id": 8}], name="orange_block"
 )
@@ -84,3 +85,25 @@ SIX_CUBE_APRIL_SCENE = Scene(
     contains_objects=True,
 )
 SIX_CUBE_APRIL_SCENE.goal = [{"goal_predicate": "on", "args": ["yellow_block", "green_block"]}]
+
+orange_cube = Cube(size=CUBE_SIZE, name="orange_block")
+blue_cube = Cube(size=CUBE_SIZE, name="blue_block")
+green_cube = Cube(size=CUBE_SIZE, name="green_block")
+red_cube = Cube(size=CUBE_SIZE, name="red_block")
+yellow_cube = Cube(size=CUBE_SIZE, name="yellow_block")
+purple_cube = Cube(size=CUBE_SIZE, name="purple_block")
+
+SIX_CUBE_SCENE = Scene(
+    objects=[
+        table_0,
+        orange_cube,
+        blue_cube,
+        green_cube,
+        red_cube,
+        yellow_cube,
+        purple_cube,
+    ],
+    closed_set=True,
+    bounds=WORLD_BOUNDS,
+    contains_objects=True,
+)

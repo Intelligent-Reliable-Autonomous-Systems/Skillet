@@ -70,8 +70,9 @@ class ReachEnv(MjDirectRlEnv):
 
     # pre-physics step calls
     def _pre_physics_step(self, actions: torch.Tensor):
-        self.actions = actions.clone().clamp(-5.0, 5.0)
-        targets = self.default_joint_pos + self.actions * self.cfg.action_scale
+        self.actions = actions.clone()  # .clamp(-5.0, 5.0)
+        # targets = self.default_joint_pos + self.actions * self.cfg.action_scale
+        targets = self.actions
         self.robot_dof_targets = torch.clamp(targets, self.robot_dof_lower_limits, self.robot_dof_upper_limits)
 
     def _apply_action(self):
@@ -146,11 +147,10 @@ class ReachEnv(MjDirectRlEnv):
     def _get_observations(self) -> dict:
         obs = torch.cat(
             (
-                self.robot.data.joint_pos[:, self.cfg.joint_ids]
-                - self.robot.data.default_joint_pos[:, self.cfg.joint_ids],
+                self.robot.data.joint_pos[:, self.cfg.joint_ids],
                 self.robot.data.joint_vel[:, self.cfg.joint_ids],
-                self.goal_ee_xyz_b,
                 self.prev_actions,
+                self.goal_ee_xyz_b,
             ),
             dim=-1,
         )
@@ -229,8 +229,6 @@ def compute_rewards(
     orientation_reward = ee_orientation_reward_scale * quat_error_magnitude(ee_quat, goal_ee_quat)
 
     action_rate_reward = action_rate_reward_scale * torch.sum(torch.square(actions - prev_actions), dim=1)
-    joint_vel_reward = (joint_vel_reward_scale * torch.sum(torch.square(joint_vel), dim=1)).clamp(-1, 1)
+    joint_vel_reward = joint_vel_reward_scale * torch.sum(torch.square(joint_vel), dim=1)
 
-    return (dist_reward + dist_fine_grained_rew + orientation_reward + joint_vel_reward + action_rate_reward).clamp(
-        -1, 1
-    )
+    return dist_reward + dist_fine_grained_rew + orientation_reward + joint_vel_reward + action_rate_reward

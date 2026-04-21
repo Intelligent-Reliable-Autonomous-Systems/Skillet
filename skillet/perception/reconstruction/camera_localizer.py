@@ -23,7 +23,8 @@ class CameraLocalizer:
         apriltag_pose: np.ndarray = np.array([0.12, 0.005, 0.0, 0.0, 0.0, 0.7071068, 0.7071068]),
         apriltag_size_m: float = 0.100,
         apriltag_id: int = 3,
-        pose_buffer_size: int = 10,
+        pose_buffer_size: int = 50,
+        fix_camera_pose: bool = True,
     ) -> None:
         """Initialize the camera localizer.
 
@@ -32,11 +33,13 @@ class CameraLocalizer:
             apriltag_size_m: The size of the AprilTag in meters.
             apriltag_id: The ID of the AprilTag
             pose_buffer_size: the length of the camera pose buffer
+            fix_camera_pose: If to fix the camera pose after warmup and not recompute
 
         """
         self._apriltag_pose = apriltag_pose
         self._apriltag_size_m = apriltag_size_m
         self._apriltag_id = apriltag_id
+        self._fix_camera_pose = fix_camera_pose
 
         self._detector = apriltags.Detector(
             families="tag36h11",
@@ -53,6 +56,7 @@ class CameraLocalizer:
         self._latest_camera_pose = _T_to_xyz_quat_xyzw(self._T_base_to_tag)
 
         self._pose_buffer: deque[np.ndarray] = deque(maxlen=pose_buffer_size)
+        self._max_pose_buffer_size = pose_buffer_size
         self._outlier_pos_threshold_m = 0.05
         self._outlier_rot_threshold_rad = 0.1
 
@@ -73,6 +77,9 @@ class CameraLocalizer:
         detections: list[apriltags.Detection] = self._detector.detect(
             gray, estimate_tag_pose=True, camera_params=camera_params, tag_size=tag_size_m
         )
+        # Fix camera pose after warmup
+        if self._fix_camera_pose and len(self._pose_buffer) > self._max_pose_buffer_size:
+            return self._latest_camera_pose
         if detections:
             for detection in detections:
                 if detection.tag_id == self._apriltag_id:

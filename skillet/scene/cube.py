@@ -6,6 +6,7 @@ import torch
 from jaxtyping import Float
 from typing_extensions import override
 
+from skillet import DEVICE
 from skillet.core.math import normalize, quat_apply, quat_from_matrix, quat_inv, quat_mul
 from skillet.scene.base import SceneObject
 
@@ -64,7 +65,7 @@ class Cube(SceneObject):
         """
         super().__init__(name=name)
         self._size = size
-        self._pose = init_pose
+        self._pose = init_pose if init_pose is not None else torch.rand(size=(7,), device=DEVICE)
         self._face_apriltags = face_apriltags or []
 
     @property

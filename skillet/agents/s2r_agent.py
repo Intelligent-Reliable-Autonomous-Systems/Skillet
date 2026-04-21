@@ -3,7 +3,7 @@
 from typing import Any
 
 from skillet.agents.base_agent import Agent, SelectedSkill, TAction, THighLevelObs, TLowLevelObs, TSkillParams
-from skillet.core.env import Environment
+from skillet.core.env import BatchedEnvironment, Environment
 from skillet.core.policy import UPolicy
 from skillet.core.skill import SingleSkill
 from skillet.scene.base import Scene
@@ -34,6 +34,14 @@ class S2RAgent(Agent):
         self.skills = skills
         self.high_level_policy = high_level_policy
         self.params_policy = params_policy
+
+    def get_high_level_obs(self, env: Environment) -> THighLevelObs:
+        """Get high level policy observations."""
+        return env.get_observation(self.high_level_policy.obs_spec)
+
+    def get_low_level_obs(self, env: BatchedEnvironment) -> TLowLevelObs:
+        """Get low level policy observations."""
+        return env.get_observation(self.skills[0].obs_spec)
 
     def execute(self, env: Environment[Any, TAction]) -> None:
         """Execute the policy over the options configured."""

@@ -69,7 +69,7 @@ class LiftCubeEnv(MjDirectRlEnv):
     # pre-physics step calls
     def _pre_physics_step(self, actions: torch.Tensor):
         self.actions = actions.clone().clamp(-5.0, 5.0)
-        targets = self.default_joint_pos + self.actions * self.cfg.action_scale
+        targets = self.actions
         self.robot_dof_targets = torch.clamp(targets, self.robot_dof_lower_limits, self.robot_dof_upper_limits)
         self.robot_dof_targets[:, -1] = (
             self.robot_dof_targets[:, -1] / (self.robot_dof_upper_limits[-1:] - self.robot_dof_lower_limits[-1:])
@@ -145,8 +145,8 @@ class LiftCubeEnv(MjDirectRlEnv):
         # Reset the cube position
         self._reset_cube_pose(env_ids=env_ids)
 
-        self.cube.write_root_link_pose_to_sim(self.cube_pose_w[env_ids], env_ids)
-        self.cube.write_root_link_velocity_to_sim(torch.zeros((len(env_ids), 6), device=self.device), env_ids)
+        self._cube.write_root_link_pose_to_sim(self.cube_pose_w[env_ids], env_ids)
+        self._cube.write_root_link_velocity_to_sim(torch.zeros((len(env_ids), 6), device=self.device), env_ids)
 
         # Need to refresh the intermediate values so that _get_observations() can use the latest values
         self._compute_intermediate_values(env_ids)
@@ -180,7 +180,7 @@ class LiftCubeEnv(MjDirectRlEnv):
         """
         if env_ids is None:
             env_ids = torch.arange(self.num_envs, device=self.device)
-        self.cube_pose_w[env_ids] = self.cube.data.root_link_pose_w[env_ids]
+        self.cube_pose_w[env_ids] = self._cube.data.root_link_pose_w[env_ids]
 
         self.robot_ee_pose_w[env_ids] = self.robot.data.body_link_pose_w[env_ids, self.ee_link_idx]
 

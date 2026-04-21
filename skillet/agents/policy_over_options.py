@@ -59,7 +59,7 @@ class PolicyOverOptionsAgent(Agent):
         return env.get_observation(self.high_level_policy.obs_spec)
 
     def get_low_level_obs(self, env: BatchedEnvironment) -> TLowLevelObs:
-        """Get low level policyobservations."""
+        """Get low level policy observations."""
         return env.get_observation(self.skills[0].obs_spec)
 
     def execute(self, env: Environment[Any, TAction]) -> None:

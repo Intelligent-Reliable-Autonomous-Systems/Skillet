@@ -2,7 +2,7 @@ from skillet.envs.mujoco import SkillsDirectRlEnvCfg
 from mjlab.scene import SceneCfg
 
 from mjlab.sim import MujocoCfg, SimulationCfg
-from mjlab.terrains import TerrainImporterCfg
+from mjlab.terrains import TerrainEntityCfg
 from dataclasses import MISSING
 from mjlab.viewer import ViewerConfig
 
@@ -10,7 +10,7 @@ from mjlab.viewer import ViewerConfig
 class BaseSceneCfg(SceneCfg):
     """Configuration for Lift Environment."""
 
-    terrain = TerrainImporterCfg(terrain_type="plane")
+    terrain = TerrainEntityCfg(terrain_type="plane")
     num_envs = 1
     env_spacing = 2.5
 

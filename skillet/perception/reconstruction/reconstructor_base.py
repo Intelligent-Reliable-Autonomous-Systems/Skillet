@@ -1,24 +1,26 @@
 from abc import ABC, abstractmethod
-
-import torch
 from typing import Any
 
-from skillet.scene.base import Scene
+import torch
+
 from skillet.core import ObservationSpec
-from skillet.core.env import BatchedEnvironment, TSpecObs
+from skillet.core.env import TSpecObs
+from skillet.scene.base import Scene
 
 
 class ReconstructorBase(ABC):
     """Base scene reconstructor for cube localization with AprilTags or segmentation + depth."""
 
-    def __init__(self, scene: Scene | None = None) -> None:
+    def __init__(self, scene: Scene | None = None, device: str = "cuda") -> None:
         """Initialize the AprilTag state estimator.
 
         Args:
             scene: The scene to update with the estimated poses of the AprilTags.
+            device: torch device
 
         """
         self._scene = scene
+        self._device = device
         self._bbox_frame = None
         self._mask_frame = None
         self._vlm_frame = None

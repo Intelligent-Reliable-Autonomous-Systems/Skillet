@@ -443,6 +443,8 @@ class MjDirectRlEnv(SkilletGymEnv):
     @property
     def robot(self) -> Entity:
         """Return the robot entity."""
+        if hasattr(self, "_robot"):
+            return self._robot
         if hasattr(self, "scene"):
             if hasattr(self.scene, "entities") and "robot" in self.scene.entities:
                 return self.scene.entities["robot"]
