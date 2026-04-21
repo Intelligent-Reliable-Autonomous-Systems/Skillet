@@ -57,7 +57,7 @@ kortex = [
     "pin",
 ]
 isaac = [
-    "isaacsim",
+    "isaacsim[all,extscache]==5.1.0",
     "isaaclab"
 ]
 mj = [

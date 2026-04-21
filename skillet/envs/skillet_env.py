@@ -378,7 +378,7 @@ class SkilletEnv(
 
         Args:
             action: The action tensor of shape (num_envs, num_actions)
-            action_spec: Skillet Action spec of the action: TODO: currently assumes all actions on batchhave same spec
+            action_spec: Skillet Action spec of the action: TODO: currently assumes all actions on batch have same spec
 
         Returns:
             A tuple containing the observation of observations tensor (num_envs, obs_dim) and info dictionary

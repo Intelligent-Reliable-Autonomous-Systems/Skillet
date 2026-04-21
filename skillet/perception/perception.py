@@ -143,18 +143,18 @@ class SkilletPerception:
             intrinsic_k = intrinsic_k[0]
         if camera_pose.dim() == 2:
             camera_pose = camera_pose[0]
-        if "tcp_pose" in obs and obs["tcp_pose"].dim() == 2:
-            tcp_pose = obs["tcp_pose"][0]
-        if "gripper_pos" in obs and obs["tcp_pose"].dim() == 2:
-            tcp_pose = obs["tcp_pose"][0]
+        if "tcp_pose_b" in obs and obs["tcp_pose_b"].dim() == 2:
+            tcp_pose_b = obs["tcp_pose_b"][0]
+        if "gripper" in obs and obs["gripper"].dim() == 2:
+            gripper = obs["gripper"][0]
 
         return {
             "rgb": rgb,
             "depth": depth,
             "intrinsic_k": intrinsic_k,
             "camera_pose": camera_pose,
-            "tcp_pose": tcp_pose,
-            "gripper_pos": gripper_pos,
+            "tcp_pose_b": tcp_pose_b,
+            "gripper": gripper,
         }
 
     def set_visualizer(
@@ -189,6 +189,8 @@ class SkilletPerception:
             "depth": depth,
             "intrinsic_k": obs_unbatched["intrinsic_k"],
             "camera_pose": obs_unbatched["camera_pose"],
+            "tcp_pose_b": obs_unbatched["tcp_pose_b"],
+            "gripper": obs_unbatched["gripper"],
         }
 
     def _observation_to_point_cloud(
@@ -248,8 +250,8 @@ class SkilletPerception:
             # Update the state based on reconstruction
             self._reconstructor.update_state(obs_unbatched, update=True)
 
-            self.scene.tcp_pose = obs_unbatched["tcp_pose"]
-            self.scene.gripper_pos = obs_unbatched["gripper_pos"]
+            self.scene.tcp_pose = obs_unbatched["tcp_pose_b"]
+            self.scene.gripper_pos = obs_unbatched["gripper"]
 
             point_cloud, segment_indices = self._observation_to_point_cloud(
                 obs_unbatched, self._reconstructor.masks, self._reconstructor.segment_indices

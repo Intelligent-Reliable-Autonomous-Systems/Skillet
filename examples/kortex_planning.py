@@ -14,7 +14,7 @@ from skillet.logging import SkilletDataLogger
 from skillet.perception import SkilletPerception
 from skillet.planning import AbstractModel
 from skillet.policy import TwistPidPosePolicy
-from skillet.scene import EMPTY_SCENE, SIX_CUBE_APRIL_SCENE, Open3DVisualizer
+from skillet.scene import EMPTY_SCENE, SIX_CUBE_APRIL_SCENE, SIX_CUBE_SCENE, Open3DVisualizer
 from skillet.skill import PickBlock2Skill, PickSkill, PlaceBlock2Skill, PlaceSkill
 from skillet_tasks.kortex_tasks.factory import create_kortex_env
 
@@ -36,7 +36,7 @@ parser.add_argument("--o3d", type=argparse.BooleanOptionalAction, default=False,
 parser.add_argument(
     "--goal",
     type=str,
-    default="Place the red block on the purple block and the green block on the red block and the yellow block on the blue block.",
+    default="Place the red block on the purple block and the green block on the red block.",
     help="Natural language goal for the block scene.",
 )
 args_cli = parser.parse_args()
@@ -66,7 +66,7 @@ def main() -> None:
         reconstructor=args_cli.reconstruction,
         poll_rate_hz=args_cli.poll_rate_hz,
         device="cuda",
-        vis_perception=False,
+        vis_perception=True,
     )
     target_pose_func = None
     if args_cli.o3d:
@@ -94,7 +94,7 @@ def main() -> None:
     place_block_skill = PlaceBlock2Skill(scene, place_skill, vis_target_pos=target_pose_func)
 
     ACTION_MAP = {"place_block": place_block_skill, "pick_block": pick_block_skill}
-    block_domain = "skillet/scene/abstract/assets/blocks.domain.pddl"
+    block_domain = "skillet/planning/abstract/assets/blocks.domain.pddl"
     block_task = None  # "skillet/scene/abstract/assets/3-block-table.problem.pddl"
 
     abs_model = AbstractModel(block_domain, block_task, scene)

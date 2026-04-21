@@ -31,7 +31,6 @@ class BasePlanner(ABC):
 
         Note: Assumes that the problem is empty (no objects, goals, initial values).
 
-        TODO: Support non-empty problems?
         """
         raise NotImplementedError
 

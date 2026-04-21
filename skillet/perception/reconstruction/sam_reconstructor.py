@@ -14,8 +14,11 @@ from PIL import Image
 
 from skillet.perception.reconstruction.reconstructor_base import ReconstructorBase
 from skillet.perception.reconstruction.utils import (
-    assign_objects_to_id,
+    assign_objects_to_id_hungarian,
+    assign_objects_to_id_mean,
     assign_poses_to_objects,
+    find_cube_centers_mean,
+    find_cube_centers_plane,
     find_cube_centers_ransac,
     get_sorted_object_poses,
     transform_xyz_to_world,
@@ -118,7 +121,7 @@ class SAMReconstructor(ReconstructorBase):
         masks = masks.cpu().numpy()
 
         # Find cube centers in the camera frame
-        dc = find_cube_centers_ransac(  # TODO: this function takes 800ms to run, way too slow
+        dc = find_cube_centers_plane(  # TODO: this function takes 800ms to run, way too slow
             cube_masks,
             depth,
             intrinsic_k,
@@ -137,7 +140,7 @@ class SAMReconstructor(ReconstructorBase):
         poses, ids = get_sorted_object_poses(self._scene, Cube)
         cube_idx, det_idx = None, None
         if poses.ndim == 2:  # only assign poses when there are cubes in the scene
-            cube_idx, det_idx = assign_objects_to_id(poses[:, 0:3], centers)
+            cube_idx, det_idx = assign_objects_to_id_hungarian(poses[:, 0:3], centers)
             assign_poses_to_objects(self._scene, Cube, centers, ids, cube_idx, det_idx)
 
         if self._visualize:
@@ -211,7 +214,7 @@ class SAMReconstructor(ReconstructorBase):
 
         self._vlm_frame = SAMReconstructor.show_vlm_image_and_masks(rgb.transpose(1, 2, 0), masks.cpu().numpy(), labels)
 
-        dc = find_cube_centers_ransac(
+        dc = find_cube_centers_plane(
             masks.cpu().numpy(),
             depth,
             intrinsic_k,
