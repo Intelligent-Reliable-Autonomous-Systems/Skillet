@@ -13,7 +13,7 @@ class GeminiClient(VLMClient):
     def __init__(
         self,
         prompt_name: str = "detect_goal",
-        model_id: str = "gemini-robotics-er-1.5-preview",  # gemini-2.5-flash",
+        model_id: str = "gemini-2.5-flash",  # "gemini-robotics-er-1.5-preview",  # gemini-2.5-flash",
         device: str = "cuda",
     ) -> None:
         super().__init__(prompt_name, model_id, device)

@@ -110,15 +110,15 @@ def main() -> None:
         perception.build_scene = args_cli.build_scene
 
     input("Press Enter to start the skill execution...\n")
-    # logger.write_video = True
-    # logger.run_thread()
+    logger.write_video = True
+    logger.run_thread()
 
     while True:
         with torch.inference_mode():
             env.reset()
             planning_agent.execute(env)
             print("[INFO][Main] finished run of skill executor, resetting")
-            # logger.save_video()
+            logger.save_video()
             break
 
 

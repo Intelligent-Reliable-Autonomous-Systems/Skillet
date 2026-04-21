@@ -23,7 +23,7 @@ class CameraLocalizer:
         apriltag_pose: np.ndarray = np.array([0.12, 0.005, 0.0, 0.0, 0.0, 0.7071068, 0.7071068]),
         apriltag_size_m: float = 0.100,
         apriltag_id: int = 3,
-        pose_buffer_size: int = 50,
+        pose_buffer_size: int = 10,
         fix_camera_pose: bool = True,
     ) -> None:
         """Initialize the camera localizer.
@@ -78,8 +78,8 @@ class CameraLocalizer:
             gray, estimate_tag_pose=True, camera_params=camera_params, tag_size=tag_size_m
         )
         # Fix camera pose after warmup
-        if self._fix_camera_pose and len(self._pose_buffer) > self._max_pose_buffer_size:
-            return self._latest_camera_pose
+        if self._fix_camera_pose and len(self._pose_buffer) >= self._max_pose_buffer_size:
+            return self._latest_camera_pose.copy()
         if detections:
             for detection in detections:
                 if detection.tag_id == self._apriltag_id:
@@ -112,7 +112,7 @@ class CameraLocalizer:
 
                     break
 
-        return self._latest_camera_pose
+        return self._latest_camera_pose.copy()
 
 
 class RealsenseCameraLocalizer:
@@ -141,10 +141,6 @@ class RealsenseCameraLocalizer:
         self._config.enable_stream(rs.stream.color, self.width, self.height, rs.format.bgr8, self.fps)
         self._config.enable_stream(rs.stream.depth, self.width, self.height, rs.format.z16, self.fps)
 
-        self._T_base_to_tag = _make_T(_quat_xyzw_to_R(*list(apriltag_pose[3:7])), list(apriltag_pose[:3]))
-        self._roll_180 = _make_T(_quat_xyzw_to_R(1.0, 0.0, 0.0, 0.0), [0.0, 0.0, 0.0])
-        self._T_base_to_tag = self._T_base_to_tag @ self._roll_180
-        self._latest_camera_pose = _T_to_xyz_quat_xyzw(self._T_base_to_tag)
         self._apriltag_size_m = apriltag_size_m
         self._apriltag_id = apriltag_id
 
@@ -207,7 +203,7 @@ class RealsenseCameraLocalizer:
 
         # Wall-clock timestamp in seconds.
         timestamp = float(time.time())
-
+        np.set_printoptions(suppress=True, precision=3)
         return {
             "rgb": rgb,
             "depth": depth,

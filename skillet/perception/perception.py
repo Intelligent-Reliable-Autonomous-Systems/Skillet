@@ -277,7 +277,8 @@ class SkilletPerception:
             if sleep_time < 0:
                 time.sleep(min(-sleep_time, poll_period_s))
             else:
-                print(f"[WARN][PERCEPT] full loop overran by {sleep_time * 1000:.1f}ms")
+                ...
+                # print(f"[WARN][PERCEPT] full loop overran by {sleep_time * 1000:.1f}ms")
             next_poll_t = time.perf_counter()
 
         self.stop()

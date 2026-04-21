@@ -90,7 +90,7 @@ class SAMReconstructor(ReconstructorBase):
         camera_pose = obs["camera_pose"]
 
         if self._mode == "text":
-            concepts = ["block", "robot_arm"]  # Can potentially segment on "cube face" for redundancy
+            concepts = ["block", "robot_arm"]
             masks, _, _, concept_indices = self._sam_model.segment_from_concepts(rgb, concepts)
         elif self._mode == "bboxes":
             bboxes = [
@@ -138,6 +138,7 @@ class SAMReconstructor(ReconstructorBase):
         cube_idx, det_idx = None, None
         if poses.ndim == 2:  # only assign poses when there are cubes in the scene
             cube_idx, det_idx = assign_objects_to_id_hungarian(poses[:, 0:3], centers)
+
             assign_poses_to_objects(self._scene, Cube, centers, ids, cube_idx, det_idx, device=self._device)
 
         if self._visualize:
@@ -238,6 +239,7 @@ class SAMReconstructor(ReconstructorBase):
         self._scene.contains_objects = True
         self._scene.goal = self._vlm_goal_atoms
 
+        pathlib.Path("data/test/").mkdir(exist_ok=True, parents=True)
         with pathlib.Path("data/test/vlm_out_multi.pkl").open("wb") as f:
             pickle.dump(self._scene, f)
         print(f"[INFO] Reconstructed Scene with VLM.\n{self._scene}")

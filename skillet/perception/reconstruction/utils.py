@@ -9,7 +9,7 @@ from skillet.scene.base import Scene, SceneObject
 
 
 def assign_objects_to_id_hungarian(
-    positions: np.ndarray, detections: np.ndarray, ids: np.ndarray | None = None, max_distance: float = 1.0
+    positions: np.ndarray, detections: np.ndarray, ids: np.ndarray | None = None, max_distance: float = 10.0
 ) -> tuple[np.ndarray, np.ndarray]:
     """Match detections to known objects (cubes).
 
@@ -27,9 +27,7 @@ def assign_objects_to_id_hungarian(
 
     """
     # Create cost matrix
-    diff = (
-        positions[:, None, :] - detections[None, :, :]
-    )  # detections[~np.isnan(detections).any(axis=1)][None, :, :]  # (K, D, 3)
+    diff = positions[:, None, :] - detections[~np.isnan(detections).any(axis=1)][None, :, :]  # (K, D, 3)
     cost = np.linalg.norm(diff, axis=-1)  # (K, D)
     # Assignment using Hungarian Algorithm
     cube_idx, det_idx = linear_sum_assignment(cost)
@@ -132,6 +130,8 @@ def assign_poses_to_objects(
             # TODO handle occlusion more robustly. The object closest to the camera
             # Should be the one that is not occluded
             continue
+        if np.isnan(poses[det_idx[idx]]).any():
+            continue
         ob.pose = torch.as_tensor(np.concatenate((poses[det_idx[idx]], [1, 0, 0, 0])), device=device)
 
 
@@ -176,12 +176,8 @@ def find_cube_centers_plane(
         mask = mask.astype(bool)
 
         if np.sum(mask) < 10:  # Skip if too few pixels
-            results["valid"].append(False)
             results["centers"].append(None)
             results["normals"].append(None)
-            results["plane_equations"].append(None)
-            results["plane_centers"].append(None)
-            results["details"].append({"error": "Insufficient masked pixels"})
             continue
 
         # Get 3D points from mask and depth
@@ -197,13 +193,13 @@ def find_cube_centers_plane(
         # Find the z offset of the plane
         z_vals = points_3d[:, 2]
         z_vals = z_vals[z_vals > 0]
-        z_rough = np.median(z_vals)
-        mad = np.median(np.abs(z_vals - z_rough))
+        z_rough = np.mean(z_vals)
+        mad = np.mean(np.abs(z_vals - z_rough))
         inliers = z_vals[np.abs(z_vals - z_rough) < (3.0 * mad)]
         if len(inliers) == 0:
             inliers = z_vals  # fallback
 
-        plane_eq = np.asarray([0, 0, 1, -np.median(inliers)])
+        plane_eq = np.asarray([0, 0, 1, -np.mean(inliers)])
         # Project points onto the fitted plane
         points_on_plane = project_points_to_plane(points_3d, normal, plane_eq)
 
