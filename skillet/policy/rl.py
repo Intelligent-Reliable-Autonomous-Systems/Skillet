@@ -96,6 +96,7 @@ class PidRlPolicy(RlPolicy):
         super().__init__(obs_spec, action_spec, params_spec, agent_fpath=agent_fpath)
 
         self._pid_controller = PidController()
+        self._pid_controller.reset(self.action_spec.with_n_envs(1).zeros())
         self._poll_rate_hz = poll_rate_hz
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
@@ -116,13 +117,13 @@ class PidRlPolicy(RlPolicy):
         """Run the policy inference thread by polling the RL policy at a specified Hz."""
         poll_period_s = 1.0 / self._poll_rate_hz
         next_poll_t = time.perf_counter()
-
         while not self._stop_event.is_set():
             if self._curr_obs is not None:
-                action = self._policy(self._build_policy_obs(self._curr_obs, self._params))
+                action = self._policy(self._build_policy_obs(self._curr_obs, self._params)).detach()
                 self._pos_desired = self._build_action(action)
                 self._prev_action = self._pos_desired.clone()
                 self._pid_controller.reset(self._pos_desired)
+
             sleep_time = (time.perf_counter() - next_poll_t) - poll_period_s
             if sleep_time < 0:
                 time.sleep(min(-sleep_time, poll_period_s))
@@ -138,7 +139,7 @@ class PidRlPolicy(RlPolicy):
         self._thread = threading.Thread(target=self._policy_inference, name="RlPolicyInference", daemon=True)
         self._thread.start()
 
-    def _build_policy_obs(self, obs: JOINT_Obs, params: Any = None) -> None:
+    def _build_policy_obs(self, obs: JOINT_Obs, params: Any = None) -> torch.Tensor:
         """Build the observation for the policy."""
         if self._prev_action is None:
             self._prev_action = self.action_spec.with_n_envs(1).zeros()
@@ -153,5 +154,8 @@ class PidRlPolicy(RlPolicy):
             dim=1,
         ).clamp(-5.0, 5.0)
 
-    def _build_action(self, action: JOINT_Params):
-        pass
+    def _build_action(self, action: JOINT_Params) -> torch.Tensor:
+        """Build the action from config."""
+        return torch.clamp(
+            action.clamp(-5, 5), min=self._curr_obs["joint_lims"][:, 0], max=self._curr_obs["joint_lims"][:, 1]
+        )

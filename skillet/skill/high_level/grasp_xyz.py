@@ -122,7 +122,6 @@ class GraspXYZSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[T
             self._reach_policy.reset(obs, self._current_target_poses, env_ids=env_ids)
 
     def get_action(self, obs: TBSkillObs) -> TBAction:  # noqa: D102
-        np.set_printoptions(precision=3, suppress=True)
         print(
             f"[INFO][GRASP XYZ STATUS]: {self._grasp_status.cpu().numpy()[0]} | target pose: {self._current_target_poses.cpu().numpy()[0]} | obs tcp pose: {obs['tcp_pose_b'].cpu().numpy()[0]}"
         )

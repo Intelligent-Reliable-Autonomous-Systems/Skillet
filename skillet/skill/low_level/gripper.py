@@ -73,11 +73,6 @@ class GripperOCSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[
         self.policy.reset(obs, self._goal_gripper_pos)
 
     def get_action(self, obs: TBSkillObs) -> TBAction:  # noqa: D102
-        np.set_printoptions(precision=3, suppress=True)
-        if False:
-            print(
-                f"[INFO][GRIPPER OC]: {self._status.cpu().numpy()[0]} | target OC: {self._normalized_goal_gripper_pos.cpu().numpy()[0]} | gripper OC: {obs['gripper'].cpu().numpy()[0]}"
-            )
 
         self._n_steps += 1
 
@@ -154,10 +149,6 @@ class GripperOpenSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generi
         self.policy.reset(obs, self._goal_gripper_pos)
 
     def get_action(self, obs: TBSkillObs) -> TBAction:  # noqa: D102
-        np.set_printoptions(precision=3, suppress=True)
-        print(
-            f"[INFO][GRIPPER O]: {self._status.cpu().numpy()[0]} | target OC: {self._goal_gripper_pos.cpu().numpy()[0]} | gripper OC: {obs['gripper'].cpu().numpy()[0]}"
-        )
 
         self._n_steps += 1
 
@@ -235,10 +226,6 @@ class GripperGraspSkill(
         self.policy.reset(obs, self._goal_gripper_pos)
 
     def get_action(self, obs: TBSkillObs) -> TBAction:  # noqa: D102
-        np.set_printoptions(precision=3, suppress=True)
-        print(
-            f"[INFO][GRIPPER C]: {self._status.cpu().numpy()[0]} | target OC: {self._normalized_goal_gripper_pos.cpu().numpy()[0]} | gripper OC: {obs['gripper'].cpu().numpy()[0]}"
-        )
 
         self._n_steps += 1
 

@@ -28,7 +28,10 @@ class PidController:
 
     def get_action(self, position: torch.Tensor) -> torch.Tensor:
         """Get the velocity command from the current and desired position."""
-        error = position - self._desired_position
+        # error = position - self._desired_position if self._desired_position is not None else position
+        error = (
+            self._angular_error(self._desired_position, position) if self._desired_position is not None else -position
+        )
 
         # Compute integral terms
         self.integral += error * self.dt
@@ -54,3 +57,8 @@ class PidController:
             self.last_error[env_ids] = torch.zeros_like(desired_position, device=desired_position.device)[env_ids]
 
         self._desired_position = desired_position
+
+    def _angular_error(self, target: torch.Tensor, current: torch.Tensor) -> torch.Tensor:
+        """Compute the angular error."""
+        error = target - current
+        return (error + torch.pi) % (2 * torch.pi) - torch.pi

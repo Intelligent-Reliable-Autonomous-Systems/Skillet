@@ -203,7 +203,6 @@ class RealsenseCameraLocalizer:
 
         # Wall-clock timestamp in seconds.
         timestamp = float(time.time())
-        np.set_printoptions(suppress=True, precision=3)
         return {
             "rgb": rgb,
             "depth": depth,

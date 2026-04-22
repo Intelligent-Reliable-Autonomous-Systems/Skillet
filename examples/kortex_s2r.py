@@ -27,7 +27,7 @@ parser.add_argument("--robot_ip", type=str, default="192.168.1.10", help="Robot 
 parser.add_argument("--poll_rate_hz", type=int, default=10, help="Tick rate of the perception")
 parser.add_argument("--task", type=str, default="Kortex-Gen3Lite-v0", help="Kortex Environment")
 parser.add_argument("--build_scene", type=argparse.BooleanOptionalAction, default=False, help="If to build the scene")
-parser.add_argument("--reconstruction", type=str, choices=["sam", "april"], default="sam")
+parser.add_argument("--reconstruction", type=str, choices=["sam", "april"], default="april")
 parser.add_argument(
     "--perception", type=argparse.BooleanOptionalAction, default=False, help="If to run the perception pipeline"
 )
@@ -75,12 +75,6 @@ def main() -> None:
         target_pose_func = visualizer.set_target_pos
     if args_cli.perception:
         perception.run_thread()
-    else:
-        with pathlib.Path("data/test/vlm_out_multi.pkl").open("rb") as f:
-            scene = pickle.load(f)
-            b = scene.get_objects_from_name(["red_block"])[0]
-            scene.tcp_pose = b.pose.clone()
-            scene.gripper_pos = 0.8
 
     # Low-level policies
     arm_policy = PidRlPolicy(

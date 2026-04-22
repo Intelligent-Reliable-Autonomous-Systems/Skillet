@@ -139,8 +139,8 @@ class Gen3KortexEnv(KortexEnv):
         """
         # Publish BLOCKING gripper command. To keep the gripper stationary
         # Assumes we can either move joints or close gripper, not both
-        if self._publish_gripper(action, action_spec, close_time=1.5):
-            return
+        # if self._publish_gripper(action, action_spec, close_time=1.5):
+        #    return
 
         if action_spec is None or action_spec.name == "joints":
             self._publish_joint_spec(action, duration)

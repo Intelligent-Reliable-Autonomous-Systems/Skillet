@@ -59,7 +59,6 @@ sys.argv = [sys.argv[0]] + hydra_args
 @hydra_task_config(args_cli.task, args_cli.agent)
 def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
     """Play with RSL-RL agent."""
-    np.set_printoptions(suppress=True, precision=4)
 
     # Override configurations with non-hydra CLI arguments
     agent_cfg: RslRlBaseRunnerCfg = cli_args.update_rsl_rl_cfg(agent_cfg, args_cli)

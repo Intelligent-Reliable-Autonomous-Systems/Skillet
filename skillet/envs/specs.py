@@ -204,9 +204,14 @@ JOINT_SPEC_BATCHED = ObservationSpec[JOINT_Obs](
             "joint_vel": ParameterizedBox(low=-10, high=10, shape=("n_joints",)),
             "joint_pos": ParameterizedBox(low=-np.pi, high=np.pi, shape=("n_joints",)),
             "joint_eff": ParameterizedBox(low=-np.pi, high=np.pi, shape=("n_joints",)),
+            "joint_lims": ParameterizedBox(
+                low=-np.pi,
+                high=np.pi,
+                shape=(2, "n_joints"),
+            ),
         }
     ),
-    name="twist_tcp",
+    name="joints",
     is_torch=True,
     is_batched=True,
     n_envs=-1,

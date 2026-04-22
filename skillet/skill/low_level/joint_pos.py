@@ -73,10 +73,6 @@ class JointPosSkill(BatchedSkill[TBSkillObs, TBAction, TBSkillParams], Generic[T
         self.policy.reset(obs, self.goal_joint_pos)
 
     def get_action(self, obs: TBSkillObs) -> TBAction:  # noqa: D102
-        np.set_printoptions(precision=3, suppress=True)
-        print(
-            f"[INFO][JOINT POS]: {self._status.cpu().numpy()[0]} | target pos: {self.goal_joint_pos.cpu().numpy()[0]} | current pos: {obs['joint_pos'].cpu().numpy()[0]}"
-        )
 
         self._n_steps += 1
 
