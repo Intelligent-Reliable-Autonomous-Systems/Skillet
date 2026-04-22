@@ -18,7 +18,7 @@ class BaseSceneCfg(SceneCfg):
 class Gen3LiteBaseCfg(SkillsDirectRlEnvCfg):
     # env
     episode_length_s = 6.0  # 500 timesteps
-    decimation = 6
+    decimation = 2
     action_space = 7
     observation_space = 27
     state_space = 0

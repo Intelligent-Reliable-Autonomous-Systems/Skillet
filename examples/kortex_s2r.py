@@ -96,7 +96,7 @@ def main() -> None:
         reach_pose_skill.params_spec,
         torch.as_tensor(
             [
-                [0.4, -0.1, 0.3, 0.0, 1.57, 0.0],
+                [0.4, 0.1, 0.4, 0.0, 1.57, 0.0],
             ],
             device=env.batched_env.device,
         ),

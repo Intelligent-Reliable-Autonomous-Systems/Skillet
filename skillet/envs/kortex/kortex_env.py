@@ -116,7 +116,7 @@ class KortexEnv(SkilletGymEnv):
     @property
     def _joint_velocities(self) -> torch.Tensor:
         """Return current joint velocities."""
-        return torch.as_tensor(self._current_joint_positions, device=self.device, dtype=torch.float32).unsqueeze(0)
+        return torch.as_tensor(self._current_joint_velocities, device=self.device, dtype=torch.float32).unsqueeze(0)
 
     @property
     def _joint_efforts(self) -> torch.Tensor:
@@ -283,7 +283,6 @@ class KortexEnv(SkilletGymEnv):
             A tuple containing the observations, rewards, resets (terminated and truncated) and extras.
 
         """
-
         # Pre process the robot action
         action = self._pre_process_action(action, action_spec=action_spec)
 
@@ -447,8 +446,13 @@ class KortexEnv(SkilletGymEnv):
         """Obtain the required robot information from the Kortex API."""
         feedback = self.kortex_c.RefreshFeedback()
 
+        def deg_to_rad_wrapped(deg: np.ndarray) -> np.ndarray:
+            """Shift angles > 180 to negative and convert to radians."""
+            deg_wrapped = (deg + 180) % 360 - 180  # [0,360] -> [-180, 180]
+            return np.deg2rad(deg_wrapped)
+
         # Compute the current joint positions, velocities, and efforts
-        curr_arm_positions = np.deg2rad([actuator.position for actuator in feedback.actuators])
+        curr_arm_positions = deg_to_rad_wrapped(np.asarray([actuator.position for actuator in feedback.actuators]))
         curr_gripper_positions = np.deg2rad([feedback.interconnect.gripper_feedback.motor[0].position])
         self._current_joint_positions = np.concatenate((curr_arm_positions, curr_gripper_positions), axis=0)
 
@@ -463,8 +467,8 @@ class KortexEnv(SkilletGymEnv):
         self._robot_links = [f.name for f in self.kortex_model.frames if f.type == pin.FrameType.BODY]
         self._robot_joints = [self.kortex_model.names[i] for i in range(1, self.kortex_model.njoints)]
 
-        self._current_upper_joint_limits = np.asarray(self.kortex_model.lowerPositionLimit, dtype=float)
-        self._current_lower_joint_limits = np.asarray(self.kortex_model.upperPositionLimit, dtype=float)
+        self._current_lower_joint_limits = np.asarray(self.kortex_model.lowerPositionLimit, dtype=float)
+        self._current_upper_joint_limits = np.asarray(self.kortex_model.upperPositionLimit, dtype=float)
         self._current_joint_centers = (self._current_upper_joint_limits + self._current_lower_joint_limits) / 2
 
         jacobians = []

@@ -109,7 +109,7 @@ def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
         normalizer = None
 
     export_model_dir = os.path.join(os.path.dirname(resume_path), "exported")
-    export_policy_as_jit(runner.alg.policy, normalizer=normalizer, path=export_model_dir, filename="agent")
+    export_policy_as_jit(runner.alg.policy, normalizer=normalizer, path=export_model_dir, filename="agent.pt")
 
     # Launch Mujoco viewer
     if args_cli.viewer == "auto":

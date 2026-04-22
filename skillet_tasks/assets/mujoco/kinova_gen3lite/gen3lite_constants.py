@@ -46,11 +46,11 @@ def get_gen3lite_robot_cfg() -> EntityCfg:
             joint_pos={
                 # Arm joints - ready pose for lifting
                 "joint_1": 0.0,  # 0°
-                "joint_2": 0.3490658504,  # 20°
-                "joint_3": 0.0,  # 0°
-                "joint_4": 1.7453292519,  # 100°
-                "joint_5": 0.0,  # 0°
-                "joint_6": -0.5235987756,  # -30°
+                "joint_2": -0.30,  # 20°
+                "joint_3": 1.9,  # 0°
+                "joint_4": -1.54,  # 100°
+                "joint_5": -0.66,  # 0°
+                "joint_6": -1.74,  # -30°
                 # Gripper joints - open position
                 "right_finger_bottom_joint": 0.0,
                 "left_finger_bottom_joint": 0.0,
