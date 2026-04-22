@@ -103,6 +103,7 @@ class Gen3KortexEnv(KortexEnv):
         self._current_joint_positions = np.zeros(shape=len(self.joint_names))
         self._current_joint_velocities = np.zeros(shape=len(self.joint_names))
         self._current_joint_efforts = np.zeros(shape=len(self.joint_names))
+        self._current_prev_actions = np.zeros(shape=len(self.joint_names))
 
         self._curr_gripper_goal = None
         self._new_gripper_goal = False
@@ -122,7 +123,7 @@ class Gen3KortexEnv(KortexEnv):
 
         """
         self.actions = actions.cpu().numpy().squeeze()  # Actions can only be 1 dimensional
-
+        self._current_prev_actions = self.actions.copy()
         return self.actions
 
     def _publish_action_to_kortex(

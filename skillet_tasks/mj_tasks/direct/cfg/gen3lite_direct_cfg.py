@@ -27,7 +27,7 @@ class Gen3LiteBaseCfg(SkillsDirectRlEnvCfg):
     tcp_offset = [0.0, 0.0, 0.130, 0.70710678, 0, 0, 0.70710678]
     ee_link_name = "end_effector_link"
     base_link_name = "base_link"
-    gripper_joint_names = ["right_bottom_finger_joint"]
+    gripper_joint_names = ["right_finger_bottom_joint"]
 
     skills = MISSING
 

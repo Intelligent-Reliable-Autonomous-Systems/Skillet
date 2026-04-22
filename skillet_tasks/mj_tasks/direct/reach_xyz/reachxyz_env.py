@@ -3,6 +3,7 @@ from __future__ import annotations
 import torch
 
 from skillet.core.math import (
+    euler_xyz_from_quat,
     quat_apply,
     quat_apply_inverse,
     quat_error_magnitude,
@@ -16,7 +17,9 @@ from skillet.core.math import (
 from skillet.envs.mujoco import MjDirectRlEnv
 
 
-class ReachEnv(MjDirectRlEnv):
+class ReachXyzEnv(MjDirectRlEnv):
+    """Reach environment assuming action is in end effector space (XYZ RPY + Gripper)."""
+
     # pre-physics step calls
     #   |-- _pre_physics_step(action)
     #   |-- _apply_action()
@@ -71,7 +74,15 @@ class ReachEnv(MjDirectRlEnv):
     # pre-physics step calls
     def _pre_physics_step(self, actions: torch.Tensor):
         self.actions = actions.clone()
-        targets = self.actions
+        xyz_rpy = self.actions[:, :6]
+        r, p, y = euler_xyz_from_quat(self.robot_tcp_pose_b[:, 3:7])
+        dx = xyz_rpy - torch.cat((self.robot_tcp_pose_b[:, 0:3], r, p, y), dim=-1)
+        J = self._jacobians[:, self.ee_link_idx, :]
+        JT = J.tranpose(-1, -2)
+        JJT = J @ JT
+        dq = JT @ torch.linalg.solve(JJT, dx.unsqueeze(-1)).squeeze(-1)
+        targets = (self._joint_positions + dq)[:, self.cfg.joint_ids]
+
         self.robot_dof_targets = torch.clamp(targets, self.robot_dof_lower_limits, self.robot_dof_upper_limits)
 
     def _apply_action(self):

@@ -209,6 +209,7 @@ JOINT_SPEC_BATCHED = ObservationSpec[JOINT_Obs](
                 high=np.pi,
                 shape=(2, "n_joints"),
             ),
+            "prev_actions": ParameterizedBox(low=-np.pi, high=np.pi, shape=("n_joints",)),
         }
     ),
     name="joints",

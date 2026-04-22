@@ -4,13 +4,13 @@ from mjlab.scene import Scene
 from mjlab.sim.sim import Simulation
 
 from skillet.envs.util import configclass
-from skillet_tasks.assets.mujoco.kinova_gen3lite import get_gen3lite_robot_cfg
-from skillet_tasks.mj_tasks.direct.cfg import Gen3LiteBaseCfg
-from skillet_tasks.mj_tasks.direct.reach.reach_env import ReachEnv
+from skillet_tasks.assets.mujoco.kinova_gen3 import get_gen3_robot_cfg
+from skillet_tasks.mj_tasks.direct.cfg import Gen3BaseCfg
+from skillet_tasks.mj_tasks.direct.reach_xyz.reachxyz_env import ReachXyzEnv
 
 
 @configclass
-class Gen3LiteReachEnvCfg(Gen3LiteBaseCfg):
+class Gen3ReachXyzEnvCfg(Gen3BaseCfg):
     action_scale = 0.5
     dof_velocity_scale = 0.1
     skills = []
@@ -32,21 +32,19 @@ class Gen3LiteReachEnvCfg(Gen3LiteBaseCfg):
     yaw = [-3.14, 3.14]
     ee_ranges = [pos_x, pos_y, pos_z, roll, pitch, yaw]
 
-    obs_terms = ["joint_pos", "joint_vel", "prev_actions", "reach_goal"]
 
-
-class Gen3LiteReachEnv(ReachEnv):
+class Gen3ReachEnv(ReachXyzEnv):
     """Use this environment for computing actions with RL."""
 
-    cfg: Gen3LiteReachEnvCfg
+    cfg: Gen3ReachXyzEnvCfg
 
-    def __init__(self, cfg: Gen3LiteReachEnvCfg, render_mode: str | None = None, **kwargs):
+    def __init__(self, cfg: Gen3ReachXyzEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
 
     def _setup_scene(self):
         super()._setup_scene()
 
-        self.cfg.scene.entities = {"robot": get_gen3lite_robot_cfg()}
+        self.cfg.scene.entities = {"robot": get_gen3_robot_cfg()}
 
         # Initialize scene and simulation.
         self.scene = Scene(self.cfg.scene, device=self.cfg.sim.device)

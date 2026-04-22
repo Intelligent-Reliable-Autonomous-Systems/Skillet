@@ -20,7 +20,7 @@ from skillet.envs.util import get_checkpoint_path, parse_mj_env_cfg
 from skillet.envs.util.dict import print_dict
 from skillet.envs.util.hydra import hydra_task_config
 from skillet.rl.cfg import RslRlBaseRunnerCfg
-from skillet.rl.exporter import export_policy_as_jit
+from skillet.rl.exporter import export_policy_as_jit, export_managers
 from skillet.rl.mj_viewer import NativeMujocoViewer
 from skillet.rl.rsl_rl import cli_args
 from skillet.rl.rsl_rl.runners import OnPolicyRunner
@@ -90,6 +90,7 @@ def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
 
     # Wrap around environment for RSL-RL
     env = SkillEnvWrapper(env) if args_cli.skill else SkilletEnv(env)
+    print(env.unwrapped._joint_positions)
     env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
 
     print(f"[INFO]: Loading model checkpoint from: {resume_path}")
@@ -110,7 +111,7 @@ def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
 
     export_model_dir = os.path.join(os.path.dirname(resume_path), "exported")
     export_policy_as_jit(runner.alg.policy, normalizer=normalizer, path=export_model_dir, filename="agent.pt")
-
+    export_managers(env.unwrapped, export_model_dir)
     # Launch Mujoco viewer
     if args_cli.viewer == "auto":
         has_display = bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))

@@ -5,6 +5,7 @@ from typing import Any
 
 import gymnasium as gym
 import mujoco
+import mujoco_warp as mjw
 import numpy as np
 import torch
 import warp as wp
@@ -23,6 +24,7 @@ from prettytable import PrettyTable
 from skillet.core.spaces import ActionSpec
 from skillet.envs.compatibility import SkilletGymEnv
 from skillet.envs.util import configclass
+from skillet.rl.s2r import ObservationManager
 
 
 @configclass
@@ -38,6 +40,8 @@ class MjDirectRlEnvCfg:
     """
 
     # Base environment configuration.
+
+    obs_terms: list[str] = MISSING
 
     decimation: int = MISSING
     """Number of physics simulation steps per environment step. Higher values mean
@@ -155,6 +159,8 @@ class MjDirectRlEnv(SkilletGymEnv):
 
         # Configure spaces for the environment.
         self._configure_gym_env_spaces()
+
+        self.obs_manager = ObservationManager(self.cfg.obs_terms, self)
 
         if self.cfg.events:
             self.event_manager = EventManager(self.cfg.events, self)
@@ -289,9 +295,8 @@ class MjDirectRlEnv(SkilletGymEnv):
         # the freshly written reset state.
         self.sim.forward()
 
-        if self.cfg.events:
-            if "interval" in self.event_manager.available_modes:
-                self.event_manager.apply(mode="interval", dt=self.step_dt)
+        if self.cfg.events and "interval" in self.event_manager.available_modes:
+            self.event_manager.apply(mode="interval", dt=self.step_dt)
 
         self.sim.sense()
         self.obs_buf = self._get_observations()
@@ -348,10 +353,9 @@ class MjDirectRlEnv(SkilletGymEnv):
         self.sim.reset(env_ids)
         self.scene.reset(env_ids)
 
-        if self.cfg.events:
-            if "reset" in self.event_manager.available_modes:
-                env_step_count = self._sim_step_counter // self.cfg.decimation
-                self.event_manager.apply(mode="reset", env_ids=env_ids, global_env_step_count=env_step_count)
+        if self.cfg.events and "reset" in self.event_manager.available_modes:
+            env_step_count = self._sim_step_counter // self.cfg.decimation
+            self.event_manager.apply(mode="reset", env_ids=env_ids, global_env_step_count=env_step_count)
 
         # NONoteTE: This is order sensitive.
         self.extras["log"] = dict()
@@ -401,7 +405,7 @@ class MjDirectRlEnv(SkilletGymEnv):
             The observations for the environment.
 
         """
-        raise NotImplementedError(f"Please implement the '_get_observations' method for {self.__class__.__name__}.")
+        raise NotImplementedError
 
     @abstractmethod
     def _get_rewards(self) -> torch.Tensor:
@@ -441,6 +445,11 @@ class MjDirectRlEnv(SkilletGymEnv):
         raise NotImplementedError
 
     @property
+    def _prev_actions(self) -> torch.Tensor:
+        """Return the previous actions."""
+        return self._current_prev_actions
+
+    @property
     def robot(self) -> Entity:
         """Return the robot entity."""
         if hasattr(self, "_robot"):
@@ -462,7 +471,7 @@ class MjDirectRlEnv(SkilletGymEnv):
     @property
     def _joint_velocities(self) -> torch.Tensor:
         """Return current joint velocities."""
-        raise self.robot.data.joint_vel
+        return self.robot.data.joint_vel
 
     @property
     def _joint_efforts(self) -> torch.Tensor:
@@ -482,7 +491,24 @@ class MjDirectRlEnv(SkilletGymEnv):
     @property
     def _jacobians(self) -> torch.Tensor:
         """Return the jacobian frame transforms of the robot."""
-        raise NotImplementedError
+        nv = self.robot.data.model.nv
+        num_links = self.robot.data.data.xpos.shape[1]
+        jacobians = torch.zeros((self.num_envs, num_links, 6, nv), device=self.device)
+        for i in range(num_links):
+            jacp = wp.zeros((self.num_envs, 3, nv), dtype=wp.float32)
+            jacr = wp.zeros((self.num_envs, 3, nv), dtype=wp.float32)
+            mjw.jac(
+                self.robot.data.model,
+                self.robot.data.data,
+                jacp,
+                jacr,
+                self.robot.data.data.xpos[:, i],
+                wp.array(np.full(self.num_envs, i), dtype=wp.int32),
+            )
+            jacobians[:, i, 0:3] = wp.to_torch(jacp)
+            jacobians[:, i, 3:6] = wp.to_torch(jacr)
+        print(jacobians)
+        return jacobians
 
     @property
     def _robot_dof_lower_limits(self) -> torch.Tensor:
@@ -522,26 +548,6 @@ class MjDirectRlEnv(SkilletGymEnv):
             posinf=0.0,
             neginf=0.0,
         )
-
-    def _compute_jacobian(self) -> None:
-        """Compute the frame Jacobian."""
-        return None
-        _jacobians = torch.zeros(
-            size=(self.num_envs, self.sim.mj_model.nv, 6, self.robot.num_joints), device=self.device
-        )
-        for i in range(self.robot.num_joints):
-            self._body_wp.fill_(i)
-            with wp.ScopedDevice(self.sim.wp_device):
-                mjwarp.jac(
-                    self.sim.wp_model,
-                    self.sim.wp_data,
-                    self._jacp_wp,
-                    self._jacr_wp,
-                    self._point_wp,
-                    self._body_wp,
-                )
-            _jacobians[:, :, :, i] = torch.cat((self._jacp_torch, self._jacr_torch), dim=1).permute(0, 2, 1)
-        return _jacobians
 
 
 def spec_to_gym_space(spec) -> gym.spaces.Space:

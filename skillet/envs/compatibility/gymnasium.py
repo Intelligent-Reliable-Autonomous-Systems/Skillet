@@ -180,6 +180,11 @@ class SkilletGymEnv(gym.Env):
         raise NotImplementedError
 
     @property
+    def _prev_actions(self) -> torch.Tensor:
+        """Return the previous action taken in the environment."""
+        raise NotImplementedError
+
+    @property
     def robot(self) -> Any:
         """Returns the robot articulation for Isaac and Mj environments. Useful for helper functions."""
         raise NotImplementedError

@@ -355,6 +355,7 @@ class SkilletEnv(
                     "joint_pos": self._get_joint_positions(joint_ids=self._joint_ids),
                     "joint_eff": self._get_joint_efforts(joint_ids=self._joint_ids),
                     "joint_lims": self._get_joint_lims(joint_ids=self._joint_ids),
+                    "prev_actions": self._env._prev_actions,
                 }
             )
         raise ValueError(f"Observation spec {obs_spec} not supported by environment.")

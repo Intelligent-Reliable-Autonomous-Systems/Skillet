@@ -82,7 +82,7 @@ def main() -> None:
         env.batched_env.action_spec_joints,
         XYZ_RPY_Params_Spec.replace(**env.batched_env._spec_args),
         agent_fpath="data/rl/gen3lite_reach",
-        poll_rate_hz=60,
+        poll_rate_hz=30,
     )
     # Skills
     skill_length = 1e9
@@ -96,7 +96,7 @@ def main() -> None:
         reach_pose_skill.params_spec,
         torch.as_tensor(
             [
-                [0.4, 0.1, 0.4, 0.0, 1.57, 0.0],
+                [0.4, 0.1, 0.3, 0.0, 1.57, 0.0],
             ],
             device=env.batched_env.device,
         ),

@@ -594,26 +594,6 @@ class MjManagerBasedRlEnv(SkilletGymEnv):
             neginf=0.0,
         )
 
-    def _compute_jacobian(self) -> None:
-        """Compute the frame Jacobian."""
-        return None
-        _jacobians = torch.zeros(
-            size=(self.num_envs, self.sim.mj_model.nv, 6, self.robot.num_joints), device=self.device
-        )
-        for i in range(self.robot.num_joints):
-            self._body_wp.fill_(i)
-            with wp.ScopedDevice(self.sim.wp_device):
-                mjwarp.jac(
-                    self.sim.wp_model,
-                    self.sim.wp_data,
-                    self._jacp_wp,
-                    self._jacr_wp,
-                    self._point_wp,
-                    self._body_wp,
-                )
-            _jacobians[:, :, :, i] = torch.cat((self._jacp_torch, self._jacr_torch), dim=1).permute(0, 2, 1)
-        return _jacobians
-
 
 def spec_to_mj_space(spec) -> mjlab.utils.spaces.Space:
     """Generate an appropriate Gymnasium space according to the given space specification.

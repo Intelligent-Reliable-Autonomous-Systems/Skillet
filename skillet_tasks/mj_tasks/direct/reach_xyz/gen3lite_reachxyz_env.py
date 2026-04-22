@@ -10,10 +10,12 @@ from skillet_tasks.mj_tasks.direct.reach.reach_env import ReachEnv
 
 
 @configclass
-class Gen3LiteReachEnvCfg(Gen3LiteBaseCfg):
+class Gen3LiteReachXyzEnvCfg(Gen3LiteBaseCfg):
     action_scale = 0.5
     dof_velocity_scale = 0.1
     skills = []
+    action_space = 8
+    observation_space = 30
 
     # reward scales
     ee_dist_reward_scale = -0.2
@@ -35,12 +37,12 @@ class Gen3LiteReachEnvCfg(Gen3LiteBaseCfg):
     obs_terms = ["joint_pos", "joint_vel", "prev_actions", "reach_goal"]
 
 
-class Gen3LiteReachEnv(ReachEnv):
+class Gen3LiteReachXyzEnv(ReachEnv):
     """Use this environment for computing actions with RL."""
 
-    cfg: Gen3LiteReachEnvCfg
+    cfg: Gen3LiteReachXyzEnvCfg
 
-    def __init__(self, cfg: Gen3LiteReachEnvCfg, render_mode: str | None = None, **kwargs):
+    def __init__(self, cfg: Gen3LiteReachXyzEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
 
     def _setup_scene(self):

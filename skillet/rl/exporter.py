@@ -8,9 +8,22 @@ import os
 import pathlib
 
 import torch
+from skillet.envs.compatibility import SkilletGymEnv
 
 
-def export_policy_as_jit(policy: object, normalizer: object | None, path: str, filename="policy.pt"):
+def export_managers(env: SkilletGymEnv, path: str) -> None:
+    """Export the observation manager.
+
+    Args:
+        env: The environment.
+        path: The path to the saving directory.
+        filename: The name of exported JIT file. Defaults to "policy.pt".
+
+    """
+    env.obs_manager.save(f"{path}/obs_cfg.yaml")
+
+
+def export_policy_as_jit(policy: object, normalizer: object | None, path: str, filename: str = "policy.pt") -> None:
     """Export policy into a Torch JIT file.
 
     Args:
@@ -26,7 +39,7 @@ def export_policy_as_jit(policy: object, normalizer: object | None, path: str, f
 
 def export_policy_as_onnx(
     policy: object, path: str, normalizer: object | None = None, filename="policy.onnx", verbose=False
-):
+) -> None:
     """Export policy into a Torch ONNX file.
 
     Args:

@@ -14,6 +14,7 @@ from skillet.core.policy import BatchedUPolicy, TBAction, TBPolicyObs, TBPolicyP
 from skillet.core.spaces import ActionSpec, ObservationSpec, SkillParamsSpec, TSkillParams
 from skillet.envs.specs import JOINT_Obs
 from skillet.skill.specs import JOINT_Params
+from skillet.rl.s2r import ObservationManager
 
 
 class RlPolicy(BatchedUPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, TBAction]):
@@ -47,11 +48,9 @@ class RlPolicy(BatchedUPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, TBAct
             print(f"[WARNING][RlPolicy] Unable to load Torch Jit file: `{agent_fpath}/agent.pt`")
 
         try:
-            with Path.open(f"{agent_fpath}/config.yaml", "rb") as f:
-                file = io.BytesIO(f.read())
-            self._policy_cfg = yaml.safe_load(file)
+            self._obs_manager = ObservationManager.load(f"{agent_fpath}/obs_cfg.yaml")
         except FileNotFoundError:
-            print(f"[WARNING][RlPolicy] Unable to load policy config file: `{agent_fpath}/config.yaml`")
+            print(f"[WARNING][RlPolicy] Unable to load policy config file: `{agent_fpath}/obs_cfg.yaml`")
 
     @property
     def obs_spec(self) -> ObservationSpec[TBPolicyObs]:  # noqa: D102
@@ -121,7 +120,6 @@ class PidRlPolicy(RlPolicy):
             if self._curr_obs is not None:
                 action = self._policy(self._build_policy_obs(self._curr_obs, self._params)).detach()
                 self._pos_desired = self._build_action(action)
-                self._prev_action = self._pos_desired.clone()
                 self._pid_controller.reset(self._pos_desired)
 
             sleep_time = (time.perf_counter() - next_poll_t) - poll_period_s
@@ -141,18 +139,8 @@ class PidRlPolicy(RlPolicy):
 
     def _build_policy_obs(self, obs: JOINT_Obs, params: Any = None) -> torch.Tensor:
         """Build the observation for the policy."""
-        if self._prev_action is None:
-            self._prev_action = self.action_spec.with_n_envs(1).zeros()
-
-        return torch.cat(
-            (
-                obs["joint_pos"],
-                obs["joint_vel"],
-                self._prev_action,
-                params,
-            ),
-            dim=1,
-        ).clamp(-5.0, 5.0)
+        env_obs = self._obs_manager.obs_from_dict(obs).clamp(-5.0, 5.0)
+        return torch.cat((env_obs, params), dim=-1)
 
     def _build_action(self, action: JOINT_Params) -> torch.Tensor:
         """Build the action from config."""

@@ -155,12 +155,11 @@ class LiftCubeEnv(MjDirectRlEnv):
         obs = torch.nan_to_num(
             torch.cat(
                 (
-                    self.robot.data.joint_pos[:, self.cfg.joint_ids]
-                    - self.robot.data.default_joint_pos[:, self.cfg.joint_ids],
+                    self.robot.data.joint_pos[:, self.cfg.joint_ids],
                     self.robot.data.joint_vel[:, self.cfg.joint_ids],
+                    self.prev_actions,
                     self.cube_pose_b[:, 0:3],
                     self.cube_goal_xyz_b[:, 0:3],
-                    self.prev_actions,
                 ),
                 dim=-1,
             ),

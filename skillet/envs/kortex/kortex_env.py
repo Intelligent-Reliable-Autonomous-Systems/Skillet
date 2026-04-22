@@ -48,6 +48,7 @@ class KortexEnv(SkilletGymEnv):
     _current_mass_matrices: np.ndarray
     _current_robot_body_vel_w: np.ndarray
     _current_joint_centers: np.ndarray
+    _current_prev_actions: np.ndarray
 
     def __init__(
         self,
@@ -107,6 +108,11 @@ class KortexEnv(SkilletGymEnv):
     """
     Skillet Gymansium Interface Properties.
     """
+
+    @property
+    def _prev_actions(self) -> torch.Tensor:
+        """Return the previous action taken in the environment."""
+        return torch.as_tensor(self._current_prev_actions, device=self.device, dtype=torch.float32).unsqueeze(0)
 
     @property
     def _joint_positions(self) -> torch.Tensor:
