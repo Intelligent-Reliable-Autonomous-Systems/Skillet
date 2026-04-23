@@ -11,9 +11,7 @@ from typing import Any
 import numpy as np
 from roslibpy import Ros
 
-from skillet.envs.ros2 import (
-    Ros2WebEnvCfg,
-)
+from skillet.envs.ros2.websocket import Ros2WebEnvCfg
 
 from .gen3_ros2 import Gen3Ros2WebEnv
 

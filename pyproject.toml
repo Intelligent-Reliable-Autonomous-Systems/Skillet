@@ -29,22 +29,22 @@ dependencies = [
     "numpy",
     "gymnasium>=1.1",
     "jaxtyping",
+    "pyrealsense2",
     "typing-extensions",
     "pynput",
     "tensordict",
     "scipy",
-    "unified_planning",
-    "unified-planning[pyperplan,tamer,fast-downward]"
 ]
 
 [project.optional-dependencies]
+planning = [
+    "unified_planning",
+    "unified-planning[pyperplan,tamer,fast-downward]"
+]
 perception = [
     "open3d",
-    "pyrealsense2",
     "pupil-apriltags",
     "google-genai",
-    "sam2",
-    "sam3",
     "opencv-python",
     "psutil",
     "h5py",
@@ -55,12 +55,13 @@ ros = [
 ]
 kortex = [
     "pin",
+    "protobuf==7.34.1"
 ]
 isaac = [
     "isaacsim[all,extscache]==5.1.0",
     "isaaclab"
 ]
-mj = [
+mujoco = [
     "mujoco",
     "mujoco-warp",
     "mjlab",

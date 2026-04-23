@@ -16,6 +16,12 @@ class Ros2EnvCfg:
     """The configuration class for ROS2 RL Envs."""
 
     """Robot configuration"""
+    urdf_path: str = MISSING
+    """Path to the model of the robot"""
+    srdf_path: str = MISSING
+    """Path to the collision model of the robot"""
+    assets_dir: list[str] = MISSING
+    """Path to parent dir of robot meshes"""
 
     default_joint_positions: list[float] = MISSING
     """Default joint position of robot"""

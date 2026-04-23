@@ -7,6 +7,7 @@ Written by Will Solow, 2026
 """
 
 import math
+import pathlib
 import time
 from typing import Any
 
@@ -16,7 +17,7 @@ import torch
 from control_msgs.action import GripperCommand, ParallelGripperCommand
 from geometry_msgs.msg import Twist
 from rclpy.action import ActionClient
-from std_msgs import Float32MultiArray
+from std_msgs.msg import Float32MultiArray
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
 from skillet.core.spaces import ActionSpec
@@ -25,7 +26,7 @@ from skillet.envs.ros2 import (
     Ros2EnvCfg,
 )
 from skillet.envs.util import configclass
-from skillet.perception.reconstruction.camera_localizer import RealsenseCameraLocalizer
+from skillet.perception.localization import RealsenseCameraLocalizer
 
 
 @configclass
@@ -33,6 +34,9 @@ class Gen3Ros2EnvCfg(Ros2EnvCfg):
     """The configuration class for Kinova Gen3 Arm."""
 
     """Robot configuration"""
+    urdf_path = f"{pathlib.Path.cwd()}/skillet_tasks/assets/kortex/kinova_gen3/gen3_2f85.urdf"
+    urdf_path = f"{pathlib.Path.cwd()}/skillet_tasks/assets/kortex/kinova_gen3/gen3_2f85.srdf"
+    assets_dir = [f"{pathlib.Path.cwd()}/skillet_tasks/assets/kortex/kinova_gen3/"]
 
     # Default joint position of robot
     default_joint_positions = [0.0, 0.523599, 0.0, 1.5708, 0.0, 0.785398, 0.0, 0.0]  # Double format for ROS 2
@@ -73,6 +77,10 @@ class Gen3Ros2Env(Ros2Env):
     def __init__(self, cfg: Ros2EnvCfg, render_mode: str | None = None, **kwargs: dict[str, Any]) -> None:
         """Initialize Gen3 Arm ROS2."""
         super().__init__(cfg, render_mode, **kwargs)
+
+        self.joint_names = np.asarray(self.cfg.arm_joint_names + self.cfg.gripper_joint_names)
+        self.arm_joint_names = np.asarray(self.cfg.arm_joint_names)
+        self.gripper_joint_names = np.asarray(self.cfg.gripper_joint_names)
 
         self.single_observation_space = gym.spaces.Dict()
         self.single_observation_space["policy"] = gym.spaces.Box(
@@ -136,8 +144,8 @@ class Gen3Ros2Env(Ros2Env):
         """
         # Publish BLOCKING gripper command. To keep the gripper stationary
         # Assumes we can either move joints or close gripper, not both
-        if self._publish_gripper(action, action_spec, close_time=2.0):
-            return
+        # if self._publish_gripper(action, action_spec, close_time=2.0):
+        #     return
 
         if action_spec is None or action_spec.name == "joints_vel":
             self._publish_joint_vel_spec(action, duration)
@@ -221,7 +229,7 @@ class Gen3Ros2Env(Ros2Env):
         gripper_val = float(joint_pos[-1])
         gripper_val = max(0, min(gripper_val, 1)) * 0.8
 
-        gripper_goal = ParallelGripperCommand()
+        # gripper_goal = ParallelGripperCommand()
         gripper_goal.name = self.cfg.gripper_joint_names
         gripper_goal.position = [gripper_val]
         gripper_goal.effort = [100.0]
@@ -279,11 +287,11 @@ class Gen3Ros2Env(Ros2Env):
             print("[INFO] Successfully switched controller to `twist_controller`")
 
         twist_cmd = Twist()
-        twist_cmd.linear.x = twist[0]
-        twist_cmd.linear.y = twist[1]
-        twist_cmd.linear.z = twist[2]
-        twist_cmd.angular.x = twist[3]
-        twist_cmd.angular.y = twist[4]
-        twist_cmd.angular.z = twist[5]
+        twist_cmd.linear.x = float(twist[0])
+        twist_cmd.linear.y = float(twist[1])
+        twist_cmd.linear.z = float(twist[2])
+        twist_cmd.angular.x = float(twist[3])
+        twist_cmd.angular.y = float(twist[4])
+        twist_cmd.angular.z = float(twist[5])
 
         self.twist_pub.publish(twist_cmd)

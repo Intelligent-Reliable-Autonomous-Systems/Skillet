@@ -258,6 +258,7 @@ class Ros2Env(Node, SkilletGymEnv):
         self._episode_length_buf += 1  # step in current episode (per env)
         self._common_step_counter += 1  # total step (common for all envs)
         self._next_step_time = time.perf_counter()
+        self._update_robot_info()
         # return observations
         return self._get_observations(), self.extras
 
@@ -322,7 +323,7 @@ class Ros2Env(Node, SkilletGymEnv):
         # reset envs that terminated/timed-out and log the episode information
         if self.reset_buf:
             self._reset_idx()
-
+        self._update_robot_info()
         # update observations
         obs = self._get_observations()
         for k, v in obs.items():
@@ -357,7 +358,7 @@ class Ros2Env(Node, SkilletGymEnv):
 
     def close(self) -> None:
         """Cleanup for the environment."""
-        self.ros.terminate()
+        self.destroy_node()
 
     """
     Helper functions.

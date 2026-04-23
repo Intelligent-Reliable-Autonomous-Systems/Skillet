@@ -11,7 +11,8 @@ from skillet.core import ActionSpec, ObservationSpec
 from skillet.core.env import BatchToSingleWrapper
 from skillet.envs import RealsenseEnv, SkilletEnv
 from skillet.logging import SkilletDataLogger
-from skillet.perception import SkilletPerception
+from skillet.perception.perception import SkilletPerception
+
 from skillet.policy import FixedSequencePolicy, TwistPidPosePolicy
 from skillet.scene import EMPTY_SCENE, Open3DVisualizer
 from skillet.skill import PickBlockSkill, PickSkill, PlaceBlockSkill, PlaceSkill, RotateBlockSkill, RotateYawSkill

@@ -18,8 +18,8 @@ from typing_extensions import override
 
 from skillet.core.env import _EnvironmentBase
 from skillet.envs.specs import RGBD_SPEC_BATCHED, RGBD_Obs
-from skillet.perception.reconstruction import CameraLocalizer
-from skillet.perception.reconstruction.camera_localizer import _make_T, _quat_xyzw_to_R, _T_to_xyz_quat_xyzw
+from skillet.perception.localization import CameraLocalizer
+from skillet.perception.localization.camera_localizer import _make_T, _quat_xyzw_to_R, _T_to_xyz_quat_xyzw
 from skillet.scene.utils import depth_to_colormap_np
 
 if TYPE_CHECKING:

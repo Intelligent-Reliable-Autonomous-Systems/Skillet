@@ -365,9 +365,7 @@ class SkilletEnv(
         return self.get_observation(self.obs_spec_state)
 
     @override
-    def step(
-        self, action: BxM_Action, action_spec: ActionSpec[Any] | None = None
-    ) -> tuple[
+    def step(self, action: BxM_Action, action_spec: ActionSpec[Any] | None = None) -> tuple[
         BxN_Obs,
         Float[torch.Tensor, "b"],  # noqa: F821
         Bool[torch.Tensor, "b"],  # noqa: F821

@@ -19,7 +19,7 @@ from skillet.core.spaces import ActionSpec
 from skillet.envs.kortex import KortexEnv, KortexEnvCfg
 from skillet.envs.kortex.kortex_bridge import DeviceConnection
 from skillet.envs.util import configclass
-from skillet.perception.reconstruction.camera_localizer import RealsenseCameraLocalizer
+from skillet.perception.localization import RealsenseCameraLocalizer
 
 
 @configclass

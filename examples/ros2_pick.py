@@ -7,9 +7,9 @@ Written by Will Solow and Jeff Jewett, 2026
 """
 
 import argparse
-import os
 from typing import TYPE_CHECKING
 
+import rclpy
 import torch
 
 import skillet_tasks.ros2_tasks  # noqa: F401
@@ -40,12 +40,8 @@ def main() -> None:
     """Run the ROS2 pick example."""
     # create environment
     env_cfg = {
-        "robot_ip": args_cli.robot_ip,
-        "launch_ros": args_cli.launch_ros,
         "device": args_cli.device,
         "num_envs": args_cli.num_envs,
-        "ros2_workspace": args_cli.ros2_ws,
-        "use_fake_hardware": True,
     }
     env = create_ros2_env(args_cli.task, env_cfg)
 
@@ -99,7 +95,7 @@ def main() -> None:
             env.reset()
             policy_over_options_agent.execute(env)
             print("[INFO][Main] finished run of skill executor, resetting")
-
+    rclpy.shutdown()
     env.close()
 
 

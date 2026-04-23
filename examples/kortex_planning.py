@@ -11,7 +11,8 @@ from skillet.core import ObservationSpec
 from skillet.core.env import BatchToSingleWrapper
 from skillet.envs import SkilletEnv
 from skillet.logging import SkilletDataLogger
-from skillet.perception import SkilletPerception
+from skillet.perception.perception import SkilletPerception
+
 from skillet.planning import AbstractModel
 from skillet.policy import TwistPidPosePolicy
 from skillet.scene import EMPTY_SCENE, SIX_CUBE_APRIL_SCENE, SIX_CUBE_SCENE, Open3DVisualizer

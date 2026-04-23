@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import torch
 
-from skillet.envs.realsense import RealsenseEnv
 from skillet.scene.utils import (
     create_aabb_lineset,
     create_camera_model,
@@ -77,9 +76,8 @@ class Open3DVisualizer:
         self._open3d_scene: np.ndarray | None = None
         self._tcp_pose: np.ndarray | None = None
         self._gripper_pos: np.ndarray | None = None
-        self._get_tcp_pose = self.get_tcp_pose if not isinstance(env, RealsenseEnv) else None
-        self._get_gripper_pos = self.get_gripper_pos if not isinstance(env, RealsenseEnv) else None
-
+        self._get_tcp_pose = self.get_tcp_pose
+        self._get_gripper_pos = self.get_gripper_pos
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._render_event = threading.Event()

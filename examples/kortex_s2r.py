@@ -9,7 +9,8 @@ import torch
 from skillet.agents import S2RAgent
 from skillet.core.env import BatchToSingleWrapper
 from skillet.envs import SkilletEnv
-from skillet.perception import SkilletPerception
+from skillet.perception.perception import SkilletPerception
+
 from skillet.policy import FixedSequencePolicy, PidRlPolicy, RandomPolicy
 from skillet.scene import EMPTY_SCENE, SIX_CUBE_APRIL_SCENE, Open3DVisualizer
 from skillet.skill import ReachXYZRPYSkill

@@ -19,9 +19,8 @@ import torch
 from roslibpy import ActionClient, Ros, Service, Topic
 
 from skillet.core.spaces import ActionSpec
-from skillet.envs.ros2 import (
-    Ros2WebEnv,
-    Ros2WebEnvCfg,
+from skillet.envs.ros2.websocket import Ros2WebEnv, Ros2WebEnvCfg
+from skillet.envs.ros2.websocket.ros2_interface import (
     launch_robot_hardware,
     wait_for_action_server,
     wait_for_rviz,

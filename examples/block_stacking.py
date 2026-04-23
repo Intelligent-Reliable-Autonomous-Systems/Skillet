@@ -15,7 +15,7 @@ from skillet.core import ActionSpec, ObservationSpec
 from skillet.core.env import BatchToSingleWrapper
 from skillet.envs.realsense import RealsenseEnv
 from skillet.envs.skillet_env import SkilletEnv
-from skillet.perception import SkilletPerception
+from skillet.perception.perception import SkilletPerception
 from skillet.policy.dummy import FixedSequencePolicy
 from skillet.policy.ik_ee import PoseAbsIkEePolicy
 from skillet.policy.moveit import MoveItTcpQuatPolicy
