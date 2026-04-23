@@ -18,6 +18,10 @@ class KortexEnvCfg:
     """Robot configuration"""
     urdf_path: str = MISSING
     """Path to the model of the robot"""
+    srdf_path: str = MISSING
+    """Path to the collision model of the robot"""
+    assets_dir: list[str] = MISSING
+    """Path to parent dir of robot meshes"""
 
     robot_ip: str = "www.xxx.yyy.zzz"
     """IP of the robot"""

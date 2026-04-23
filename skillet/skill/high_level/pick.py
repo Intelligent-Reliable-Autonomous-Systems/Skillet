@@ -78,7 +78,6 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         self._params = None
 
         # 180 degree rotation about X axis + -90 degree yaw
-        # self._default_quat = torch.as_tensor([[0.0, 0.7071, -0.7071, 0.0]])
         self._default_quat = torch.as_tensor([[0.0, 0.0, -1.0, 0.0]])
 
     @property

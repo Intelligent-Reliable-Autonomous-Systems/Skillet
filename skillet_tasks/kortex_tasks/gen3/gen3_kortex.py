@@ -32,7 +32,8 @@ class Gen3KortexEnvCfg(KortexEnvCfg):
     """Robot configuration"""
 
     urdf_path = f"{pathlib.Path.cwd()}/skillet_tasks/assets/kortex/kinova_gen3/gen3_2f85.urdf"
-
+    urdf_path = f"{pathlib.Path.cwd()}/skillet_tasks/assets/kortex/kinova_gen3/gen3_2f85.srdf"
+    assets_dir = [f"{pathlib.Path.cwd()}/skillet_tasks/assets/kortex/kinova_gen3/"]
     # IP of the robot
     robot_ip = "www.xxx.yyy.zzz"
 

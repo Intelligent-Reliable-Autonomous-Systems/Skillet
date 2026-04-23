@@ -30,6 +30,8 @@ class Gen3LiteKortexEnvCfg(KortexEnvCfg):
     robot_ip = "192.168.1.10"
 
     urdf_path = f"{pathlib.Path.cwd()}/skillet_tasks/assets/kortex/kinova_gen3lite/gen3_lite.urdf"
+    srdf_path = f"{pathlib.Path.cwd()}/skillet_tasks/assets/kortex/kinova_gen3lite/gen3_lite.srdf"
+    assets_dir = [f"{pathlib.Path.cwd()}/skillet_tasks/assets/kortex/kinova_gen3lite/"]
 
     # Visualize
     vision = False

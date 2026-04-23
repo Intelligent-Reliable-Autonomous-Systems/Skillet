@@ -87,11 +87,11 @@ class ReachPoseSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_QUAT_Params], Generic[
 
         self._n_steps += 1
 
-        ee_pose_b = obs["ee_pose_b"]
+        tcp_pose_b = obs["tcp_pose_b"]
         reached_pos = (
-            torch.linalg.vector_norm(ee_pose_b[:, 0:3] - self._target_poses[:, 0:3], dim=1) < self._pos_threshold
+            torch.linalg.vector_norm(tcp_pose_b[:, 0:3] - self._target_poses[:, 0:3], dim=1) < self._pos_threshold
         )
-        reached_quat = quat_error_magnitude(ee_pose_b[:, 3:7], self._target_poses[:, 3:7]) < self._quat_threshold
+        reached_quat = quat_error_magnitude(tcp_pose_b[:, 3:7], self._target_poses[:, 3:7]) < self._quat_threshold
         reached_pose = reached_pos & reached_quat
 
         self._status = torch.where(

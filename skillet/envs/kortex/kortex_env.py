@@ -23,6 +23,7 @@ from skillet.envs.kortex.kortex_bridge import DeviceConnection
 from skillet.envs.util import configure_seed
 
 from .kortex_env_cfg import KortexEnvCfg
+from .safety import CollisionProximityMonitor
 
 
 class KortexEnv(SkilletGymEnv):
@@ -89,6 +90,16 @@ class KortexEnv(SkilletGymEnv):
 
         # setup the action and observation spaces for Gym
         self._next_step_time = time.perf_counter()
+
+        # Set up the collision checker and add the table
+        self._collision_checker = CollisionProximityMonitor(
+            self.cfg.urdf_path, self.cfg.srdf_path, self.cfg.assets_dir, distance_threshold=0.01, dt=self.physics_dt
+        )
+        self._collision_checker.add_box_obstacle(
+            name="table",
+            size_xyz=[2.0, 2.0, 0.05],
+            xyz=[0.0, 0.0, -0.05],
+        )
 
         print("[INFO][KortexEnv] Completed Environment Setup")
 
@@ -289,11 +300,24 @@ class KortexEnv(SkilletGymEnv):
             A tuple containing the observations, rewards, resets (terminated and truncated) and extras.
 
         """
-        # Pre process the robot action
-        action = self._pre_process_action(action, action_spec=action_spec)
+        # Perform safety check
+        out = self._collision_checker.check_near_collision(
+            self._current_joint_positions,
+            self._current_joint_velocities,
+            self.cfg.arm_joint_names + self.cfg.gripper_joint_names,
+        )
+        if out.near_collision:
+            print(
+                f"[WARN][KORTEX] Near collision with [{out.limiting_pair[0]}, {out.limiting_pair[1]}]. Stopping robot.."
+            )
+            zero_action = self._pre_process_action(torch.zeros_like(action), action_spec=action_spec)
+            self._publish_action_to_kortex(zero_action, duration=self.step_dt, action_spec=action_spec)
+        else:
+            # Pre process the robot action
+            action = self._pre_process_action(action, action_spec=action_spec)
 
-        # Send the robot action to hardware
-        self._publish_action_to_kortex(action, duration=self.step_dt, action_spec=action_spec)
+            # Send the robot action to hardware
+            self._publish_action_to_kortex(action, duration=self.step_dt, action_spec=action_spec)
         sleep_time = (time.perf_counter() - self._next_step_time) - self.step_dt
 
         if sleep_time < 0:
