@@ -44,7 +44,7 @@ To run:
    - Source IRAS-Kinova ROS2 overlay: `source install/setup.bash`
    - Laucn ROSBridge Node: `ros2 launch rosbridge_server rosbridge_websocket_launch.xml`
 2. Navigate back to Robot-Skills in another terminal. Ensure virtual env is active: `conda activate skills`
-3. Run a Pick Skill with ROS2/RViz: `python3 examples/ros2_pick.py --num_envs 1 --task ROS2-Gen3-v0 --ros2_ws <absolute-path-to-IRAS/Kinova>`
+3. Run a Pick Skill with ROS2/RViz: `python3 examples/ros2_pick.py --num_envs 1 --task Ros2Web-Gen3-v0 --ros2_ws <absolute-path-to-IRAS/Kinova>`
 
 ### Hardware Experiment with ROS
 Launch Gen3

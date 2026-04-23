@@ -7,7 +7,6 @@ Written by Will Solow, 2026
 """
 
 import pathlib
-import threading
 import time
 from typing import Any
 
@@ -16,13 +15,11 @@ import numpy as np
 import torch
 from kortex_api.autogen.messages import Base_pb2
 
-from skillet.core.math import np_euler_xyz_degrees_from_quat
 from skillet.core.spaces import ActionSpec
 from skillet.envs.kortex import KortexEnv, KortexEnvCfg
-from skillet.envs.kortex.kortex_bridge import DeviceConnection, check_for_end_or_abort
+from skillet.envs.kortex.kortex_bridge import DeviceConnection
 from skillet.envs.util import configclass
 from skillet.perception.reconstruction.camera_localizer import RealsenseCameraLocalizer
-from skillet.policy.specs import JOINTS_SPEC
 
 
 @configclass
@@ -144,8 +141,8 @@ class Gen3KortexEnv(KortexEnv):
         # if self._publish_gripper(action, action_spec, close_time=1.5):
         #    return
 
-        if action_spec is None or action_spec.name == "joints":
-            self._publish_joint_spec(action, duration)
+        if action_spec is None or action_spec.name == "joints_vel":
+            self._publish_joint_vel_spec(action, duration)
         elif action_spec.name == "twist_tcp":
             self._publish_twist_tcp_spec(action)
         else:
@@ -225,8 +222,8 @@ class Gen3KortexEnv(KortexEnv):
             finger.finger_identifier = 1
             finger.value = gripper_goal
 
-            if action_spec is None or action_spec.name == "joints":
-                self._publish_joint_spec(np.zeros_like(joint_pos), duration)
+            if action_spec is None or action_spec.name == "joints_vel":
+                self._publish_joint_vel_spec(np.zeros_like(joint_pos), duration)
             elif action_spec.name == "twist_tcp":
                 self._publish_twist_tcp_spec(np.zeros_like(joint_pos))
 
@@ -241,7 +238,7 @@ class Gen3KortexEnv(KortexEnv):
 
         return self._new_gripper_goal
 
-    def _publish_joint_spec(self, joint_vel: np.ndarray, duration: float = 20) -> None:
+    def _publish_joint_vel_spec(self, joint_vel: np.ndarray, duration: float = 20) -> None:
         """Publish a joint velocity commmand to the kortex API.
 
         Args:

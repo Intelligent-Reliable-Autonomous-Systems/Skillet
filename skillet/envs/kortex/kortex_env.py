@@ -19,11 +19,11 @@ from kortex_api.autogen.messages import Base_pb2
 from skillet.core.math import convert_quat
 from skillet.core.spaces import ActionSpec
 from skillet.envs.compatibility import SkilletGymEnv
+from skillet.envs.compatibility.s2r import CollisionProximityMonitor
 from skillet.envs.kortex.kortex_bridge import DeviceConnection
 from skillet.envs.util import configure_seed
 
 from .kortex_env_cfg import KortexEnvCfg
-from .safety import CollisionProximityMonitor
 
 
 class KortexEnv(SkilletGymEnv):

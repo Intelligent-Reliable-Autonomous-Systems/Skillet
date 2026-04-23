@@ -10,7 +10,7 @@ JOINTS = Float[torch.Tensor, "b n_joints"]
 
 JOINTS_SPEC = ActionSpec[JOINTS](
     space=ParameterizedBox(low=-float("inf"), high=float("inf"), shape=("n_joints",), dtype=np.float32),
-    name="joints",
+    name="joints_vel",
     is_torch=True,
     is_batched=True,
     n_envs=-1,

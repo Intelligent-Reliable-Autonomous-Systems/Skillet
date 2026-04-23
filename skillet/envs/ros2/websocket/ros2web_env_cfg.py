@@ -12,10 +12,25 @@ from skillet.envs.util import configclass
 
 
 @configclass
-class Ros2EnvCfg:
+class Ros2WebEnvCfg:
     """The configuration class for ROS2 RL Envs."""
 
     """Robot configuration"""
+
+    use_fake_hardware: bool = False
+    """If to use fake hardware or not"""
+
+    ros2_workspace: str = MISSING
+    """Workspace which bringup configuration is defined"""
+
+    launch_ros: bool = True
+    """If to launch robot software in gen3_py ROS2 package"""
+
+    robot_ip: str = "www.xxx.yyy.zzz"
+    """IP of the robot"""
+
+    vision: str = "false"
+    """If vision is enabled"""
 
     default_joint_positions: list[float] = MISSING
     """Default joint position of robot"""
@@ -44,6 +59,9 @@ class Ros2EnvCfg:
 
     is_finite_horizon: bool = False
     """Whether learning is treated as a finite or infinite horizon problem"""
+
+    skills: list[str] | None = None
+    """List of behavior primitives available"""
 
     use_sc: bool = False
     """If to use the skill controller through SkillEnvWrapper"""

@@ -2,7 +2,7 @@
 
 Provides a simple environment that streams RGB-D observations from an Intel
 RealSense camera in a format compatible with the ROS2 RGB-D pipeline and
-`ROS2EnvWrapper`'s `"rgb-d"` observation.
+`Ros2WebEnvWrapper`'s `"rgb-d"` observation.
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ class RealsenseEnv(_EnvironmentBase[RGBD_Obs, Any]):
     The raw RGB-D snapshot matches `_get_latest_rgbd` in
     `gen3_ros2.py` (RGB HxWx3, depth HxW, intrinsics, pose, timestamp).
     The public observation returned by `get_observation()` also mirrors the
-    post-processing done in `ROS2EnvWrapper` for the `"rgb-d"` observation:
+    post-processing done in `Ros2WebEnvWrapper` for the `"rgb-d"` observation:
 
     - quaternion converted from ROS xyzw -> IsaacLab wxyz
     - RGB transposed from (H, W, 3) -> (3, H, W)
@@ -102,7 +102,7 @@ class RealsenseEnv(_EnvironmentBase[RGBD_Obs, Any]):
         self._depth_scale = depth_sensor.get_depth_scale()
 
         # Unbatched RGB-D observation spec, numpy-based, matching ROS2 `"rgb-d"` spec
-        # in `ROS2EnvWrapper` but without batching.
+        # in `Ros2WebEnvWrapper` but without batching.
         self.obs_spec_rgbd = (
             RGBD_SPEC_BATCHED.bind(height=self.height, width=self.width).replace(is_torch=False).unbatched()
         )

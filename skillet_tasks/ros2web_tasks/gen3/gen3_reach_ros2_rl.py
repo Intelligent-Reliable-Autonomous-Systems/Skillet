@@ -12,14 +12,14 @@ import numpy as np
 from roslibpy import Ros
 
 from skillet.envs.ros2 import (
-    ROS2EnvCfg,
+    Ros2WebEnvCfg,
 )
 
-from .gen3_ros2 import Gen3ROS2Env
+from .gen3_ros2 import Gen3Ros2WebEnv
 
 
-class Gen3ROS2ReachRlEnv(Gen3ROS2Env):
-    def __init__(self, cfg: ROS2EnvCfg, ros: Ros, render_mode: str | None = None, **kwargs: dict[str, Any]) -> None:
+class Gen3ROS2ReachRlEnv(Gen3Ros2WebEnv):
+    def __init__(self, cfg: Ros2WebEnvCfg, ros: Ros, render_mode: str | None = None, **kwargs: dict[str, Any]) -> None:
         super().__init__(cfg, ros, render_mode=render_mode, **kwargs)
 
     def _get_observations(self) -> dict[str, np.ndarray]:

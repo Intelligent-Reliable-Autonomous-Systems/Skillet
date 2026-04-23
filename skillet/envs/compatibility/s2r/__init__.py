@@ -1,0 +1,1 @@
+from .safety.collision import CollisionProximityMonitor as CollisionProximityMonitor

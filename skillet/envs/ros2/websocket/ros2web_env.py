@@ -12,21 +12,18 @@ from abc import abstractmethod
 from typing import Any
 
 import numpy as np
-import pinocchio as pin
 import torch
-from rclpy.node import Node
-from sensor_msgs.msg import JointState
+from roslibpy import Ros
 
 from skillet.core.math import convert_quat
 from skillet.core.spaces import ActionSpec
 from skillet.envs.compatibility import SkilletGymEnv
-from skillet.envs.compatibility.s2r import CollisionProximityMonitor
 from skillet.envs.util import configure_seed
 
-from .ros2_env_cfg import Ros2EnvCfg
+from .ros2web_env_cfg import Ros2WebEnvCfg
 
 
-class Ros2Env(Node, SkilletGymEnv):
+class Ros2WebEnv(SkilletGymEnv):
     """The superclass for the ROS2 workflow to design environments.
 
     This class implements the core functionality for reinforcement learning (RL)
@@ -50,24 +47,22 @@ class Ros2Env(Node, SkilletGymEnv):
     _current_robot_body_vel_w: np.ndarray
     _current_joint_centers: np.ndarray
 
-    def __init__(self, cfg: Ros2EnvCfg, render_mode: str | None = None, **kwargs: dict[str, Any]) -> None:
+    def __init__(self, cfg: Ros2WebEnvCfg, ros: Ros, render_mode: str | None = None, **kwargs: dict[str, Any]) -> None:
         """Initialize the environment.
 
         Args:
             cfg: The configuration object for the environment
+            ros: roslibpy object
             render_mode: The render mode for the environment. Defaults to None, which
                 is similar to ``"human"``.
             kwargs: Additoinal arguments
 
         """
-        super().__init__("Ros2Env")
         self.cfg = cfg
+        self.ros = ros
         self.num_envs = cfg.num_envs
         self.device = cfg.device
         self.render_mode = render_mode
-
-        self.ros2_model: pin.Model = pin.buildModelFromUrdf(self.cfg.urdf_path)
-        self.ros2_data: pin.Data = self.ros2_model.createData()
 
         self._sim_step_counter = 0
         # -- counter for curriculum
@@ -83,19 +78,7 @@ class Ros2Env(Node, SkilletGymEnv):
         # setup the action and observation spaces for Gym
         self._next_step_time = time.perf_counter()
 
-        # Set up the collision checker and add the table
-        self._collision_checker = CollisionProximityMonitor(
-            self.cfg.urdf_path, self.cfg.srdf_path, self.cfg.assets_dir, distance_threshold=0.01, dt=self.physics_dt
-        )
-        self._collision_checker.add_box_obstacle(
-            name="table",
-            size_xyz=[2.0, 2.0, 0.05],
-            xyz=[0.0, 0.0, -0.05],
-        )
-
-        self._joint_sub = self.create_subscription(JointState, "/joint_states", self._robot_state_sub, 10)
-
-        print("[INFO][Ros2Env] Completed Environment Setup")
+        print("[INFO][Ros2WebEnv] Completed Environment Setup")
 
     def __del__(self) -> None:
         """Cleanup for the environment."""
@@ -286,21 +269,12 @@ class Ros2Env(Node, SkilletGymEnv):
             A tuple containing the observations, rewards, resets (terminated and truncated) and extras.
 
         """
-        # Perform safety check
-        out = self._collision_checker.check_near_collision(
-            self._current_joint_positions,
-            self._current_joint_velocities,
-            self.cfg.arm_joint_names + self.cfg.gripper_joint_names,
+        assert self._supports_action_spec(action_spec), (
+            f"Action specification `{action_spec.name}: {action_spec}` not supported by environment {self}."
         )
-        if out.near_collision:
-            print(
-                f"[WARN][ROS2] Near collision with [{out.limiting_pair[0]}, {out.limiting_pair[1]}]. Stopping robot.."
-            )
-            zero_action = self._pre_process_action(torch.zeros_like(action), action_spec=action_spec)
-            self._publish_action_to_ros(zero_action, duration=self.step_dt, action_spec=action_spec)
-        else:
-            # Pre process the robot action
-            action = self._pre_process_action(action, action_spec=action_spec)
+
+        # Pre process the robot action
+        action = self._pre_process_action(action, action_spec=action_spec)
 
         # Send the robot action to hardware
         self._publish_action_to_ros(action, duration=self.step_dt, action_spec=action_spec)
@@ -308,8 +282,7 @@ class Ros2Env(Node, SkilletGymEnv):
         if sleep_time < 0:
             time.sleep(min(-sleep_time, self.step_dt))
         else:
-            # print(f"[WARN] full loop overran by {sleep_time * 1000:.1f}ms")
-            pass
+            print(f"[WARN] full loop overran by {sleep_time * 1000:.1f}ms")
         self._next_step_time = time.perf_counter()
 
         self._episode_length_buf += 1
@@ -447,6 +420,56 @@ class Ros2Env(Node, SkilletGymEnv):
     Helper functions to communicate with ROS2
     """
 
+    def _update_jacobians(self, msg: dict[str, Any]) -> None:
+        """Update jacobians the robot by subscribing to jacobian topic."""
+        self._current_jacobians = np.asarray(msg["matrix"], dtype=float).reshape(
+            msg["num_links"], msg["rows"], msg["cols"]
+        )
+        self._ready["jacobians"] = True
+
+    def _update_mass_matrix(self, msg: dict[str, Any]) -> None:
+        """Update mass matrices by subscribing to mass matrix topic."""
+        self._current_mass_matrices = np.asarray(msg["matrix"], dtype=float).reshape(msg["rows"], msg["cols"])
+        self._ready["mass_matrices"] = True
+
+    def _update_gravity_vector(self, msg: dict[str, Any]) -> None:
+        """Update gravity vector by subscribing to the gravity vector topic."""
+        self._current_gravity_vector = np.asarray(msg["matrix"], dtype=float).reshape(msg["rows"])
+        self._ready["gravity_vector"] = True
+
+    def _update_robot_links_and_joints(self, msg: dict[str, Any]) -> None:
+        """Update the state of the robot by subscribing to robot topics."""
+        self._robot_links = list(msg["links"])
+        self._robot_joints = list(msg["joints"])
+        self._current_upper_joint_limits = np.asarray(msg["upper_limits"], dtype=float)
+        self._current_lower_joint_limits = np.asarray(msg["lower_limits"], dtype=float)
+        self._current_joint_centers = (self._current_upper_joint_limits + self._current_lower_joint_limits) / 2
+        self._ready["robot_info"] = True
+
+    def _update_body_pose(self, msg: dict[str, Any]) -> None:
+        """Update the state of the robot by subscribing to robot topics."""
+        self._current_robot_body_pose_w = np.asarray(msg["body_w"], dtype=float).reshape(msg["num_links"], -1)
+        self._current_robot_root_pose_w = np.asarray(msg["root_w"], dtype=float)
+        self._ready["body_pose"] = True
+
+    def _update_body_vel(self, msg: dict[str, Any]) -> None:
+        """Update the velocity of the robot by subscribing to robot topics."""
+        self._current_robot_body_vel_w = np.asarray(msg["body_w"], dtype=float).reshape(msg["num_links"], -1)
+        self._ready["body_vel"] = True
+
+    def _update_robot_state(self, msg: dict[str, Any]) -> None:
+        """Update the state of the robot by subscribing to robot topics."""
+        self._current_joint_positions = np.asarray(
+            [msg["position"][msg["name"].index(j)] for j in self.joint_names]
+        ).astype(np.float32)
+        self._current_joint_velocities = np.asarray(
+            [msg["velocity"][msg["name"].index(j)] for j in self.joint_names]
+        ).astype(np.float32)
+        self._current_joint_efforts = np.asarray(
+            [msg["effort"][msg["name"].index(j)] for j in self.joint_names]
+        ).astype(np.float32)
+        self._ready["joint_states"] = True
+
     def switch_controllers(self, activate: list[str], deactivate: list[str], strictness: int = 1) -> bool:
         """Switch ROS2 controllers.
 
@@ -459,67 +482,14 @@ class Ros2Env(Node, SkilletGymEnv):
             Bool if the controller switch was successful
 
         """
-        # request = {
-        #     "activate_controllers": activate,
-        #     "deactivate_controllers": deactivate,
-        #     "strictness": strictness,
-        #     "activate_asap": True,
-        #     "timeout": {"sec": 5, "nanosec": 0},
-        # }
+        request = {
+            "activate_controllers": activate,
+            "deactivate_controllers": deactivate,
+            "strictness": strictness,
+            "activate_asap": True,
+            "timeout": {"sec": 5, "nanosec": 0},
+        }
 
-        # result = self.controller_client.call(request)
+        result = self.controller_client.call(request)
 
-        # return result["ok"]
-        # TODO fix this for ROS2
-        return None
-
-    def _robot_state_sub(self, msg: JointState) -> None:
-        self._current_joint_positions = np.asarray([msg.position[msg.name.index(j)] for j in self.joint_names]).astype(
-            np.float32
-        )
-        self._current_joint_velocities = np.asarray([msg.velocity[msg.name.index(j)] for j in self.joint_names]).astype(
-            np.float32
-        )
-        self._current_joint_efforts = np.asarray([msg.effort[msg.name.index(j)] for j in self.joint_names]).astype(
-            np.float32
-        )
-
-    def _update_robot_info(self) -> None:
-        """Obtain the required robot information from the Kortex API."""
-        self._robot_links = [f.name for f in self.ros2_model.frames if f.type == pin.FrameType.BODY]
-        self._robot_joints = [self.ros2_model.names[i] for i in range(1, self.ros2_model.njoints)]
-
-        self._current_lower_joint_limits = np.asarray(self.ros2_model.lowerPositionLimit, dtype=float)
-        self._current_upper_joint_limits = np.asarray(self.ros2_model.upperPositionLimit, dtype=float)
-        self._current_joint_centers = (self._current_upper_joint_limits + self._current_lower_joint_limits) / 2
-
-        jacobians = []
-        poses = []
-        vels = []
-        # Pad gripper positions and velocities
-        q = pin.neutral(self.ros2_model)
-        q[: len(self.cfg.arm_joint_names)] = self._current_joint_positions[: len(self.cfg.arm_joint_names)]
-        dq = pin.neutral(self.ros2_model)
-        dq[: len(self.cfg.arm_joint_names)] = self._current_joint_velocities[: len(self.cfg.arm_joint_names)]
-        pin.computeJointJacobians(self.ros2_model, self.ros2_data, q)
-        pin.forwardKinematics(self.ros2_model, self.ros2_data, q, dq)
-        pin.updateFramePlacements(self.ros2_model, self.ros2_data)
-        for f in self.ros2_model.frames:
-            if f.type != pin.FrameType.BODY:
-                continue
-            frame_id = self.ros2_model.getFrameId(f.name)
-
-            poses.append(pin.SE3ToXYZQUAT(self.ros2_data.oMf[frame_id].copy()))
-            jacobians.append(
-                pin.getFrameJacobian(self.ros2_model, self.ros2_data, frame_id, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)
-            )
-            vels.append(
-                pin.getFrameVelocity(self.ros2_model, self.ros2_data, frame_id, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)
-            )
-        self._current_jacobians = np.asarray(jacobians)
-        self._current_robot_body_pose_w = np.asarray(poses)
-        self._current_robot_root_pose_w = np.asarray(poses[0])
-        self._current_robot_body_vel_w = np.asarray(vels)
-
-        self._current_mass_matrices = pin.crba(self.ros2_model, self.ros2_data, q)
-        self._current_gravity_vector = pin.computeGeneralizedGravity(self.ros2_model, self.ros2_data, q)
+        return result["ok"]

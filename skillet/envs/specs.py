@@ -212,7 +212,7 @@ JOINT_SPEC_BATCHED = ObservationSpec[JOINT_Obs](
             "prev_actions": ParameterizedBox(low=-np.pi, high=np.pi, shape=("n_joints",)),
         }
     ),
-    name="joints",
+    name="joints_vel",
     is_torch=True,
     is_batched=True,
     n_envs=-1,
@@ -224,7 +224,7 @@ JOINT_Action = Float[torch.Tensor, "b n_joints"]
 """Action type for Joint Commands"""
 JOINT_SPEC = ActionSpec[JOINT_Action](
     space=ParameterizedBox(low=-float("inf"), high=float("inf"), shape=("n_joints",)),
-    name="joints",
+    name="joints_vel",
     is_torch=True,
     is_batched=True,
     n_envs=-1,

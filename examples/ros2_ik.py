@@ -17,9 +17,9 @@ if TYPE_CHECKING:
     from skillet.core import BatchedSkill
     from skillet.envs.specs import BxM_Action, IKEE_Obs
 
-import skillet_tasks.ros2_tasks  # noqa: F401
+import skillet_tasks.ros2web_tasks  # noqa: F401
 from skillet.agents.policy_over_options import PolicyOverOptionsBatchedAgent
-from skillet.envs.ros2.ros_bridge import setup_ros
+from skillet.envs.ros2.websocket.ros_bridge import setup_ros
 from skillet.envs.skillet_env import SkilletEnv
 from skillet.envs.util import parse_ros2_env_cfg
 from skillet.policy.dummy import FixedSequencePolicy, RandomPolicy
@@ -30,7 +30,7 @@ from skillet.skill.specs import SELECT_OPTIONS_SPEC_BATCHED, XYZ_QUAT_Params
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Main ROS2 executor file.")
 parser.add_argument("--num_envs", type=int, default=1, required=True, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="ROS2-Gen3-v0", required=True, help="Name of the task.")
+parser.add_argument("--task", type=str, default="Ros2Web-Gen3-v0", required=True, help="Name of the task.")
 parser.add_argument("--device", type=str, default="cuda", help="Device to use")
 parser.add_argument(
     "--ros2_ws", type=str, default=None, required=False, help="Absolute path to ROS2 workspace containing bringup files"

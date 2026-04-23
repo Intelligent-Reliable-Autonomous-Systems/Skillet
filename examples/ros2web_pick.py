@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 import torch
 
-import skillet_tasks.ros2_tasks  # noqa: F401
+import skillet_tasks.ros2web_tasks  # noqa: F401
 from skillet.agents.policy_over_options import PolicyOverOptionsBatchedAgent
 from skillet.envs.skillet_env import SkilletEnv
 from skillet.policy.dummy import FixedSequencePolicy, RandomPolicy
@@ -20,7 +20,7 @@ from skillet.policy.ik_ee import PoseAbsIkEePolicy
 from skillet.policy.twist import TwistPidPosePolicy
 from skillet.skill.high_level.pick import PickSkill
 from skillet.skill.specs import SELECT_OPTIONS_SPEC_BATCHED, XYZ_YAW_Params
-from skillet_tasks.ros2_tasks.factory import create_ros2_env
+from skillet_tasks.ros2web_tasks.factory import create_ros2web_env
 
 if TYPE_CHECKING:
     from skillet.core import BatchedSkill
@@ -29,11 +29,22 @@ if TYPE_CHECKING:
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Main ROS2 executor file.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="Ros2-Gen3Lite-v0", help="Name of the task.")
+parser.add_argument("--task", type=str, default="Ros2Web-Gen3Lite-v0", help="Name of the task.")
 parser.add_argument("--device", type=str, default="cuda", help="Device to use")
+parser.add_argument(
+    "--ros2_ws", type=str, default=None, help="Absolute path to ROS2 workspace containing bringup files"
+)
+parser.add_argument("--robot_ip", type=str, default="192.168.1.10", help="Robot IP.")
+parser.add_argument(
+    "--launch_ros", action=argparse.BooleanOptionalAction, default=False, help="Launch ROS from env startup."
+)
 
 # parse the arguments
 args_cli = parser.parse_args()
+if args_cli.ros2_ws is None:
+    args_cli.ros2_ws = os.getenv("ROS2_WS", None)
+    if args_cli.ros2_ws is None:
+        raise ValueError("ROS2 workspace path must be provided via --ros2_ws argument or ROS2_WS environment variable.")
 
 
 def main() -> None:
@@ -47,7 +58,7 @@ def main() -> None:
         "ros2_workspace": args_cli.ros2_ws,
         "use_fake_hardware": True,
     }
-    env = create_ros2_env(args_cli.task, env_cfg)
+    env = create_ros2web_env(args_cli.task, env_cfg)
 
     env = SkilletEnv(env)
     env.reset()

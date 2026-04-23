@@ -12,7 +12,7 @@ from skillet.core.spaces import ActionSpec, ParameterizedBox, ParameterizedDiscr
 JOINT_Params = Float[torch.Tensor, "b n_joints"]
 JOINT_Params_Spec = ActionSpec[JOINT_Params](
     space=ParameterizedBox(low=-np.pi, high=np.pi, shape=("n_joints",)),
-    name="joints",
+    name="joints_vel",
     is_torch=True,
     n_envs=-1,
 )

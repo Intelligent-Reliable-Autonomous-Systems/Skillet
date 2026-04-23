@@ -343,7 +343,7 @@ class SkilletEnv(
                     "gripper": self._get_gripper_state(gripper_joints=self._gripper_joint_names),
                 }
             )
-        if obs_spec.name == "joints":
+        if obs_spec.name == "joints_vel":
             return obs_spec.cast(
                 {
                     "tcp_pose_b": self._get_tcp_pose_b(ee_link=self._ee_link_name),
@@ -365,7 +365,9 @@ class SkilletEnv(
         return self.get_observation(self.obs_spec_state)
 
     @override
-    def step(self, action: BxM_Action, action_spec: ActionSpec[Any] | None = None) -> tuple[
+    def step(
+        self, action: BxM_Action, action_spec: ActionSpec[Any] | None = None
+    ) -> tuple[
         BxN_Obs,
         Float[torch.Tensor, "b"],  # noqa: F821
         Bool[torch.Tensor, "b"],  # noqa: F821

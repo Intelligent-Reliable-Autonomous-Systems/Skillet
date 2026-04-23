@@ -1,4 +1,4 @@
-"""gen3lite_ros2.py.
+"""gen3_ros2.py.
 
 Gen3 Arm class for ROS2 RL
 
@@ -11,20 +11,23 @@ from typing import Any
 from roslibpy import Ros
 
 from skillet.envs.ros2 import (
-    Ros2EnvCfg,
+    Ros2WebEnvCfg,
 )
 from skillet.envs.util import configclass
-from skillet_tasks.ros2_tasks.gen3.gen3_ros2 import Gen3Ros2Env
+from skillet_tasks.ros2web_tasks.gen3.gen3_ros2 import Gen3Ros2WebEnv
 
 
 @configclass
-class Gen3LiteRos2EnvCfg(Ros2EnvCfg):
+class Gen3LiteRos2WebEnvCfg(Ros2WebEnvCfg):
     """The configuration class for Kinova Gen3 Lite Arm."""
 
     """Robot configuration"""
 
     # IP of the robot
     robot_ip = "192.168.1.10"
+
+    # Visualize
+    vision = False
 
     # Default joint position of robot
     default_joint_positions = [0.2, -0.18, 2.16, -1.57, -0.6, -1.34, 0.0]  # Double format for ROS 2
@@ -56,11 +59,11 @@ class Gen3LiteRos2EnvCfg(Ros2EnvCfg):
     tool_frame_name = "tool_frame"
 
 
-class Gen3LiteRos2Env(Gen3Ros2Env):
+class Gen3LiteRos2WebEnv(Gen3Ros2WebEnv):
     """Kinova Gen3Lite 6DoF ROS2 implementation."""
 
     def __init__(
-        self, cfg: Gen3LiteRos2EnvCfg, ros: Ros, render_mode: str | None = None, **kwargs: dict[str, Any]
+        self, cfg: Gen3LiteRos2WebEnvCfg, ros: Ros, render_mode: str | None = None, **kwargs: dict[str, Any]
     ) -> None:
         """Initialize Gen3Lite Arm ROS2."""
         super().__init__(cfg, ros, render_mode, **kwargs)
