@@ -1,0 +1,1060 @@
+From e48723682e13ef2d2e806191e3eb05669c2e5ebd Mon Sep 17 00:00:00 2001
+From: DigeshC <chitrakar.digesh@gmail.com>
+Date: Thu, 16 Apr 2026 21:42:30 -0700
+Subject: [PATCH 1/2] Bug fixes + add gpt client + cache vlm call
+
+---
+ skillet/envs/skillet_env.py                   |   4 +-
+ skillet/perception/perception.py              |  36 ++++--
+ .../reconstruction/sam_reconstructor.py       |  64 ++++++++--
+ .../perception/segmentation/vlm/__init__.py   |   1 +
+ .../perception/segmentation/vlm/gpt_client.py | 111 ++++++++++++++++++
+ skillet/policy/joint_pos.py                   |   3 +-
+ skillet/skill/object_level/pick_block.py      |   2 +-
+ skillet/skill/object_level/place_block.py     |   2 +-
+ 8 files changed, 201 insertions(+), 22 deletions(-)
+ create mode 100644 skillet/perception/segmentation/vlm/gpt_client.py
+
+diff --git a/skillet/envs/skillet_env.py b/skillet/envs/skillet_env.py
+index 8dad997..8d03bd3 100644
+--- a/skillet/envs/skillet_env.py
++++ b/skillet/envs/skillet_env.py
+@@ -140,11 +140,11 @@ class SkilletEnv(
+                 space=action_space,
+             )
+             .replace(**spec_args)
+-            .replace(device=self.ddevice)
++            .replace(device=self.device)
+         )
+ 
+         self.action_spec_joints = (
+-            JOINT_SPEC(**spec_args).bind(n_joints=len(self._joint_ids)).replace(device=self.device)
++            JOINT_SPEC.replace(**spec_args).bind(n_joints=len(self._joint_ids)).replace(device=self.device)
+         )
+         self.action_spec_twist_tcp = (
+             TWIST_TCP_SPEC.replace(**spec_args)
+diff --git a/skillet/perception/perception.py b/skillet/perception/perception.py
+index 7d3c88e..cfd2b96 100644
+--- a/skillet/perception/perception.py
++++ b/skillet/perception/perception.py
+@@ -46,8 +46,18 @@ class SkilletPerception:
+         max_depth_m: float | None = None,
+         build_scene: bool = False,
+         vis_perception: bool = False,
++        vlm_cache_path: str | None = None,
+     ) -> None:
+-        """Initialize the perception pipeline."""
++        """Initialize the perception pipeline.
++
++        Args:
++            vlm_cache_path: Optional path to a pickle file caching the SAM
++                reconstructor's VLM output (image + bboxes + goal atoms). Only
++                used when ``reconstructor="sam"``. If the file exists it is
++                loaded and the Gemini API call is skipped; otherwise the VLM
++                output is saved to this path on first run.
++
++        """
+         self.env = env
+         self._scene = scene
+         if isinstance(device, str):
+@@ -60,6 +70,7 @@ class SkilletPerception:
+         # Scene reconstructor
+         self._reconstructor_type = reconstructor
+         self._reconstructor = None
++        self._vlm_cache_path = vlm_cache_path
+         self._viz: Open3DVisualizer = None
+         self._visualize_perception = vis_perception
+         self._display_rgb = True
+@@ -143,10 +154,10 @@ class SkilletPerception:
+             intrinsic_k = intrinsic_k[0]
+         if camera_pose.dim() == 2:
+             camera_pose = camera_pose[0]
+-        if "tcp_pose" in obs and obs["tcp_pose"].dim() == 2:
+-            tcp_pose = obs["tcp_pose"][0]
+-        if "gripper_pos" in obs and obs["tcp_pose"].dim() == 2:
+-            tcp_pose = obs["tcp_pose"][0]
++        if "tcp_pose_b" in obs and obs["tcp_pose_b"].dim() == 2:
++            tcp_pose = obs["tcp_pose_b"][0]
++        if "gripper" in obs and obs["gripper"].dim() == 2:
++            gripper_pos = obs["gripper"][0]
+ 
+         return {
+             "rgb": rgb,
+@@ -195,10 +206,13 @@ class SkilletPerception:
+         self, obs_unbatched: Mapping[str, Any], masks: torch.Tensor, segment_ids: torch.Tensor
+     ) -> tuple[torch.Tensor, torch.Tensor]:
+         """Build a point cloud from an unbatched RGB-D observation."""
+-        if masks is None:
++        if masks is None or masks.numel() == 0 or masks.shape[0] == 0:
+             depth = obs_unbatched["depth"]
+             masks = torch.ones((1, depth.shape[-2], depth.shape[-1]), dtype=torch.bool, device=depth.device)
+             segment_ids = torch.zeros((1,), dtype=torch.int64, device=depth.device)
++        # Squeeze extra dim: (N, 1, H, W) → (N, H, W)
++        if masks.ndim == 4:
++            masks = masks.squeeze(1)
+         point_cloud, segment_indices = segmented_rgbd_to_point_cloud(
+             obs_unbatched["depth"],
+             masks,
+@@ -222,7 +236,9 @@ class SkilletPerception:
+     def stop(self) -> None:
+         """Signal the polling loop to stop and wait for the worker thread."""
+         self._stop_event.set()
+-        if self._thread is not None and self._thread.is_alive():
++        import threading
++
++        if self._thread is not None and self._thread.is_alive() and self._thread is not threading.current_thread():
+             self._thread.join(timeout=2.0)
+ 
+     def run(self) -> None:
+@@ -230,13 +246,17 @@ class SkilletPerception:
+         if self._reconstructor is None:
+             if self._reconstructor_type == "sam":
+                 print("[INFO][PERCEPTION] Loading SAM reconstructor")
+-                self._reconstructor = SAMReconstructor(scene=self._scene)
++                self._reconstructor = SAMReconstructor(
++                    scene=self._scene, vlm_cache_path=self._vlm_cache_path
++                )
+             elif self._reconstructor_type == "april":
+                 print("[INFO][PERCEPTION] Loading AprilTag reconstructor")
+                 assert (
+                     self._scene is not None
+                 ), "[ERROR] Perception Scene cannot be None when using AprilTagStateReconstructor."
+                 self._reconstructor = ApriltagStateReconstructor(self._scene)
++            self._reconstructor.build_scene = self._build_scene
++            self._reconstructor.task_instruction = self._task_instruction
+         poll_period_s = 1.0 / self.poll_rate_hz
+         next_poll_t = time.perf_counter()
+ 
+diff --git a/skillet/perception/reconstruction/sam_reconstructor.py b/skillet/perception/reconstruction/sam_reconstructor.py
+index c7b4c5a..641eece 100644
+--- a/skillet/perception/reconstruction/sam_reconstructor.py
++++ b/skillet/perception/reconstruction/sam_reconstructor.py
+@@ -3,7 +3,9 @@
+ Reconstruct the scene from SAM bounding boxes.
+ """
+ 
++import copy
+ import pickle
++from pathlib import Path
+ from typing import Any, Literal
+ 
+ import cv2
+@@ -41,8 +43,22 @@ class SAMReconstructor(ReconstructorBase):
+         mode: Literal["text", "bboxes"] = "text",
+         device: str = "cuda",
+         visualize: bool = True,
++        vlm_cache_path: str | Path | None = None,
+     ) -> None:
+-        """Initialize the SAM reconstructor."""
++        """Initialize the SAM reconstructor.
++
++        Args:
++            scene: The scene to reconstruct into.
++            model: SAM model variant to load.
++            mode: Segmentation mode.
++            device: Compute device.
++            visualize: Render debug overlays.
++            vlm_cache_path: Optional path to a pickle file caching the initial
++                VLM (Gemini) image + bboxes + goal atoms. If the file exists,
++                it is loaded and the VLM API call is skipped; otherwise the VLM
++                is called and its output is written to this path.
++
++        """
+         super().__init__(scene)
+         self._model = model
+         self._mode = mode
+@@ -50,6 +66,7 @@ class SAMReconstructor(ReconstructorBase):
+         self._device = device
+         self._vlm_client = GeminiClient()
+         self._visualize = visualize
++        self._vlm_cache_path = Path(vlm_cache_path) if vlm_cache_path is not None else None
+ 
+         self._masks = None
+         self._segment_indices = None
+@@ -136,7 +153,7 @@ class SAMReconstructor(ReconstructorBase):
+ 
+         poses, ids = get_sorted_object_poses(self._scene, Cube)
+         cube_idx, det_idx = None, None
+-        if poses.ndim == 2:  # only assign poses when there are cubes in the scene
++        if poses.ndim == 2 and centers.ndim == 2 and centers.shape[0] > 0:
+             cube_idx, det_idx = assign_objects_to_id(poses[:, 0:3], centers)
+             assign_poses_to_objects(self._scene, Cube, centers, ids, cube_idx, det_idx)
+ 
+@@ -153,6 +170,32 @@ class SAMReconstructor(ReconstructorBase):
+         """Return the scene."""
+         return self._scene
+ 
++    def _load_vlm_cache(self) -> bool:
++        """Load cached VLM bboxes + goal atoms from disk if available."""
++        if self._vlm_cache_path is None or not self._vlm_cache_path.exists():
++            return False
++        with open(self._vlm_cache_path, "rb") as f:
++            cached = pickle.load(f)
++        self._vlm_bboxes = copy.deepcopy(cached["bboxes"])
++        self._vlm_goal_atoms = copy.deepcopy(cached["goal_atoms"])
++        print(f"[INFO][SAM RECONSTRUCTOR] Loaded cached VLM output from {self._vlm_cache_path}")
++        return True
++
++    def _save_vlm_cache(self, image: Image.Image) -> None:
++        """Persist the VLM input image + bboxes + goal atoms to disk."""
++        if self._vlm_cache_path is None:
++            return
++        self._vlm_cache_path.parent.mkdir(parents=True, exist_ok=True)
++        payload = {
++            "image": image,
++            "bboxes": copy.deepcopy(self._vlm_bboxes),
++            "goal_atoms": copy.deepcopy(self._vlm_goal_atoms),
++            "task_instruction": self._task_instruction,
++        }
++        with open(self._vlm_cache_path, "wb") as f:
++            pickle.dump(payload, f)
++        print(f"[INFO][SAM RECONSTRUCTOR] Saved VLM output to {self._vlm_cache_path}")
++
+     def _build_scene(
+         self,
+         obs: dict[str, torch.Tensor],
+@@ -179,13 +222,16 @@ class SAMReconstructor(ReconstructorBase):
+             camera_pose = camera_pose.cpu().numpy()
+             intrinsic_k = intrinsic_k.cpu().numpy()
+         if call_vlm:
+-            rgb_pil = Image.fromarray(rgb.transpose(1, 2, 0))
+-            rgb_pil_resized = rgb_pil.resize(
+-                (800, int(800 * rgb_pil.size[1] / rgb_pil.size[0])), Image.Resampling.LANCZOS
+-            )
+-            self._vlm_bboxes, self._vlm_goal_atoms, _ = self._vlm_client.detect_and_translate(
+-                rgb_pil_resized, self._task_instruction
+-            )
++            cache_hit = self._load_vlm_cache()
++            if not cache_hit:
++                rgb_pil = Image.fromarray(rgb.transpose(1, 2, 0))
++                rgb_pil_resized = rgb_pil.resize(
++                    (800, int(800 * rgb_pil.size[1] / rgb_pil.size[0])), Image.Resampling.LANCZOS
++                )
++                self._vlm_bboxes, self._vlm_goal_atoms, _ = self._vlm_client.detect_and_translate(
++                    rgb_pil_resized, self._task_instruction
++                )
++                self._save_vlm_cache(rgb_pil_resized)
+ 
+             for bbox in self._vlm_bboxes:
+                 bbox["label"] = bbox["label"].replace(" ", "_")
+diff --git a/skillet/perception/segmentation/vlm/__init__.py b/skillet/perception/segmentation/vlm/__init__.py
+index 14236c3..e5b65bc 100644
+--- a/skillet/perception/segmentation/vlm/__init__.py
++++ b/skillet/perception/segmentation/vlm/__init__.py
+@@ -1 +1,2 @@
+ from .gemini_client import GeminiClient as GeminiClient
++from .gpt_client import GPTClient as GPTClient
+diff --git a/skillet/perception/segmentation/vlm/gpt_client.py b/skillet/perception/segmentation/vlm/gpt_client.py
+new file mode 100644
+index 0000000..245704c
+--- /dev/null
++++ b/skillet/perception/segmentation/vlm/gpt_client.py
+@@ -0,0 +1,111 @@
++import base64
++import io
++from functools import cache
++
++from openai import AsyncOpenAI, OpenAI
++from PIL import Image
++
++from skillet.perception.segmentation.vlm.vlm_base import VLMClient
++
++
++class GPTClient(VLMClient):
++    """Class for OpenAI GPT-4o Vision Client."""
++
++    def __init__(
++        self,
++        prompt_name: str = "detect_goal",
++        model_id: str = "gpt-4o",
++        device: str = "cuda",
++        api_key: str | None = None,
++    ) -> None:
++        super().__init__(prompt_name, model_id, device)
++
++        self.prompt = self._load_prompt(prompt_name)
++        self.client = self._openai_client(api_key)
++
++    def detect_and_translate(
++        self,
++        image: Image.Image,
++        task_instruction: str,
++    ) -> tuple[list[dict], list[dict], list[dict]]:
++        """Detect objects and translate task in a single GPT-4o API call.
++
++        Args:
++            image: The image to analyze.
++            task_instruction: The natural language task to translate.
++
++        Returns:
++            Tuple of (bboxes, grounded_goal_atoms, grounded_scene_atoms).
++
++        """
++        prompt = self.prompt.format(task_instruction=task_instruction)
++        b64_image = self._encode_image(image)
++
++        response = self.client.chat.completions.create(
++            model=self.model_id,
++            messages=[{
++                "role": "user",
++                "content": [
++                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_image}"}},
++                    {"type": "text", "text": prompt},
++                ],
++            }],
++            temperature=0.0,
++        )
++        print(self.parse_response(response.choices[0].message.content))
++        return self.parse_response(response.choices[0].message.content)
++
++    async def detect_and_translate_async(
++        self,
++        image: Image.Image,
++        task_instruction: str,
++    ) -> tuple[list[dict], list[dict], list[dict]]:
++        """Asynchronously detect objects and translate task in a single GPT-4o API call.
++
++        Args:
++            image: The image to analyze.
++            task_instruction: The natural language task to translate.
++
++        Returns:
++            Tuple of (bboxes, grounded_goal_atoms, grounded_scene_atoms).
++
++        """
++        async_client = AsyncOpenAI(api_key=self.client.api_key)
++        prompt = self.prompt.format(task_instruction=task_instruction)
++        b64_image = self._encode_image(image)
++
++        response = await async_client.chat.completions.create(
++            model=self.model_id,
++            messages=[{
++                "role": "user",
++                "content": [
++                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_image}"}},
++                    {"type": "text", "text": prompt},
++                ],
++            }],
++            temperature=0.0,
++        )
++        return self.parse_response(response.choices[0].message.content)
++
++    def parse_response(self, response_text: str) -> tuple[list, list, list]:
++        """Parse GPT response text into bboxes, grounded goal atoms, and grounded scene atoms."""
++        try:
++            result = self._load_json(response_text)
++        except Exception:
++            raise ValueError(
++                f"GPT returned a non-JSON response; check for a discrepancy in your image: {response_text}"
++            )
++
++        return self._parse_response(result)
++
++    @staticmethod
++    def _encode_image(image: Image.Image) -> str:
++        """Encode a PIL image to a base64 JPEG string."""
++        buf = io.BytesIO()
++        image.save(buf, format="JPEG")
++        return base64.b64encode(buf.getvalue()).decode("utf-8")
++
++    @staticmethod
++    def _openai_client(api_key: str | None = None) -> OpenAI:
++        """Return the OpenAI client. Uses OPENAI_API_KEY env var if api_key is None."""
++        return OpenAI(api_key=api_key)
+diff --git a/skillet/policy/joint_pos.py b/skillet/policy/joint_pos.py
+index 0f23a54..ad39837 100644
+--- a/skillet/policy/joint_pos.py
++++ b/skillet/policy/joint_pos.py
+@@ -5,7 +5,8 @@ from typing import Any, Generic
+ import torch
+ 
+ from skillet.core.policy import BatchedPolicy, TBAction, TBPolicyObs
+-from skillet.core.skill import JOINT_Params, JOINT_Params_Spec, SkillParamsSpec
++from skillet.skill.specs import JOINT_Params, JOINT_Params_Spec
++from skillet.core.skill import SkillParamsSpec
+ from skillet.core.spaces import ActionSpec, ObservationSpec
+ 
+ 
+diff --git a/skillet/skill/object_level/pick_block.py b/skillet/skill/object_level/pick_block.py
+index f89c8a8..bc42b26 100644
+--- a/skillet/skill/object_level/pick_block.py
++++ b/skillet/skill/object_level/pick_block.py
+@@ -71,7 +71,7 @@ class PickBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
+         self._status = None
+         params = self.params_spec.cast(params)
+ 
+-        self._target_block: SceneObject = self._scene.objects(params)
++        self._target_block: SceneObject = self._scene.get_objects_from_id([int(params)])[0]
+         if not self._target_block.is_pose_known():
+             self._status = SkillStatusCodes.FAILED.value
+             return
+diff --git a/skillet/skill/object_level/place_block.py b/skillet/skill/object_level/place_block.py
+index ff1046f..55a3a91 100644
+--- a/skillet/skill/object_level/place_block.py
++++ b/skillet/skill/object_level/place_block.py
+@@ -73,7 +73,7 @@ class PlaceBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
+         self._status = None
+         params = self.params_spec.cast(params)
+ 
+-        self._target_block: SceneObject = self._scene.objects(params)
++        self._target_block: SceneObject = self._scene.get_objects_from_id([int(params)])[0]
+         if not self._target_block.is_pose_known():
+             self._status = SkillStatusCodes.FAILED.value
+             return
+-- 
+2.43.0
+
+
+From fbb9c3975dc8344b11ef594d8f43da7e6e9f77c2 Mon Sep 17 00:00:00 2001
+From: DigeshC <chitrakar.digesh@gmail.com>
+Date: Thu, 16 Apr 2026 23:27:39 -0700
+Subject: [PATCH 2/2] Add LLM agent and example script
+
+---
+ examples/kortex_llm_agent.py              | 184 +++++++++++++++++
+ skillet/agents/llm_agent.py               | 190 ++++++++++++++++++
+ skillet/agents/llm_planner.py             | 228 ++++++++++++++++++++++
+ skillet/skill/object_level/place_block.py |   2 +-
+ 4 files changed, 603 insertions(+), 1 deletion(-)
+ create mode 100644 examples/kortex_llm_agent.py
+ create mode 100644 skillet/agents/llm_agent.py
+ create mode 100644 skillet/agents/llm_planner.py
+
+diff --git a/examples/kortex_llm_agent.py b/examples/kortex_llm_agent.py
+new file mode 100644
+index 0000000..539cddd
+--- /dev/null
++++ b/examples/kortex_llm_agent.py
+@@ -0,0 +1,184 @@
++"""Run the LLM planning agent on Kortex hardware (no replan on failure)."""
++
++import argparse
++import copy
++import time
++from typing import TYPE_CHECKING
++
++import torch
++
++from skillet.agents.llm_agent import LLMPlanningAgent
++from skillet.agents.llm_planner import LLMPlanner, OpenAIClient, GeminiLLMClient
++from skillet.core import ObservationSpec
++from skillet.core.env import BatchToSingleWrapper
++from skillet.envs import RealsenseEnv, SkilletEnv
++from skillet.perception import SkilletPerception
++from skillet.scene import EMPTY_SCENE, Open3DVisualizer
++from skillet.skill import PickBlockSkill, PickSkill, PlaceBlock2Skill, PlaceSkill
++
++if TYPE_CHECKING:
++    from skillet.envs.specs import RGBD_Obs
++
++parser = argparse.ArgumentParser(description="LLM planning agent on Kortex hardware.")
++parser.add_argument("--robot_ip", type=str, default="192.168.1.10", help="Robot IP.")
++parser.add_argument("--device", type=str, default="cuda", help="Device to use.")
++parser.add_argument("--task", type=str, default="Kortex-Gen3Lite-v0", help="Kortex environment.")
++parser.add_argument("--poll_rate_hz", type=int, default=1, help="Perception poll rate.")
++parser.add_argument("--model", type=str, default="gpt-4o", help="LLM model for planning.")
++parser.add_argument("--goal", type=str, default="Stack red_block on blue_block", help="Task goal.")
++parser.add_argument(
++    "--realsense_env", action=argparse.BooleanOptionalAction, default=False,
++    help="Use standalone RealSense camera (no robot).",
++)
++parser.add_argument(
++    "--vlm_cache_path", type=str, default=None,
++    help=(
++        "Pickle path for cached Gemini VLM output (image + bboxes + goal atoms). "
++        "Loaded if the file exists, skipping the API call; otherwise written "
++        "after the first VLM call. Leave unset to always call the API."
++    ),
++)
++parser.add_argument(
++    "--vlm_predicates", action=argparse.BooleanOptionalAction, default=False,
++    help=(
++        "Derive scene predicates for the planner from the workspace image via "
++        "the planning VLM instead of from geometric grounding."
++    ),
++)
++
++
++def main() -> None:
++    args = parser.parse_args()
++
++    scene = copy.deepcopy(EMPTY_SCENE)
++
++    # --- 1. Create environment ---
++    if args.realsense_env:
++        env = RealsenseEnv(apriltag_size_m=0.1, apriltag_id=3)
++    else:
++        env_cfg = {
++            "robot_ip": args.robot_ip,
++            "device": args.device,
++            "num_envs": 1,
++        }
++        from skillet_tasks.kortex_tasks.factory import create_kortex_env
++
++        env = create_kortex_env(args.task, env_cfg)
++        env = SkilletEnv(env)
++        env = BatchToSingleWrapper(env)
++        env.reset()
++
++    obs_spec_name = "rgb-d" if args.realsense_env else "rgbd-gripper"
++    rgbd_spec: ObservationSpec[RGBD_Obs] = env.coerce_obs_spec(obs_spec_name)
++
++    # --- 2. Start perception (VLM + SAM → scene with 3D poses) ---
++    perception = SkilletPerception(
++        env=env,
++        scene=scene,
++        obs_spec=rgbd_spec,
++        reconstructor="sam",
++        poll_rate_hz=args.poll_rate_hz,
++        device=args.device,
++        vlm_cache_path=args.vlm_cache_path,
++    )
++    perception.task_instruction = args.goal
++    perception.build_scene = True
++
++    visualizer = Open3DVisualizer(scene, env)
++    perception.set_visualizer(visualizer, segment_point_cloud=True)
++    perception.run_thread()
++    visualizer.run_thread()
++
++    # Wait for perception to detect objects
++    print(f"[KortexLLM] Waiting for perception to build scene...")
++    timeout = 60
++    start = time.time()
++    while not scene.contains_objects and (time.time() - start) < timeout:
++        time.sleep(0.5)
++
++    if not scene.contains_objects:
++        print("[KortexLLM] ERROR: Perception timed out — no objects detected.")
++        perception.stop()
++        env.close()
++        return
++
++    print(f"[KortexLLM] Scene built:\n{scene}")
++
++    # --- 3. Create LLM planner ---
++    planner = LLMPlanner(
++        client=OpenAIClient(model=args.model),
++        use_vlm_predicates=args.vlm_predicates,
++    )
++
++    if args.realsense_env:
++        # RealSense only: no robot, just test perception + planning
++        print(f"[KortexLLM] Goal: {args.goal}")
++        print(f"[KortexLLM] Model: {args.model}")
++        print("[KortexLLM] RealSense mode — planning only (no robot execution).")
++
++        success, plan = planner.plan(perception.scene, args.goal)
++        print(f"\n=== LLM Plan (success={success}) ===")
++        if plan:
++            for i, action in enumerate(plan.actions):
++                print(f"  Step {i}: {action.action}({action.parameters})")
++        else:
++            print("  No plan generated.")
++
++        input("\n[KortexLLM] Press Enter to stop...")
++        perception.stop()
++        env.close()
++        return
++
++    # --- 4. Create skills (requires robot) ---
++    from skillet.policy import TwistPidPosePolicy
++
++    arm_policy = TwistPidPosePolicy(
++        env.batched_env.obs_spec_twist_tcp,
++        env.batched_env.action_spec_twist_tcp,
++    )
++    skill_length = int(1e9)
++
++    pick_skill = PickSkill(
++        reach_policy=arm_policy, gripper_policy=None,
++        lift_height=0.23, length=skill_length,
++    )
++    place_skill = PlaceSkill(
++        reach_policy=arm_policy, gripper_policy=None,
++        lift_height=0.23, length=skill_length,
++    )
++
++    pick_block_skill = PickBlockSkill(
++        perception.scene, pick_skill, vis_target_pos=visualizer.set_target_pos,
++    )
++    place_block_skill = PlaceBlock2Skill(
++        perception.scene, place_skill, vis_target_pos=visualizer.set_target_pos,
++    )
++
++    action_map = {
++        "pick_block": pick_block_skill,
++        "place_block": place_block_skill,
++    }
++
++    # --- 5. Create agent and run ---
++    agent = LLMPlanningAgent(
++        scene=perception.scene,
++        planner=planner,
++        action_to_skill_map=action_map,
++        goal=args.goal,
++        perception=perception,
++    )
++
++    print(f"[KortexLLM] Goal: {args.goal}")
++    print(f"[KortexLLM] Model: {args.model}")
++    input("[KortexLLM] Press Enter to start execution...")
++
++    with torch.inference_mode():
++        agent.execute(env)
++
++    print("[KortexLLM] Done.")
++    perception.stop()
++    env.close()
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/skillet/agents/llm_agent.py b/skillet/agents/llm_agent.py
+new file mode 100644
+index 0000000..ca6785b
+--- /dev/null
++++ b/skillet/agents/llm_agent.py
+@@ -0,0 +1,190 @@
++"""An agent that uses an LLM planner with scene-predicate verification."""
++
++import time
++from typing import Any
++
++import numpy as np
++from PIL import Image
++
++from skillet.agents.base_agent import Agent
++from skillet.agents.llm_planner import LLMPlanner
++from skillet.core.env import Environment
++from skillet.core.skill import SingleSkill, SkillStatusCodes
++from skillet.perception import SkilletPerception
++from skillet.scene.abstract.spatial_grounding import (
++    ground_cube_on_relations,
++    ground_gripper_relations,
++)
++from skillet.scene.base import Scene
++
++
++class LLMPlanningAgent(Agent):
++    """An agent that uses an LLM to plan skill sequences.
++
++    Each action is verified against live scene predicates after it executes.
++    Execution halts on the first failure — no replanning.
++
++    Args:
++        scene: The scene with object poses.
++        planner: LLMPlanner instance.
++        action_to_skill_map: Maps action names to skill instances.
++        goal: Natural language goal.
++
++    """
++
++    def __init__(
++        self,
++        scene: Scene,
++        planner: LLMPlanner,
++        action_to_skill_map: dict[str, SingleSkill],
++        goal: str,
++        perception: SkilletPerception | None = None,
++    ) -> None:
++        """Initialize the agent.
++
++        Args:
++            perception: Optional perception instance. Required when the
++                planner uses VLM-based predicates (so the agent can capture a
++                workspace image to pass into ``planner.plan``).
++
++        """
++        super().__init__()
++        self._scene = scene
++        self._planner = planner
++        self._action_to_skill_map = action_to_skill_map
++        self._goal = goal
++        self._perception = perception
++
++    def _capture_image(self) -> Image.Image | None:
++        """Capture the current workspace RGB image from perception."""
++        if self._perception is None:
++            print("[LLMAgent] No perception attached; cannot capture image.")
++            return None
++
++        obs = self._perception.latest_observation
++        if obs is None:
++            print("[LLMAgent] perception.latest_observation is None; cannot capture image.")
++            return None
++
++        try:
++            rgb = obs["rgb"]
++        except (KeyError, TypeError) as e:
++            print(f"[LLMAgent] Could not read 'rgb' from latest_observation: {e}")
++            return None
++
++        rgb_np = rgb.cpu().numpy() if hasattr(rgb, "cpu") else np.asarray(rgb)
++        if rgb_np.ndim == 4:
++            rgb_np = rgb_np[0]
++        if rgb_np.shape[0] == 3:
++            rgb_np = rgb_np.transpose(1, 2, 0)
++
++        return Image.fromarray(rgb_np.astype(np.uint8))
++
++    def _execute_plan(self, env: Environment[Any, Any]) -> bool:
++        """Execute the current plan with scene-predicate verification.
++
++        Returns True if every action in the plan completed and verified.
++        """
++        if self._plan is None:
++            return False
++
++        terminated = False
++
++        for ab_action in self._plan.actions:
++            if ab_action.action not in self._action_to_skill_map:
++                print(f"[LLMAgent] Unknown action: {ab_action.action}")
++                return False
++
++            self._selected_skill = self._action_to_skill_map[ab_action.action]
++            ids = self._scene.resolve_names_to_ids(ab_action.parameters)
++
++            # PickBlockSkill takes a single Discrete block id (source block).
++            # PlaceBlock2Skill takes [source_id, target_id] so it can dispatch
++            # on whether the target is a Cube or a Table.
++            if ab_action.action == "pick_block":
++                skill_args = ids[0]
++            elif ab_action.action == "place_block":
++                skill_args = ids
++            else:
++                skill_args = ids
++
++            obs = env.get_observation(self._selected_skill.obs_spec)
++            self._selected_skill.initiate(obs, skill_args)
++
++            skill_done = self._selected_skill.is_terminated(
++                env.get_observation(self._selected_skill.obs_spec)
++            )
++            while not skill_done and not bool(terminated):
++                action = self._selected_skill.get_action(
++                    env.get_observation(self._selected_skill.obs_spec)
++                )
++                _, r, term, trunc, _ = env.step(
++                    action, action_spec=self._selected_skill.action_spec
++                )
++                terminated = terminated | term | trunc
++                skill_done = self._selected_skill.is_terminated(
++                    env.get_observation(self._selected_skill.obs_spec)
++                )
++
++            if self._selected_skill.status != SkillStatusCodes.SUCCESS:
++                print(f"[LLMAgent] Skill {ab_action.action}({ab_action.parameters}) failed (status).")
++                return False
++
++            if terminated:
++                print("[LLMAgent] Environment terminated.")
++                return False
++
++            verified, explanation = self._verify_action_from_scene(
++                ab_action.action, ab_action.parameters
++            )
++            if verified:
++                print(f"[LLMAgent] Verified {ab_action.action}({ab_action.parameters}): {explanation}")
++            else:
++                print(f"[LLMAgent] Verification failed for {ab_action.action}({ab_action.parameters}): {explanation}")
++                return False
++
++        return True
++
++    def _verify_action_from_scene(
++        self, action: str, params: list[str], timeout_s: float = 3.0, poll_s: float = 0.25
++    ) -> tuple[bool, str]:
++        """Confirm an action's post-condition by polling scene predicates."""
++        start = time.time()
++        last_reason = "no predicate check executed"
++        while time.time() - start < timeout_s:
++            on_preds, _ = ground_cube_on_relations(self._scene)
++            _, holding_preds = ground_gripper_relations(self._scene)
++
++            if action == "pick_block" and len(params) >= 1:
++                block_name = params[0]
++                if any(h[1].name == block_name for h in holding_preds):
++                    return True, f"scene shows gripper holding {block_name}"
++                currently_holding = [h[1].name for h in holding_preds] or "nothing"
++                last_reason = f"gripper is holding {currently_holding}, expected {block_name}"
++            elif action == "place_block" and len(params) >= 2:
++                block_name, surface_name = params[0], params[1]
++                if any(o[1].name == block_name and o[2].name == surface_name for o in on_preds):
++                    return True, f"scene shows {block_name} on {surface_name}"
++                on_what = next((o[2].name for o in on_preds if o[1].name == block_name), "nothing")
++                last_reason = f"{block_name} is on {on_what}, expected {surface_name}"
++            else:
++                return True, f"no predicate rule for {action}; skipping verification"
++
++            time.sleep(poll_s)
++
++        return False, f"timed out after {timeout_s:.1f}s — {last_reason}"
++
++    def execute(self, env: Environment[Any, Any]) -> None:
++        """Plan once and execute. Stop on the first failure."""
++        image = self._capture_image()
++        success, self._plan = self._planner.plan(self._scene, self._goal, image=image)
++        if not success or self._plan is None:
++            print("[LLMAgent] Failed to generate plan.")
++            return
++
++        print(f"[LLMAgent] Plan: {self._plan}")
++
++        if self._execute_plan(env):
++            print("[LLMAgent] Plan executed successfully.")
++        else:
++            print("[LLMAgent] Execution halted.")
+\ No newline at end of file
+diff --git a/skillet/agents/llm_planner.py b/skillet/agents/llm_planner.py
+new file mode 100644
+index 0000000..48f49dd
+--- /dev/null
++++ b/skillet/agents/llm_planner.py
+@@ -0,0 +1,228 @@
++"""An LLM-based task planner"""
++
++import base64
++import io
++from abc import ABC, abstractmethod
++
++from PIL import Image
++
++from skillet.scene.abstract.spatial_grounding import ground_cube_on_relations, ground_gripper_relations
++from skillet.scene.abstract.up_utils import AbstractAction, AbstractPlan
++from skillet.scene.base import Scene
++from skillet.scene.cube import Cube
++
++
++_PREDICATE_PROMPT = """You are analyzing a robot tabletop workspace from the attached image.
++
++Available blocks: {block_names}
++Surface: {table_name}
++
++Output the current spatial state as a list of predicates, one per line, using EXACTLY these forms (no bullets, no extra punctuation):
++  X is on Y
++  X is clear (nothing on top)
++  Robot hand is empty
++  Robot is holding X
++
++Use the block names verbatim. Emit a predicate for every block on a surface (block or table), mark each block that has nothing on top of it as clear, and state exactly one of "Robot hand is empty" or "Robot is holding X". Output only the predicate lines, nothing else."""
++
++
++class LLMClient(ABC):
++    """Abstract interface for an LLM text completion client."""
++
++    @abstractmethod
++    def complete(self, prompt: str) -> str:
++        """Send a text prompt and return the raw text response."""
++        raise NotImplementedError
++
++    @abstractmethod
++    def complete_with_image(self, prompt: str, image: Image.Image) -> str:
++        """Send a text prompt with an image and return the raw text response."""
++        raise NotImplementedError
++
++    def predicates_from_image(
++        self, image: Image.Image, block_names: list[str], table_name: str
++    ) -> list[str]:
++        """Ask the VLM for scene predicates matching the geometric grounding format."""
++        prompt = _PREDICATE_PROMPT.format(
++            block_names=", ".join(block_names), table_name=table_name
++        )
++        response = self.complete_with_image(prompt, image)
++        return [line.strip() for line in response.strip().splitlines() if line.strip()]
++
++
++class OpenAIClient(LLMClient):
++    """OpenAI client"""
++
++    def __init__(self, model: str = "gpt-4o", api_key: str | None = None, base_url: str | None = None) -> None:
++        from openai import OpenAI
++
++        self._client = OpenAI(api_key=api_key, base_url=base_url)
++        self._model = model
++
++    def complete(self, prompt: str) -> str:
++        response = self._client.chat.completions.create(
++            model=self._model,
++            messages=[{"role": "user", "content": prompt}],
++            temperature=0.0,
++        )
++        return response.choices[0].message.content
++
++    def complete_with_image(self, prompt: str, image: Image.Image) -> str:
++        buf = io.BytesIO()
++        image.save(buf, format="JPEG")
++        b64_image = base64.b64encode(buf.getvalue()).decode("utf-8")
++
++        response = self._client.chat.completions.create(
++            model=self._model,
++            messages=[{
++                "role": "user",
++                "content": [
++                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_image}"}},
++                    {"type": "text", "text": prompt},
++                ],
++            }],
++            temperature=0.0,
++        )
++        return response.choices[0].message.content
++
++
++class GeminiLLMClient(LLMClient):
++    """Google Gemini client"""
++
++    def __init__(self, model: str = "gemini-2.5-flash", api_key: str | None = None) -> None:
++        from google import genai
++
++        self._client = genai.Client(api_key=api_key)
++        self._model = model
++
++    def complete(self, prompt: str) -> str:
++        response = self._client.models.generate_content(model=self._model, contents=[prompt])
++        return response.text
++
++    def complete_with_image(self, prompt: str, image: Image.Image) -> str:
++        response = self._client.models.generate_content(
++            model=self._model, contents=[image, prompt]
++        )
++        return response.text
++
++
++class LLMPlanner:
++    """Uses an LLM to generate a plan from the current scene state.
++
++    Args:
++        client: An LLMClient instance. Defaults to OpenAIClient("gpt-4o")
++
++    """
++
++    def __init__(self, client: LLMClient | None = None, use_vlm_predicates: bool = False) -> None:
++        """Initialize the planner.
++
++        Args:
++            client: An LLMClient instance. Defaults to OpenAIClient("gpt-4o").
++            use_vlm_predicates: If True, derive scene predicates from a workspace
++                image via the VLM; otherwise use geometric grounding on the
++                scene's 3D poses.
++
++        """
++        self._client = client or OpenAIClient()
++        self._use_vlm_predicates = use_vlm_predicates
++
++    def _geometric_state_lines(self, scene: Scene) -> list[str]:
++        """Build predicate lines from the scene's symbolic grounding."""
++        on_preds, clear_preds = ground_cube_on_relations(scene)
++        empty_pred, holding_pred = ground_gripper_relations(scene)
++
++        lines = []
++        for pred in on_preds:
++            lines.append(f"  {pred[1].name} is on {pred[2].name}")
++        for pred in clear_preds:
++            lines.append(f"  {pred[1].name} is clear (nothing on top)")
++        if empty_pred:
++            lines.append("  Robot hand is empty")
++        for pred in holding_pred:
++            lines.append(f"  Robot is holding {pred[1].name}")
++        return lines
++
++    def scene_to_prompt(self, scene: Scene, goal: str, image: Image.Image | None = None) -> str:
++        """Convert scene state into a natural language prompt for the LLM."""
++        block_names = scene.get_object_names(Cube)
++        table_name = scene.table.name
++
++        if self._use_vlm_predicates:
++            if image is None:
++                raise ValueError(
++                    "LLMPlanner configured with use_vlm_predicates=True but no image was provided."
++                )
++            raw_lines = self._client.predicates_from_image(image, block_names, table_name)
++            state_lines = [f"  {line}" for line in raw_lines]
++            print("[LLMPlanner] Predicates source: VLM (image-based)")
++        else:
++            state_lines = self._geometric_state_lines(scene)
++            print("[LLMPlanner] Predicates source: geometric grounding")
++
++        print("[LLMPlanner] Predicates:")
++        for line in state_lines:
++            print(line.rstrip())
++
++        state_str = "\n".join(state_lines)
++
++        return f"""You are a robot task planner. Plan a sequence of pick and place actions.
++
++Available objects: {', '.join(block_names)} (blocks), {table_name} (table surface)
++
++Current state:
++{state_str}
++
++Goal: {goal}
++
++Available actions:
++- pick_block(block, surface): Pick up a block from a surface. Requires: block is clear, block is on surface, hand is empty.
++- place_block(block, surface): Place a block onto a surface. Requires: holding the block, surface is clear.
++
++IMPORTANT:
++- First check whether the goal is ALREADY satisfied by the current state. If every goal condition already holds, output `[]` (an empty list) — do NOT add pointless actions.
++- Skip any step whose effect already holds in the current state.
++- Only output actions that change the state toward the goal.
++
++Output ONLY a JSON list of actions. Example (when the goal is not yet met):
++[
++  {{"action": "pick_block", "params": ["red_block", "table0"]}},
++  {{"action": "place_block", "params": ["red_block", "blue_block"]}}
++]"""
++
++    def plan(
++        self, scene: Scene, goal: str, image: Image.Image | None = None
++    ) -> tuple[bool, AbstractPlan | None]:
++        """Query the LLM to generate a plan.
++
++        Args:
++            scene: Current scene with object poses.
++            goal: Natural language goal description.
++            image: Workspace image. Required when ``use_vlm_predicates=True``,
++                ignored otherwise.
++
++        Returns:
++            (success, plan) tuple matching the AbstractModel.plan() interface.
++
++        """
++        import json
++
++        prompt = self.scene_to_prompt(scene, goal, image=image)
++        content = self._client.complete(prompt)
++
++        # Parse JSON from response (strip markdown code fences if present)
++        content = content.strip()
++        if content.startswith("```"):
++            content = content.split("\n", 1)[1].rsplit("```", 1)[0]
++
++        try:
++            actions_json = json.loads(content)
++        except json.JSONDecodeError:
++            print(f"[LLMPlanner] Failed to parse LLM response:\n{content}")
++            return (False, None)
++
++        actions = [
++            AbstractAction(action=a["action"], parameters=a["params"])
++            for a in actions_json
++        ]
++        return (True, AbstractPlan(actions=actions))
+\ No newline at end of file
+diff --git a/skillet/skill/object_level/place_block.py b/skillet/skill/object_level/place_block.py
+index 55a3a91..52c2fce 100644
+--- a/skillet/skill/object_level/place_block.py
++++ b/skillet/skill/object_level/place_block.py
+@@ -39,7 +39,7 @@ class PlaceBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
+         )
+ 
+         self._status = None
+-        self._offset = torch.tensor([0, 0.0, 0.035], device=self.obs_spec.device)
++        self._offset = torch.tensor([0, 0.0, 0.055], device=self.obs_spec.device)
+ 
+         self._vis_target_pos = vis_target_pos
+ 
+-- 
+2.43.0
+
