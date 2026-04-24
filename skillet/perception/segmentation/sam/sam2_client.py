@@ -1,7 +1,6 @@
 """SAM2 segmentation — local predictor and remote HTTP client."""
 
 import os
-from functools import cache
 from pathlib import Path
 
 import numpy as np
@@ -15,7 +14,7 @@ from typing_extensions import override
 from skillet.perception.segmentation.sam.sam_base import SAMClient
 from skillet.perception.utils import get_skillet_model_cache_dir
 
-_SAM2_BASE_URL = Path("https://dl.fbaipublicfiles.com/segment_anything_2/092824")
+_SAM2_BASE_URL = Path("https://dl.fbaipublicfiles.com/segment_anything_2/092824/")
 
 
 class SAM2Client(SAMClient):
@@ -34,8 +33,8 @@ class SAM2Client(SAMClient):
 
         """
         model_path = self._download_sam_checkpoint(model_name)
-        self.sam_model = self._load_sam_model(checkpoint=model_path)
         super().__init__(model_path, device)
+        self.sam_model = self._load_sam_model(checkpoint=model_path)
 
     @override
     def segment_from_bboxes(
@@ -44,7 +43,8 @@ class SAM2Client(SAMClient):
         bboxes: Float[torch.Tensor | np.ndarray, "n 4"] | None = None,
     ) -> tuple[Float[torch.Tensor, "n 1 h w"], Float[torch.Tensor, " n"]]:
         # bboxes are already in SAM2 format [x0, y0, x1, y1] (pixels)
-
+        if isinstance(rgb, torch.Tensor):
+            rgb = rgb.cpu().numpy()
         self.sam_model.set_image(rgb)
         masks, scores, _ = self.sam_model.predict(
             point_coords=None,
@@ -53,10 +53,10 @@ class SAM2Client(SAMClient):
             multimask_output=False,
         )
 
-        masks_t = torch.from_numpy(masks, device=self.device)
-        if masks.dim() == 3:
-            masks_t = masks_t.unsqueeze(0)
-        scores_t = torch.from_numpy(scores, device=self.device)
+        masks_t = torch.as_tensor(masks, device=self.device)
+        if masks.ndim == 4:
+            masks_t = masks_t.squeeze()
+        scores_t = torch.as_tensor(scores, device=self.device)
         return masks_t, scores_t
 
     @override
@@ -72,12 +72,12 @@ class SAM2Client(SAMClient):
     def _download_sam_checkpoint(self, model_name: str = "sam2.1_hiera_large.pt") -> str:
         """Download SAM2 checkpoint if it doesn't already exist."""
         model_url = _SAM2_BASE_URL / model_name
-        dest_path = get_skillet_model_cache_dir() / "sam2" / model_name
+        dest_path = get_skillet_model_cache_dir() / model_name
 
         if dest_path.exists():
             return dest_path
 
-        (get_skillet_model_cache_dir() / "sam2").mkdir(parents=True, exist_ok=True)
+        (get_skillet_model_cache_dir()).mkdir(parents=True, exist_ok=True)
 
         print(f"[INFO][SAM]Downloading SAM2 checkpoint from {model_url} to {dest_path}.")
         response = requests.get(model_url, stream=True)

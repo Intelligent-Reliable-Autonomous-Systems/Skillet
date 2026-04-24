@@ -22,7 +22,7 @@ from skillet.perception.reconstruction.utils import (
     transform_xyz_to_world,
 )
 from skillet.perception.segmentation.sam import get_sam_client
-from skillet.perception.segmentation.vlm import GeminiClient
+from skillet.perception.segmentation.vlm import GeminiClient, QwenClient
 from skillet.scene import CUBE_SIZE, Cube
 from skillet.scene.base import Scene
 
@@ -39,6 +39,7 @@ class SAMReconstructor(ReconstructorBase):
         self,
         scene: Scene | None = None,
         model: Literal["sam2", "sam3", "sam3_streaming"] = "sam3",
+        vlm_model: Literal["gemini", "qwen"] = "gemini",
         mode: Literal["text", "bboxes"] = "text",
         device: str = "cuda",
         visualize: bool = True,
@@ -48,7 +49,7 @@ class SAMReconstructor(ReconstructorBase):
         self._model = model
         self._mode = mode
         self._sam_model = get_sam_client(model)
-        self._vlm_client = GeminiClient()
+        self._vlm_client = GeminiClient() if vlm_model == "gemini" else QwenClient()
         self._visualize = visualize
 
         self._masks = None
@@ -90,7 +91,7 @@ class SAMReconstructor(ReconstructorBase):
         camera_pose = obs["camera_pose"]
 
         if self._mode == "text":
-            concepts = ["purple block", "yellow block", "pink block", "blue block", "green block", "robot_arm"]
+            concepts = ["block", "robot_arm"]
             masks, _, _, concept_indices = self._sam_model.segment_from_concepts(rgb, concepts)
         elif self._mode == "bboxes":
             bboxes = [

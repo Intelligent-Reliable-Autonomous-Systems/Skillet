@@ -89,6 +89,29 @@ class GeminiClient(VLMClient):
 
         return self._parse_response(result)
 
+    def _parse_response(self, result: list | dict) -> tuple[list, list, list]:
+        """Parse the response from the VLM. Assumes a prompt in ./prompts/.
+
+        Args:
+            result: JSON formatted result from VLM
+
+        Returns:
+            Lists of bounding boxes, goal predicates, and scene predicates.
+
+        """
+        bboxes = result.get("bboxes", [])
+        grounded_goal_atoms = [
+            {"goal_predicate": spec["name"], "args": spec["args"]}
+            for spec in result.get("goal_predicates", [])
+            if spec.get("name") and spec.get("args")
+        ]
+        grounded_scene_atoms = [
+            {"scene_predicate": spec["name"], "args": spec["args"]}
+            for spec in result.get("scene_predicates", [])
+            if spec.get("name") and spec.get("args")
+        ]
+        return bboxes, grounded_goal_atoms, grounded_scene_atoms
+
     @cache
     def gemini_client(self) -> genai.Client:
         """Return the gemini client class."""
