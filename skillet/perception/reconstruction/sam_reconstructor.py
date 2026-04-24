@@ -90,7 +90,7 @@ class SAMReconstructor(ReconstructorBase):
         camera_pose = obs["camera_pose"]
 
         if self._mode == "text":
-            concepts = ["block", "robot_arm"]
+            concepts = ["purple block", "yellow block", "pink block", "blue block", "green block", "robot_arm"]
             masks, _, _, concept_indices = self._sam_model.segment_from_concepts(rgb, concepts)
         elif self._mode == "bboxes":
             bboxes = [

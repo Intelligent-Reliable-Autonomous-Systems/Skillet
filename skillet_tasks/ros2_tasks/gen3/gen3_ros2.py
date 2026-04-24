@@ -14,11 +14,6 @@ from typing import Any
 import gymnasium as gym
 import numpy as np
 import torch
-from control_msgs.action import GripperCommand, ParallelGripperCommand
-from geometry_msgs.msg import Twist
-from rclpy.action import ActionClient
-from std_msgs.msg import Float32MultiArray
-from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
 from skillet.core.spaces import ActionSpec
 from skillet.envs.ros2 import (
@@ -96,15 +91,7 @@ class Gen3Ros2Env(Ros2Env):
         self._current_joint_efforts = np.zeros(shape=len(self.joint_names))
         self.prev_action = np.zeros(shape=(len(self.joint_names),))
 
-        self.active_controller = "twist_controller"
-
-        # Create publishers
-        self.gripper_action_client = ActionClient(self, ParallelGripperCommand, self.cfg.gripper_cmd_topic)
-        self.joint_traj_pub = self.create_publisher(
-            JointTrajectory, "/joint_trajectory_controller/joint_trajectory", 10
-        )
-        self.joint_vel_pub = self.create_publisher(Float32MultiArray, "/forward_velocity_controller/commands", 10)
-        self.twist_pub = self.create_publisher(Twist, "/twist_controller/commands", 10)
+        self.active_controller = "joint_trajectory_controller"
 
         # Set up controller interfaces
         # self.controller_client = Service(
@@ -113,7 +100,6 @@ class Gen3Ros2Env(Ros2Env):
         self._rs_cam_localizer = RealsenseCameraLocalizer(apriltag_size_m=0.1, apriltag_id=self.cfg.base_apriltag_id)
 
         self.curr_gripper_goal = None
-        self.curr_moveit_goal = None
 
     def _pre_process_action(self, actions: torch.Tensor, action_spec: ActionSpec[Any] | None = None) -> np.ndarray:
         """Pre process the robot action.
@@ -144,14 +130,13 @@ class Gen3Ros2Env(Ros2Env):
         """
         # Publish BLOCKING gripper command. To keep the gripper stationary
         # Assumes we can either move joints or close gripper, not both
-        # if self._publish_gripper(action, action_spec, close_time=2.0):
-        #     return
+        if self._publish_gripper(action, action_spec, close_time=2.0):
+            return
 
         if action_spec is None or action_spec.name == "joints_vel":
             self._publish_joint_vel_spec(action, duration)
         elif action_spec.name == "twist_tcp":
             self._publish_twist_tcp_spec(action)
-
         else:
             raise ValueError(f"Unknown Action Specification `{action_spec.name}`")
 
@@ -229,19 +214,15 @@ class Gen3Ros2Env(Ros2Env):
         gripper_val = float(joint_pos[-1])
         gripper_val = max(0, min(gripper_val, 1)) * 0.8
 
-        # gripper_goal = ParallelGripperCommand()
-        gripper_goal.name = self.cfg.gripper_joint_names
-        gripper_goal.position = [gripper_val]
-        gripper_goal.effort = [100.0]
-        self.gripper_action_client.send_goal(gripper_goal)
-
-        if gripper_goal != self.curr_gripper_goal:
+        if gripper_val != self.curr_gripper_goal:
             if action_spec is None or action_spec.name == "joints_vel":
                 self._publish_joint_vel_spec(np.zeros_like(joint_pos), duration)
             elif action_spec.name == "twist_tcp":
                 self._publish_twist_tcp_spec(np.zeros_like(joint_pos))
             new_gripper_goal = True
+            self._ros2_listener.send_gripper_goal(gripper_val)
             time.sleep(close_time)
+            self.curr_gripper_goal = gripper_val
 
         return new_gripper_goal
 
@@ -254,7 +235,6 @@ class Gen3Ros2Env(Ros2Env):
 
         """
         if self.active_controller != "joint_trajectory_controller":
-            print("[INFO] Switching controller to `joint_trajectory_controller`")
             if not self.switch_controllers(activate=["joint_trajectory_controller"], deactivate=["twist_controller"]):
                 print("[INFO] Unable to switch controller to `joint_trajectory_controller`. Aborting trajectory.")
                 return
@@ -280,18 +260,13 @@ class Gen3Ros2Env(Ros2Env):
         """
         if self.active_controller != "twist_controller":
             print("[INFO] Switching controller to `twist_controller`")
-            if not self.switch_controllers(activate=["twist_controller"], deactivate=["joint_trajectory_controller"]):
+            if not self._ros2_listener.switch_controllers(
+                activate=["twist_controller"], deactivate=["joint_trajectory_controller"]
+            ):
                 print("[INFO] Unable to switch controller to `twist_controller`. Aborting trajectory.")
                 return
             self.active_controller = "twist_controller"
+
             print("[INFO] Successfully switched controller to `twist_controller`")
 
-        twist_cmd = Twist()
-        twist_cmd.linear.x = float(twist[0])
-        twist_cmd.linear.y = float(twist[1])
-        twist_cmd.linear.z = float(twist[2])
-        twist_cmd.angular.x = float(twist[3])
-        twist_cmd.angular.y = float(twist[4])
-        twist_cmd.angular.z = float(twist[5])
-
-        self.twist_pub.publish(twist_cmd)
+        self._ros2_listener.twist_cmd = twist

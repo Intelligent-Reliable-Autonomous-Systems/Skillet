@@ -7,6 +7,7 @@ Written by Will Solow, 2026
 """
 
 import math
+import threading
 import time
 from abc import abstractmethod
 from typing import Any
@@ -14,8 +15,6 @@ from typing import Any
 import numpy as np
 import pinocchio as pin
 import torch
-from rclpy.node import Node
-from sensor_msgs.msg import JointState
 
 from skillet.core.math import convert_quat
 from skillet.core.spaces import ActionSpec
@@ -24,9 +23,10 @@ from skillet.envs.compatibility.s2r import CollisionProximityMonitor
 from skillet.envs.util import configure_seed
 
 from .ros2_env_cfg import Ros2EnvCfg
+from .ros2_listener import Ros2EnvListener
 
 
-class Ros2Env(Node, SkilletGymEnv):
+class Ros2Env(SkilletGymEnv):
     """The superclass for the ROS2 workflow to design environments.
 
     This class implements the core functionality for reinforcement learning (RL)
@@ -60,7 +60,6 @@ class Ros2Env(Node, SkilletGymEnv):
             kwargs: Additoinal arguments
 
         """
-        super().__init__("Ros2Env")
         self.cfg = cfg
         self.num_envs = cfg.num_envs
         self.device = cfg.device
@@ -82,6 +81,9 @@ class Ros2Env(Node, SkilletGymEnv):
 
         # setup the action and observation spaces for Gym
         self._next_step_time = time.perf_counter()
+        self._ros2_listener = Ros2EnvListener.initialize_ros2(self.physics_dt, self.cfg)
+        self._ros2_thread = threading.Thread(target=Ros2EnvListener.spin_node, args=(self._ros2_listener,), daemon=True)
+        self._ros2_thread.start()
 
         # Set up the collision checker and add the table
         self._collision_checker = CollisionProximityMonitor(
@@ -92,8 +94,6 @@ class Ros2Env(Node, SkilletGymEnv):
             size_xyz=[2.0, 2.0, 0.05],
             xyz=[0.0, 0.0, -0.05],
         )
-
-        self._joint_sub = self.create_subscription(JointState, "/joint_states", self._robot_state_sub, 10)
 
         print("[INFO][Ros2Env] Completed Environment Setup")
 
@@ -302,7 +302,6 @@ class Ros2Env(Node, SkilletGymEnv):
         else:
             # Pre process the robot action
             action = self._pre_process_action(action, action_spec=action_spec)
-
         # Send the robot action to hardware
         self._publish_action_to_ros(action, duration=self.step_dt, action_spec=action_spec)
         sleep_time = (time.perf_counter() - self._next_step_time) - self.step_dt
@@ -358,7 +357,7 @@ class Ros2Env(Node, SkilletGymEnv):
 
     def close(self) -> None:
         """Cleanup for the environment."""
-        self.destroy_node()
+        ...
 
     """
     Helper functions.
@@ -448,47 +447,14 @@ class Ros2Env(Node, SkilletGymEnv):
     Helper functions to communicate with ROS2
     """
 
-    def switch_controllers(self, activate: list[str], deactivate: list[str], strictness: int = 1) -> bool:
-        """Switch ROS2 controllers.
-
-        Args:
-            activate: List of controllers to activate.
-            deactivate: List of controllers to deactivate.
-            strictness: Control the switch beheavior. 1 or 2. Default 2 to "fail loudly
-
-        Returns:
-            Bool if the controller switch was successful
-
-        """
-        # request = {
-        #     "activate_controllers": activate,
-        #     "deactivate_controllers": deactivate,
-        #     "strictness": strictness,
-        #     "activate_asap": True,
-        #     "timeout": {"sec": 5, "nanosec": 0},
-        # }
-
-        # result = self.controller_client.call(request)
-
-        # return result["ok"]
-        # TODO fix this for ROS2
-        return None
-
-    def _robot_state_sub(self, msg: JointState) -> None:
-        self._current_joint_positions = np.asarray([msg.position[msg.name.index(j)] for j in self.joint_names]).astype(
-            np.float32
-        )
-        self._current_joint_velocities = np.asarray([msg.velocity[msg.name.index(j)] for j in self.joint_names]).astype(
-            np.float32
-        )
-        self._current_joint_efforts = np.asarray([msg.effort[msg.name.index(j)] for j in self.joint_names]).astype(
-            np.float32
-        )
-
     def _update_robot_info(self) -> None:
-        """Obtain the required robot information from the Kortex API."""
+        """Obtain the required robot information from the ROS2 Listener."""
         self._robot_links = [f.name for f in self.ros2_model.frames if f.type == pin.FrameType.BODY]
         self._robot_joints = [self.ros2_model.names[i] for i in range(1, self.ros2_model.njoints)]
+
+        self._current_joint_positions = self._ros2_listener.joint_positions
+        self._current_joint_velocities = self._ros2_listener.joint_velocities
+        self._current_joint_efforts = self._ros2_listener.joint_efforts
 
         self._current_lower_joint_limits = np.asarray(self.ros2_model.lowerPositionLimit, dtype=float)
         self._current_upper_joint_limits = np.asarray(self.ros2_model.upperPositionLimit, dtype=float)

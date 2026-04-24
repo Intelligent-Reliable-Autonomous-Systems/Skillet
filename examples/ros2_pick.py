@@ -9,7 +9,6 @@ Written by Will Solow and Jeff Jewett, 2026
 import argparse
 from typing import TYPE_CHECKING
 
-import rclpy
 import torch
 
 import skillet_tasks.ros2_tasks  # noqa: F401
@@ -95,8 +94,6 @@ def main() -> None:
             env.reset()
             policy_over_options_agent.execute(env)
             print("[INFO][Main] finished run of skill executor, resetting")
-    rclpy.shutdown()
-    env.close()
 
 
 if __name__ == "__main__":

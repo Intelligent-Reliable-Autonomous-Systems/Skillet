@@ -92,7 +92,7 @@ class TwistPidPosePolicy(BatchedPolicy[TBPolicyObs, TBAction, TBAction], Generic
 
         # Max velocities
         self.rot_sensitivity = 20.0
-        self.pos_sensitivity = 0.06
+        self.pos_sensitivity = 0.08
 
         # PID gains
         self.Kp_pos = 1.0
