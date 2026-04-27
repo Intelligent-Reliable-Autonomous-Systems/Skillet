@@ -16,7 +16,9 @@ import numpy as np
 import torch
 
 from skillet.perception.reconstruction.apriltag_reconstructor import ApriltagStateReconstructor
-from skillet.perception.reconstruction.sam_reconstructor import SAMReconstructor
+from skillet.perception.reconstruction.sam_reconstructor import Sam3Reconstructor
+from skillet.perception.reconstruction.sam_vlm_reconstructor import SamVlmReconstructor
+from skillet.perception.reconstruction.vlm_reconstructor import VlmReconstructor
 from skillet.scene.utils import arrange_panels, depth_to_colormap_np, segmented_rgbd_to_point_cloud
 
 if TYPE_CHECKING:
@@ -40,7 +42,7 @@ class SkilletPerception:
         env: Environment | BatchedEnvironment,
         scene: Scene,
         obs_spec: ObservationSpec,
-        reconstructor: Literal["sam", "april"] = "april",
+        reconstructor: Literal["sam3", "april", "vlm", "sam+vlm"] = "april",
         poll_rate_hz: float = 10,
         device: str | torch.device | None = None,
         max_depth_m: float | None = None,
@@ -230,15 +232,19 @@ class SkilletPerception:
     def run(self) -> None:
         """Run the SkilletPerception pipeline."""
         if self._reconstructor is None:
-            if self._reconstructor_type == "sam":
+            if self._reconstructor_type == "sam+vlm":
                 print("[INFO][PERCEPTION] Loading SAM reconstructor")
-                self._reconstructor = SAMReconstructor(scene=self._scene, device=self.device)
+                self._reconstructor = SamVlmReconstructor(scene=self._scene, device=self.device)
             elif self._reconstructor_type == "april":
                 print("[INFO][PERCEPTION] Loading AprilTag reconstructor")
                 assert (
                     self._scene is not None
                 ), "[ERROR] Perception Scene cannot be None when using AprilTagStateReconstructor."
                 self._reconstructor = ApriltagStateReconstructor(self._scene)
+            elif self._reconstructor_type == "sam3":
+                self._reconstructor = Sam3Reconstructor(self._scene, device=self.device)
+            elif self._reconstructor_type == "vlm":
+                self._reconstructor = VlmReconstructor(scene=self._scene)
         poll_period_s = 1.0 / self.poll_rate_hz
         next_poll_t = time.perf_counter()
 

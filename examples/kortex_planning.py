@@ -29,7 +29,7 @@ parser.add_argument("--robot_ip", type=str, default="192.168.1.10", help="Robot 
 parser.add_argument("--poll_rate_hz", type=int, default=10, help="Tick rate of the perception")
 parser.add_argument("--task", type=str, default="Kortex-Gen3Lite-v0", help="Kortex Environment")
 parser.add_argument("--build_scene", type=argparse.BooleanOptionalAction, default=True, help="If to build the scene")
-parser.add_argument("--reconstruction", type=str, choices=["sam", "april"], default="sam")
+parser.add_argument("--reconstruction", type=str, choices=["sam3", "april", "vlm", "sam+vlm"], default="sam3")
 parser.add_argument(
     "--perception", type=argparse.BooleanOptionalAction, default=True, help="If to run the perception pipeline"
 )
@@ -47,7 +47,12 @@ def main() -> None:
     """Visualize RGB + depth color map from _get_latest_rgbd()."""
     import pickle
 
-    scene = SIX_CUBE_APRIL_SCENE if args_cli.reconstruction == "april" else EMPTY_SCENE
+    if args_cli.reconstruction == "april":
+        scene = SIX_CUBE_APRIL_SCENE
+    elif args_cli.reconstruction == "sam+vlm" or args_cli.reconstruction == "vlm":
+        scene = EMPTY_SCENE
+    elif args_cli.reconstruction == "sam3":
+        scene = SIX_CUBE_SCENE
     env_cfg = {
         "robot_ip": args_cli.robot_ip,
         "device": "cuda",

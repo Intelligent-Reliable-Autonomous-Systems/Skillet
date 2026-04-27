@@ -4,11 +4,13 @@ import platform
 import subprocess
 import time
 
+import cv2
 import numpy as np
 import requests
 import torch
 from PIL import Image
 
+from skillet.envs.realsense import RealsenseEnv
 from skillet.perception.segmentation.vlm.vlm_base import VLMClient
 
 
@@ -26,7 +28,6 @@ class QwenClient(VLMClient):
         super().__init__(prompt_name, model_id, device)
 
         self.host = host
-
         if not self._is_server_running():
             print("[INFO][OLLAMA] Ollama server not running, starting it...")
             self._start_server()
@@ -57,7 +58,8 @@ class QwenClient(VLMClient):
             time.sleep(interval)
         raise TimeoutError(f"Ollama server did not start within {timeout} seconds.")
 
-    def chat(self, message: str) -> str:
+    def query_text(self, message: str) -> str:
+        """Query the VLM with a message."""
         response = requests.post(
             f"{self.host}/api/chat",
             json={
@@ -65,17 +67,20 @@ class QwenClient(VLMClient):
                 "messages": [{"role": "user", "content": message}],
                 "stream": False,
                 "options": {
-                    "temperature": 0,  # no randomness
-                    "top_p": 1,  # disable nucleus sampling
-                    "top_k": 1,  # always pick the single most likely token
-                    "seed": 42,  # fixed seed for reproducibility
+                    "temperature": 0,
+                    "top_p": 1,
+                    "top_k": 1,
+                    "seed": 0,
                 },
             },
         )
-        response.raise_for_status()
+        if response.status_code != 200:
+            print("[WARN][QWEN] STATUS:", response.status_code)
+            print("[WARN][QWEN] RESPONSE:", response.text)
+            response.raise_for_status()
         return response.json()["message"]["content"]
 
-    def chat_with_image(self, message: str, image: Image.Image | np.ndarray | torch.Tensor) -> str:
+    def query_image(self, message: str, image: Image.Image | np.ndarray | torch.Tensor) -> str:
         """Query the VLM with a message and image."""
         if isinstance(image, Image.Image):
             image_encode = self._encode_image_pil(image)
@@ -88,10 +93,13 @@ class QwenClient(VLMClient):
                 "model": self.model_id,
                 "messages": [{"role": "user", "content": message, "images": [image_encode]}],
                 "stream": False,
-                "options": {"temperature": 0, "top_p": 1, "top_k": 1, "seed": 42, "num_ctx": 4096},
+                "options": {"temperature": 0, "top_p": 1, "top_k": 1, "seed": 0, "num_ctx": 4096},
             },
         )
-        response.raise_for_status()
+        if response.status_code != 200:
+            print("[WARN][QWEN] STATUS:", response.status_code)
+            print("[WARN][QWEN] RESPONSE:", response.text)
+            response.raise_for_status()
         return response.json()["message"]["content"]
 
     def _encode_image_arr(self, image: np.ndarray | torch.Tensor, max_size: int = 512) -> str:
@@ -101,7 +109,6 @@ class QwenClient(VLMClient):
             image = image.cpu().numpy()
         if image.ndim == 3 and image.shape[2] == 3:
             image = image[:, :, ::-1]  # BGR -> RGB
-
         pil_image = Image.fromarray(image.astype(np.uint8))
         pil_image.thumbnail((max_size, max_size))
 
@@ -116,9 +123,18 @@ class QwenClient(VLMClient):
         image.save(buffer, format="JPEG")
         return base64.b64encode(buffer.getvalue()).decode("utf-8")
 
-    def detect_bboxes(self, image: np.ndarray, task_instruction: str) -> str:
-        """Detect the image and translate to bounding boxes."""
-        return self.parse_response(self.chat_with_image(task_instruction, image))
+    def detect_bboxes(self, image: np.ndarray | torch.Tensor, task_instruction: str) -> str:
+        """Detect the image and translate to bounding boxes.
+
+        Args:
+            image: np.ndarray image in shape (H,W,3)
+            task_instruction: natural language task
+        """
+        if isinstance(image, torch.Tensor):
+            image = image.cpu().numpy()
+
+        image = image.transpose((1, 2, 0))
+        return self.parse_response(self.query_image(task_instruction, image))
 
     def parse_response(self, response_text: str) -> tuple[list, list]:
         """Parse Qwen response text into bboxes, grounded goal atoms, and grounded scene atoms."""
@@ -148,3 +164,19 @@ class QwenClient(VLMClient):
             labels.append(o["label"])
 
         return np.asarray(bboxes), np.asarray(labels)
+
+
+def main():
+    env = RealsenseEnv()
+    vlm = QwenClient()
+    cv2.namedWindow("VLM Scene", cv2.WINDOW_NORMAL)
+
+    while True:
+        obs = env.get_observation()
+        out = vlm.query_image(vlm.prompt, obs["rgb"])
+        cv2.imshow("VLM Scene", vlm._bbox_frame)
+        cv2.waitKey(1)
+
+
+if __name__ == "__main__":
+    main()

@@ -25,6 +25,7 @@ class SAM2Client(SAMClient):
         model_name: str = "sam2.1_hiera_large.pt",
         device: str = "cuda",
         use_server: bool = True,
+        load_server: bool = True,
     ) -> None:
         """Initialize the SAM2 client.
 
@@ -36,7 +37,7 @@ class SAM2Client(SAMClient):
         model_path = self._download_sam_checkpoint(model_name)
         self.model_name = "sam2"
         super().__init__(model_path, device, use_server)
-        if use_server and not self._is_server_alive():
+        if not load_server or not use_server:
             self.sam_model = self._load_sam_model(checkpoint=model_path)
 
     @override
@@ -48,6 +49,8 @@ class SAM2Client(SAMClient):
         # bboxes are already in SAM2 format [x0, y0, x1, y1] (pixels)
         if isinstance(rgb, torch.Tensor):
             rgb = rgb.cpu().numpy()
+        if isinstance(rgb, np.ndarray) and rgb.shape[0] == 3:
+            rgb = rgb.transpose((1, 2, 0))
         self.sam_model.set_image(rgb)
         masks, scores, _ = self.sam_model.predict(
             point_coords=None,

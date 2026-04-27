@@ -10,7 +10,7 @@ import numpy as np
 import torch
 
 from skillet.envs.realsense import RealsenseEnv
-from skillet.perception.segmentation.sam import get_sam_client, SAMClient
+from skillet.perception.segmentation.sam import SAMClient, get_sam_client
 from skillet.scene.utils import depth_to_colormap_np
 
 # Distinct BGR colors for mask overlays (high contrast on typical scenes).

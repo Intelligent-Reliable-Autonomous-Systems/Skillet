@@ -1,2 +1,2 @@
 from .apriltag_reconstructor import ApriltagStateReconstructor as ApriltagStateReconstructor
-from .sam_reconstructor import SAMReconstructor as SAMReconstructor
+from .sam_vlm_reconstructor import SamVlmReconstructor as SamVlmReconstructor

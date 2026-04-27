@@ -1,6 +1,6 @@
 """sam_reconstructor.py.
 
-Reconstruct the scene from SAM3 concepts and bounding boxes.
+Reconstruct the scene from a VLM and SAM bounding boxes.
 """
 
 import pathlib
@@ -26,7 +26,7 @@ from skillet.scene import CUBE_SIZE, Cube
 from skillet.scene.base import Scene
 
 
-class Sam3Reconstructor(ReconstructorBase):
+class SamVlmReconstructor(ReconstructorBase):
     """Main class for reconstruction with SAM Client.
 
     Finds the bounding boxes of the cubes, segments point cloud, and projects normal
@@ -37,12 +37,18 @@ class Sam3Reconstructor(ReconstructorBase):
     def __init__(
         self,
         scene: Scene | None = None,
+        model: Literal["sam2", "sam3", "sam3_streaming"] = "sam3",
+        vlm_model: Literal["gemini", "qwen"] = "gemini",
+        mode: Literal["text", "bboxes"] = "text",
         device: str = "cuda",
         visualize: bool = True,
     ) -> None:
         """Initialize the SAM reconstructor."""
         super().__init__(scene, device=device)
-        self._sam_model: SAMClient = get_sam_client("sam3")(use_server=True)
+        self._model = model
+        self._mode = mode
+        self._sam_model: SAMClient = get_sam_client(model)(use_server=True)
+        self._vlm_client = GeminiClient() if vlm_model == "gemini" else QwenClient()
         self._visualize = visualize
 
         self._masks = None
@@ -51,10 +57,6 @@ class Sam3Reconstructor(ReconstructorBase):
         # Scene reconstruction
         self._vlm_bboxes = None
         self._vlm_goal_atoms = None
-
-        self._concepts = ["robot arm"]
-        for o in self._scene.get_object_names(Cube):
-            self._concepts.append(o.replace("_", " "))
 
     @property
     def masks(self) -> torch.Tensor:
@@ -87,7 +89,13 @@ class Sam3Reconstructor(ReconstructorBase):
         intrinsic_k = obs["intrinsic_k"]
         camera_pose = obs["camera_pose"]
 
-        masks, _, _, concept_indices = self._sam_model.segment_concepts(rgb, self._concepts)
+        if self._mode == "text":
+            concepts = ["block", "robot_arm"]
+            masks, _, _, concept_indices = self._sam_model.segment_concepts(rgb, concepts)
+        elif self._mode == "bboxes":
+            raise NotImplementedError("Implement segment from bboxes support...")
+        else:
+            raise ValueError(f"Invalid mode: {self._mode}")
 
         self._masks = masks
         self._segment_indices = torch.arange(masks.shape[0], device=masks.device)
@@ -99,7 +107,7 @@ class Sam3Reconstructor(ReconstructorBase):
             camera_pose = camera_pose.cpu().numpy()
 
         # Grab only the cubes
-        cube_masks = masks[concept_indices != 0].cpu().numpy()
+        cube_masks = masks[concept_indices == 0].cpu().numpy()
         masks = masks.cpu().numpy()
 
         # Find cube centers in the camera frame
@@ -113,33 +121,27 @@ class Sam3Reconstructor(ReconstructorBase):
             frame=frame,
         )
 
+        # TODO assign blocks from name
+
         centers = (
             transform_xyz_to_world(dc["centers"], camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7])
             if frame == "camera"
             else dc["centers"]
         )
 
-        _, ids = get_sorted_object_poses(self._scene, Cube)
-        cube_idx, det_idx = [], []
+        poses, ids = get_sorted_object_poses(self._scene, Cube)
+        cube_idx, det_idx = None, None
+        if poses.ndim == 2:  # only assign poses when there are cubes in the scene
+            cube_idx, det_idx = assign_objects_to_id_hungarian(poses[:, 0:3], centers)
 
-        for i, c in enumerate(concept_indices):
-            if c == 0:  # Ignore the robot arm
-                continue
-            cube_name = self._concepts[c].replace(" ", "_")
-            cube = self._scene.get_objects_from_name([cube_name])[0]
+            assign_poses_to_objects(self._scene, Cube, centers, ids, cube_idx, det_idx, device=self._device)
 
-            cube_idx.append(i)
-            if cube.object_id in ids:
-                det_idx.append(int(np.argwhere(ids == cube.object_id)[0][0]))
-
-            # cube.pose = centers[i]
-        assign_poses_to_objects(self._scene, Cube, centers, ids, cube_idx, det_idx, device=self._device)
         if self._visualize:
-            self._bbox_frame = Sam3Reconstructor.show_bounding_boxes(
-                rgb, masks, concept_indices=concept_indices, concepts=self._concepts
+            self._bbox_frame = SamVlmReconstructor.show_bounding_boxes(
+                rgb, masks, concept_indices=concept_indices, concepts=concepts
             )
             if cube_idx is not None and det_idx is not None:
-                self._mask_frame = Sam3Reconstructor.show_cube_masks(
+                self._mask_frame = SamVlmReconstructor.show_cube_masks(
                     rgb, cube_masks, self._scene, ids, cube_idx, det_idx
                 )
 
@@ -198,7 +200,7 @@ class Sam3Reconstructor(ReconstructorBase):
         # Find cube centers from SAM3 with bounding boxes
         masks, _ = self._sam_model.segment_bboxes(rgb, np.asarray(boxes))
 
-        self._vlm_frame = Sam3Reconstructor.show_vlm_image_and_masks(
+        self._vlm_frame = SamVlmReconstructor.show_vlm_image_and_masks(
             rgb.transpose(1, 2, 0), masks.cpu().numpy(), labels
         )
 
@@ -285,6 +287,255 @@ class Sam3Reconstructor(ReconstructorBase):
             )
 
         return overlay
+
+    @staticmethod
+    def visualize_cube_detection(
+        results: dict[str, Any],
+        masks: np.ndarray,
+        depth: np.ndarray,
+        camera_matrix: np.ndarray,
+        camera_pose: np.ndarray,
+        frame: Literal["world", "camera"] = "world",
+        depth_scale: float = 1.0,
+        max_points: int = 500,
+    ) -> None:
+        """Visualize cube detection results with live streaming at ~2Hz.
+
+        Args:
+            results:        Output dict from find_cube_centers_ransac().
+            masks:          Binary masks (N, H, W).
+            depth:          Depth map (1, H, W) or (H, W).
+            camera_matrix:  3x3 intrinsics.
+            camera_pose:    Pose of camera in xyz wxyz (quat) in world frame
+            frame:          Frame to visualize in (world or camera)
+            depth_scale:    Same scale used in find_cube_centers_ransac().
+            max_points:     Max depth cloud points to render (downsampled for speed).
+
+        """
+        fx, fy = camera_matrix[0, 0], camera_matrix[1, 1]
+        cx, cy = camera_matrix[0, 2], camera_matrix[1, 2]
+
+        COLORS = plt.cm.tab10.colors
+
+        def deproject(mask: np.ndarray, depth_img: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+            """Back-project masked pixels into 3D camera-frame points."""
+            ys, xs = np.where(mask & (depth_img > 0))
+            z = depth_img[ys, xs] * depth_scale
+            x = (xs - cx) * z / fx
+            y = (ys - cy) * z / fy
+            all_pts = np.stack([x, y, z], axis=1)
+
+            # Downsample for rendering speed
+            if len(all_pts) > max_points:
+                idx = np.random.choice(len(all_pts), max_points, replace=False)
+                pts = all_pts[idx]
+            else:
+                pts = all_pts
+            return pts, all_pts
+
+        def plane_patch(
+            center: np.ndarray,
+            normal: np.ndarray,
+            pts_3d: np.ndarray,
+            plane_eq: np.ndarray,
+            padding: float = 0.000,
+            threshold: float = 0.004,
+        ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+            """Build a plane patch bounded by the min/max x and y of the point cloud."""
+            # Build local (u, v) frame on the plane
+            ref = np.array([0.0, 0.0, 1.0]) if abs(normal[2]) < 0.9 else np.array([1.0, 0.0, 0.0])
+            u = np.cross(normal, ref)
+            u /= np.linalg.norm(u)
+            v = np.cross(normal, u)
+            v /= np.linalg.norm(v)
+
+            # Compute plane distances and mask out far
+            a, b, c, d = plane_eq
+            distances = a * pts_3d[:, 0] + b * pts_3d[:, 1] + c * pts_3d[:, 2] + d
+
+            # Project along normal
+            distances = distances.reshape(-1, 1)
+            mask = (distances < threshold).flatten()
+
+            # Project points into 2D (u, v) coords
+            origin = center
+            coords_u = (pts_3d[mask] - origin) @ u
+            coords_v = (pts_3d[mask] - origin) @ v
+
+            # Bounding box with optional padding
+            u_min, u_max = coords_u.min() - padding, coords_u.max() + padding
+            v_min, v_max = coords_v.min() - padding, coords_v.max() + padding
+
+            # Four corners lifted back to 3D
+            uu, vv = np.meshgrid(
+                np.linspace(u_min, u_max, 10),
+                np.linspace(v_min, v_max, 10),
+            )
+            pts = origin[:, None, None] + u[:, None, None] * uu + v[:, None, None] * vv
+            return pts[0], pts[1], pts[2]
+
+        # Figure setup
+        fig = plt.figure(figsize=(10, 7), facecolor="white")
+        ax = fig.add_subplot(111, projection="3d")
+        ax.set_facecolor("white")
+        for pane in (ax.xaxis.pane, ax.yaxis.pane, ax.zaxis.pane):
+            pane.fill = False
+            pane.set_edgecolor("#333")
+        ax.tick_params(colors="#888", labelsize=7)
+        for spine in ax.spines.values():
+            spine.set_color("#333")
+        ax.set_xlabel("X (m)", color="#888", fontsize=8)
+        ax.set_ylabel("Y (m)", color="#888", fontsize=8)
+        ax.set_zlabel("Z (m)", color="#888", fontsize=8)
+        ax.set_title("", color="white", fontsize=10, pad=8)
+
+        def draw(res: dict[str, np.ndarray], msk: np.ndarray, dep: np.ndarray) -> None:
+            """Draw the result of RANSAC with cube centers."""
+            ax.cla()
+            ax.set_facecolor("white")
+            fig.patch.set_facecolor("white")
+            ax.tick_params(colors="#888", labelsize=7)
+            ax.set_xlabel("X (m)", color="#888", fontsize=8)
+            ax.set_ylabel("Y (m)", color="#888", fontsize=8)
+            ax.set_zlabel("Z (m)", color="#888", fontsize=8)
+
+            d2d = dep.squeeze() if dep.ndim == 3 else dep
+            legend_handles = []
+
+            for i, (mask, center, normal, plane_eq, plane_center) in enumerate(
+                zip(msk, res["centers"], res["normals"], res["plane_equations"], res["plane_centers"])
+            ):
+                color = COLORS[i % len(COLORS)]
+                pts, all_pts = deproject(mask.astype(bool), d2d)
+
+                if len(pts) == 0:
+                    continue
+                if frame == "world":
+                    pts = transform_xyz_to_world(pts, camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7])
+                # Depth cloud with cube outline
+                ax.scatter(
+                    pts[:, 0],
+                    pts[:, 1],
+                    pts[:, 2],
+                    s=3,
+                    c="black",
+                    depthshade=False,
+                    zorder=1,
+                )
+                # Faint colored halo so you can tell cubes apart
+                ax.scatter(
+                    pts[:, 0],
+                    pts[:, 1],
+                    pts[:, 2],
+                    s=10,
+                    c=[color],
+                    alpha=0.15,
+                    depthshade=False,
+                    zorder=1,
+                )
+
+                # Fitted Plane
+
+                Xp, Yp, Zp = plane_patch(plane_center, normal, all_pts, plane_eq)
+                surf = ax.plot_surface(
+                    Xp,
+                    Yp,
+                    Zp,
+                    color=color,
+                    alpha=0.25,
+                    linewidth=0,
+                    antialiased=True,
+                    zorder=2,
+                )
+
+                # Normal vector
+                ax.quiver(
+                    plane_center[0],
+                    plane_center[1],
+                    plane_center[2],
+                    normal[0],
+                    normal[1],
+                    normal[2],
+                    length=0.035,
+                    normalize=False,
+                    color=color,
+                    linewidth=2,
+                    arrow_length_ratio=0.35,
+                    zorder=4,
+                )
+                # Label "n̂"
+                tip = plane_center + normal * 0.038
+                ax.text(
+                    tip[0],
+                    tip[1],
+                    tip[2],
+                    "n̂",
+                    color=color,
+                    fontsize=8,
+                    zorder=5,
+                )
+
+                # Cube center: sphere with cross
+                ax.scatter(
+                    center[0],
+                    center[1],
+                    center[2],
+                    s=120,
+                    c=[color],
+                    edgecolors="black",
+                    linewidths=1.5,
+                    depthshade=False,
+                    zorder=6,
+                    marker="o",
+                )
+                # tiny cross
+                d = 0.008
+                for dx, dy, dz in [(d, 0, 0), (0, d, 0), (0, 0, d)]:
+                    ax.plot(
+                        [center[0] - dx, center[0] + dx],
+                        [center[1] - dy, center[1] + dy],
+                        [center[2] - dz, center[2] + dz],
+                        color="black",
+                        linewidth=1,
+                        alpha=0.8,
+                        zorder=7,
+                    )
+                ax.text(
+                    center[0],
+                    center[1],
+                    center[2] + d * 2,
+                    f"C{i}",
+                    color="black",
+                    fontsize=7,
+                    zorder=8,
+                )
+
+                lbl = f"Cube {i}  z={center[2]:.3f}m"
+                legend_handles.append(mpatches.Patch(color=color, label=lbl))
+
+            ax.set_title(
+                "Cube Plane Detection",
+                color="black",
+                fontsize=10,
+                pad=8,
+            )
+            if legend_handles:
+                ax.legend(
+                    handles=legend_handles,
+                    loc="upper left",
+                    fontsize=7,
+                    facecolor="#222",
+                    edgecolor="#444",
+                    labelcolor="black",
+                )
+
+            ax.grid(False)
+            fig.canvas.draw_idle()
+
+        draw(results, masks, depth)
+        plt.tight_layout()
+        plt.show()
+        return
 
     @staticmethod
     def masks_to_bboxes(masks: np.ndarray) -> list[tuple[int, int, int, int]]:

@@ -1,17 +1,17 @@
 from typing import Any, Literal
-from PIL import Image
 
 import cv2
 import numpy as np
 import torch
 
+from skillet.envs.realsense import RealsenseEnv
 from skillet.perception.reconstruction.reconstructor_base import ReconstructorBase
 from skillet.perception.segmentation.sam import get_sam_client
 from skillet.perception.segmentation.vlm import GeminiClient, QwenClient
 from skillet.scene.base import Scene
 
 
-class VLMReconstructor(ReconstructorBase):
+class VlmReconstructor(ReconstructorBase):
     """Parses observations for localizing objects depth and segmentation masks."""
 
     def __init__(
@@ -32,7 +32,7 @@ class VLMReconstructor(ReconstructorBase):
         super().__init__(scene, device=device)
         self._model = model
         self._mode = mode
-        self._sam_model = get_sam_client(model)()
+        self._sam_model = get_sam_client(model)(use_server=False)
         self._vlm_client = GeminiClient() if vlm_model == "gemini" else QwenClient()
         self._visualize = visualize
 
@@ -60,10 +60,6 @@ class VLMReconstructor(ReconstructorBase):
         if not update:
             return
         rgb = obs["rgb"]
-        # depth = obs["depth"]
-        # intrinsic_k = obs["intrinsic_k"]
-        # camera_pose = obs["camera_pose"]
-
         bboxes, labels = self._vlm_client.detect_bboxes(rgb, self._vlm_client.prompt)
 
         if self._mode == "text":
@@ -71,10 +67,10 @@ class VLMReconstructor(ReconstructorBase):
             masks, _, _, concept_indices = self._sam_model.segment_concepts(rgb, concepts)
         elif self._mode == "bboxes":
             for box in bboxes:
-                box[0] = (box[0] / 1000) * rgb.shape[1]
-                box[2] = (box[2] / 1000) * rgb.shape[1]  # TODO might need to change these indices
-                box[1] = (box[1] / 1000) * rgb.shape[0]
-                box[3] = (box[3] / 1000) * rgb.shape[0]
+                box[0] = (box[0] / 1000) * rgb.shape[2]
+                box[2] = (box[2] / 1000) * rgb.shape[2]
+                box[1] = (box[1] / 1000) * rgb.shape[1]
+                box[3] = (box[3] / 1000) * rgb.shape[1]
             masks, _ = self._sam_model.segment_bboxes(rgb, bboxes)
             concept_indices = np.arange(len(labels))
             concepts = labels
@@ -94,7 +90,7 @@ class VLMReconstructor(ReconstructorBase):
         masks = masks.cpu().numpy()
 
         if self._visualize:
-            self._bbox_frame = VLMReconstructor.show_bounding_boxes(
+            self._bbox_frame = VlmReconstructor.show_bounding_boxes(
                 rgb, masks, concept_indices=concept_indices, concepts=concepts
             )
 
@@ -122,7 +118,7 @@ class VLMReconstructor(ReconstructorBase):
         THICKNESS = 1
         PADDING = 4
         # cv2 works in BGR
-        # rgb_image = rgb_image.transpose((1, 2, 0))
+        rgb_image = rgb_image.transpose((1, 2, 0))
         display = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2BGR).copy()
         overlay = display.copy()
 
@@ -166,17 +162,15 @@ class VLMReconstructor(ReconstructorBase):
 
 
 def main():
-    img = Image.open("data/llm_debug_images/1776386618728_verify_pick_block_red_block_table0.jpg")
-    vlm = VLMReconstructor()
-    import time
+    env = RealsenseEnv()
+    vlm = VlmReconstructor()
+    cv2.namedWindow("VLM Scene", cv2.WINDOW_NORMAL)
 
-    for i in range(10):
-        st = time.perf_counter()
-        vlm.update_state({"rgb": torch.as_tensor(np.asarray(img).copy(), device="cuda")})
-        print(f"Iter: {i}: {(time.perf_counter() - st) * 1000:.1f}ms")
-    cv2.namedWindow("Test", cv2.WINDOW_NORMAL)
-    cv2.imshow("Test", vlm._bbox_frame)
-    cv2.waitKey(10000)
+    while True:
+        obs = env.get_observation()
+        vlm.update_state(obs)
+        cv2.imshow("VLM Scene", vlm._bbox_frame)
+        cv2.waitKey(1)
 
 
 if __name__ == "__main__":
