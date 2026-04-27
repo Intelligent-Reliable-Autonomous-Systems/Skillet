@@ -10,7 +10,7 @@ import numpy as np
 import torch
 
 from skillet.envs.realsense import RealsenseEnv
-from skillet.perception.segmentation.sam import get_sam_client
+from skillet.perception.segmentation.sam import get_sam_client, SAMClient
 from skillet.scene.utils import depth_to_colormap_np
 
 # Distinct BGR colors for mask overlays (high contrast on typical scenes).
@@ -128,7 +128,7 @@ def draw_stats_panel(
 
 
 def main(
-    model: Literal["sam2", "sam3", "sam3_streaming", "sam3_ultralytics"],
+    model: Literal["sam2", "sam3"],
     mode: Literal["text", "bboxes"] = "text",
     *,
     rolling_window: int = 30,
@@ -137,7 +137,7 @@ def main(
     """Run live SAM benchmark with RGB/depth view and mask overlay."""
     env = RealsenseEnv()
     print("RealsenseEnv initialized")
-    sam_model = get_sam_client(model)
+    sam_model: SAMClient = get_sam_client(model)(use_server=True)
     print("Sam model loaded")
 
     latencies_ms: deque[float] = deque(maxlen=rolling_window)
@@ -152,7 +152,7 @@ def main(
             t0 = time.perf_counter()
             if mode == "text":
                 concepts = ["block", "robot arm"]
-                masks, boxes, scores, concept_indices = sam_model.segment_from_concepts(rgb, concepts)
+                masks, boxes, scores, concept_indices = sam_model.segment_concepts(rgb, concepts)
                 _sync_cuda()
                 t1 = time.perf_counter()
                 vis_rgb = overlay_masks_bgr(
@@ -211,9 +211,9 @@ def main(
             depth = depth_to_colormap_np(obs["depth"][0])
             combined = np.concatenate([vis_rgb, depth], axis=1)
             print(f"Latency: {latency_ms:.2f} ms, FPS: {1000.0 / latency_ms:.2f}, GPU mem: {_gpu_mem_mb():.0f} MB")
-            cv2.imshow("SAM benchmark (segmentation | depth) — q to quit", combined)
-            if cv2.waitKey(1) & 0xFF == ord("q"):
-                break
+            # cv2.imshow("SAM benchmark (segmentation | depth) — q to quit", combined)
+            # if cv2.waitKey(1) & 0xFF == ord("q"):
+            #     break
     finally:
         env.close()
         cv2.destroyAllWindows()

@@ -1,13 +1,14 @@
-"""SAM2 segmentation — local predictor and remote HTTP client."""
+"""SAM3 segmentation — local predictor."""
 
+import os
 import pathlib
 from collections.abc import Sequence
-import os
+
 import numpy as np
+import sam3
 import torch
 from jaxtyping import Float, Int, UInt8
 from PIL import Image
-import sam3
 from sam3.model.sam3_image_processor import Sam3Processor
 from sam3.model_builder import build_sam3_image_model
 from typing_extensions import override
@@ -15,28 +16,28 @@ from typing_extensions import override
 from skillet.perception.segmentation.sam.sam_base import SAMClient
 from skillet.perception.utils import get_skillet_model_cache_dir
 
-_SAM3_BPE_URL = "https://github.com/openai/CLIP/raw/main/clip/bpe_simple_vocab_16e6.txt.gz"
-
 
 class SAM3Client(SAMClient):
     """Main client class for the SAM3 model."""
 
     def __init__(
-        self,
-        model_name: str = "sam3.pt",
-        device: str = "cuda",
+        self, model_name: str = "sam3.pt", device: str = "cuda", use_server: bool = True, load_server: bool = True
     ) -> None:
         """Initialize the SAM3 client.
 
         Args:
             model_name: Name of the SAM3 model checkpoint
             device: Device to load the model on
+            use_server: if to use a SAM server
 
         """
         model_path = get_skillet_model_cache_dir() / model_name
-        super().__init__(model_path, device)
-        self.sam_model = self._load_sam_model(checkpoint=model_path)
-        print("[INFO][SAM3] Successfully loaded SAM3 Model")
+        self.model_name = "sam3"
+        super().__init__(model_path, device, use_server, load_server)
+
+        if not load_server or not use_server:
+            self.sam_model = self._load_sam_model(checkpoint=model_path)
+            print("[INFO][SAM3] Successfully loaded SAM3 Model")
 
     @override
     def segment_from_bboxes(
@@ -108,10 +109,9 @@ class SAM3Client(SAMClient):
         scores_t = torch.tensor(scores, dtype=torch.float32, device=self.device)
         concept_indices_t = torch.tensor(concept_indices, dtype=torch.int64, device=self.device)
 
+        # SAM3 bboxes in [center_x, center_y, width, height] format
+        boxes_t = torch.stack(boxes, dim=0).to(dtype=torch.float32, device=self.device)
         # Convert boxes to [ymin, xmin, ymax, xmax] format
-        boxes_t = torch.stack(boxes, dim=0).to(
-            dtype=torch.float32, device=self.device
-        )  # in [center_x, center_y, width, height] format
         minx = boxes_t[:, 0] - boxes_t[:, 2] / 2
         miny = boxes_t[:, 1] - boxes_t[:, 3] / 2
         maxx = boxes_t[:, 0] + boxes_t[:, 2] / 2
@@ -154,7 +154,6 @@ class SAM3Client(SAMClient):
 
     def _load_sam_model(self, checkpoint: pathlib.Path | None = None, confidence: float = 0.5):  # noqa: ANN202
         """Load and cache the SAM2 image predictor."""
-
         if checkpoint is not None and not checkpoint.exists():
             # Let sam3 download the checkpoint if it doesn't exist
             checkpoint = None
@@ -167,15 +166,12 @@ class SAM3Client(SAMClient):
 if __name__ == "__main__":
     sam3_root = os.path.join(os.path.dirname(sam3.__file__), "..")
 
-    import torch
-
-    image_path = f"{sam3_root}/assets/images/test_image.jpg"
+    image_path = "data/llm_debug_images/1776386658206_verify_pick_block_blue_block_table0.jpg"
     image = Image.open(image_path)
     width, height = image.size
 
     image.show()
     sam3_client = SAM3Client()
-    masks, boxes, scores, concept_indices = sam3_client.segment_from_concepts(
-        image, ["shoe", "a child", "basketball hoop"]
+    masks, boxes, scores, concept_indices = sam3_client.segment_concepts(
+        np.array(image).transpose(2, 1, 0), concepts=["block"]
     )
-    print(masks.shape, boxes.shape, scores.shape, concept_indices.shape)

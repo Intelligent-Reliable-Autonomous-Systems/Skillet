@@ -24,6 +24,7 @@ class SAM2Client(SAMClient):
         self,
         model_name: str = "sam2.1_hiera_large.pt",
         device: str = "cuda",
+        use_server: bool = True,
     ) -> None:
         """Initialize the SAM2 client.
 
@@ -33,8 +34,10 @@ class SAM2Client(SAMClient):
 
         """
         model_path = self._download_sam_checkpoint(model_name)
-        super().__init__(model_path, device)
-        self.sam_model = self._load_sam_model(checkpoint=model_path)
+        self.model_name = "sam2"
+        super().__init__(model_path, device, use_server)
+        if use_server and not self._is_server_alive():
+            self.sam_model = self._load_sam_model(checkpoint=model_path)
 
     @override
     def segment_from_bboxes(

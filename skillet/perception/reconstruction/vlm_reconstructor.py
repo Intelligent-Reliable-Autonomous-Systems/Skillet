@@ -32,7 +32,7 @@ class VLMReconstructor(ReconstructorBase):
         super().__init__(scene, device=device)
         self._model = model
         self._mode = mode
-        self._sam_model = get_sam_client(model)
+        self._sam_model = get_sam_client(model)()
         self._vlm_client = GeminiClient() if vlm_model == "gemini" else QwenClient()
         self._visualize = visualize
 
@@ -68,14 +68,14 @@ class VLMReconstructor(ReconstructorBase):
 
         if self._mode == "text":
             concepts = ["block", "robot_arm"]
-            masks, _, _, concept_indices = self._sam_model.segment_from_concepts(rgb, concepts)
+            masks, _, _, concept_indices = self._sam_model.segment_concepts(rgb, concepts)
         elif self._mode == "bboxes":
             for box in bboxes:
                 box[0] = (box[0] / 1000) * rgb.shape[1]
                 box[2] = (box[2] / 1000) * rgb.shape[1]  # TODO might need to change these indices
                 box[1] = (box[1] / 1000) * rgb.shape[0]
                 box[3] = (box[3] / 1000) * rgb.shape[0]
-            masks, _ = self._sam_model.segment_from_bboxes(rgb, bboxes)
+            masks, _ = self._sam_model.segment_bboxes(rgb, bboxes)
             concept_indices = np.arange(len(labels))
             concepts = labels
         else:

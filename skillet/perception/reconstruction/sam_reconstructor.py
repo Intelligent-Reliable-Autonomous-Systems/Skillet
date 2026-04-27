@@ -21,7 +21,7 @@ from skillet.perception.reconstruction.utils import (
     get_sorted_object_poses,
     transform_xyz_to_world,
 )
-from skillet.perception.segmentation.sam import get_sam_client
+from skillet.perception.segmentation.sam import SAMClient, get_sam_client
 from skillet.perception.segmentation.vlm import GeminiClient, QwenClient
 from skillet.scene import CUBE_SIZE, Cube
 from skillet.scene.base import Scene
@@ -48,7 +48,7 @@ class SAMReconstructor(ReconstructorBase):
         super().__init__(scene, device=device)
         self._model = model
         self._mode = mode
-        self._sam_model = get_sam_client(model)
+        self._sam_model: SAMClient = get_sam_client(model)(use_server=True)
         self._vlm_client = GeminiClient() if vlm_model == "gemini" else QwenClient()
         self._visualize = visualize
 
@@ -92,7 +92,7 @@ class SAMReconstructor(ReconstructorBase):
 
         if self._mode == "text":
             concepts = ["block", "robot_arm"]
-            masks, _, _, concept_indices = self._sam_model.segment_from_concepts(rgb, concepts)
+            masks, _, _, concept_indices = self._sam_model.segment_concepts(rgb, concepts)
         elif self._mode == "bboxes":
             bboxes = [
                 [100, 100, 150, 150],
@@ -101,7 +101,7 @@ class SAMReconstructor(ReconstructorBase):
                 [200, 100, 250, 150],
                 [100, 200, 150, 250],
             ]
-            masks, _ = self._sam_model.segment_from_bboxes(rgb, bboxes)
+            masks, _ = self._sam_model.segment_bboxes(rgb, bboxes)
         else:
             raise ValueError(f"Invalid mode: {self._mode}")
 
@@ -209,7 +209,7 @@ class SAMReconstructor(ReconstructorBase):
                 boxes.append(box)
 
         # Find cube centers from SAM3 with bounding boxes
-        masks, _ = self._sam_model.segment_from_bboxes(rgb, np.asarray(boxes))
+        masks, _ = self._sam_model.segment_bboxes(rgb, np.asarray(boxes))
 
         self._vlm_frame = SAMReconstructor.show_vlm_image_and_masks(rgb.transpose(1, 2, 0), masks.cpu().numpy(), labels)
 

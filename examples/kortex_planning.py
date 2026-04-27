@@ -33,7 +33,7 @@ parser.add_argument("--reconstruction", type=str, choices=["sam", "april"], defa
 parser.add_argument(
     "--perception", type=argparse.BooleanOptionalAction, default=True, help="If to run the perception pipeline"
 )
-parser.add_argument("--o3d", type=argparse.BooleanOptionalAction, default=False, help="If to visualize with open3d")
+parser.add_argument("--o3d", type=argparse.BooleanOptionalAction, default=True, help="If to visualize with open3d")
 parser.add_argument(
     "--goal",
     type=str,
@@ -50,7 +50,7 @@ def main() -> None:
     scene = SIX_CUBE_APRIL_SCENE if args_cli.reconstruction == "april" else EMPTY_SCENE
     env_cfg = {
         "robot_ip": args_cli.robot_ip,
-        "device": "cpu",
+        "device": "cuda",
         "num_envs": args_cli.num_envs,
     }
 

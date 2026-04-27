@@ -129,5 +129,7 @@ class PickBlock2Skill(PickBlockSkill):
         self._pick_skill.initiate(obs, target_pose)
 
     def __str__(self) -> str:
-        names = self._scene.resolve_ids_to_names(self._params)
-        return f"Pick Block: | {names[0]} | {names[1]} |"
+        if self._params is not None:
+            names = self._scene.resolve_ids_to_names(self._params)
+            return f"Pick Block: | {names[0]} | {names[1]} |"
+        return "Pick Block: | Unset | Unset |"
