@@ -118,10 +118,10 @@ class PlaceSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAct
         goal_quat = quat_mul(quat_from_yaw(params[:, 3]), self._default_quat.repeat(self.n_envs, 1))
 
         self._pos_threshold = 0.005
-        self._quat_threshold = 0.08
+        self._quat_threshold = 0.04
         self._vel_threshold = 0.001  #
         self._joint_threshold = 0.001
-        self._joint_effort_threshold = 10
+        self._joint_effort_threshold = 9
         self._prev_gripper_pos = None
 
         ee_pose_b = obs["tcp_pose_b"]
@@ -174,16 +174,16 @@ class PlaceSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAct
         next_pose = (reached_pose & ee_vel) | (
             (torch.abs(joint_efforts) > self._joint_effort_threshold).any(dim=-1)
             & (self._place_status == PlaceStatusCodes.LOWER)
-            & (self._n_lower_steps > 20)
+            & (self._n_lower_steps > 10)
         )  # Avoids dropping due to initial acceleration
 
         flag = (
             (torch.abs(joint_efforts) > self._joint_effort_threshold).any(dim=-1)
             & (self._place_status == PlaceStatusCodes.LOWER)
-            & (self._n_lower_steps > 20)
+            & (self._n_lower_steps > 10)
         )
         if flag.item():
-            print(joint_efforts)
+            print(f"[WARN][PICK BLOCK] Joint efforts exceeded limit of {self._joint_effort_threshold}. Stopping Place.")
         if next_pose.any():
             idx = torch.arange(self.n_envs, device=next_pose.device)
             valid_idx = (self._status == SkillStatusCodes.RUNNING) & (next_pose)

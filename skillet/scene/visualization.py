@@ -135,15 +135,26 @@ class Open3DVisualizer:
             scene.remove_geometry(name)
         if isinstance(geom, list):
             for g in geom:
-                scene.add_geometry(name, g, mat)
+                if self._is_valid_geometry(g):
+                    scene.add_geometry(name, g, mat)
         else:
-            scene.add_geometry(name, geom, mat)
+            if self._is_valid_geometry(geom):
+                scene.add_geometry(name, geom, mat)
         self._added_geometries.add(name)
 
     def _remove_geometry(self, name: str) -> None:
         if name in self._added_geometries:
             self._scene_widget.scene.remove_geometry(name)
             self._added_geometries.discard(name)
+
+    def _is_valid_geometry(self, geom) -> bool:
+        if isinstance(geom, o3d.geometry.PointCloud):
+            return len(geom.points) > 0
+        if isinstance(geom, o3d.geometry.TriangleMesh):
+            return len(geom.vertices) > 0
+        if isinstance(geom, o3d.geometry.LineSet):
+            return len(geom.points) > 0
+        return True  # unknown types pass through
 
     def _on_layout(self, layout_context: Any) -> None:
         r = self._window.content_rect

@@ -9,8 +9,10 @@ from skillet.scene.base import Scene, SceneObject
 
 
 def assign_objects_to_id_hungarian(
-    positions: np.ndarray, detections: np.ndarray, ids: np.ndarray | None = None, max_distance: float = 10.0
-) -> tuple[np.ndarray, np.ndarray]:
+    positions: np.ndarray | torch.Tensor,
+    detections: np.ndarray | torch.Tensor,
+    max_distance: float = 10.0,
+) -> tuple[np.ndarray, np.ndarray] | tuple[torch.Tensor, torch.Tensor]:
     """Match detections to known objects (cubes).
 
     Occluded cubes (no confident match) retain their last known position and are flagged in self.occluded.
@@ -26,6 +28,11 @@ def assign_objects_to_id_hungarian(
         tuple of: np.ndarray of positions and cube ids of those positions
 
     """
+    device = None
+    if isinstance(positions, torch.Tensor):
+        device = positions.device
+        positions = positions.cpu().numpy()
+        detections = detections.cpu().numpy()
     # Create cost matrix
     diff = positions[:, None, :] - detections[~np.isnan(detections).any(axis=1)][None, :, :]  # (K, D, 3)
     cost = np.linalg.norm(diff, axis=-1)  # (K, D)
@@ -37,8 +44,11 @@ def assign_objects_to_id_hungarian(
         if cost[k, d] <= max_distance:
             valid_cube_idx.append(k)
             valid_det_idx.append(d)
-
-    return np.asarray(valid_cube_idx, dtype=np.int32), np.asarray(valid_det_idx, dtype=np.int32)
+    if device is None:
+        return np.asarray(valid_cube_idx, dtype=np.int32), np.asarray(valid_det_idx, dtype=np.int32)
+    return torch.as_tensor(valid_cube_idx, dtype=torch.int32, device=device), torch.as_tensor(
+        valid_det_idx, dtype=torch.int32, device=device
+    )
 
 
 def assign_objects_to_id_mean(
@@ -127,8 +137,7 @@ def assign_poses_to_objects(
         if idx.size > 0:
             idx = idx[0]
         else:
-            # TODO handle occlusion more robustly. The object closest to the camera
-            # Should be the one that is not occluded
+            # TODO handle occlusion more robustly.
             continue
         if np.isnan(poses[det_idx[idx]]).any():
             continue
@@ -368,12 +377,91 @@ def find_cube_centers_ransac(
     return results
 
 
-def mask_to_3d_points(
-    mask: np.ndarray,
+def find_cube_centers_ransac_torch(
+    masks: np.ndarray,
     depth: np.ndarray,
     camera_matrix: np.ndarray,
+    camera_pos: np.ndarray,
+    camera_quat: np.ndarray,
     depth_scale: float = 1.0,
-) -> np.ndarray:
+    cube_size: float = 0.044,
+    frame: Literal["world", "camera"] = "camera",
+) -> dict[str, np.ndarray]:
+    """Find cube centers from segmentation masks and depth map in the camera frame.
+
+    Args:
+        masks: Binary masks for each cube, shape (N, H, W) or list of (H, W) arrays
+        depth: Depth map, shape (1, H, W) in meters or scaled units
+        camera_matrix: 3x3 camera intrinsics matrix
+        camera_pos: (3,) array of camera position in world frame
+        camera_quat: (4,) array of quaternion in wxyz of camera orientation in world frame
+        depth_scale: Scale factor for depth values (if depth is in mm, use 1/1000)
+        cube_size: Expected cube size in meters (used for validation)
+        frame: frame in which to compute RANSAC in (world or camera)
+
+    Returns:
+        Dictionary containing:
+            - centers: List of 3D cube centers in camera frame (N, 3)
+            - normals: List of face normals (N, 3)
+            - plane_equations: List of (a, b, c, d) for plane ax + by + cz + d = 0
+            - valid: List of booleans indicating which detections are valid
+            - details: List of dictionaries with per-cube debug info
+
+    """
+    depth = depth.squeeze(0)
+
+    results = {"centers": [], "normals": [], "plane_equations": [], "valid": [], "details": [], "plane_centers": []}
+
+    for mask in masks:
+        mask = mask.astype(bool)
+
+        if np.sum(mask) < 10:  # Skip if too few pixels
+            results["valid"].append(False)
+            results["centers"].append(None)
+            results["normals"].append(None)
+            results["plane_equations"].append(None)
+            results["plane_centers"].append(None)
+            results["details"].append({"error": "Insufficient masked pixels"})
+            continue
+
+        # Get 3D points from mask and depth
+        points_3d = mask_to_3d_points(mask, depth, camera_matrix, depth_scale)
+
+        # Transform 3d points into world frame
+        if frame == "world":
+            points_3d = transform_xyz_to_world(points_3d, camera_pos=camera_pos, camera_quat=camera_quat)
+
+        # Fit plane to visible cube face with RANSAC
+        normal, plane_eq, _ = fit_plane_to_points(points_3d, frame=frame)
+
+        # Project points onto the fitted plane
+        points_on_plane = project_points_to_plane(points_3d, normal, plane_eq)
+
+        # Find 2D center of the points on the plane
+        center_on_plane = np.mean(points_on_plane, axis=0)
+
+        # Move back along the normal to find cube center
+        # Assume cube center is at distance cube_size/2 from the visible face
+        cube_center = center_on_plane + normal * (cube_size / 2)
+
+        results["centers"].append(cube_center)
+        results["plane_centers"].append(center_on_plane)
+        results["normals"].append(normal)
+        results["plane_equations"].append(plane_eq)
+
+    results["centers"] = np.asarray(results["centers"])
+    results["plane_centers"] = np.asarray(results["plane_centers"])
+    results["normals"] = np.asarray(results["normals"])
+    results["plane_equations"] = np.asarray(results["plane_equations"])
+    return results
+
+
+def mask_to_3d_points(
+    mask: np.ndarray | torch.Tensor,
+    depth: np.ndarray | torch.Tensor,
+    camera_matrix: np.ndarray | torch.Tensor,
+    depth_scale: float = 1.0,
+) -> np.ndarray | torch.Tensor:
     """Convert 2D mask and depth map to 3D points in camera frame.
 
     Args:
@@ -387,7 +475,7 @@ def mask_to_3d_points(
 
     """
     # Get pixel coordinates where mask is True
-    v, u = np.where(mask)
+    v, u = np.where(mask) if isinstance(mask, np.ndarray) else torch.where(mask)
 
     # Get depth values at masked pixels
     z = depth[v, u] * depth_scale
@@ -401,12 +489,12 @@ def mask_to_3d_points(
     x = (u - cx) * z / fx
     y = (v - cy) * z / fy
 
-    return np.column_stack([x, y, z])
+    return np.column_stack([x, y, z]) if isinstance(mask, np.ndarray) else torch.column_stack([x, y, z])
 
 
 def fit_plane_to_points(
     points: np.ndarray,
-    max_iterations: int = 1000,
+    max_iterations: int = 500,
     inlier_threshold: float = 0.01,
     frame: Literal["world", "camera"] = "world",
 ) -> tuple[np.ndarray, np.ndarray, float]:
@@ -490,8 +578,11 @@ def fit_plane_to_points(
 
 
 def project_points_to_plane(
-    points: np.ndarray, normal: np.ndarray, plane_eq: np.ndarray, threshold: float = 0.004
-) -> np.ndarray:
+    points: np.ndarray | torch.Tensor,
+    normal: np.ndarray | torch.Tensor,
+    plane_eq: np.ndarray | torch.Tensor,
+    threshold: float = 0.004,
+) -> np.ndarray | torch.Tensor:
     """Project 3D points onto a plane and filter out points on it that exceed a maximum distance.
 
     Args:
@@ -514,7 +605,9 @@ def project_points_to_plane(
     return points[mask] - distances[mask] * normal.reshape(1, 3)
 
 
-def transform_xyz_to_world(centers: np.ndarray, camera_pos: np.ndarray, camera_quat: np.ndarray) -> np.ndarray:
+def transform_xyz_to_world(
+    centers: np.ndarray | torch.Tensor, camera_pos: np.ndarray | torch.Tensor, camera_quat: np.ndarray | torch.Tensor
+) -> np.ndarray | torch.Tensor:
     """Transform points (xyz) from the camera frame to the world frame.
 
     Args:
@@ -528,14 +621,21 @@ def transform_xyz_to_world(centers: np.ndarray, camera_pos: np.ndarray, camera_q
     """
     R = quaternion_to_rotation_matrix(camera_quat)
 
-    xyz_world = np.zeros_like(centers)
-    for i in range(centers.shape[0]):
-        xyz_world[i] = R @ np.asarray(centers[i]) + camera_pos
+    if isinstance(centers, np.ndarray):
+        xyz_world = np.zeros_like(centers)
+        for i in range(centers.shape[0]):
+            xyz_world[i] = R @ np.asarray(centers[i]) + camera_pos
+    else:
+        xyz_world = torch.zeros_like(centers, device=centers.device)
+        for i in range(centers.shape[0]):
+            xyz_world[i] = R @ torch.as_tensor(centers[i]) + camera_pos
 
     return xyz_world
 
 
-def transform_plane_to_world(plane_eq: np.ndarray, camera_pos: np.ndarray, camera_quat: np.ndarray) -> np.ndarray:
+def transform_plane_to_world(
+    plane_eq: np.ndarray | torch.Tensor, camera_pos: np.ndarray | torch.Tensor, camera_quat: np.ndarray | torch.Tensor
+) -> np.ndarray | torch.Tensor:
     """Transform a plane equation from camera frame to world frame.
 
     Args:
@@ -563,16 +663,30 @@ def transform_plane_to_world(plane_eq: np.ndarray, camera_pos: np.ndarray, camer
     # Recompute d in world frame: d' = -n_world . p_world
     d_world = -n_world @ p_world
 
-    return np.array([n_world[0], n_world[1], n_world[2], d_world])
+    return (
+        np.asarray([n_world[0], n_world[1], n_world[2], d_world])
+        if isinstance(camera_pos, np.ndarray)
+        else torch.as_tensor([n_world[0], n_world[1], n_world[2], d_world], device=camera_pos.device)
+    )
 
 
-def quaternion_to_rotation_matrix(wxyz: np.ndarray) -> np.ndarray:
+def quaternion_to_rotation_matrix(wxyz: np.ndarray | torch.Tensor) -> np.ndarray | torch.Tensor:
     """Convert a unit quaternion (w, x, y, z) to a 3x3 rotation matrix."""
-    w, x, y, z = wxyz / np.linalg.norm(wxyz)  # normalise for safety
-    return np.array(
+    if isinstance(wxyz, np.ndarray):
+        w, x, y, z = wxyz / np.linalg.norm(wxyz)
+        return np.asarray(
+            [
+                [1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * z + w * y)],
+                [2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x)],
+                [2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y)],
+            ]
+        )
+    w, x, y, z = wxyz / torch.linalg.norm(wxyz)
+    return torch.as_tensor(
         [
             [1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * z + w * y)],
             [2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x)],
             [2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y)],
-        ]
+        ],
+        device=wxyz.device,
     )

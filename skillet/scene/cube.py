@@ -11,6 +11,23 @@ from skillet.core.math import normalize, quat_apply, quat_from_matrix, quat_inv,
 from skillet.scene.base import SceneObject
 
 
+class EMAFilter:
+    """EMA filter for cube positions."""
+
+    def __init__(self, alpha: float = 0.8, init: torch.Tensor | None = None):
+        self.alpha = alpha
+        self.x = None if init is None else torch.as_tensor(init, dtype=torch.float32)
+
+    def update(self, measurement: torch.Tensor) -> torch.Tensor:
+        """Update the current pose."""
+        if self.x is None:
+            self.x = measurement
+        else:
+            self.x = self.alpha * measurement + (1 - self.alpha) * self.x
+
+        return self.x
+
+
 class Cube(SceneObject):
     """A cube in a scene."""
 
@@ -67,6 +84,7 @@ class Cube(SceneObject):
         self._size = size
         self._pose = init_pose if init_pose is not None else torch.rand(size=(7,), device=DEVICE)
         self._face_apriltags = face_apriltags or []
+        self._ema_filter = EMAFilter()
 
     @property
     def pose(self) -> torch.Tensor:
@@ -78,7 +96,7 @@ class Cube(SceneObject):
     @pose.setter
     def pose(self, pose: torch.Tensor) -> None:
         """Set the pose of the cube in the world frame."""
-        self._pose = pose
+        self._pose = self._ema_filter.update(pose)
 
     @property
     def aabb(self) -> torch.Tensor:

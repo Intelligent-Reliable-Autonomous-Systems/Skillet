@@ -87,9 +87,9 @@ SIX_CUBE_APRIL_SCENE = Scene(
 SIX_CUBE_APRIL_SCENE.goal = [{"goal_predicate": "on", "args": ["yellow_block", "green_block"]}]
 
 orange_cube = Cube(size=CUBE_SIZE, name="orange_block")
-blue_cube = Cube(size=CUBE_SIZE, name="blue_block")
+black_cube = Cube(size=CUBE_SIZE, name="black_block")
 green_cube = Cube(size=CUBE_SIZE, name="green_block")
-red_cube = Cube(size=CUBE_SIZE, name="red_block")
+pink_cube = Cube(size=CUBE_SIZE, name="pink_block")
 yellow_cube = Cube(size=CUBE_SIZE, name="yellow_block")
 purple_cube = Cube(size=CUBE_SIZE, name="purple_block")
 
@@ -97,9 +97,9 @@ SIX_CUBE_SCENE = Scene(
     objects=[
         table_0,
         orange_cube,
-        blue_cube,
+        # black_cube,
         green_cube,
-        red_cube,
+        # pink_cube,
         yellow_cube,
         purple_cube,
     ],
@@ -109,5 +109,6 @@ SIX_CUBE_SCENE = Scene(
 )
 
 SIX_CUBE_SCENE.goal = [
-    {"goal_predicate": "on", "args": ["yellow_block", "green_block"]},
+    {"goal_predicate": "on", "args": ["orange_block", "purple_block"]},
+    {"goal_predicate": "on", "args": ["green_block", "orange_block"]},
 ]

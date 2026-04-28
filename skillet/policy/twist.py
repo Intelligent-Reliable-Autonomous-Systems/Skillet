@@ -97,10 +97,10 @@ class TwistPidPosePolicy(BatchedPolicy[TBPolicyObs, TBAction, TBAction], Generic
         # PID gains
         self.Kp_pos = 1.0
         self.Ki_pos = 0.0
-        self.Kd_pos = 0.1
+        self.Kd_pos = -1.5
         self.Kp_rot = 1.0
         self.Ki_rot = 0.0
-        self.Kd_rot = 0.1
+        self.Kd_rot = -0.1
 
         # PID integrals
         self.integral_pos = torch.zeros(

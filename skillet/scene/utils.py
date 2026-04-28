@@ -530,6 +530,9 @@ def arrange_panels(panels: list[np.ndarray], gap: int = 10) -> np.ndarray:
 def find_valid_table_xy(scene: Scene, buffer: float = 0.15, max_attempts: int = 200) -> torch.Tensor:
     """Find a valid clear position on the table to place an object.
 
+    Prioritizes finding an open X position first, then finds the Y position
+    that is minimally far from other objects while respecting the buffer.
+
     Args:
         scene: scene object containing cube positions
         buffer: safe distance around each cube in m where no place is possible.
@@ -537,29 +540,37 @@ def find_valid_table_xy(scene: Scene, buffer: float = 0.15, max_attempts: int = 
 
     """
     x_min, y_min, _, x_max, y_max, _ = scene.bounds
-
-    # Collect all existing cube XY positions
     occupied_positions = [obj.pose[:2] for obj in scene.objects if isinstance(obj, Cube)]
 
     for _ in range(max_attempts):
-        # Sample a random XY within table bounds
-        candidate = torch.tensor(
-            [
-                torch.FloatTensor(1).uniform_(x_min * 1.25, x_max * 0.75).item(),
-                torch.FloatTensor(1).uniform_(y_min * 0.75, y_max * 0.75).item(),
-            ]
-        )
+        # Step 1: Sample a candidate X
+        candidate_y = torch.FloatTensor(1).uniform_(y_min * 0.5, y_max * 0.6).item()
+        x_candidates = torch.linspace(x_min * 1.50, x_max * 0.6, steps=100)
 
-        # Check buffer distance against all cubes
-        valid = True
-        for pos in occupied_positions:
-            dist = torch.norm(candidate.to(pos.device) - pos)
-            if dist < buffer:
-                valid = False
-                break
+        # Step 2: Find all Y positions that are valid at this X (brute sample)
+        valid_x_candidates = []
+        for x in x_candidates:
+            candidate = torch.tensor([x.item(), candidate_y])
+            valid = all(torch.norm(candidate.to(pos.device) - pos) >= buffer for pos in occupied_positions)
+            if valid:
+                valid_x_candidates.append(candidate)
 
-        if valid:
-            return torch.cat((candidate, torch.as_tensor([0.0], device=candidate.device)))
+        if not valid_x_candidates:
+            continue  # This Y slice is fully blocked, try another X
+
+        if not occupied_positions:  # no objects, middle
+            best = valid_x_candidates[len(valid_x_candidates) // 2]
+        else:
+            # Step 3: Among valid Y positions, pick the one closest to any existing object
+            occupied_tensor = torch.stack(occupied_positions)  # (N, 2)
+
+            def min_dist_to_any(candidate: torch.Tensor) -> float:
+                dists = torch.norm(occupied_tensor.to(candidate.device) - candidate.unsqueeze(0), dim=1)
+                return dists.min().item()
+
+            best = min(valid_x_candidates, key=min_dist_to_any)
+
+        return torch.cat((best, torch.as_tensor([0.0], device=best.device)))
 
     raise RuntimeError(
         f"Could not find a valid table position after {max_attempts} attempts. Table may be too crowded."

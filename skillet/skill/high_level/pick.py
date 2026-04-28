@@ -124,7 +124,7 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         goal_quat = quat_mul(quat_from_yaw(params[:, 3]), self._default_quat.repeat(self.n_envs, 1))
 
         self._pos_threshold = 0.005
-        self._quat_threshold = 0.08
+        self._quat_threshold = 0.05
         self._vel_threshold = 0.001
         self._joint_threshold = 0.001
         self._prev_gripper_pos = None

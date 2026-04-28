@@ -110,10 +110,10 @@ def main() -> None:
     logger = SkilletDataLogger(
         "data/test/", env, scene, perception, abs_model, planning_agent, obs_spec=rgbd_grip_spec, visualize=False
     )
-    if args_cli.build_scene:
-        input("Press Enter to start the scene building...\n")
-        perception.task_instruction = args_cli.goal
-        perception.build_scene = args_cli.build_scene
+    # if args_cli.build_scene:
+    #     input("Press Enter to start the scene building...\n")
+    #     perception.task_instruction = args_cli.goal
+    #     perception.build_scene = args_cli.build_scene
 
     input("Press Enter to start the skill execution...\n")
     logger.write_video = True

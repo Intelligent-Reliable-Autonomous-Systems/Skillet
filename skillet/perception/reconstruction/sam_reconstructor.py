@@ -14,6 +14,7 @@ import torch
 from skillet.perception.reconstruction.reconstructor_base import ReconstructorBase
 from skillet.perception.reconstruction.utils import (
     find_cube_centers_plane,
+    find_cube_centers_ransac,
     get_sorted_object_poses,
     transform_xyz_to_world,
 )
@@ -88,40 +89,34 @@ class Sam3Reconstructor(ReconstructorBase):
         self._masks = masks
         self._segment_indices = torch.arange(masks.shape[0], device=masks.device)
 
-        if isinstance(depth, torch.Tensor):
-            rgb = rgb.cpu().numpy()
-            depth = depth.cpu().numpy()
-            intrinsic_k = intrinsic_k.cpu().numpy()
-            camera_pose = camera_pose.cpu().numpy()
-
         # Grab only the cubes and combine overlapping indices
-        # cube_masks = masks[concept_indices != 0].cpu().numpy()
         agg_cube_masks = []
         _, mh, mw = masks.shape
         for i in range(1, len(self._concepts)):
             if i not in concept_indices:
                 continue
             inds = torch.argwhere(i == concept_indices)[0]
-            c_mask = np.zeros(shape=(mh, mw))
+            c_mask = torch.zeros(size=(mh, mw), device=self._device)
             for j in inds:
-                c_mask = np.logical_or(c_mask, masks[j].cpu().numpy().squeeze())
+                c_mask = torch.logical_or(c_mask, masks[j].squeeze())
             agg_cube_masks.append(c_mask)
-        cube_masks = np.asarray(agg_cube_masks)
-        masks = masks.cpu().numpy()
+        cube_masks = torch.stack(agg_cube_masks, dim=0)
 
         # Find cube centers in the camera frame
-        dc = find_cube_centers_plane(
-            cube_masks,
-            depth,
-            intrinsic_k,
+        dc = find_cube_centers_ransac(
+            cube_masks.cpu().numpy(),
+            depth.cpu().numpy(),
+            intrinsic_k.cpu().numpy(),
             cube_size=CUBE_SIZE,
-            camera_pos=camera_pose[0:3],
-            camera_quat=camera_pose[3:7],
+            camera_pos=camera_pose[0:3].cpu().numpy(),
+            camera_quat=camera_pose[3:7].cpu().numpy(),
             frame=frame,
         )
 
         centers = (
-            transform_xyz_to_world(dc["centers"], camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7])
+            transform_xyz_to_world(
+                dc["centers"], camera_pos=camera_pose[0:3].cpu().numpy(), camera_quat=camera_pose[3:7].cpu().numpy()
+            )
             if frame == "camera"
             else dc["centers"]
         )
@@ -136,7 +131,7 @@ class Sam3Reconstructor(ReconstructorBase):
 
         if self._visualize:
             self._bbox_frame = Sam3Reconstructor.show_bounding_boxes(
-                rgb, masks, concept_indices=concept_indices, concepts=self._concepts
+                rgb.cpu().numpy(), masks.cpu().numpy(), concept_indices=concept_indices, concepts=self._concepts
             )
             if cube_idx is not None and det_idx is not None:
                 if not hasattr(self, "_colors"):
@@ -145,7 +140,7 @@ class Sam3Reconstructor(ReconstructorBase):
                         for c in np.random.randint(100, 255, size=(len(self._scene.objects), 3))
                     ]
                 self._mask_frame = Sam3Reconstructor.show_cube_masks(
-                    rgb, cube_masks, self._scene, ids, cube_idx, det_idx, self._colors
+                    rgb.cpu().numpy(), cube_masks.cpu().numpy(), self._scene, ids, cube_idx, det_idx, self._colors
                 )
 
     def get_observation(self) -> Scene:
