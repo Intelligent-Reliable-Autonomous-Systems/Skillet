@@ -121,7 +121,6 @@ class PushSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         self._quat_threshold = 0.1
         self._vel_threshold = 0.001
         self._joint_threshold = 0.001
-        self._prev_gripper_pos = None
 
         ee_pose_b = obs["tcp_pose_b"]
 
@@ -171,8 +170,7 @@ class PushSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
             quat_error_magnitude(ee_pose_b[:, 3:7], self._current_target_poses[:, 3:7]) < self._quat_threshold
         )
         reached_pose = (reached_pos & reached_quat) | reached_height
-        ee_vel = (obs["ee_vel_b"][:, 0:3] < self._vel_threshold).any(dim=-1)
-        next_pose = reached_pose & ee_vel
+        next_pose = reached_pose
 
         if next_pose.any():
             idx = torch.arange(self.n_envs, device=next_pose.device)
@@ -190,7 +188,6 @@ class PushSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         reach_actions = self._reach_policy.get_action(obs)
         reach_actions[:, -1] = torch.ones_like(reach_actions[:, -1]) * 0.8  # Gripper always closed
 
-        self._prev_gripper_pos = obs["joint_pos"][:, -1]
         self._n_steps += 1
         self._status[self._push_status == PushStatusCodes.DONE] = SkillStatusCodes.SUCCESS
         if self._n_steps >= self._length:

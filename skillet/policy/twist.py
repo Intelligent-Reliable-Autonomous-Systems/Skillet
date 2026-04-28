@@ -3,72 +3,21 @@
 Written by Will Solow, 2026.
 """
 
-from typing import Any, Generic
-
 import torch
 
 from skillet.core import SkillParamsSpec
 from skillet.core.math import (
-    base_to_tcp_twist,
     compute_pose_error,
     quat_apply,
     quat_inv,
 )
 from skillet.core.policy import BatchedPolicy, TBAction, TBPolicyObs
 from skillet.core.spaces import ActionSpec, ObservationSpec
-from skillet.envs.specs import MOVEIT_TCP_Obs
-from skillet.skill.specs import XYZ_QUAT_Params, XYZ_QUAT_Params_Spec, XYZ_RPY_Params, XYZ_RPY_Params_Spec
+from skillet.envs.specs import TCP_CART_Action, TCP_Obs
+from skillet.skill.specs import XYZ_QUAT_Params, XYZ_QUAT_Params_Spec
 
 
-class TwistFramePolicy(BatchedPolicy[MOVEIT_TCP_Obs, TBAction, XYZ_RPY_Params], Generic[TBPolicyObs, TBAction]):
-    """Policy for twist velocities of the end effector in specified frame"""
-
-    _params: torch.Tensor
-
-    def __init__(
-        self, obs_spec: ObservationSpec[TBPolicyObs], action_spec: ActionSpec[TBAction], frame: str = "base"
-    ) -> None:
-        """Initialize the policy.
-
-        Args:
-            obs_spec: The observation specification.
-            action_spec: The action specification.
-
-        """
-        self._obs_spec = obs_spec
-        self._action_spec = action_spec
-        self._frame = frame
-
-    @property
-    def obs_spec(self) -> ObservationSpec[TBPolicyObs]:  # noqa: D102
-        return self._obs_spec
-
-    @property
-    def action_spec(self) -> ActionSpec[TBAction]:  # noqa: D102
-        return self._action_spec
-
-    @property
-    def params_spec(self) -> SkillParamsSpec[XYZ_RPY_Params]:
-        """The parameter specification for XYZ + Quat target poses."""
-        return XYZ_RPY_Params_Spec
-
-    def get_action(self, obs: TBPolicyObs, params: Any = None) -> TBAction:
-        """Get the next gripper position."""
-        return torch.cat((self._twist_cmd, self.start_gripper_pos), dim=-1)
-
-    def reset(self, obs: TBPolicyObs, params: Any = None, env_ids: torch.Tensor = None) -> None:
-        """Reset the policy. Useful if policy is stateful."""
-        self._params = params
-        if self._frame == "base":
-            lin_vel_b, ang_vel_b = base_to_tcp_twist(params[:, 0:3], params[:, 3:6], obs["tcp_pose_b"][:, 3:7])
-            self._twist_cmd = torch.cat((lin_vel_b, ang_vel_b), dim=-1)
-        else:
-            self._twist_cmd = self._params[:, :6]
-        gripper_lim = obs["gripper_lim"]
-        self.start_gripper_pos = (obs["gripper"] - gripper_lim[:, :1]) / (gripper_lim[:, 1:] - gripper_lim[:, :1])
-
-
-class TwistPidPosePolicy(BatchedPolicy[TBPolicyObs, TBAction, TBAction], Generic[TBPolicyObs, TBAction]):
+class TwistPidPosePolicy(BatchedPolicy[TCP_Obs, TCP_CART_Action, XYZ_QUAT_Params]):
     """Policy for end effector position and orientation using PID control."""
 
     _params: torch.Tensor
@@ -136,7 +85,7 @@ class TwistPidPosePolicy(BatchedPolicy[TBPolicyObs, TBAction, TBAction], Generic
         """The parameter specification for XYZ + Quat target poses."""
         return XYZ_QUAT_Params_Spec
 
-    def get_action(self, obs: TBPolicyObs, params: Any = None) -> TBAction:
+    def get_action(self, obs: TBPolicyObs, params: XYZ_QUAT_Params = None) -> TBAction:
         """Get the next gripper position."""
         tcp_pose_b = obs["tcp_pose_b"]
         dt = obs["dt"]
@@ -170,7 +119,7 @@ class TwistPidPosePolicy(BatchedPolicy[TBPolicyObs, TBAction, TBAction], Generic
         self.last_error_rot = error_rot
         return torch.cat((command, self.start_gripper_pos), dim=-1)
 
-    def reset(self, obs: TBPolicyObs, params: Any = None, env_ids: torch.Tensor = None) -> None:
+    def reset(self, obs: TBPolicyObs, params: XYZ_QUAT_Params = None, env_ids: torch.Tensor = None) -> None:
         """Reset the policy. Useful if policy is stateful."""
         self._params = params
         self._tcp_quat_des_b = params[:, :7]

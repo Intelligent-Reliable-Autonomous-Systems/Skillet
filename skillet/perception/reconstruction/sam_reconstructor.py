@@ -72,11 +72,6 @@ class Sam3Reconstructor(ReconstructorBase):
             frame: the frame to perform the scene update from
 
         """
-        # if self._build_scene_flag:
-        #     print("[INFO][SAM RECONSTRUCTOR] Building scene...")
-        #     self._build_scene(obs, frame=frame)
-        #     print("[INFO][SAM RECONSTRUCTOR] Successfully built scene.")
-
         if not update:
             return
         rgb = obs["rgb"]
@@ -100,6 +95,8 @@ class Sam3Reconstructor(ReconstructorBase):
             for j in inds:
                 c_mask = torch.logical_or(c_mask, masks[j].squeeze())
             agg_cube_masks.append(c_mask)
+        if len(agg_cube_masks) == 0:
+            return
         cube_masks = torch.stack(agg_cube_masks, dim=0)
 
         # Find cube centers in the camera frame

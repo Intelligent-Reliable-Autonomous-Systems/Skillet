@@ -7,7 +7,9 @@ Written by Will Solow, 2026
 """
 
 import pathlib
+import threading
 import time
+from collections.abc import Callable
 from typing import Any
 
 import gymnasium as gym
@@ -145,6 +147,8 @@ class Gen3KortexEnv(KortexEnv):
             self._publish_joint_vel_spec(action, duration)
         elif action_spec.name == "twist_tcp":
             self._publish_twist_tcp_spec(action)
+        elif action_spec.name == "tcp_cart":
+            self._publish_tcp_cart_spec(action)
         else:
             raise ValueError(f"Unknown Action Specification `{action_spec.name}`")
 
@@ -291,3 +295,59 @@ class Gen3KortexEnv(KortexEnv):
         twist_cmd.angular_z = twist[5]
 
         self.kortex.SendTwistCommand(command)
+
+    def _publish_tcp_cart_spec(self, tcp_cart: np.ndarray, duration: float = 5) -> None:
+        """Publish a TCP cartesian trajectory to the kortex API.
+
+        Args:
+            tcp_cart: End effector position in XYZ RPY
+            duration: Max duration of trajectory
+
+        """
+        if self.active_controller != Base_pb2.SINGLE_LEVEL_SERVOING:
+            print("[INFO] Switching controller to `Base_pb2.SINGLE_LEVEL_SERVOING`")
+            if not self.switch_controllers(active_controller=Base_pb2.SINGLE_LEVEL_SERVOING):
+                print("[INFO] Unable to switch controller to `Base_pb2.SINGLE_LEVEL_SERVOING`. Aborting trajectory.")
+                return
+            self.active_controller = Base_pb2.SINGLE_LEVEL_SERVOING
+            print("[INFO] Successfully switched controller to `Base_pb2.SINGLE_LEVEL_SERVOING`")
+
+        action = Base_pb2.Action()
+        action.name = "TCP Cartesian Action"
+        action.application_data = ""
+
+        cartesian_pose = action.reach_pose.target_pose
+        cartesian_pose.x = tcp_cart[0]
+        cartesian_pose.y = tcp_cart[1]
+        cartesian_pose.z = tcp_cart[2]
+        cartesian_pose.theta_x = np.rad2deg(tcp_cart[3])
+        cartesian_pose.theta_y = np.rad2deg(tcp_cart[4])
+        cartesian_pose.theta_z = np.rad2deg(tcp_cart[5])
+        speed = action.reach_pose.constraint.speed
+        speed.translation = 0.08
+        speed.orientation = 20
+
+        e = threading.Event()
+        notification_handle = self.kortex.OnNotificationActionTopic(
+            self.check_for_end_or_abort(e), Base_pb2.NotificationOptions()
+        )
+
+        self.kortex.ExecuteAction(action)
+        self.kortex.Unsubscribe(notification_handle)
+
+        return e.wait(duration)
+
+    def check_for_end_or_abort(self, e) -> Callable:
+        """Return a closure checking for END or ABORT notifications.
+
+        Args:
+            e: event to signal when the action is completed. (will be set when an END or ABORT occurs)
+
+        """
+
+        def check(notification, e=e):
+            print("EVENT : " + Base_pb2.ActionEvent.Name(notification.action_event))
+            if notification.action_event == Base_pb2.ACTION_END or notification.action_event == Base_pb2.ACTION_ABORT:
+                e.set()
+
+        return check

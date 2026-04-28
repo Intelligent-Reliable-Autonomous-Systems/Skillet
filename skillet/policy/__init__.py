@@ -8,7 +8,8 @@ from .ik_ee import PoseAbsIkEePolicy as PoseAbsIkEePolicy
 from .joint_pos import GripperPolicy as GripperPolicy
 from .joint_pos import JointPosPidPosePolicy as JointPosPidPosePolicy
 from .joint_pos import JointPosPolicy as JointPosPolicy
-from .moveit import MoveItTcpQuatPolicy as MoveItTcpQuatPolicy
 from .osc_ee import PoseAbsOscEePolicy as PoseAbsOscEePolicy
 from .rl import PidRlPolicy as PidRlPolicy
+from .tcp import TcpCartPolicy as TcpCartPolicy
+from .tcp import TcpQuatPolicy as TcpQuatPolicy
 from .twist import TwistPidPosePolicy as TwistPidPosePolicy
