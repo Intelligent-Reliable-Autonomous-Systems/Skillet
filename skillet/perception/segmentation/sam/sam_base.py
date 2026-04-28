@@ -405,7 +405,8 @@ class SAMClient(ABC):
         return torch.stack(masks).to(device)
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """Run the SAM server."""
     if "--serve" in sys.argv:
         sam_client: SAMClient = get_sam_client(model=sys.argv[2])(load_server=False)
         app = sam_client.create_server()
@@ -413,3 +414,7 @@ if __name__ == "__main__":
     else:
         SAMClient.ensure_server(SAM_SERVER_URL)
         print(f"[INFO][SAM3] Ready. Server at {SAM_SERVER_URL}")
+
+
+if __name__ == "__main__":
+    main()

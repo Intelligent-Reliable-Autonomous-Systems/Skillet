@@ -78,9 +78,9 @@ class SamVlmReconstructor(ReconstructorBase):
 
         """
         if not self._scene.contains_objects and self._build_scene_flag:
-            print("[INFO][SAM RECONSTRUCTOR] Building scene...")
+            print("[INFO][SAM+VLM RECONSTRUCTOR] Building scene...")
             self._build_scene(obs, frame=frame)
-            print("[INFO][SAM RECONSTRUCTOR] Successfully built scene.")
+            print("[INFO][SAM+VLM RECONSTRUCTOR] Successfully built scene.")
 
         if not update:
             return

@@ -275,10 +275,8 @@ class SkilletPerception:
                     segment_indices=vis_seg,
                     camera_pose=obs_unbatched["camera_pose"],
                 )
-
             if self._visualize_perception:
                 self._update_perception_window(obs_unbatched)
-
             sleep_time = (time.perf_counter() - next_poll_t) - poll_period_s
             if sleep_time < 0:
                 time.sleep(min(-sleep_time, poll_period_s))
@@ -286,16 +284,13 @@ class SkilletPerception:
                 ...
                 # print(f"[WARN][PERCEPT] full loop overran by {sleep_time * 1000:.1f}ms")
             next_poll_t = time.perf_counter()
-
         self.stop()
 
     def _update_perception_window(self, obs_unbatched: Mapping[str, Any]) -> None:
         """Update side-by-side RGB/Depth CV2 preview."""
         if not (self._display_rgb or self._display_depth):
             return
-
         self._ensure_perception_window()
-
         panels: list[np.ndarray] = []
         if self._display_rgb:
             rgb = obs_unbatched["rgb"].detach().to("cpu").numpy().transpose((1, 2, 0))

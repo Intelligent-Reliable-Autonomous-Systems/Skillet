@@ -107,3 +107,7 @@ SIX_CUBE_SCENE = Scene(
     bounds=WORLD_BOUNDS,
     contains_objects=True,
 )
+
+SIX_CUBE_SCENE.goal = [
+    {"goal_predicate": "on", "args": ["yellow_block", "green_block"]},
+]

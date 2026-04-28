@@ -106,6 +106,8 @@ class AbstractModel(BasePlanner):
         goals = (
             self._create_goal(self._scene.goal, object_state) if self._scene.goal is not None else self._problem.goals
         )
+        if len(goals) == 0:
+            print("[WARN][ABSTRACT MODEL] Empty goal list!")
         return ParsedUpProblem(fluents=fluent_state, objects=object_state, goals=goals)
 
     def reset_abstract_state(self, problem: Problem, state: ParsedUpProblem) -> None:

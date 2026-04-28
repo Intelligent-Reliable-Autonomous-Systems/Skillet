@@ -81,6 +81,7 @@ mj_play = "skillet.scripts.rl.mj_play:main"
 isaac_play = "skillet.scripts.rl.isaac_play:main"
 ros2_play = "skillet.scripts.rl.ros2_play:main"
 ros2_teleop = "skillet.scripts.teleop.ros2_teleop:main"
+sam3_server = "skillet.perception.segmentation.sam.sam_base:main"
 
 
 #[project.entry-points."gymnasium.envs"]
