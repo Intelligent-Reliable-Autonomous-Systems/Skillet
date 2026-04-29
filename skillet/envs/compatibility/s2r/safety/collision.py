@@ -227,31 +227,3 @@ class CollisionProximityMonitor:
             vel[iv_m] = mim_info["multiplier"] * vel[iv_s]
 
         return pos, vel
-
-
-if __name__ == "__main__":
-    # Minimal example with fake state vectors.
-    # Replace file paths and state vectors with your own robot values.
-    monitor = CollisionProximityMonitor(
-        urdf_path="skillet_tasks/assets/kortex/kinova_gen3lite/gen3_lite.urdf",
-        srdf_path="skillet_tasks/assets/kortex/kinova_gen3lite/gen3_lite.srdf",
-        package_dirs=["skillet_tasks/assets/kortex/kinova_gen3lite/"],
-        distance_threshold=0.01,
-        prediction_dt=0.02,
-        safety_factor=1.1,
-    )
-    monitor.add_box_obstacle(
-        name="table",
-        size_xyz=[2.0, 2.0, 0.05],
-        xyz=[0.0, 0.0, -0.05],
-    )
-
-    q = np.zeros(7)
-    dq = np.zeros(7)
-    report = monitor.check_near_collision(
-        q=q,
-        dq=dq,
-        joint_names=["joint_1", "joint_2", "joint_3", "joint_4", "joint_5", "joint_6", "right_finger_bottom_joint"],
-    )
-
-    print(report)

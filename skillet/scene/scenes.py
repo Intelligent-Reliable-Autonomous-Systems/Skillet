@@ -109,6 +109,6 @@ SIX_CUBE_SCENE = Scene(
 )
 
 SIX_CUBE_SCENE.goal = [
-    {"goal_predicate": "on", "args": ["orange_block", "purple_block"]},
-    {"goal_predicate": "on", "args": ["green_block", "orange_block"]},
+    {"goal_predicate": "on", "args": ["yellow_block", "green_block"]},
+    {"goal_predicate": "on", "args": ["orange_block", "yellow_block"]},
 ]

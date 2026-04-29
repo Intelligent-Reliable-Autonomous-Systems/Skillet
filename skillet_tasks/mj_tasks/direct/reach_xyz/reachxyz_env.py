@@ -46,6 +46,7 @@ class ReachXyzEnv(MjDirectRlEnv):
 
         self.robot_ee_pose_b = torch.zeros((self.num_envs, 7), device=self.device)
         self.robot_tcp_pose_b = torch.zeros((self.num_envs, 7), device=self.device)
+        self.robot_ee_vel_b = torch.zeros((self.num_envs, 6), device=self.device)
 
         self.actions = torch.zeros((self.num_envs, self.cfg.action_space), device=self.device)
         self._current_prev_actions = torch.zeros_like(self.actions, device=self.device)
@@ -76,11 +77,11 @@ class ReachXyzEnv(MjDirectRlEnv):
         self.actions = actions.clone()
         xyz_rpy = self.actions[:, :6]
         r, p, y = euler_xyz_from_quat(self.robot_tcp_pose_b[:, 3:7])
-        dx = xyz_rpy - torch.cat((self.robot_tcp_pose_b[:, 0:3], r, p, y), dim=-1)
+        dx = xyz_rpy - torch.cat((self.robot_tcp_pose_b[:, 0:3], torch.stack((r, p, y), dim=-1)), dim=-1)
         J = self._jacobians[:, self.ee_link_idx, :]
-        JT = J.tranpose(-1, -2)
+        JT = J.permute(0, -1, -2)
         JJT = J @ JT
-        dq = JT @ torch.linalg.solve(JJT, dx.unsqueeze(-1)).squeeze(-1)
+        dq = (JT @ torch.linalg.solve(JJT, dx.unsqueeze(-1))).squeeze()
         targets = (self._joint_positions + dq)[:, self.cfg.joint_ids]
 
         self.robot_dof_targets = torch.clamp(targets, self.robot_dof_lower_limits, self.robot_dof_upper_limits)
@@ -97,7 +98,9 @@ class ReachXyzEnv(MjDirectRlEnv):
 
     def _get_observations(self) -> dict[str, torch.Tensor]:
         """Return the observations as a vector."""
+        # obs = torch.cat((self.robot_tcp_pose_b, self.robot_ee_vel_b, self._prev_actions, self.goal_ee_xyz_b), dim=1)
         return {"policy": self.obs_manager.obs_vec().clamp(-5.0, 5.0)}
+        # return {"policy": obs.clamp(-5.0, 5.0)}
 
     def _get_rewards(self) -> torch.Tensor:
         # Refresh the intermediate values after the physics steps
@@ -106,8 +109,7 @@ class ReachXyzEnv(MjDirectRlEnv):
         return compute_rewards(
             self.actions,
             self._current_prev_actions,
-            self.robot.data.joint_pos[:, self.cfg.joint_ids],
-            self.robot.data.joint_vel[:, self.cfg.joint_ids],
+            self.robot_ee_vel_b,
             self.goal_ee_pos_w,
             self.goal_ee_quat_w,
             self.robot_ee_pos_w,
@@ -117,7 +119,7 @@ class ReachXyzEnv(MjDirectRlEnv):
             self.cfg.ee_dist_reward_fine_grained_std,
             self.cfg.ee_orientation_reward_scale,
             self.cfg.action_rate_reward_scale,
-            self.cfg.joint_vel_reward_scale,
+            self.cfg.ee_vel_reward_scale,
         )
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
@@ -204,13 +206,25 @@ class ReachXyzEnv(MjDirectRlEnv):
             dim=1,
         )
 
+        ee_vel_w = self.robot.data.body_link_vel_w[env_ids, ee_link_idx, :]
+        root_vel_w = self.robot.data.body_link_vel_w[env_ids, base_link_idx, :]
+        relative_vel_w = ee_vel_w - root_vel_w  # Compute the relative velocity in the world frame
+        ee_lin_vel_b = quat_apply_inverse(
+            self.robot.data.body_link_pose_w[env_ids, base_link_idx][:, 3:7],
+            relative_vel_w[:, 0:3],
+        )  # From world to root frame
+        ee_ang_vel_b = quat_apply_inverse(
+            self.robot.data.body_link_pose_w[env_ids, base_link_idx][:, 3:7],
+            relative_vel_w[:, 3:6],
+        )
+        self.robot_ee_vel_b[env_ids] = torch.cat([ee_lin_vel_b, ee_ang_vel_b], dim=-1)
+
 
 @torch.jit.script
 def compute_rewards(
     actions: torch.Tensor,
     prev_actions: torch.Tensor,
-    joint_pos: torch.Tensor,
-    joint_vel: torch.Tensor,
+    ee_vel: torch.Tensor,
     goal_ee_pos: torch.Tensor,
     goal_ee_quat: torch.Tensor,
     ee_pos: torch.Tensor,
@@ -220,7 +234,7 @@ def compute_rewards(
     ee_dist_reward_fine_grained_std: float,
     ee_orientation_reward_scale: float,
     action_rate_reward_scale: float,
-    joint_vel_reward_scale: float,
+    ee_vel_reward_scale: float,
 ) -> torch.Tensor:
     ee_distance = torch.norm(ee_pos - goal_ee_pos, dim=1)
     dist_reward = ee_dist_reward_scale * ee_distance
@@ -231,6 +245,6 @@ def compute_rewards(
     orientation_reward = ee_orientation_reward_scale * quat_error_magnitude(ee_quat, goal_ee_quat)
 
     action_rate_reward = action_rate_reward_scale * torch.sum(torch.square(actions - prev_actions), dim=1)
-    joint_vel_reward = joint_vel_reward_scale * torch.sum(torch.square(joint_vel), dim=1)
+    joint_vel_reward = ee_vel_reward_scale * torch.sum(torch.square(ee_vel), dim=1)
 
     return dist_reward + dist_fine_grained_rew + orientation_reward + joint_vel_reward + action_rate_reward

@@ -144,16 +144,34 @@ def assign_poses_to_objects(
         ob.pose = torch.as_tensor(np.concatenate((poses[det_idx[idx]], [1, 0, 0, 0])), device=device)
 
 
-def find_cube_centers_plane(
-    masks: np.ndarray,
-    depth: np.ndarray,
-    camera_matrix: np.ndarray,
-    camera_pos: np.ndarray,
-    camera_quat: np.ndarray,
+def percentile_clip(pts: torch.Tensor | np.ndarray, lo: float, hi: float) -> torch.Tensor | np.ndarray:
+    """Percentile clip piont clouds.
+
+    Args:
+        pts: Points in shape (N,3)
+        lo: low percentile
+        hi: high percentile
+
+    """
+    if isinstance(pts, torch.Tensor):
+        lo_vals = torch.quantile(pts, lo / 100.0, dim=0)
+        hi_vals = torch.quantile(pts, hi / 100.0, dim=0)
+    elif isinstance(pts, np.ndarray):
+        lo_vals, hi_vals = np.percentile(pts, [lo / 100.0, hi / 100.0], dim=0)
+    mask = ((pts >= lo_vals) & (pts <= hi_vals)).all(dim=1)
+    return pts[mask]
+
+
+def find_cube_centers_mean(
+    masks: torch.Tensor,
+    depth: torch.Tensor,
+    camera_matrix: torch.Tensor,
+    camera_pos: torch.Tensor,
+    camera_quat: torch.Tensor,
     depth_scale: float = 1.0,
     cube_size: float = 0.044,
     frame: Literal["world", "camera"] = "camera",
-) -> dict[str, np.ndarray]:
+) -> torch.Tensor:
     """Find cube centers from segmentation masks and depth map in the camera frame.
 
     Assumes that each cube face is parallel to the camera, meaning we know the plane equation
@@ -169,24 +187,70 @@ def find_cube_centers_plane(
         frame: frame in which to compute RANSAC in (world or camera)
 
     Returns:
-        Dictionary containing:
-            - centers: List of 3D cube centers in camera frame (N, 3)
-            - normals: List of face normals (N, 3)
-            - plane_equations: List of (a, b, c, d) for plane ax + by + cz + d = 0
-            - valid: List of booleans indicating which detections are valid
-            - details: List of dictionaries with per-cube debug info
+        Centers: List of 3D cube centers in camera frame (N, 3)
 
     """
     depth = depth.squeeze(0)
+    centers = []
+    for mask in masks:
+        mask = mask.to(torch.bool)
 
-    results = {"centers": [], "normals": [], "plane_equations": [], "valid": [], "details": [], "plane_centers": []}
+        if mask.sum() < 10:
+            continue
 
+        # Get 3D points from mask and depth
+        points_3d = percentile_clip(mask_to_3d_points(mask, depth, camera_matrix, depth_scale), lo=10, hi=90)
+
+        # Transform 3d points into world frame
+        if frame == "world":
+            points_3d = transform_xyz_to_world(points_3d, camera_pos=camera_pos, camera_quat=camera_quat)
+
+        proj_u = points_3d[:, 0]
+        proj_v = points_3d[:, 1]
+        proj_w = points_3d[:, 2]
+        centroid_u = torch.median(proj_u)
+        centroid_v = torch.median(proj_v)
+        centroid_w = proj_w.max() + (cube_size / 2)
+        centroid = torch.as_tensor([centroid_u, centroid_v, centroid_w], device=masks.device)
+        centers.append(centroid)
+
+    return torch.stack(centers, dim=0)
+
+
+def find_cube_centers_plane(
+    masks: np.ndarray,
+    depth: np.ndarray,
+    camera_matrix: np.ndarray,
+    camera_pos: np.ndarray,
+    camera_quat: np.ndarray,
+    depth_scale: float = 1.0,
+    cube_size: float = 0.044,
+    frame: Literal["world", "camera"] = "camera",
+) -> np.ndarray:
+    """Find cube centers from segmentation masks and depth map in the camera frame.
+
+    Assumes that each cube face is parallel to the camera, meaning we know the plane equation
+
+    Args:
+        masks: Binary masks for each cube, shape (N, H, W) or list of (H, W) arrays
+        depth: Depth map, shape (1, H, W) in meters or scaled units
+        camera_matrix: 3x3 camera intrinsics matrix
+        camera_pos: (3,) array of camera position in world frame
+        camera_quat: (4,) array of quaternion in wxyz of camera orientation in world frame
+        depth_scale: Scale factor for depth values (if depth is in mm, use 1/1000)
+        cube_size: Expected cube size in meters (used for validation)
+        frame: frame in which to compute RANSAC in (world or camera)
+
+    Returns:
+        Centers: List of 3D cube centers in camera frame (N, 3)
+
+    """
+    depth = depth.squeeze(0)
+    centers = []
     for mask in masks:
         mask = mask.astype(bool)
 
-        if np.sum(mask) < 10:  # Skip if too few pixels
-            results["centers"].append(None)
-            results["normals"].append(None)
+        if np.sum(mask) < 10:
             continue
 
         # Get 3D points from mask and depth
@@ -218,84 +282,8 @@ def find_cube_centers_plane(
         # Move back along the normal to find cube center
         # Assume cube center is at distance cube_size/2 from the visible face
         cube_center = center_on_plane + normal * (cube_size / 2)
-        results["centers"].append(cube_center)
-        results["normals"].append(normal)
-    results["centers"] = np.asarray(results["centers"])
-    results["normals"] = np.asarray(results["normals"])
-    return results
-
-
-def find_cube_centers_mean(
-    masks: np.ndarray,
-    depth: np.ndarray,
-    camera_matrix: np.ndarray,
-    camera_pos: np.ndarray,
-    camera_quat: np.ndarray,
-    depth_scale: float = 1.0,
-    cube_size: float = 0.044,
-    frame: Literal["world", "camera"] = "camera",
-) -> dict[str, np.ndarray]:
-    """Find cube centers from segmentation masks and depth map in the camera frame.
-
-    Take the mean of each mask
-
-    Args:
-        masks: Binary masks for each cube, shape (N, H, W) or list of (H, W) arrays
-        depth: Depth map, shape (1, H, W) in meters or scaled units
-        camera_matrix: 3x3 camera intrinsics matrix
-        camera_pos: (3,) array of camera position in world frame
-        camera_quat: (4,) array of quaternion in wxyz of camera orientation in world frame
-        depth_scale: Scale factor for depth values (if depth is in mm, use 1/1000)
-        cube_size: Expected cube size in meters (used for validation)
-        frame: frame in which to compute RANSAC in (world or camera)
-
-    Returns:
-        Dictionary containing:
-            - centers: List of 3D cube centers in camera frame (N, 3)
-            - normals: List of face normals (N, 3)
-            - plane_equations: List of (a, b, c, d) for plane ax + by + cz + d = 0
-            - valid: List of booleans indicating which detections are valid
-            - details: List of dictionaries with per-cube debug info
-
-    """
-    depth = depth.squeeze(0)
-
-    results = {"centers": [], "normals": [], "plane_equations": [], "valid": [], "details": [], "plane_centers": []}
-
-    for mask in masks:
-        mask = mask.astype(bool)
-
-        if np.sum(mask) < 10:  # Skip if too few pixels
-            results["valid"].append(False)
-            results["centers"].append(None)
-            results["normals"].append(None)
-            results["plane_equations"].append(None)
-            results["plane_centers"].append(None)
-            results["details"].append({"error": "Insufficient masked pixels"})
-            continue
-
-        # Get 3D points from mask and depth
-        points_3d = mask_to_3d_points(mask, depth, camera_matrix, depth_scale)
-
-        # Transform 3d points into world frame
-        if frame == "world":
-            points_3d = transform_xyz_to_world(points_3d, camera_pos=camera_pos, camera_quat=camera_quat)
-
-        # normal always faces away from camera
-        normal = np.asarray([0, 0, 1])
-
-        # Find 3D center of the points on the plane
-        center_on_plane = np.mean(points_3d, axis=0)
-
-        # Move back along the normal to find cube center
-        # Assume cube center is at distance cube_size/2 from the visible face
-        cube_center = center_on_plane + normal * (cube_size / 2)
-
-        results["centers"].append(cube_center)
-        results["normals"].append(normal)
-    results["centers"] = np.asarray(results["centers"])
-    results["normals"] = np.asarray(results["normals"])
-    return results
+        centers.append(cube_center)
+    return np.asarray(centers)
 
 
 def find_cube_centers_ransac(
@@ -321,28 +309,16 @@ def find_cube_centers_ransac(
         frame: frame in which to compute RANSAC in (world or camera)
 
     Returns:
-        Dictionary containing:
-            - centers: List of 3D cube centers in camera frame (N, 3)
-            - normals: List of face normals (N, 3)
-            - plane_equations: List of (a, b, c, d) for plane ax + by + cz + d = 0
-            - valid: List of booleans indicating which detections are valid
-            - details: List of dictionaries with per-cube debug info
+        Centers: List of 3D cube centers in camera frame (N, 3)
 
     """
     depth = depth.squeeze(0)
 
-    results = {"centers": [], "normals": [], "plane_equations": [], "valid": [], "details": [], "plane_centers": []}
-
+    centers = []
     for mask in masks:
         mask = mask.astype(bool)
 
         if np.sum(mask) < 10:  # Skip if too few pixels
-            results["valid"].append(False)
-            results["centers"].append(None)
-            results["normals"].append(None)
-            results["plane_equations"].append(None)
-            results["plane_centers"].append(None)
-            results["details"].append({"error": "Insufficient masked pixels"})
             continue
 
         # Get 3D points from mask and depth
@@ -365,16 +341,9 @@ def find_cube_centers_ransac(
         # Assume cube center is at distance cube_size/2 from the visible face
         cube_center = center_on_plane + normal * (cube_size / 2)
 
-        results["centers"].append(cube_center)
-        results["plane_centers"].append(center_on_plane)
-        results["normals"].append(normal)
-        results["plane_equations"].append(plane_eq)
+        centers.append(cube_center)
 
-    results["centers"] = np.asarray(results["centers"])
-    results["plane_centers"] = np.asarray(results["plane_centers"])
-    results["normals"] = np.asarray(results["normals"])
-    results["plane_equations"] = np.asarray(results["plane_equations"])
-    return results
+    return np.asarray(centers)
 
 
 def find_cube_centers_ransac_torch(

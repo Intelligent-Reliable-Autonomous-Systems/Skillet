@@ -7,14 +7,13 @@ from pathlib import Path
 from typing import Any, Generic
 
 import torch
-import yaml
 
-from skillet.controllers import PidController
+from skillet.controllers import PidJointController, PidTwistController
 from skillet.core.policy import BatchedUPolicy, TBAction, TBPolicyObs, TBPolicyParams
 from skillet.core.spaces import ActionSpec, ObservationSpec, SkillParamsSpec, TSkillParams
-from skillet.envs.specs import JOINT_Obs
-from skillet.skill.specs import JOINT_Params
+from skillet.envs.specs import JOINT_Obs, TWIST_TCP_Obs
 from skillet.rl.s2r import ObservationManager
+from skillet.skill.specs import JOINT_Params, XYZ_RPY_Params
 
 
 class RlPolicy(BatchedUPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, TBAction]):
@@ -70,7 +69,7 @@ class RlPolicy(BatchedUPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, TBAct
         raise NotImplementedError
 
 
-class PidRlPolicy(RlPolicy):
+class PidRlJointPolicy(RlPolicy):
     """Class for the RL policy with a PID controller."""
 
     def __init__(
@@ -94,7 +93,7 @@ class PidRlPolicy(RlPolicy):
         """
         super().__init__(obs_spec, action_spec, params_spec, agent_fpath=agent_fpath)
 
-        self._pid_controller = PidController()
+        self._pid_controller = PidJointController()
         self._pid_controller.reset(self.action_spec.with_n_envs(1).zeros())
         self._poll_rate_hz = poll_rate_hz
         self._thread: threading.Thread | None = None
@@ -147,3 +146,83 @@ class PidRlPolicy(RlPolicy):
         return torch.clamp(
             action.clamp(-5, 5), min=self._curr_obs["joint_lims"][:, 0], max=self._curr_obs["joint_lims"][:, 1]
         )
+
+
+class PidRlCartPolicy(RlPolicy):
+    """Class for the RL policy with a PID controller."""
+
+    def __init__(
+        self,
+        obs_spec: ObservationSpec[TBPolicyObs],
+        action_spec: ActionSpec[TBAction],
+        params_spec: SkillParamsSpec[TBPolicyParams],
+        agent_fpath: str,
+        poll_rate_hz: int = 20,
+    ) -> None:
+        """Initialize the policy.
+
+        Args:
+            obs_spec: The observation specification.
+            action_spec: The action specification.
+            params_spec: The parameter specification.
+            agent_fpath: A str (path) to a folder containing jit-compiled torch policy named `agent.pt` and a
+                `config.yaml` file describing the input (observation) space and the output
+            poll_rate_hz: The poll rate of the RL policy
+
+        """
+        super().__init__(obs_spec, action_spec, params_spec, agent_fpath=agent_fpath)
+
+        self._pid_controller = PidTwistController()
+        self._pid_controller.reset(self.action_spec.with_n_envs(1).zeros())
+        self._poll_rate_hz = poll_rate_hz
+        self._thread: threading.Thread | None = None
+        self._stop_event = threading.Event()
+        self._curr_obs = None
+        self._prev_action = None
+        self.run_thread()
+
+    def get_action(self, obs: TBPolicyObs, params: Any = None) -> TBAction:
+        """Get the next velocity action from the PID controller."""
+        self._curr_obs = obs
+        return torch.cat(
+            (self._pid_controller.get_action(obs["tcp_pose_b"]), torch.as_tensor([[0]], device=self._curr_obs.device)),
+            dim=-1,
+        )
+
+    def reset(self, obs: JOINT_Obs, params: Any = None, env_ids: torch.Tensor = None) -> None:
+        self._params = params
+        self._curr_obs = obs
+
+    def _policy_inference(self) -> None:
+        """Run the policy inference thread by polling the RL policy at a specified Hz."""
+        poll_period_s = 1.0 / self._poll_rate_hz
+        next_poll_t = time.perf_counter()
+        while not self._stop_event.is_set():
+            if self._curr_obs is not None:
+                action = self._policy(self._build_policy_obs(self._curr_obs, self._params)).detach()
+                self._pos_desired = self._build_action(action)
+                self._pid_controller.reset(self._pos_desired)
+
+            sleep_time = (time.perf_counter() - next_poll_t) - poll_period_s
+            if sleep_time < 0:
+                time.sleep(min(-sleep_time, poll_period_s))
+            else:
+                print(f"[WARN][RlPolicy] full loop overran by {sleep_time * 1000:.1f}ms")
+            next_poll_t = time.perf_counter()
+
+    def run_thread(self) -> None:
+        """Start the policy inference thread."""
+        if self._thread is not None and self._thread.is_alive():
+            return
+        self._stop_event.clear()
+        self._thread = threading.Thread(target=self._policy_inference, name="RlPolicyInference", daemon=True)
+        self._thread.start()
+
+    def _build_policy_obs(self, obs: TWIST_TCP_Obs, params: Any = None) -> torch.Tensor:
+        """Build the observation for the policy."""
+        env_obs = self._obs_manager.obs_from_dict(obs).clamp(-5.0, 5.0)
+        return torch.cat((env_obs, params), dim=-1)
+
+    def _build_action(self, action: XYZ_RPY_Params) -> torch.Tensor:
+        """Build the action from config."""
+        return action.clamp(-5, 5)

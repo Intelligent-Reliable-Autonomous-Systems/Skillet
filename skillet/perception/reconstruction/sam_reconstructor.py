@@ -13,6 +13,7 @@ import torch
 
 from skillet.perception.reconstruction.reconstructor_base import ReconstructorBase
 from skillet.perception.reconstruction.utils import (
+    find_cube_centers_mean,
     find_cube_centers_plane,
     find_cube_centers_ransac,
     get_sorted_object_poses,
@@ -100,29 +101,27 @@ class Sam3Reconstructor(ReconstructorBase):
         cube_masks = torch.stack(agg_cube_masks, dim=0)
 
         # Find cube centers in the camera frame
-        dc = find_cube_centers_ransac(
-            cube_masks.cpu().numpy(),
-            depth.cpu().numpy(),
-            intrinsic_k.cpu().numpy(),
+        centers = find_cube_centers_mean(
+            cube_masks,
+            depth,
+            intrinsic_k,
             cube_size=CUBE_SIZE,
-            camera_pos=camera_pose[0:3].cpu().numpy(),
-            camera_quat=camera_pose[3:7].cpu().numpy(),
+            camera_pos=camera_pose[0:3],
+            camera_quat=camera_pose[3:7],
             frame=frame,
         )
 
         centers = (
-            transform_xyz_to_world(
-                dc["centers"], camera_pos=camera_pose[0:3].cpu().numpy(), camera_quat=camera_pose[3:7].cpu().numpy()
-            )
+            transform_xyz_to_world(centers, camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7])
             if frame == "camera"
-            else dc["centers"]
+            else centers
         )
 
         _, ids = get_sorted_object_poses(self._scene, Cube)
         cube_idx, det_idx = [], []
         for i, c in enumerate(torch.unique(concept_indices[concept_indices != 0]).cpu().numpy()):
             cube = self._scene.get_objects_from_name([self._concepts[c].replace(" ", "_")])[0]
-            cube.pose = torch.as_tensor(np.concatenate((centers[i], [1, 0, 0, 0]), axis=0), device=self._device)
+            cube.pose = torch.cat((centers[i], torch.as_tensor([1, 0, 0, 0], device=centers[i].device)), dim=0)
             cube_idx.append(int(np.argwhere(cube.object_id == ids)[0][0]))
             det_idx.append(i)
 

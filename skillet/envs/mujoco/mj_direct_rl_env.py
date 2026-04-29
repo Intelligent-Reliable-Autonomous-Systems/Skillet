@@ -21,6 +21,7 @@ from mjlab.viewer.offscreen_renderer import OffscreenRenderer
 from mjlab.viewer.viewer_config import ViewerConfig
 from prettytable import PrettyTable
 
+from skillet.core.math import quat_apply, quat_apply_inverse, quat_inv, quat_mul
 from skillet.core.spaces import ActionSpec
 from skillet.envs.compatibility import SkilletGymEnv
 from skillet.envs.util import configclass
@@ -464,6 +465,46 @@ class MjDirectRlEnv(SkilletGymEnv):
         return None
 
     @property
+    def _tcp_pose_b(self) -> torch.Tensor:
+        """Return current tool frame position."""
+        ee_pose_w = self._robot_body_pose_w[:, self._find_link_idx(self.cfg.ee_link_name)]
+        ee_pos_b = quat_apply_inverse(
+            self._robot_root_pose_w[:, 3:7], ee_pose_w[:, 0:3] - self._robot_root_pose_w[:, 0:3]
+        )
+        ee_quat_b = quat_mul(quat_inv(self._robot_root_pose_w[:, 3:7]), ee_pose_w[:, 3:7])
+
+        tcp_pos_b = ee_pos_b + quat_apply(ee_quat_b, self.tcp_offset[:, 0:3])
+        tcp_quat_b = quat_mul(ee_quat_b, self.tcp_offset[:, 3:7])
+        self.robot_tcp_pose_b[:] = torch.concatenate(
+            (tcp_pos_b, tcp_quat_b),
+            dim=1,
+        )
+
+        tcp_pos = ee_pos_b + quat_apply(ee_quat_b, self.tcp_offset[:, 0:3])
+        tcp_quat = quat_mul(ee_quat_b, self.tcp_offset[:, 3:7])
+        return torch.concatenate(
+            (tcp_pos, tcp_quat),
+            dim=1,
+        )
+
+    @property
+    def _ee_vel_b(self) -> torch.Tensor:
+        """Return current TCP velocity in robot base frame."""
+        base_link_idx = self._find_link_idx(self.cfg.base_link_name)
+        ee_vel_w = self.robot.data.body_link_vel_w[:, self._find_link_idx(self.cfg.ee_link_name), :]
+        root_vel_w = self.robot.data.body_link_vel_w[:, base_link_idx, :]
+        relative_vel_w = ee_vel_w - root_vel_w
+        ee_lin_vel_b = quat_apply_inverse(
+            self.robot.data.body_link_pose_w[:, base_link_idx][:, 3:7],
+            relative_vel_w[:, 0:3],
+        )  # From world to root frame
+        ee_ang_vel_b = quat_apply_inverse(
+            self.robot.data.body_link_pose_w[:, base_link_idx][:, 3:7],
+            relative_vel_w[:, 3:6],
+        )
+        return torch.cat([ee_lin_vel_b, ee_ang_vel_b], dim=-1)
+
+    @property
     def _joint_positions(self) -> torch.Tensor:
         """Return current joint positions."""
         return self.robot.data.joint_pos
@@ -507,7 +548,6 @@ class MjDirectRlEnv(SkilletGymEnv):
             )
             jacobians[:, i, 0:3] = wp.to_torch(jacp)
             jacobians[:, i, 3:6] = wp.to_torch(jacr)
-        print(jacobians)
         return jacobians
 
     @property

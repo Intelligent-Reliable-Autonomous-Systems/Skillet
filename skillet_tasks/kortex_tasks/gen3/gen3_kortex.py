@@ -103,7 +103,7 @@ class Gen3KortexEnv(KortexEnv):
         self._current_joint_positions = np.zeros(shape=len(self.joint_names))
         self._current_joint_velocities = np.zeros(shape=len(self.joint_names))
         self._current_joint_efforts = np.zeros(shape=len(self.joint_names))
-        self._current_prev_actions = np.zeros(shape=len(self.joint_names))
+        self._current_prev_actions = np.zeros(shape=(7,))  # TODO find out how to change dynamically
 
         self._curr_gripper_goal = None
         self._new_gripper_goal = False

@@ -14,7 +14,7 @@ from skillet.scene.base import SceneObject
 class EMAFilter:
     """EMA filter for cube positions."""
 
-    def __init__(self, alpha: float = 0.8, init: torch.Tensor | None = None):
+    def __init__(self, alpha: float = 0.7, init: torch.Tensor | None = None):
         self.alpha = alpha
         self.x = None if init is None else torch.as_tensor(init, dtype=torch.float32)
 

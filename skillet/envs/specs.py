@@ -170,6 +170,7 @@ TWIST_SPEC_BATCHED = ObservationSpec[TWIST_TCP_Obs](
             "joint_vel": ParameterizedBox(low=-10, high=10, shape=("n_joints",)),
             "joint_pos": ParameterizedBox(low=-np.pi, high=np.pi, shape=("n_joints",)),
             "joint_eff": ParameterizedBox(low=-np.pi, high=np.pi, shape=("n_joints",)),
+            "prev_actions": ParameterizedBox(low=-1, high=1, shape=("6 + n_gripper_joints",)),
         }
     ),
     name="twist_tcp",
