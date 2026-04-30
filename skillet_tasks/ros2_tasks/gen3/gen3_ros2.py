@@ -93,13 +93,12 @@ class Gen3Ros2Env(Ros2Env):
 
         self.active_controller = "joint_trajectory_controller"
 
-        # Set up controller interfaces
-        # self.controller_client = Service(
-        #     self.ros, "/controller_manager/switch_controller", "controller_manager_msgs/srv/SwitchController"
-        # )
         self._rs_cam_localizer = RealsenseCameraLocalizer(apriltag_size_m=0.1, apriltag_id=self.cfg.base_apriltag_id)
 
-        self.curr_gripper_goal = None
+        self._curr_gripper_goal = None
+        self._new_gripper_goal = False
+        self._gripper_goal_start = None
+        self._blocking_gripper_cmd = True
 
     def _pre_process_action(self, actions: torch.Tensor, action_spec: ActionSpec[Any] | None = None) -> np.ndarray:
         """Pre process the robot action.
@@ -130,15 +129,15 @@ class Gen3Ros2Env(Ros2Env):
         """
         # Publish BLOCKING gripper command. To keep the gripper stationary
         # Assumes we can either move joints or close gripper, not both
-        if self._publish_gripper(action, action_spec, close_time=2.0):
-            return
+        gripper_moving = self._publish_gripper(action, action_spec, close_time=2.0)
 
-        if action_spec is None or action_spec.name == "joints_vel":
-            self._publish_joint_vel_spec(action, duration)
-        elif action_spec.name == "twist_tcp":
-            self._publish_twist_tcp_spec(action)
-        else:
-            raise ValueError(f"Unknown Action Specification `{action_spec.name}`")
+        if not gripper_moving or not self._blocking_gripper_cmd:
+            if action_spec is None or action_spec.name == "joints_vel":
+                self._publish_joint_vel_spec(action, duration)
+            elif action_spec.name == "twist_tcp":
+                self._publish_twist_tcp_spec(action)
+            else:
+                raise ValueError(f"Unknown Action Specification `{action_spec.name}`")
 
     def _reset_idx(self) -> None:
         """Reset environment based on specified indices to default position."""
@@ -214,15 +213,20 @@ class Gen3Ros2Env(Ros2Env):
         gripper_val = float(joint_pos[-1])
         gripper_val = max(0, min(gripper_val, 1)) * 0.8
 
-        if gripper_val != self.curr_gripper_goal:
+        if gripper_val != self._curr_gripper_goal:
             if action_spec is None or action_spec.name == "joints_vel":
                 self._publish_joint_vel_spec(np.zeros_like(joint_pos), duration)
             elif action_spec.name == "twist_tcp":
                 self._publish_twist_tcp_spec(np.zeros_like(joint_pos))
             new_gripper_goal = True
             self._ros2_listener.send_gripper_goal(gripper_val)
-            time.sleep(close_time)
-            self.curr_gripper_goal = gripper_val
+            self._curr_gripper_goal = gripper_val
+            self._new_gripper_goal = True
+            self._gripper_goal_start = time.perf_counter()
+        elif (time.perf_counter() - self._gripper_goal_start) < close_time:
+            self._new_gripper_goal = True
+        else:
+            self._new_gripper_goal = False
 
         return new_gripper_goal
 

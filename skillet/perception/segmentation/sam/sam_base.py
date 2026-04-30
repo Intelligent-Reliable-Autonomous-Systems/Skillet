@@ -9,7 +9,6 @@ import subprocess
 import sys
 import time
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,6 +22,8 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from PIL import Image
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from jaxtyping import Float, Int, UInt8
 
 

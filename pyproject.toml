@@ -2,7 +2,7 @@
 name = "skillet"
 version = "0.0.2"
 description = "A Robot Skills framework for manipulation tasks with integration for ROS2 and IsaacLab"
-requires-python = ">= 3.11"
+requires-python = ">= 3.10"
 authors = [
     {name = "Jeff Jewett", email = "jewettje@oregonstate.edu"},
     {name = "Will Solow", email = "soloww@oregonstate.edu"},
@@ -41,6 +41,11 @@ planning = [
     "unified_planning",
     "unified-planning[pyperplan,tamer,fast-downward]"
 ]
+vla = [
+    "transformers",
+    "timm",
+    "torchvision",
+]
 perception = [
     "open3d",
     "pupil-apriltags",
@@ -48,10 +53,12 @@ perception = [
     "opencv-python",
     "psutil",
     "h5py",
+    "uvicorn",
+    "fastapi",
+    "python-multipart"
 ]
 ros = [
     "roslibpy",
-    "zmq",
 ]
 kortex = [
     "pin",
@@ -82,6 +89,7 @@ isaac_play = "skillet.scripts.rl.isaac_play:main"
 ros2_play = "skillet.scripts.rl.ros2_play:main"
 ros2_teleop = "skillet.scripts.teleop.ros2_teleop:main"
 sam3_server = "skillet.perception.segmentation.sam.sam_base:main"
+vla_server = "skillet.policy.vla:main"
 
 
 #[project.entry-points."gymnasium.envs"]

@@ -299,11 +299,15 @@ class Ros2Env(SkilletGymEnv):
             )
             zero_action = self._pre_process_action(torch.zeros_like(action), action_spec=action_spec)
             self._publish_action_to_ros(zero_action, duration=self.step_dt, action_spec=action_spec)
+        elif out.effort_lim:
+            print(f"[WARN][ROS2] Joint effort limits reached {self._joint_efforts}. Stopping robot")
+            zero_action = self._pre_process_action(torch.zeros_like(action), action_spec=action_spec)
+            self._publish_action_to_ros(zero_action, duration=self.step_dt, action_spec=action_spec)
         else:
             # Pre process the robot action
             action = self._pre_process_action(action, action_spec=action_spec)
-        # Send the robot action to hardware
-        self._publish_action_to_ros(action, duration=self.step_dt, action_spec=action_spec)
+            # Send the robot action to hardware
+            self._publish_action_to_ros(action, duration=self.step_dt, action_spec=action_spec)
         sleep_time = (time.perf_counter() - self._next_step_time) - self.step_dt
         if sleep_time < 0:
             time.sleep(min(-sleep_time, self.step_dt))

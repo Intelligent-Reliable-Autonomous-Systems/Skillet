@@ -108,6 +108,13 @@ class Gen3KortexEnv(KortexEnv):
         self._curr_gripper_goal = None
         self._new_gripper_goal = False
         self._gripper_goal_start = None
+        self._blocking_gripper_cmd = True
+
+        self._curr_motion_goal = None
+        self._new_motion_goal = False
+        self._motion_goal_start = None
+        self._motion_event = None
+        self._motion_handle = None
 
         self._rs_cam_localizer = RealsenseCameraLocalizer(apriltag_size_m=0.1, apriltag_id=self.cfg.base_apriltag_id)
 
@@ -140,17 +147,17 @@ class Gen3KortexEnv(KortexEnv):
         """
         # Publish BLOCKING gripper command. To keep the gripper stationary
         # Assumes we can either move joints or close gripper, not both
-        if self._publish_gripper(action, action_spec, close_time=1.5):
-            return
+        gripper_moving = self._publish_gripper(action, action_spec, close_time=1.5)
 
-        if action_spec is None or action_spec.name == "joints_vel":
-            self._publish_joint_vel_spec(action, duration)
-        elif action_spec.name == "twist_tcp":
-            self._publish_twist_tcp_spec(action)
-        elif action_spec.name == "tcp_cart":
-            self._publish_tcp_cart_spec(action)
-        else:
-            raise ValueError(f"Unknown Action Specification `{action_spec.name}`")
+        if not gripper_moving or not self._blocking_gripper_cmd:
+            if action_spec is None or action_spec.name == "joints_vel":
+                self._publish_joint_vel_spec(action, duration)
+            elif action_spec.name == "twist_tcp":
+                self._publish_twist_tcp_spec(action)
+            elif action_spec.name == "tcp_cart":
+                self._publish_tcp_cart_spec(action)
+            else:
+                raise ValueError(f"Unknown Action Specification `{action_spec.name}`")
 
     def _reset_idx(self) -> None:
         """Reset environment based on specified indices to default position."""
@@ -202,7 +209,6 @@ class Gen3KortexEnv(KortexEnv):
         self,
         joint_pos: np.ndarray,
         action_spec: ActionSpec,
-        timeout: int = 30,
         duration: int = 3,
         close_time: float = 0.5,
     ) -> None:
@@ -211,7 +217,6 @@ class Gen3KortexEnv(KortexEnv):
         Args:
             joint_pos: Joint positions of the robot.
             action_spec: what stationary action to specify
-            timeout: Duration before timeout
             duration: what duration to specify
             close_time: time the gripper takes to close
 
@@ -315,29 +320,36 @@ class Gen3KortexEnv(KortexEnv):
         action = Base_pb2.Action()
         action.name = "TCP Cartesian Action"
         action.application_data = ""
+        if (tcp_cart[:6] != self._curr_motion_goal).any():
+            self._curr_motion_goal = tcp_cart[:6]
 
-        cartesian_pose = action.reach_pose.target_pose
-        cartesian_pose.x = tcp_cart[0]
-        cartesian_pose.y = tcp_cart[1]
-        cartesian_pose.z = tcp_cart[2]
-        cartesian_pose.theta_x = np.rad2deg(tcp_cart[3])
-        cartesian_pose.theta_y = np.rad2deg(tcp_cart[4])
-        cartesian_pose.theta_z = np.rad2deg(tcp_cart[5])
-        speed = action.reach_pose.constraint.speed
-        speed.translation = 0.08
-        speed.orientation = 20
+            cartesian_pose = action.reach_pose.target_pose
+            cartesian_pose.x = tcp_cart[0]
+            cartesian_pose.y = tcp_cart[1]
+            cartesian_pose.z = tcp_cart[2]
+            cartesian_pose.theta_x = np.rad2deg(tcp_cart[3])
+            cartesian_pose.theta_y = np.rad2deg(tcp_cart[4])
+            cartesian_pose.theta_z = np.rad2deg(tcp_cart[5])
+            speed = action.reach_pose.constraint.speed
+            speed.translation = 0.08
+            speed.orientation = 20
 
-        e = threading.Event()
-        notification_handle = self.kortex.OnNotificationActionTopic(
-            self.check_for_end_or_abort(e), Base_pb2.NotificationOptions()
-        )
+            self._motion_event = threading.Event()
+            self._motion_handle = self.kortex.OnNotificationActionTopic(
+                self._check_for_end_or_abort(self._motion_event), Base_pb2.NotificationOptions()
+            )
 
-        self.kortex.ExecuteAction(action)
-        self.kortex.Unsubscribe(notification_handle)
+            self.kortex.ExecuteAction(action)
 
-        return e.wait(duration)
+            self._new_motion_goal = True
+            self._gripper_goal_start = time.perf_counter()
+        elif (time.perf_counter() - self._gripper_goal_start) < duration and not self._motion_event.is_set():
+            self._new_motion_goal = True
+        else:
+            self._new_motion_goal = False
+            self.kortex.Unsubscribe(self._motion_handle)
 
-    def check_for_end_or_abort(self, e) -> Callable:
+    def _check_for_end_or_abort(self, e: threading.Event) -> Callable:
         """Return a closure checking for END or ABORT notifications.
 
         Args:
@@ -345,8 +357,7 @@ class Gen3KortexEnv(KortexEnv):
 
         """
 
-        def check(notification, e=e):
-            print("EVENT : " + Base_pb2.ActionEvent.Name(notification.action_event))
+        def check(notification: Base_pb2.ActionNotification, e: threading.Event = e) -> bool:
             if notification.action_event == Base_pb2.ACTION_END or notification.action_event == Base_pb2.ACTION_ABORT:
                 e.set()
 

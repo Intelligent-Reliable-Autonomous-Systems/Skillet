@@ -19,6 +19,7 @@ import pinocchio as pin
 class CollisionInfo:
     """Structured result for a single monitoring query."""
 
+    effort_lim: bool
     near_collision: bool
     min_distance_now: float
     min_distance_predicted: float
@@ -39,10 +40,12 @@ class CollisionProximityMonitor:
         distance_threshold: float = 0.02,
         dt: float = 0.10,
         safety_factor: float = 1.0,
+        effort_lim: float = 20,
     ) -> None:
         self.distance_threshold = distance_threshold
         self.prediction_dt = dt
         self.safety_factor = safety_factor
+        self.effort_lim = effort_lim
 
         package_dirs = list(package_dirs) if package_dirs is not None else None
         self.model, self.collision_model, _ = pin.buildModelsFromUrdf(urdf_path, package_dirs)
@@ -117,6 +120,7 @@ class CollisionProximityMonitor:
         self,
         q: np.ndarray,
         dq: np.ndarray,
+        eff: np.ndarray,
         joint_names: list[str],
         dt: float | None = None,
     ) -> CollisionInfo:
@@ -139,6 +143,7 @@ class CollisionProximityMonitor:
         limiting_pair = pair_now if dist_now <= dist_pred else pair_pred
 
         return CollisionInfo(
+            effort_lim=(eff > self.effort_lim).any(),
             near_collision=near,
             min_distance_now=dist_now,
             min_distance_predicted=dist_pred,
