@@ -26,7 +26,7 @@ VLA_SERVER_URL = "http://localhost:8001"
 class ActionResponse:
     """Dataclass for segmenting from concepts."""
 
-    action: list[float]
+    actions: list[float]
 
 
 class OpenVlaPolicy(BatchedUPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, TBAction]):
@@ -34,25 +34,28 @@ class OpenVlaPolicy(BatchedUPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, 
         self.server_url = server_url
         self.use_server = use_server
         self.model_name = "OpenVLA"
+        self._device = "cuda"
 
-        if use_server and load_server:
+        if use_server and not load_server:
             OpenVlaPolicy.ensure_server(self.server_url, self.model_name)
 
-        if not load_server or not use_server:
+        if (load_server and use_server) or not use_server:
             bnb_config = BitsAndBytesConfig(
                 load_in_4bit=True,
                 bnb_4bit_quant_type="nf4",  # "nf4" or "fp4"
                 bnb_4bit_compute_dtype=torch.float16,
                 bnb_4bit_use_double_quant=True,  # nested quantization, saves a bit more
             )
-            self._image_processer = AutoProcessor.from_pretrained("openvla/openvla-7b", trust_remote_code=True)
+            self._image_processer = AutoProcessor.from_pretrained(
+                "openvla/openvla-7b", trust_remote_code=True, device_map=self._device, torch_dtype=torch.float16
+            )
             self._vla = AutoModelForVision2Seq.from_pretrained(
                 "openvla/openvla-7b",
                 quantization_config=bnb_config,
-                # torch_dtype=torch.bfloat16,
+                torch_dtype=torch.float16,
                 low_cpu_mem_usage=True,
                 trust_remote_code=True,
-                device_map="cuda:0",
+                device_map=self._device,
             )
 
     @property
@@ -70,17 +73,20 @@ class OpenVlaPolicy(BatchedUPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, 
 
     def get_action(self, obs: RGBD_Obs, params: Any = None) -> TBAction:
         """Get the action from the policy."""
+        rgb = obs["rgb"]
         if self.use_server:
-            return self.remote_action(obs["rgb"])
-        return self.action(obs["rgb"])
+            return self.remote_action(rgb)
+        return self.action(rgb)
 
-    def action(self, rgb: torch.Tensor):
+    def action(self, rgb: UInt8[torch.Tensor, "3 h w"]):
         """Get the action from the VLA."""
         instruction = "Place pink block on purple block"
         prompt = f"In: What action should the robot take to {instruction}?\nOut:"
-        image = Image.fromarray(rgb.permute((1, 2, 0)).cpu().numpy())
+        image = Image.fromarray(rgb.cpu().numpy().transpose(1, 2, 0))
         inputs = self._image_processer(prompt, image, return_tensors="pt").to(rgb.device, dtype=torch.float16)
-        return self._vla.predict_action(**inputs, unnorm_key="bridge_orig", do_sample=False)
+        return torch.as_tensor(
+            self._vla.predict_action(**inputs, unnorm_key="bridge_orig", do_sample=False), device=self._device
+        )
 
     def remote_action(
         self,
@@ -105,7 +111,7 @@ class OpenVlaPolicy(BatchedUPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, 
             )
         )
 
-        return torch.tensor(data["actions"], dtype=torch.float32, device=self.device)
+        return torch.tensor(data["actions"], dtype=torch.float32, device=self._device)
 
     @asynccontextmanager
     async def lifespan(self, app: FastAPI):
@@ -126,7 +132,7 @@ class OpenVlaPolicy(BatchedUPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, 
             """Decode uploaded image bytes → CHW uint8 tensor on CUDA."""
             img = Image.open(io.BytesIO(file_bytes)).convert("RGB")
             arr = np.array(img, dtype=np.uint8)  # HWC
-            return torch.as_tensor(arr).permute(2, 0, 1)  # CHW
+            return torch.as_tensor(arr).permute(2, 1, 0)  # CHW
 
         @app.get("/health")
         def health():
@@ -141,8 +147,7 @@ class OpenVlaPolicy(BatchedUPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, 
             Returns one mask per detected instance, with the concept index it matched.
             """
             rgb = _upload_to_tensor(await file.read())
-
-            action = self.action(rgb)
+            action = self.action(rgb.to(self._device))
 
             return ActionResponse(
                 actions=_tensor_to_list(action),
@@ -200,7 +205,7 @@ class OpenVlaPolicy(BatchedUPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, 
         else:
             if isinstance(rgb, torch.Tensor):
                 rgb = rgb.cpu().numpy()
-            img = Image.fromarray(rgb.transpose(1, 2, 0).astype(np.uint8))
+            img = Image.fromarray(rgb.transpose(2, 1, 0).astype(np.uint8))
         buf = io.BytesIO()
         img.save(buf, format="JPEG")
         return buf.getvalue()
@@ -217,7 +222,7 @@ class OpenVlaPolicy(BatchedUPolicy[TBPolicyObs, TBAction], Generic[TBPolicyObs, 
 def main() -> None:
     """Run the VLA server."""
     if "--serve" in sys.argv:
-        vla_client = OpenVlaPolicy()
+        vla_client = OpenVlaPolicy(load_server=True)
         app = vla_client.create_server()
         uvicorn.run(app, host="0.0.0.0", port=8001, reload=False, workers=1, access_log=False)
     else:

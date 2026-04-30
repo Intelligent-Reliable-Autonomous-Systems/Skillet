@@ -25,7 +25,7 @@ class SAM2Client(SAMClient):
         model_name: str = "sam2.1_hiera_large.pt",
         device: str = "cuda",
         use_server: bool = True,
-        load_server: bool = True,
+        load_server: bool = False,
     ) -> None:
         """Initialize the SAM2 client.
 
@@ -37,7 +37,7 @@ class SAM2Client(SAMClient):
         model_path = self._download_sam_checkpoint(model_name)
         self.model_name = "sam2"
         super().__init__(model_path, device, use_server)
-        if not load_server or not use_server:
+        if (load_server and use_server) or not use_server:
             self.sam_model = self._load_sam_model(checkpoint=model_path)
 
     @override

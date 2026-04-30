@@ -21,7 +21,7 @@ class SAM3Client(SAMClient):
     """Main client class for the SAM3 model."""
 
     def __init__(
-        self, model_name: str = "sam3.pt", device: str = "cuda", use_server: bool = True, load_server: bool = True
+        self, model_name: str = "sam3.pt", device: str = "cuda", use_server: bool = True, load_server: bool = False
     ) -> None:
         """Initialize the SAM3 client.
 
@@ -35,7 +35,7 @@ class SAM3Client(SAMClient):
         self.model_name = "sam3"
         super().__init__(model_path, device, use_server, load_server)
 
-        if not load_server or not use_server:
+        if (load_server and use_server) or not use_server:
             self.sam_model = self._load_sam_model(checkpoint=model_path)
             print("[INFO][SAM3] Successfully loaded SAM3 Model")
 
