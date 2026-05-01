@@ -19,7 +19,7 @@ class QwenClient(VLMClient):
 
     def __init__(
         self,
-        prompt_name: str = "detect_goal_qwen",
+        prompt_name: str = "detect_bbox_qwen",
         model_id: str | None = "qwen3.5:9b",
         device: str = "cuda",
         host: str = "http://localhost:11434",
@@ -129,6 +129,7 @@ class QwenClient(VLMClient):
         Args:
             image: np.ndarray image in shape (H,W,3)
             task_instruction: natural language task
+
         """
         if isinstance(image, torch.Tensor):
             image = image.cpu().numpy()
@@ -136,7 +137,12 @@ class QwenClient(VLMClient):
         image = image.transpose((1, 2, 0))
         return self.parse_response(self.query_image(task_instruction, image))
 
-    def parse_response(self, response_text: str) -> tuple[list, list]:
+    def detect_goal(self, task_instruction: str) -> str:
+        """Parse a task goal to PDDL based on the task instruction."""
+        message = self.prompt.format(task_instruction=task_instruction)
+        return self.parse_response(self.query_text(message))
+
+    def parse_response(self, response_text: str) -> tuple[list, list, list]:
         """Parse Qwen response text into bboxes, grounded goal atoms, and grounded scene atoms."""
         try:
             result = self._load_json(response_text)
@@ -159,21 +165,27 @@ class QwenClient(VLMClient):
         """
         bboxes = []
         labels = []
+        goals = []
+
         for o in result:
-            bboxes.append(o["bbox_2d"])
-            labels.append(o["label"])
+            if "bbox_2d" in o:
+                bboxes.append(o["bbox_2d"])
+            if "label" in o:
+                labels.append(o["label"])
+            if "goal" in o:
+                goals.append(o["goal"])
 
-        return np.asarray(bboxes), np.asarray(labels)
+        return np.asarray(bboxes), np.asarray(labels), np.asarray(goals)
 
 
-def main():
+def main() -> None:
     env = RealsenseEnv()
     vlm = QwenClient()
     cv2.namedWindow("VLM Scene", cv2.WINDOW_NORMAL)
 
     while True:
         obs = env.get_observation()
-        out = vlm.query_image(vlm.prompt, obs["rgb"])
+        _ = vlm.query_image(vlm.prompt, obs["rgb"])
         cv2.imshow("VLM Scene", vlm._bbox_frame)
         cv2.waitKey(1)
 

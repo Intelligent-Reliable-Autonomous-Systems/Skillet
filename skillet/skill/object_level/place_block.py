@@ -136,6 +136,7 @@ class PlaceBlock2Skill(PlaceBlockSkill):
         target_pose = torch.tensor([target_xyz[0], target_xyz[1], target_xyz[2], yaw])
         target_pose = self._place_skill.params_spec.with_n_envs(1).cast(target_pose)
         self._place_skill.initiate(obs, target_pose)
+        print(f"[INFO][PLACE BLOCK]: {objs[0].name} | {self._target.name}")
 
     def __str__(self) -> str:
         if self._params is not None:

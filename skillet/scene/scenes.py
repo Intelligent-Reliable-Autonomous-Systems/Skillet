@@ -1,9 +1,10 @@
 """Default Skillet Scenes."""
 
 import torch
+
 from skillet import DEVICE
-from skillet.scene.cube import Cube, Table
 from skillet.scene.base import Scene
+from skillet.scene.scene_objs import Cube, Table, Target
 
 CUBE_SIZE = 0.044
 SM_APRIL_SZ = 0.036
@@ -84,30 +85,25 @@ SIX_CUBE_APRIL_SCENE = Scene(
     bounds=WORLD_BOUNDS,
     contains_objects=True,
 )
-SIX_CUBE_APRIL_SCENE.goal = [{"goal_predicate": "on", "args": ["yellow_block", "green_block"]}]
+SIX_CUBE_APRIL_SCENE.goal = [{"predicate": "on", "args": ["yellow_block", "green_block"]}]
 
 orange_cube = Cube(size=CUBE_SIZE, name="orange_block")
-black_cube = Cube(size=CUBE_SIZE, name="black_block")
+blue_cube = Cube(size=CUBE_SIZE, name="light_blue_block")
 green_cube = Cube(size=CUBE_SIZE, name="green_block")
-pink_cube = Cube(size=CUBE_SIZE, name="pink_block")
+pink_cube = Cube(size=CUBE_SIZE, name="light_pink_block")
 yellow_cube = Cube(size=CUBE_SIZE, name="yellow_block")
-purple_cube = Cube(size=CUBE_SIZE, name="purple_block")
+purple_cube = Cube(size=CUBE_SIZE, name="dark_purple_block")
+red_cube = Cube(size=CUBE_SIZE, name="dark_red_block")
+
+blue_target = Target(name="blue_circle")
 
 SIX_CUBE_SCENE = Scene(
-    objects=[
-        table_0,
-        orange_cube,
-        # black_cube,
-        green_cube,
-        # pink_cube,
-        yellow_cube,
-        purple_cube,
-    ],
+    objects=[table_0, orange_cube, blue_cube, green_cube, pink_cube, yellow_cube, purple_cube, red_cube, blue_target],
     closed_set=True,
     bounds=WORLD_BOUNDS,
     contains_objects=True,
 )
 
 SIX_CUBE_SCENE.goal = [
-    {"goal_predicate": "on", "args": ["yellow_block", "green_block"]},
+    {"predicate": "on", "args": ["yellow_block", "green_block"]},
 ]

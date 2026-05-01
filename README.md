@@ -21,8 +21,7 @@ Primary Developers: Jeff Jewett (jewettje@oregonstate.edu) and Will Solow (solow
 2. Install `open3d`: `conda install -c conda-forge open3d`
 3. Install perception python packages: `pip install -e ".[perception]"`
 4. You must first request access for the model weights on the [SAM 3 model page on Hugging Face](https://huggingface.co/facebook/sam3) and then, once approved, download the sam3.pt file. Place the downloaded sam3.pt file at `data/models/sam3.pt`.
-5. Clone the SAM3 repository: `git clone https://github.com/facebookresearch/sam3.git third_party/sam3`
-6. `cd third_party/sam3 && pip install -e .`
+
 
 ## Kortex Integration
 Sometimes ROS2 is a pain. To run the robot through the Kortex API instead of ROS2, follow these directions:

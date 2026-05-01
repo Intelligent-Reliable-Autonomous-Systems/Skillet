@@ -37,7 +37,7 @@ class PickBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
             space=gym.spaces.Discrete(n=self.max_objects), name="block_id", is_torch=False, is_batched=False
         )
         self._status = None
-        self._offset = torch.tensor([0, 0.0, 0.005], device=self.obs_spec.device)
+        self._offset = torch.tensor([0, 0.0, 0.0], device=self.obs_spec.device)
 
         self._vis_target_pos = vis_target_pos
 
@@ -127,6 +127,9 @@ class PickBlock2Skill(PickBlockSkill):
         target_pose = torch.tensor([target_xyz[0], target_xyz[1], target_xyz[2], yaw])
         target_pose = self._pick_skill.params_spec.with_n_envs(1).cast(target_pose)
         self._pick_skill.initiate(obs, target_pose)
+        print(
+            f"[INFO][PICK BLOCK]: {self._target_block.name} | {self._scene.get_objects_from_id(self._params)[1].name}"
+        )
 
     def __str__(self) -> str:
         if self._params is not None:

@@ -71,7 +71,8 @@ class PlaceSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAct
         self._place_status = None
         self._params = None
         # 180 degree rotation about X axis + -90 yaw
-        self._default_quat = torch.as_tensor([[0.0, 0.0, -1.0, 0.0]])
+        # self._default_quat = torch.as_tensor([[0.0, 0.0, -1.0, 0.0]])
+        self._default_quat = torch.as_tensor([[0.0, 0.7071, -0.7071, 0.0]])
 
     @property
     def param_dim(self) -> int:
@@ -187,7 +188,7 @@ class PlaceSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAct
             valid_idx = (self._status == SkillStatusCodes.RUNNING) & (next_pose)
             self._place_status[valid_idx] += 1
             valid_idx = valid_idx & (self._place_status < PlaceStatusCodes.DONE)
-            print(f"[INFO][PLACE STATUS UPDATE]: {self._place_status.cpu().numpy()[0]} | reached_pose: {next_pose}")
+            # print(f"[INFO][PLACE STATUS UPDATE]: {self._place_status.cpu().numpy()[0]} | reached_pose: {next_pose.cpu().numpy()}")
             # Update the target pose based on the new place status
             self._current_target_poses[valid_idx] = self._target_poses[idx[valid_idx], self._place_status[valid_idx]]
 

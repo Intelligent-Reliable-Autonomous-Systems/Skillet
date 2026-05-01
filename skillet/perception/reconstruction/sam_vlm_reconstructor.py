@@ -16,7 +16,7 @@ from skillet.perception.reconstruction.reconstructor_base import ReconstructorBa
 from skillet.perception.reconstruction.utils import (
     assign_objects_to_id_hungarian,
     assign_poses_to_objects,
-    find_cube_centers_plane,
+    find_cube_centers_mean,
     get_sorted_object_poses,
     transform_xyz_to_world,
 )
@@ -77,13 +77,14 @@ class SamVlmReconstructor(ReconstructorBase):
             frame: the frame to perform the scene update from
 
         """
+        if not update:
+            return
+
         if not self._scene.contains_objects and self._build_scene_flag:
             print("[INFO][SAM+VLM RECONSTRUCTOR] Building scene...")
             self._build_scene(obs, frame=frame)
             print("[INFO][SAM+VLM RECONSTRUCTOR] Successfully built scene.")
 
-        if not update:
-            return
         rgb = obs["rgb"]
         depth = obs["depth"]
         intrinsic_k = obs["intrinsic_k"]
@@ -111,7 +112,7 @@ class SamVlmReconstructor(ReconstructorBase):
         masks = masks.cpu().numpy()
 
         # Find cube centers in the camera frame
-        dc = find_cube_centers_plane(
+        centers = find_cube_centers_mean(
             cube_masks,
             depth,
             intrinsic_k,
@@ -121,12 +122,10 @@ class SamVlmReconstructor(ReconstructorBase):
             frame=frame,
         )
 
-        # TODO assign blocks from name
-
         centers = (
-            transform_xyz_to_world(dc["centers"], camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7])
+            transform_xyz_to_world(centers, camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7])
             if frame == "camera"
-            else dc["centers"]
+            else centers
         )
 
         poses, ids = get_sorted_object_poses(self._scene, Cube)
@@ -174,7 +173,7 @@ class SamVlmReconstructor(ReconstructorBase):
             depth = depth.cpu().numpy()
             camera_pose = camera_pose.cpu().numpy()
             intrinsic_k = intrinsic_k.cpu().numpy()
-        if call_vlm:
+        if call_vlm:  # TODO change how this is parsed from goal
             self._vlm_bboxes, self._vlm_goal_atoms, _ = self._vlm_client.detect_bboxes_and_goal(
                 rgb, self._task_instruction
             )
@@ -204,7 +203,7 @@ class SamVlmReconstructor(ReconstructorBase):
             rgb.transpose(1, 2, 0), masks.cpu().numpy(), labels
         )
 
-        dc = find_cube_centers_plane(
+        centers = find_cube_centers_mean(
             masks.cpu().numpy(),
             depth,
             intrinsic_k,
@@ -214,9 +213,9 @@ class SamVlmReconstructor(ReconstructorBase):
             frame=frame,
         )
         centers = (
-            transform_xyz_to_world(dc["centers"], camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7])
+            transform_xyz_to_world(centers, camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7])
             if frame == "camera"
-            else dc["centers"]
+            else centers
         )
         # Reconstruct scene
         cubes = []

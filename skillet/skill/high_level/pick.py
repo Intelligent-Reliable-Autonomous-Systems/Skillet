@@ -78,7 +78,8 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         self._params = None
 
         # 180 degree rotation about X axis + -90 degree yaw
-        self._default_quat = torch.as_tensor([[0.0, 0.0, -1.0, 0.0]])
+        # self._default_quat = torch.as_tensor([[0.0, 0.0, -1.0, 0.0]])
+        self._default_quat = torch.as_tensor([[0.0, 0.7071, -0.7071, 0.0]])
 
     @property
     def param_dim(self) -> int:
@@ -179,9 +180,9 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
             valid_idx = (self._status == SkillStatusCodes.RUNNING) & (reached_pose)
             self._pick_status[valid_idx] += 1
             valid_idx = valid_idx & (self._pick_status < PickStatusCodes.DONE)
-            print(
-                f"[INFO][PICK STATUS UPDATE]: {PickStatusCodes(self._pick_status.cpu().numpy()[0]).name} | reached_pose: {reached_pose}"
-            )
+            # print(
+            #     f"[INFO][PICK STATUS UPDATE]: {PickStatusCodes(self._pick_status.cpu().numpy()[0]).name} | reached_pose: {reached_pose.cpu().numpy()}"
+            # )
             # Update the target pose based on the new pick status
             self._current_target_poses[valid_idx] = self._target_poses[idx[valid_idx], self._pick_status[valid_idx]]
 

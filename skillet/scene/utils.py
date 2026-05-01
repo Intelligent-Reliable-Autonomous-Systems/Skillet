@@ -6,7 +6,7 @@ from jaxtyping import Int
 
 from skillet.core.math import transform_points, unproject_depth
 from skillet.scene.base import Scene, SceneObject
-from skillet.scene.cube import Cube
+from skillet.scene.scene_objs import Cube
 
 _PALETTE_BGR: list[tuple[int, int, int]] = [
     (44, 44, 220),

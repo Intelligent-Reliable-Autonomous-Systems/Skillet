@@ -54,6 +54,11 @@ class GeminiClient(VLMClient):
         )
         return self.parse_response(response.text)
 
+    def detect_goal(self, task_instruction: str) -> str:
+        """Parse a task goal to PDDL based on the task instruction."""
+        message = self.prompt.format(task_instruction=task_instruction)
+        return self.parse_response(self.query_text(message))
+
     def parse_response(self, response_text: str) -> tuple[list, list, list]:
         """Parse Gemini response text into bboxes, grounded goal atoms, and grounded scene atoms."""
         try:

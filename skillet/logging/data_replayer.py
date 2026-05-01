@@ -13,7 +13,7 @@ import numpy as np
 import torch
 
 from skillet.scene.base import Scene
-from skillet.scene.cube import Cube
+from skillet.scene.scene_objs import Cube
 
 
 class SkilletPlaybackEnv:

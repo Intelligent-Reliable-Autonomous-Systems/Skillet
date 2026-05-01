@@ -55,7 +55,9 @@ perception = [
     "h5py",
     "uvicorn",
     "fastapi",
-    "python-multipart"
+    "python-multipart",
+    "sam2",
+    "sam3",
 ]
 ros = [
     "roslibpy",

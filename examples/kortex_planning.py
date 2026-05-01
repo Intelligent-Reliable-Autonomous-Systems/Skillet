@@ -27,7 +27,7 @@ parser.add_argument("--device", type=str, default="cpu", help="Device to use")
 parser.add_argument("--robot_ip", type=str, default="192.168.1.10", help="Robot IP.")
 parser.add_argument("--poll_rate_hz", type=int, default=10, help="Tick rate of the perception")
 parser.add_argument("--task", type=str, default="Kortex-Gen3Lite-v0", help="Kortex Environment")
-parser.add_argument("--build_scene", type=argparse.BooleanOptionalAction, default=True, help="If to build the scene")
+parser.add_argument("--build_scene", type=argparse.BooleanOptionalAction, default=False, help="If to build the scene")
 parser.add_argument("--reconstruction", type=str, choices=["sam3", "april", "vlm", "sam+vlm"], default="sam3")
 parser.add_argument(
     "--perception", type=argparse.BooleanOptionalAction, default=True, help="If to run the perception pipeline"
@@ -36,7 +36,7 @@ parser.add_argument("--o3d", type=argparse.BooleanOptionalAction, default=True, 
 parser.add_argument(
     "--goal",
     type=str,
-    default="Place the red block on the purple block and the green block on the red block.",
+    default="Place the red block on the yellow block.",
     help="Natural language goal for the block scene.",
 )
 args_cli = parser.parse_args()
@@ -110,10 +110,10 @@ def main() -> None:
     logger = SkilletDataLogger(
         "data/test/", env, scene, perception, abs_model, planning_agent, obs_spec=rgbd_grip_spec, visualize=False
     )
-    # if args_cli.build_scene:
-    #     input("Press Enter to start the scene building...\n")
-    #     perception.task_instruction = args_cli.goal
-    #     perception.build_scene = args_cli.build_scene
+    if args_cli.build_scene:
+        input("Press Enter to start the scene building...\n")
+        perception.task_instruction = args_cli.goal
+        perception.build_scene = args_cli.build_scene
 
     input("Press Enter to start the skill execution...\n")
     logger.write_video = True

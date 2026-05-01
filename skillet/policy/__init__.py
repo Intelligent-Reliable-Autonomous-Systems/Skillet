@@ -14,4 +14,3 @@ from .rl import PidRlJointPolicy as PidRlJointPolicy
 from .tcp import TcpCartPolicy as TcpCartPolicy
 from .tcp import TcpQuatPolicy as TcpQuatPolicy
 from .twist import TwistPidPosePolicy as TwistPidPosePolicy
-from .vla import OpenVlaPolicy as OpenVlaPolicy

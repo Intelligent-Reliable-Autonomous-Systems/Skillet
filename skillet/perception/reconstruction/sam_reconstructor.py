@@ -14,13 +14,13 @@ import torch
 from skillet.perception.reconstruction.reconstructor_base import ReconstructorBase
 from skillet.perception.reconstruction.utils import (
     find_cube_centers_mean,
-    find_cube_centers_plane,
-    find_cube_centers_ransac,
     get_sorted_object_poses,
     transform_xyz_to_world,
 )
 from skillet.perception.segmentation.sam import SAMClient, get_sam_client
-from skillet.scene import CUBE_SIZE, Cube
+from skillet.perception.segmentation.vlm import GeminiClient, QwenClient
+from skillet.perception.segmentation.vlm.vlm_base import VLMClient
+from skillet.scene import CUBE_SIZE, Cube, Target
 from skillet.scene.base import Scene
 
 
@@ -41,6 +41,7 @@ class Sam3Reconstructor(ReconstructorBase):
         """Initialize the SAM reconstructor."""
         super().__init__(scene, device=device)
         self._sam_model: SAMClient = get_sam_client("sam3")(use_server=True)
+        self._vlm_client: VLMClient = GeminiClient(prompt_name="detect_goal_qwen")
         self._visualize = visualize
 
         self._masks = None
@@ -52,6 +53,8 @@ class Sam3Reconstructor(ReconstructorBase):
 
         self._concepts = ["robot arm"]
         for o in self._scene.get_object_names(Cube):
+            self._concepts.append(o.replace("_", " "))
+        for o in self._scene.get_object_names(Target):
             self._concepts.append(o.replace("_", " "))
 
     @property
@@ -75,11 +78,16 @@ class Sam3Reconstructor(ReconstructorBase):
         """
         if not update:
             return
+        if self._build_scene_flag:
+            print("[INFO][SAM RECONSTRUCTOR] Building scene...")
+            self._build_scene(obs, frame=frame)
+            print("[INFO][SAM RECONSTRUCTOR] Successfully built scene.")
+            self._build_scene_flag = False
+
         rgb = obs["rgb"]
         depth = obs["depth"]
         intrinsic_k = obs["intrinsic_k"]
         camera_pose = obs["camera_pose"]
-
         masks, _, _, concept_indices = self._sam_model.segment_concepts(rgb, self._concepts)
 
         self._masks = masks
@@ -88,7 +96,8 @@ class Sam3Reconstructor(ReconstructorBase):
         # Grab only the cubes and combine overlapping indices
         agg_cube_masks = []
         _, mh, mw = masks.shape
-        for i in range(1, len(self._concepts)):
+        cube_inds = [j for j, item in enumerate(self._concepts) if "block" in item]
+        for i in cube_inds:  # grab only cube masks
             if i not in concept_indices:
                 continue
             inds = torch.argwhere(i == concept_indices)[0]
@@ -111,6 +120,8 @@ class Sam3Reconstructor(ReconstructorBase):
             frame=frame,
         )
 
+        # TODO localize target centers as well
+
         centers = (
             transform_xyz_to_world(centers, camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7])
             if frame == "camera"
@@ -120,6 +131,8 @@ class Sam3Reconstructor(ReconstructorBase):
         _, ids = get_sorted_object_poses(self._scene, Cube)
         cube_idx, det_idx = [], []
         for i, c in enumerate(torch.unique(concept_indices[concept_indices != 0]).cpu().numpy()):
+            if c not in cube_inds:
+                continue
             cube = self._scene.get_objects_from_name([self._concepts[c].replace(" ", "_")])[0]
             cube.pose = torch.cat((centers[i], torch.as_tensor([1, 0, 0, 0], device=centers[i].device)), dim=0)
             cube_idx.append(int(np.argwhere(cube.object_id == ids)[0][0]))
@@ -169,66 +182,17 @@ class Sam3Reconstructor(ReconstructorBase):
             camera_pose = camera_pose.cpu().numpy()
             intrinsic_k = intrinsic_k.cpu().numpy()
         if call_vlm:
-            self._vlm_bboxes, self._vlm_goal_atoms, _ = self._vlm_client.detect_bboxes_and_goal(
-                rgb, self._task_instruction
-            )
-            for bbox in self._vlm_bboxes:
-                bbox["label"] = bbox["label"].replace(" ", "_")
+            _, _, self._vlm_goal_atoms = self._vlm_client.detect_goal(self._task_instruction)
             for atom in self._vlm_goal_atoms:
                 atom["args"] = [arg.replace(" ", "_") for arg in atom["args"]]
 
-        labels = []
-        boxes = []
-        # Parse boxes + labels from VLM
-        for d in self._vlm_bboxes:
-            if "block" in d["label"]:
-                labels.append(d["label"])
-                # BBoxes in format  [ymin, xmin, ymax, xmax]
-                box = d["box_2d"]
-                box[0] = (box[0] / 1000) * rgb.shape[1]
-                box[2] = (box[2] / 1000) * rgb.shape[1]
-                box[1] = (box[1] / 1000) * rgb.shape[2]
-                box[3] = (box[3] / 1000) * rgb.shape[2]
-                boxes.append(box)
-
-        # Find cube centers from SAM3 with bounding boxes
-        masks, _ = self._sam_model.segment_bboxes(rgb, np.asarray(boxes))
-
-        self._vlm_frame = Sam3Reconstructor.show_vlm_image_and_masks(
-            rgb.transpose(1, 2, 0), masks.cpu().numpy(), labels
-        )
-
-        dc = find_cube_centers_plane(
-            masks.cpu().numpy(),
-            depth,
-            intrinsic_k,
-            cube_size=CUBE_SIZE,
-            camera_pos=camera_pose[0:3],
-            camera_quat=camera_pose[3:7],
-            frame=frame,
-        )
-        centers = (
-            transform_xyz_to_world(dc["centers"], camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7])
-            if frame == "camera"
-            else dc["centers"]
-        )
-        # Reconstruct scene
-        cubes = []
-        for i, l in enumerate(labels):
-            c = Cube(
-                size=CUBE_SIZE,
-                init_pose=torch.as_tensor(np.concatenate((centers[i], [1, 0, 0, 0])), device=self._device),
-            )
-            c.name = l
-            cubes.append(c)
-        self._scene.add_objects(cubes)
-        self._scene.contains_objects = True
         self._scene.goal = self._vlm_goal_atoms
+        print(self._scene.goal)
 
         pathlib.Path("data/test/").mkdir(exist_ok=True, parents=True)
         with pathlib.Path("data/test/vlm_out_multi.pkl").open("wb") as f:
             pickle.dump(self._scene, f)
-        print(f"[INFO] Reconstructed Scene with VLM.\n{self._scene}")
+        print(f"[INFO] Reconstructed Goal with VLM.\n{self._scene}")
 
     @staticmethod
     def show_vlm_image_and_masks(

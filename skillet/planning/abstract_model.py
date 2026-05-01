@@ -21,7 +21,7 @@ from skillet.planning.abstract import (
 )
 from skillet.planning.base_planner import BasePlanner
 from skillet.scene.base import Scene
-from skillet.scene.cube import Cube
+from skillet.scene.scene_objs import Cube
 
 
 class AbstractModel(BasePlanner):
@@ -158,7 +158,7 @@ class AbstractModel(BasePlanner):
         Note: currently only supports parsing one `on` goal.
         """
         return [
-            self._problem.fluent(g["goal_predicate"])(*(object_state[g["args"][0]], object_state[g["args"][1]]))
+            self._problem.fluent(g["predicate"])(*(object_state[g["args"][0]], object_state[g["args"][1]]))
             for g in goal
         ]
 

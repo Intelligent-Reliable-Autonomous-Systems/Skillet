@@ -7,7 +7,7 @@ import torch
 from skillet.core.math import quat_apply
 from skillet.perception.reconstruction.reconstructor_base import ReconstructorBase
 from skillet.scene.base import Scene
-from skillet.scene.cube import Cube
+from skillet.scene.scene_objs import Cube
 
 
 class ApriltagStateReconstructor(ReconstructorBase):

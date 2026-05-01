@@ -128,7 +128,7 @@ class Scene:
     @property
     def table(self) -> SceneObject | None:
         """Return the table."""
-        from skillet.scene.cube import Table
+        from skillet.scene.scene_objs import Table
 
         for obj in self._objects:
             if isinstance(obj, Table):

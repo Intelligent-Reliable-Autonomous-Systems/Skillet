@@ -3,7 +3,7 @@
 from typing import Literal
 
 from skillet.scene.base import Scene, SceneObject
-from skillet.scene.cube import Cube, Table
+from skillet.scene.scene_objs import Cube, Table
 
 
 def _is_on(a: Cube, b: Cube, height_tol_frac: float = 0.3, xy_slack_frac: float = 0.5) -> bool:

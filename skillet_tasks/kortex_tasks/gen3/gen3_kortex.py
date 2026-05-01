@@ -347,7 +347,6 @@ class Gen3KortexEnv(KortexEnv):
             self._new_motion_goal = True
         else:
             self._new_motion_goal = False
-            self.kortex.Unsubscribe(self._motion_handle)
 
     def _check_for_end_or_abort(self, e: threading.Event) -> Callable:
         """Return a closure checking for END or ABORT notifications.

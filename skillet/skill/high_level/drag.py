@@ -79,7 +79,8 @@ class DragSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         self._params = None
 
         # 180 degree rotation about X axis + -90 degree yaw
-        self._default_quat = torch.as_tensor([[0.0, 0.7071, -0.7071, 0.0]])
+        # self._default_quat = torch.as_tensor([[0.0, 0.7071, -0.7071, 0.0]])
+        self._default_quat = torch.as_tensor([[0.7071, 0.0, 0.0, 0.7071]])
 
     @property
     def param_dim(self) -> int:
@@ -198,7 +199,7 @@ class DragSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         reach_actions[:, -1] = torch.where(
             self._drag_status >= DragStatusCodes.GRASP,
             torch.ones_like(reach_actions[:, -1]) * 0.8,  # Close gripper
-            torch.zeros_like(reach_actions[:, -1]) + 0.2,  # Open gripper
+            torch.ones_like(reach_actions[:, -1]) * 0.8,  # Close gripper
         )
 
         self._n_steps += 1
