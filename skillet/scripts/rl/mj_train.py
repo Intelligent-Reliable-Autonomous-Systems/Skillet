@@ -95,7 +95,6 @@ def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
             "video_length": args_cli.video_length,
             "disable_logger": True,
         }
-        print("[INFO] Recording videos during training.")
         print_dict(video_kwargs, nesting=4)
         env = gym.wrappers.RecordVideo(env, **video_kwargs)
 

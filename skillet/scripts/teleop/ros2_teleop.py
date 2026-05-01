@@ -80,12 +80,8 @@ def main() -> None:
     else:
         raise ValueError(f"Unsupported teleop device: {args_cli.teleop_device}")
 
-    print(f"[INFO] Using teleop device: {teleop_interface}")
-
     env.reset()
     teleop_interface.reset()
-
-    print("[INFO] Teleoperation started")
 
     while True:
         with torch.inference_mode():

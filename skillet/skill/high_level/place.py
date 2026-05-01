@@ -122,7 +122,6 @@ class PlaceSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAct
         self._vel_threshold = 0.001  #
         self._joint_threshold = 0.001
         self._joint_effort_threshold = 9
-        self._prev_gripper_pos = None
 
         ee_pose_b = obs["tcp_pose_b"]
 
@@ -169,9 +168,8 @@ class PlaceSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAct
             quat_error_magnitude(ee_pose_b[:, 3:7], self._current_target_poses[:, 3:7]) < self._quat_threshold
         )
         reached_pose = (reached_pos & reached_quat) | reached_height
-        ee_vel = (obs["ee_vel_b"][:, 0:3] < self._vel_threshold).any(dim=-1)
         self._n_lower_steps = self._n_lower_steps + (self._place_status == PlaceStatusCodes.LOWER)
-        next_pose = (reached_pose & ee_vel) | (
+        next_pose = reached_pose | (
             (torch.abs(joint_efforts) > self._joint_effort_threshold).any(dim=-1)
             & (self._place_status == PlaceStatusCodes.LOWER)
             & (self._n_lower_steps > 10)
@@ -204,7 +202,6 @@ class PlaceSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAct
             torch.ones_like(reach_actions[:, -1]) * 0.8,  # Close gripper
         )
 
-        self._prev_gripper_pos = obs["joint_pos"][:, -1]
         self._n_steps += 1
         self._status[self._place_status == PlaceStatusCodes.DONE] = SkillStatusCodes.SUCCESS
         if self._n_steps >= self._length:

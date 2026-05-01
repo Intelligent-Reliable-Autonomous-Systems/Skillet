@@ -22,6 +22,8 @@ class ObservationManager:
         raw_obs = {
             "joint_pos": self.env._joint_positions[:, self.env.cfg.joint_ids],
             "joint_vel": self.env._joint_velocities[:, self.env.cfg.joint_ids],
+            "tcp_pose_b": self.env._tcp_pose_b,
+            "ee_vel_b": self.env._ee_vel_b,
             "prev_actions": self.env._prev_actions,
             "cube_pos": self.env.cube_pose_b[:, 0:3] if hasattr(self.env, "cube_pos") else None,
             "cube_goal": self.env.cube_goal_xyz_b[:, 0:3] if hasattr(self.env, "cube_goal") else None,

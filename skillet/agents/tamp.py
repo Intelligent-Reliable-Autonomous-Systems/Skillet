@@ -49,7 +49,6 @@ class PlanningAgent(Agent):
 
         terminated = False
         cum_reward = 0.0
-        print(self._plan)
         if self._plan is None:
             print("[WARNING][TAMP] Failed to find plan.")
             return

@@ -5,7 +5,7 @@ from skillet.rl.cfg import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, RslRl
 
 
 @configclass
-class Gen3ReachPPORunnerCfg(RslRlOnPolicyRunnerCfg):
+class Gen3ReachXyzPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     actor = RslRlPpoPolicyCfg(
         hidden_dims=(64, 64),
         activation="elu",

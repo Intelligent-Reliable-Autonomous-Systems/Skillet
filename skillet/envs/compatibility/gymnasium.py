@@ -190,6 +190,16 @@ class SkilletGymEnv(gym.Env):
         raise NotImplementedError
 
     @property
+    def _tcp_pose_b(self) -> torch.Tensor:
+        """Return current tool frame position."""
+        raise NotImplementedError
+
+    @property
+    def _ee_vel_b(self) -> torch.Tensor:
+        """Return current EE velocity."""
+        raise NotImplementedError
+
+    @property
     def _joint_positions(self) -> torch.Tensor:
         """Return current joint positions."""
         raise NotImplementedError

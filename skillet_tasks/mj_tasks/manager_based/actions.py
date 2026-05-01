@@ -77,14 +77,13 @@ class HomeRelativeIKAction(DifferentialIKAction):
         # Store previous desired position for delta-based clipping
         self._prev_desired_pos = self._home_pos.clone()
 
-        self._printed_ee = False  # for debug print
+        self._printed_ee = False
 
     @property
     def action_dim(self) -> int:
         return 6
 
     def process_actions(self, actions: torch.Tensor) -> None:
-        # DEBUG: Print step counter
         if not hasattr(self, "_step_counter"):
             self._step_counter = 0
         self._step_counter += 1
@@ -122,7 +121,6 @@ class HomeRelativeIKAction(DifferentialIKAction):
             nan_envs = torch.where(torch.isnan(delta_from_prev).any(dim=1))[0][:3]
             print(f"[ACTION CLIP DEBUG] delta_from_prev has NaN in envs: {nan_envs.tolist()}")
 
-        # Print current EE position
         ee_pos, ee_quat = self._get_frame_pose()
 
         # Clip delta to be within max_pos_delta box

@@ -10,8 +10,7 @@ from skillet.agents import S2RAgent
 from skillet.core.env import BatchToSingleWrapper
 from skillet.envs import SkilletEnv
 from skillet.perception.perception import SkilletPerception
-
-from skillet.policy import FixedSequencePolicy, PidRlPolicy, RandomPolicy
+from skillet.policy import FixedSequencePolicy, PidRlCartPolicy, PidRlJointPolicy, RandomPolicy
 from skillet.scene import EMPTY_SCENE, SIX_CUBE_APRIL_SCENE, Open3DVisualizer
 from skillet.skill import ReachXYZRPYSkill
 from skillet.skill.specs import SELECT_OPTIONS_SPEC_BATCHED, XYZ_RPY_Params_Spec
@@ -44,7 +43,6 @@ args_cli = parser.parse_args()
 
 def main() -> None:
     """Visualize RGB + depth color map from _get_latest_rgbd()."""
-    import pickle
 
     scene = SIX_CUBE_APRIL_SCENE if args_cli.reconstruction == "april" else EMPTY_SCENE
     env_cfg = {
@@ -78,11 +76,18 @@ def main() -> None:
         perception.run_thread()
 
     # Low-level policies
-    arm_policy = PidRlPolicy(
-        env.batched_env.obs_spec_joints,
-        env.batched_env.action_spec_joints,
+    # arm_policy = PidRlJointPolicy(
+    #     env.batched_env.obs_spec_joints,
+    #     env.batched_env.action_spec_joints,
+    #     XYZ_RPY_Params_Spec.replace(**env.batched_env._spec_args),
+    #     agent_fpath="data/rl/gen3lite_reach",
+    #     poll_rate_hz=30,
+    # )
+    arm_policy = PidRlCartPolicy(
+        env.batched_env.obs_spec_twist_tcp,
+        env.batched_env.action_spec_twist_tcp,
         XYZ_RPY_Params_Spec.replace(**env.batched_env._spec_args),
-        agent_fpath="data/rl/gen3lite_reach",
+        agent_fpath="data/rl/gen3_reach_xyz",
         poll_rate_hz=30,
     )
     # Skills

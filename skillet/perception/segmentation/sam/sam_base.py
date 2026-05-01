@@ -9,7 +9,6 @@ import subprocess
 import sys
 import time
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,6 +22,8 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from PIL import Image
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from jaxtyping import Float, Int, UInt8
 
 
@@ -87,7 +88,7 @@ class SAMClient(ABC):
         self.server_url = server_url
         self.use_server = use_server
 
-        if use_server and load_server:
+        if use_server and not load_server:
             SAMClient.ensure_server(self.server_url, self.model_name)
 
     def reset(self) -> None:  # noqa: B027
@@ -408,7 +409,7 @@ class SAMClient(ABC):
 def main() -> None:
     """Run the SAM server."""
     if "--serve" in sys.argv:
-        sam_client: SAMClient = get_sam_client(model=sys.argv[2])(load_server=False)
+        sam_client: SAMClient = get_sam_client(model=sys.argv[2])(load_server=True)
         app = sam_client.create_server()
         uvicorn.run(app, host="0.0.0.0", port=8000, reload=False, workers=1, access_log=False)
     else:

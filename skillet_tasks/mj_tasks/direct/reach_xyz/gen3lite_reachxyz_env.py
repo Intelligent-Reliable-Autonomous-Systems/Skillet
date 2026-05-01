@@ -6,7 +6,7 @@ from mjlab.sim.sim import Simulation
 from skillet.envs.util import configclass
 from skillet_tasks.assets.mujoco.kinova_gen3lite import get_gen3lite_robot_cfg
 from skillet_tasks.mj_tasks.direct.cfg import Gen3LiteBaseCfg
-from skillet_tasks.mj_tasks.direct.reach.reach_env import ReachEnv
+from skillet_tasks.mj_tasks.direct.reach_xyz.reachxyz_env import ReachXyzEnv
 
 
 @configclass
@@ -14,8 +14,8 @@ class Gen3LiteReachXyzEnvCfg(Gen3LiteBaseCfg):
     action_scale = 0.5
     dof_velocity_scale = 0.1
     skills = []
-    action_space = 8
-    observation_space = 30
+    action_space = 7
+    observation_space = 26
 
     # reward scales
     ee_dist_reward_scale = -0.2
@@ -23,7 +23,7 @@ class Gen3LiteReachXyzEnvCfg(Gen3LiteBaseCfg):
     ee_dist_reward_fine_grained_std = 0.1
     ee_orientation_reward_scale = -0.02
     action_rate_reward_scale = -0.0001
-    joint_vel_reward_scale = -0.0001
+    ee_vel_reward_scale = -0.0001
 
     # EE Pose target ranges
     pos_x = [0.35, 0.65]
@@ -34,10 +34,10 @@ class Gen3LiteReachXyzEnvCfg(Gen3LiteBaseCfg):
     yaw = [-3.14, 3.14]
     ee_ranges = [pos_x, pos_y, pos_z, roll, pitch, yaw]
 
-    obs_terms = ["joint_pos", "joint_vel", "prev_actions", "reach_goal"]
+    obs_terms = ["tcp_pose_b", "ee_vel_b", "prev_actions", "reach_goal"]
 
 
-class Gen3LiteReachXyzEnv(ReachEnv):
+class Gen3LiteReachXyzEnv(ReachXyzEnv):
     """Use this environment for computing actions with RL."""
 
     cfg: Gen3LiteReachXyzEnvCfg

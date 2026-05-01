@@ -3,7 +3,7 @@
 from pathlib import Path
 
 import mujoco
-from mjlab.actuator import XmlActuatorCfg
+from mjlab.actuator import XmlPositionActuatorCfg
 from mjlab.actuator.actuator import TransmissionType
 from mjlab.entity import EntityArticulationInfoCfg, EntityCfg
 
@@ -61,14 +61,13 @@ def get_gen3lite_robot_cfg() -> EntityCfg:
         spec_fn=get_gen3lite_spec,
         articulation=EntityArticulationInfoCfg(
             actuators=(
-                XmlActuatorCfg(
+                XmlPositionActuatorCfg(
                     target_names_expr=(".*",),  # Match all joints (arm + gripper)
                     transmission_type=TransmissionType.JOINT,
                 ),
-                XmlActuatorCfg(
+                XmlPositionActuatorCfg(
                     target_names_expr=("fingers_actuator",),
                     transmission_type=TransmissionType.TENDON,
-                    command_field="position",
                 ),
             ),
             soft_joint_pos_limit_factor=0.9,

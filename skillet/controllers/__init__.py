@@ -2,4 +2,5 @@
 
 from .differential_ik import DifferentialIKController as DifferentialIKController
 from .operational_space import OperationalSpaceController as OperationalSpaceController
-from .pid import PidController as PidController
+from .pid import PidJointController as PidJointController
+from .pid import PidTwistController as PidTwistController

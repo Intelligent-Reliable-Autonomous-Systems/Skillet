@@ -28,13 +28,14 @@ from skillet.envs.compatibility import DirectRlInterface, SkilletGymEnv
 from skillet.envs.specs import (
     GRIPPER_SPEC_BATCHED,
     IK_EE_SPEC_BATCHED,
-    JOINT_SPEC,
-    JOINT_SPEC_BATCHED,
-    MOVEIT_JOINT_SPEC,
-    MOVEIT_TCP_QUAT_SPEC,
+    JOINT_VEL_SPEC,
+    JOINT_VEL_SPEC_BATCHED,
     OSC_SPEC_BATCHED,
     RGBD_GRIPPER_SPEC_BATCHED,
     RGBD_SPEC_BATCHED,
+    TCP_CART_SPEC,
+    TCP_CART_SPEC_BATCHED,
+    TCP_QUAT_SPEC,
     TWIST_SPEC_BATCHED,
     TWIST_TCP_SPEC,
     BxM_Action,
@@ -129,32 +130,35 @@ class SkilletEnv(
             n_gripper_joints=len(self._gripper_joint_names), n_joints=len(self._joint_ids)
         ).replace(**self._spec_args)
         """Specification of Twist TCP observations."""
-        self.obs_spec_joints = JOINT_SPEC_BATCHED.bind(
+        self.obs_spec_joints_vel = JOINT_VEL_SPEC_BATCHED.bind(
             n_gripper_joints=len(self._gripper_joint_names), n_joints=len(self._joint_ids)
         ).replace(**self._spec_args)
         """Specification for joints"""
+        self.obs_spec_tcp_cart = TCP_CART_SPEC_BATCHED.bind(
+            n_gripper_joints=len(self._gripper_joint_names), n_joints=len(self._joint_ids)
+        ).replace(**self._spec_args)
 
         self.action_spec_state = ActionSpec[Float[torch.Tensor, "b ..."]](
             name="state",
             space=action_space,
         ).replace(**self._spec_args)
 
-        self.action_spec_joints = (
-            JOINT_SPEC.replace(**self._spec_args).bind(n_joints=len(self._joint_ids)).replace(device=self.device)
+        self.action_spec_joints_vel = (
+            JOINT_VEL_SPEC.replace(**self._spec_args).bind(n_joints=len(self._joint_ids)).replace(device=self.device)
         )
         self.action_spec_twist_tcp = (
             TWIST_TCP_SPEC.replace(**self._spec_args)
             .bind(n_gripper_joints=len(self._env.cfg.gripper_joint_names))
             .replace(device=self.device)
         )
-        self.action_spec_moveit_joint = (
-            MOVEIT_JOINT_SPEC.replace(**self._spec_args)
-            .bind(n_joints=len(self._env.cfg.joint_ids))
+        self.action_spec_tcp_quat = (
+            TCP_QUAT_SPEC.replace(**self._spec_args)
+            .bind(n_gripper_joints=len(self._env.cfg.gripper_joint_names), n_joints=len(self._joint_ids))
             .replace(device=self.device)
         )
-        self.action_spec_moveit_tcp_quat = (
-            MOVEIT_TCP_QUAT_SPEC.replace(**self._spec_args)
-            .bind(n_gripper_joints=len(self._env.cfg.gripper_joint_names))
+        self.action_spec_tcp_cart = (
+            TCP_CART_SPEC.replace(**self._spec_args)
+            .bind(n_gripper_joints=len(self._env.cfg.gripper_joint_names), n_joints=len(self._joint_ids))
             .replace(device=self.device)
         )
 
@@ -212,7 +216,7 @@ class SkilletEnv(
     @property
     @override
     def action_spec(self) -> ActionSpec[BxM_Action]:
-        return self.action_spec_joints
+        return self.action_spec_joints_vel
 
     @override
     def supports_observation_spec(self, obs_spec: ObservationSpec) -> bool:
@@ -224,17 +228,18 @@ class SkilletEnv(
             self.obs_spec_osc.name,
             self.obs_spec_gripper.name,
             self.obs_spec_rgbd_grip.name,
-            self.obs_spec_joints,
+            self.obs_spec_joints_vel.name,
+            self.obs_spec_tcp_cat.name,
+            self.obs_spec_twist_tcp.name,
         ]
 
     @override
     def supports_action_spec(self, action_spec: ActionSpec) -> bool:
         return action_spec.name in [
-            self.action_spec_joints.name,
+            self.action_spec_joints_vel.name,
             self.action_spec_twist_tcp.name,
-            self.action_spec_moveit_joint.name,
-            self.action_spec_moveit_tcp_quat.name,
-            self.action_spec_joints.name,
+            self.action_spec_tcp_cart.name,
+            self.action_spec_tcp_quat.name,
             self.action_spec_state.name,
         ]
 
@@ -248,7 +253,7 @@ class SkilletEnv(
             self.obs_spec_osc,
             self.obs_spec_gripper,
             self.obs_spec_rgbd_grip,
-            self.obs_spec_joints,
+            self.obs_spec_joints_vel,
         ]:
             if spec.name == obs_spec:
                 return spec
@@ -333,6 +338,18 @@ class SkilletEnv(
                     "ee_vel_b": self._get_ee_vel_b(ee_link=self._ee_link_name, base_link=self._base_link_name),
                     "joint_vel": self._get_joint_velocities(joint_ids=self._joint_ids),
                     "joint_pos": self._get_joint_positions(joint_ids=self._joint_ids),
+                    "joint_eff": self._get_joint_efforts(joint_ids=self._joint_ids),
+                    "prev_actions": self._env._prev_actions,
+                }
+            )
+        if obs_spec.name == "tcp_cart":
+            return obs_spec.cast(
+                {
+                    "tcp_pose_b": self._get_tcp_pose_b(ee_link=self._ee_link_name),
+                    "gripper_lim": self._get_gripper_lims(gripper_joints=self._gripper_joint_names),
+                    "gripper": self._get_gripper_state(gripper_joints=self._gripper_joint_names),
+                    "dt": torch.tensor([self._env.step_dt]).expand(self.num_envs),
+                    "joint_vel": self._get_joint_velocities(joint_ids=self._joint_ids),
                     "joint_eff": self._get_joint_efforts(joint_ids=self._joint_ids),
                 }
             )

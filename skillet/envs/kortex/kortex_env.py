@@ -304,6 +304,7 @@ class KortexEnv(SkilletGymEnv):
         out = self._collision_checker.check_near_collision(
             self._current_joint_positions,
             self._current_joint_velocities,
+            self._current_joint_efforts,
             self.cfg.arm_joint_names + self.cfg.gripper_joint_names,
         )
         if out.near_collision:
@@ -312,10 +313,12 @@ class KortexEnv(SkilletGymEnv):
             )
             zero_action = self._pre_process_action(torch.zeros_like(action), action_spec=action_spec)
             self._publish_action_to_kortex(zero_action, duration=self.step_dt, action_spec=action_spec)
+        elif out.effort_lim:
+            print(f"[WARN][KORTEX] Joint effort limits reached {self._joint_efforts}. Stopping robot")
+            zero_action = self._pre_process_action(torch.zeros_like(action), action_spec=action_spec)
         else:
             # Pre process the robot action
             action = self._pre_process_action(action, action_spec=action_spec)
-
             # Send the robot action to hardware
             self._publish_action_to_kortex(action, duration=self.step_dt, action_spec=action_spec)
         sleep_time = (time.perf_counter() - self._next_step_time) - self.step_dt

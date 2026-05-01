@@ -66,8 +66,6 @@ def configclass(cls: Any, **kwargs: dict[str, Any]) -> Any:  # noqa: ANN401
         # create configuration instance
         env_cfg = EnvCfg(num_envs=24)
 
-        # print information as a dictionary
-        print(env_cfg.to_dict())
 
         # create a copy of the configuration
         env_cfg_copy = env_cfg.copy()

@@ -100,7 +100,7 @@ RGBD_GRIPPER_SPEC_BATCHED: ObservationSpec[RGBD_Gripper_Obs] = ObservationSpec[R
 IKEE_Obs = Mapping[str, Float[torch.Tensor, "b ..."]]
 OSC_Obs = Mapping[str, Float[torch.Tensor, "b ..."]]
 TWIST_TCP_Obs = Mapping[str, Float[torch.Tensor, "b ..."]]
-MOVEIT_TCP_Obs = Mapping[str, Float[torch.Tensor, "b ..."]]
+TCP_Obs = Mapping[str, Float[torch.Tensor, "b ..."]]
 JOINT_Obs = Mapping[str, Float[torch.Tensor, "b ..."]]
 IK_EE_SPEC_BATCHED = ObservationSpec[IKEE_Obs](
     space=gym.spaces.Dict(
@@ -170,6 +170,7 @@ TWIST_SPEC_BATCHED = ObservationSpec[TWIST_TCP_Obs](
             "joint_vel": ParameterizedBox(low=-10, high=10, shape=("n_joints",)),
             "joint_pos": ParameterizedBox(low=-np.pi, high=np.pi, shape=("n_joints",)),
             "joint_eff": ParameterizedBox(low=-np.pi, high=np.pi, shape=("n_joints",)),
+            "prev_actions": ParameterizedBox(low=-1, high=1, shape=("6 + n_gripper_joints",)),
         }
     ),
     name="twist_tcp",
@@ -178,22 +179,24 @@ TWIST_SPEC_BATCHED = ObservationSpec[TWIST_TCP_Obs](
     n_envs=-1,
 )
 
-MOVEIT_SPEC_BATCHED = ObservationSpec[MOVEIT_TCP_Obs](
+TCP_CART_SPEC_BATCHED = ObservationSpec[TCP_Obs](
     space=gym.spaces.Dict(
         {
             "tcp_pose_b": gym.spaces.Box(low=-1.0, high=1.0, shape=(7,)),
             "gripper_lim": gym.spaces.Box(low=0.0, high=1.0, shape=(2,)),
             "gripper": ParameterizedBox(low=0.0, high=1.0, shape=("n_gripper_joints",)),
+            "joint_eff": ParameterizedBox(low=-np.pi, high=np.pi, shape=("n_joints",)),
+            "joint_vel": ParameterizedBox(low=-10, high=10, shape=("n_joints",)),
             "dt": gym.spaces.Box(low=0.0, high=1.0, shape=(1,)),
         }
     ),
-    name="twist_tcp",
+    name="tcp_cart",
     is_torch=True,
     is_batched=True,
     n_envs=-1,
 )
 
-JOINT_SPEC_BATCHED = ObservationSpec[JOINT_Obs](
+JOINT_VEL_SPEC_BATCHED = ObservationSpec[JOINT_Obs](
     space=gym.spaces.Dict(
         {
             "tcp_pose_b": gym.spaces.Box(low=-1.0, high=1.0, shape=(7,)),
@@ -222,7 +225,7 @@ JOINT_SPEC_BATCHED = ObservationSpec[JOINT_Obs](
 
 JOINT_Action = Float[torch.Tensor, "b n_joints"]
 """Action type for Joint Commands"""
-JOINT_SPEC = ActionSpec[JOINT_Action](
+JOINT_VEL_SPEC = ActionSpec[JOINT_Action](
     space=ParameterizedBox(low=-float("inf"), high=float("inf"), shape=("n_joints",)),
     name="joints_vel",
     is_torch=True,
@@ -240,21 +243,22 @@ TWIST_TCP_SPEC = ActionSpec[TWIST_TCP_Action](
     n_envs=-1,
 )
 
-MOVEIT_Joint_Action = Float[torch.Tensor, "b n_joints"]
-"""Action type for MoveIt joint commands."""
-MOVEIT_JOINT_SPEC = ActionSpec[MOVEIT_Joint_Action](
-    space=ParameterizedBox(low=-float("inf"), high=float("inf"), shape=("n_joints",)),
-    name="moveit_joint",
+
+TCP_QUAT_Action = Float[torch.Tensor, "b 7+n_gripper_joints"]
+"""Action type for TCP + Quat commands."""
+TCP_QUAT_SPEC = ActionSpec[TCP_QUAT_Action](
+    space=ParameterizedBox(low=-float("inf"), high=float("inf"), shape=("7 + n_gripper_joints",)),
+    name="tcp_quat",
     is_torch=True,
     is_batched=True,
     n_envs=-1,
 )
 
-TCP_QUAT_Action = Float[torch.Tensor, "b 7+n_gripper_joints"]
-"""Action type for MoveIt TCP + Quat commands."""
-MOVEIT_TCP_QUAT_SPEC = ActionSpec[TCP_QUAT_Action](
-    space=ParameterizedBox(low=-float("inf"), high=float("inf"), shape=("7 + n_gripper_joints",)),
-    name="moveit_tcp_quat",
+TCP_CART_Action = Float[torch.Tensor, "b 7+n_gripper_joints"]
+"""Action type for TCP + Cartesian commands."""
+TCP_CART_SPEC = ActionSpec[TCP_CART_Action](
+    space=ParameterizedBox(low=-float("inf"), high=float("inf"), shape=("6 + n_gripper_joints",)),
+    name="tcp_cart",
     is_torch=True,
     is_batched=True,
     n_envs=-1,

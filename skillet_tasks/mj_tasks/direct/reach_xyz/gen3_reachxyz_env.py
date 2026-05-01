@@ -15,13 +15,16 @@ class Gen3ReachXyzEnvCfg(Gen3BaseCfg):
     dof_velocity_scale = 0.1
     skills = []
 
+    action_space = 7
+    observation_space = 26
+
     # reward scales
     ee_dist_reward_scale = -0.2
     ee_dist_reward_fine_grained_scale = 0.1
     ee_dist_reward_fine_grained_std = 0.1
     ee_orientation_reward_scale = -0.02
     action_rate_reward_scale = -0.0001
-    joint_vel_reward_scale = -0.0001
+    ee_vel_reward_scale = -0.0001
 
     # EE Pose target ranges
     pos_x = [0.35, 0.65]
@@ -32,8 +35,10 @@ class Gen3ReachXyzEnvCfg(Gen3BaseCfg):
     yaw = [-3.14, 3.14]
     ee_ranges = [pos_x, pos_y, pos_z, roll, pitch, yaw]
 
+    obs_terms = ["tcp_pose_b", "ee_vel_b", "prev_actions", "reach_goal"]
 
-class Gen3ReachEnv(ReachXyzEnv):
+
+class Gen3ReachXyzEnv(ReachXyzEnv):
     """Use this environment for computing actions with RL."""
 
     cfg: Gen3ReachXyzEnvCfg

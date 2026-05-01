@@ -12,9 +12,8 @@ from skillet.core.env import BatchToSingleWrapper
 from skillet.envs import SkilletEnv
 from skillet.logging import SkilletDataLogger
 from skillet.perception.perception import SkilletPerception
-
 from skillet.planning import AbstractModel
-from skillet.policy import TwistPidPosePolicy
+from skillet.policy import TcpCartPolicy, TwistPidPosePolicy
 from skillet.scene import EMPTY_SCENE, SIX_CUBE_APRIL_SCENE, SIX_CUBE_SCENE, Open3DVisualizer
 from skillet.skill import PickBlock2Skill, PickSkill, PlaceBlock2Skill, PlaceSkill
 from skillet_tasks.kortex_tasks.factory import create_kortex_env
@@ -90,7 +89,8 @@ def main() -> None:
             scene.gripper_pos = 0.8
 
     # Low-level policies
-    arm_policy = TwistPidPosePolicy(env.batched_env.obs_spec_twist_tcp, env.batched_env.action_spec_twist_tcp)
+    # arm_policy = TwistPidPosePolicy(env.batched_env.obs_spec_twist_tcp, env.batched_env.action_spec_twist_tcp)
+    arm_policy = TcpCartPolicy(env.batched_env.obs_spec_tcp_cart, env.batched_env.action_spec_tcp_cart)
     # Skills
     skill_length = 1e9
     place_skill = PlaceSkill(reach_policy=arm_policy, gripper_policy=None, lift_height=0.23, length=skill_length)
