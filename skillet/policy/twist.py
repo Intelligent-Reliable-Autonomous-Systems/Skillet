@@ -40,8 +40,8 @@ class TwistPidPosePolicy(BatchedPolicy[TCP_Obs, TCP_CART_Action, XYZ_QUAT_Params
         self._frame = frame
 
         # Max velocities
-        self.rot_sensitivity = 20.0
-        self.pos_sensitivity = 0.08
+        self.rot_sensitivity = 10.0
+        self.pos_sensitivity = 0.01
 
         # PID gains
         self.Kp_pos = 1.0
@@ -97,6 +97,7 @@ class TwistPidPosePolicy(BatchedPolicy[TCP_Obs, TCP_CART_Action, XYZ_QUAT_Params
         # Rotate position and rotation error into the frame the twist controller expects
         error_pos = quat_apply(quat_inv(tcp_pose_b[:, 3:7]), error_pos)
         error_rot = quat_apply(quat_inv(tcp_pose_b[:, 3:7]), error_rot) * 10
+        error_rot = torch.zeros_like(error_rot, device=error_rot.device)
 
         self.integral_pos += error_pos * dt
         self.integral_rot += error_rot * dt

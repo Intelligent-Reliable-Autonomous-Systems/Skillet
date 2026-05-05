@@ -119,8 +119,8 @@ def move_home(base, base_cyclic):
     feedback = base_cyclic.RefreshFeedback()
 
     cartesian_pose = action.reach_pose.target_pose
-    cartesian_pose.x = 0.20  # (meters)
-    cartesian_pose.y = 0.3  # (meters)
+    cartesian_pose.x = 0.35  # (meters)
+    cartesian_pose.y = 0.0  # (meters)
     cartesian_pose.z = 0.03  # (meters)
     cartesian_pose.theta_x = 0  # (degrees)
     cartesian_pose.theta_y = 180  # (degrees)

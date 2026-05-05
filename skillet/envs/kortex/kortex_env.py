@@ -307,7 +307,8 @@ class KortexEnv(SkilletGymEnv):
             self._current_joint_efforts,
             self.cfg.arm_joint_names + self.cfg.gripper_joint_names,
         )
-        if out.near_collision:
+        # if out.near_collision:
+        if False:
             print(
                 f"[WARN][KORTEX] Near collision with [{out.limiting_pair[0]}, {out.limiting_pair[1]}]. Stopping robot.."
             )
@@ -510,7 +511,7 @@ class KortexEnv(SkilletGymEnv):
         # Pad gripper positions and velocities
         q = pin.neutral(self.kortex_model)
         q[: len(curr_arm_positions)] = curr_arm_positions
-        dq = pin.neutral(self.kortex_model)
+        dq = np.zeros(self.kortex_model.nv)
         dq[: len(curr_arm_velocities)] = curr_arm_velocities
         pin.computeJointJacobians(self.kortex_model, self.kortex_data, q)
         pin.forwardKinematics(self.kortex_model, self.kortex_data, q, dq)

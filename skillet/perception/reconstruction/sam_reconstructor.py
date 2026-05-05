@@ -127,7 +127,6 @@ class Sam3Reconstructor(ReconstructorBase):
             if frame == "camera"
             else centers
         )
-
         _, ids = get_sorted_object_poses(self._scene, Cube)
         cube_idx, det_idx = [], []
         for i, c in enumerate(torch.unique(concept_indices[concept_indices != 0]).cpu().numpy()):

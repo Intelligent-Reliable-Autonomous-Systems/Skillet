@@ -26,9 +26,9 @@ if TYPE_CHECKING:
     from skillet.core import ActionSpec
     from skillet.core.spaces import ObservationSpec
 
-DEFAULT_APRILTAG_POSE = np.array([0.12, 0.005, 0.0, 0.0, 0.0, 0.7071068, 0.7071068])
+DEFAULT_APRILTAG_POSE = np.array([0.13, 0.000, 0.0, 0.0, 0.0, 0.7071068, 0.7071068])
 DEFAULT_APRILTAG_SIZE_M = 0.100
-DEFAULT_APRILTAG_ID = 3
+DEFAULT_APRILTAG_ID = 2
 
 
 class RealsenseEnv(_EnvironmentBase[RGBD_Obs, Any]):

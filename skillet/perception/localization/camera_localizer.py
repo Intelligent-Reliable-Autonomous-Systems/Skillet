@@ -10,9 +10,9 @@ import pupil_apriltags as apriltags
 import pyrealsense2 as rs
 from scipy.spatial.transform import Rotation
 
-DEFAULT_APRILTAG_POSE = np.array([0.12, 0.005, 0.0, 0.0, 0.0, 0.7071068, 0.7071068])
+DEFAULT_APRILTAG_POSE = np.array([0.13, 0.000, 0.0, 0.0, 0.0, 0.7071068, 0.7071068])
 DEFAULT_APRILTAG_SIZE_M = 0.100
-DEFAULT_APRILTAG_ID = 3
+DEFAULT_APRILTAG_ID = 2
 
 
 class CameraLocalizer:
@@ -20,9 +20,9 @@ class CameraLocalizer:
 
     def __init__(
         self,
-        apriltag_pose: np.ndarray = np.array([0.12, 0.005, 0.0, 0.0, 0.0, 0.7071068, 0.7071068]),
+        apriltag_pose: np.ndarray = DEFAULT_APRILTAG_POSE,  # in xywz
         apriltag_size_m: float = 0.100,
-        apriltag_id: int = 3,
+        apriltag_id: int = 2,
         pose_buffer_size: int = 10,
         fix_camera_pose: bool = True,
     ) -> None:

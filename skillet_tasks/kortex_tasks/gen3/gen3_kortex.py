@@ -31,7 +31,7 @@ class Gen3KortexEnvCfg(KortexEnvCfg):
     """Robot configuration"""
 
     urdf_path = f"{pathlib.Path.cwd()}/skillet_tasks/assets/kortex/kinova_gen3/gen3_2f85.urdf"
-    urdf_path = f"{pathlib.Path.cwd()}/skillet_tasks/assets/kortex/kinova_gen3/gen3_2f85.srdf"
+    srdf_path = f"{pathlib.Path.cwd()}/skillet_tasks/assets/kortex/kinova_gen3/gen3_2f85.srdf"
     assets_dir = [f"{pathlib.Path.cwd()}/skillet_tasks/assets/kortex/kinova_gen3/"]
     # IP of the robot
     robot_ip = "www.xxx.yyy.zzz"
@@ -57,17 +57,19 @@ class Gen3KortexEnvCfg(KortexEnvCfg):
 
     joint_ids = [0, 1, 2, 3, 4, 5, 6, 7]
 
-    tcp_offset = [0.0, 0.0, 0.12, 1.0, 0.0, 0.0, 0.0]
+    tcp_offset = [0.0, 0.0, 0.12, 0.0, 0.7071, -0.7071, 0.0]
+    # tcp_offset = [0.0, 0.0, 0.12, 0.70710678, 0, 0, 0.70710678]
+    # tcp_offset = [0.0, 0.0, 0.12, 1.0, 0.0, 0.0, 0.0]
 
     ee_link_name = "end_effector_link"
 
     base_link_name = "base_link"
 
-    gripper_joint_names = ["robotiq_85_left_knuckle_joint"]
+    gripper_joint_names = ["robotiq_85_left_inner_knuckle_joint"]
 
     arm_joint_names = ["joint_1", "joint_2", "joint_3", "joint_4", "joint_5", "joint_6", "joint_7"]
 
-    base_apriltag_id = 3
+    base_apriltag_id = 2
 
 
 class Gen3KortexEnv(KortexEnv):
@@ -235,7 +237,6 @@ class Gen3KortexEnv(KortexEnv):
                 self._publish_joint_vel_spec(np.zeros_like(joint_pos), duration)
             elif action_spec.name == "twist_tcp":
                 self._publish_twist_tcp_spec(np.zeros_like(joint_pos))
-
             self.kortex.SendGripperCommand(gripper_command)
             self._curr_gripper_goal = gripper_goal
             self._new_gripper_goal = True

@@ -26,7 +26,7 @@ parser.add_argument("--num_envs", type=int, default=1, help="Number of environme
 parser.add_argument("--device", type=str, default="cpu", help="Device to use")
 parser.add_argument("--robot_ip", type=str, default="192.168.1.10", help="Robot IP.")
 parser.add_argument("--poll_rate_hz", type=int, default=10, help="Tick rate of the perception")
-parser.add_argument("--task", type=str, default="Kortex-Gen3Lite-v0", help="Kortex Environment")
+parser.add_argument("--task", type=str, default="Kortex-Gen3-v0", help="Kortex Environment")
 parser.add_argument("--build_scene", type=argparse.BooleanOptionalAction, default=False, help="If to build the scene")
 parser.add_argument("--reconstruction", type=str, choices=["sam3", "april", "vlm", "sam+vlm"], default="sam3")
 parser.add_argument(
@@ -89,8 +89,8 @@ def main() -> None:
             scene.gripper_pos = 0.8
 
     # Low-level policies
-    # arm_policy = TwistPidPosePolicy(env.batched_env.obs_spec_twist_tcp, env.batched_env.action_spec_twist_tcp)
-    arm_policy = TcpCartPolicy(env.batched_env.obs_spec_tcp_cart, env.batched_env.action_spec_tcp_cart)
+    arm_policy = TwistPidPosePolicy(env.batched_env.obs_spec_twist_tcp, env.batched_env.action_spec_twist_tcp)
+    # arm_policy = TcpCartPolicy(env.batched_env.obs_spec_tcp_cart, env.batched_env.action_spec_tcp_cart)
     # Skills
     skill_length = 1e9
     place_skill = PlaceSkill(reach_policy=arm_policy, gripper_policy=None, lift_height=0.23, length=skill_length)
