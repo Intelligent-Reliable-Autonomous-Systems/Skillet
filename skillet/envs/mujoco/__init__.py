@@ -3,3 +3,4 @@ from .mj_direct_rl_env import MjDirectRlEnvCfg as MjDirectRlEnvCfg
 from .mj_manager_based_rl_env import MjManagerBasedRlEnv as MjManagerBasedRlEnv
 from .mj_manager_based_rl_env import MjManagerBasedRlEnvCfg as MjManagerBasedRlEnvCfg
 from .mj_rl_env_cfg import SkillsDirectRlEnvCfg as SkillsDirectRlEnvCfg
+from .scene_spec import MujocoSceneSpec as MujocoSceneSpec
