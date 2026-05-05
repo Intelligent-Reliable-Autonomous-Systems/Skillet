@@ -193,6 +193,15 @@ line-ending = "auto"
 [tool.pytest.ini_options]
 testpaths = ["test"]
 pythonpath = ["."]
+addopts = [
+    "-p", "no:launch_testing",
+    "-p", "no:launch_ros",
+    "-p", "no:ament_pep257",
+    "-p", "no:ament_copyright",
+    "-p", "no:ament_xmllint",
+    "-p", "no:ament_lint",
+    "-p", "no:ament_flake8",
+]
 
 [tool.mypy]
 python_version = "3.11"
