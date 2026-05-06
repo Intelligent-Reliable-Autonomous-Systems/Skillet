@@ -213,7 +213,7 @@ class Gen3KortexEnv(KortexEnv):
         action_spec: ActionSpec,
         duration: int = 3,
         close_time: float = 0.5,
-        mode: Literal["position", "velocity"] = "velocity",
+        mode: Literal["position", "velocity"] = "position",
     ) -> None:
         """Publish a joint position to the joint trajectory controller.
 
