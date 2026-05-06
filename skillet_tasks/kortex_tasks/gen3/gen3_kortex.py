@@ -333,7 +333,7 @@ class Gen3KortexEnv(KortexEnv):
             cartesian_pose.theta_z = np.rad2deg(tcp_cart[5])
             speed = action.reach_pose.constraint.speed
             speed.translation = 0.08
-            speed.orientation = 20
+            speed.orientation = 30
 
             self._motion_event = threading.Event()
             self._motion_handle = self.kortex.OnNotificationActionTopic(

@@ -16,7 +16,7 @@ import pinocchio as pin
 import torch
 from kortex_api.autogen.messages import Base_pb2
 
-from skillet.core.math import convert_quat
+from skillet.core.math import convert_quat, np_quat_from_euler_xyz
 from skillet.core.spaces import ActionSpec
 from skillet.envs.compatibility import SkilletGymEnv
 from skillet.envs.compatibility.s2r import CollisionProximityMonitor
@@ -35,6 +35,7 @@ class KortexEnv(SkilletGymEnv):
 
     """
 
+    _current_robot_tool_pose_b: np.ndarray
     _current_joint_positions: np.ndarray
     _current_joint_velocities: np.ndarray
     _current_joint_efforts: np.ndarray
@@ -119,6 +120,10 @@ class KortexEnv(SkilletGymEnv):
     """
     Skillet Gymansium Interface Properties.
     """
+
+    @property
+    def _robot_tool_pose_b(self) -> torch.Tensor:
+        return torch.as_tensor(self._current_robot_tool_pose_b, device=self.device, dtype=torch.float32).unsqueeze(0)
 
     @property
     def _prev_actions(self) -> torch.Tensor:
@@ -314,7 +319,7 @@ class KortexEnv(SkilletGymEnv):
             )
             zero_action = self._pre_process_action(torch.zeros_like(action), action_spec=action_spec)
             self._publish_action_to_kortex(zero_action, duration=self.step_dt, action_spec=action_spec)
-        elif out.effort_lim:
+        elif False:  # out.effort_lim
             print(f"[WARN][KORTEX] Joint effort limits reached {self._joint_efforts}. Stopping robot")
             zero_action = self._pre_process_action(torch.zeros_like(action), action_spec=action_spec)
         else:
@@ -484,6 +489,17 @@ class KortexEnv(SkilletGymEnv):
             """Shift angles > 180 to negative and convert to radians."""
             deg_wrapped = (deg + 180) % 360 - 180  # [0,360] -> [-180, 180]
             return np.deg2rad(deg_wrapped)
+
+        # Compute tool pose
+        self._current_robot_tool_pose_b = np.zeros(7)
+        self._current_robot_tool_pose_b[0] = feedback.base.tool_pose_x
+        self._current_robot_tool_pose_b[1] = feedback.base.tool_pose_y
+        self._current_robot_tool_pose_b[2] = feedback.base.tool_pose_z
+        self._current_robot_tool_pose_b[3:7] = np_quat_from_euler_xyz(
+            deg_to_rad_wrapped(feedback.base.tool_pose_theta_x),
+            deg_to_rad_wrapped(feedback.base.tool_pose_theta_y),
+            deg_to_rad_wrapped(feedback.base.tool_pose_theta_z),
+        )
 
         # Compute the current joint positions, velocities, and efforts
         curr_arm_positions = deg_to_rad_wrapped(np.asarray([actuator.position for actuator in feedback.actuators]))

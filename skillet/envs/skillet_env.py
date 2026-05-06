@@ -229,7 +229,7 @@ class SkilletEnv(
             self.obs_spec_gripper.name,
             self.obs_spec_rgbd_grip.name,
             self.obs_spec_joints_vel.name,
-            self.obs_spec_tcp_cat.name,
+            self.obs_spec_tcp_cart.name,
             self.obs_spec_twist_tcp.name,
         ]
 
@@ -509,6 +509,9 @@ class SkilletEnv(
             Tensor in shape (N,7) with 7 in (X,Y,Z,Quat)
 
         """
+        if self._env._robot_tool_pose_b is not None:
+            return self._env._robot_tool_pose_b
+
         if env_ids is None:
             env_ids = torch.arange(self.num_envs, device=self.device)
 

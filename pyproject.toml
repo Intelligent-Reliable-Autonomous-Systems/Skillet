@@ -56,7 +56,6 @@ perception = [
     "uvicorn",
     "fastapi",
     "python-multipart",
-    "sam2",
     "sam3",
 ]
 ros = [

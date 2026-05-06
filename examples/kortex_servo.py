@@ -9,11 +9,7 @@ import torch
 from skillet.agents import PolicyOverOptionsAgent
 from skillet.core.env import BatchToSingleWrapper
 from skillet.envs import SkilletEnv
-from skillet.policy import (
-    FixedSequencePolicy,
-    RandomPolicy,
-    TwistPidPosePolicy,
-)
+from skillet.policy import FixedSequencePolicy, RandomPolicy, TwistPidPosePolicy, TcpCartPolicy
 from skillet.skill import ReachPoseSkill
 from skillet.skill.specs import SELECT_OPTIONS_SPEC_BATCHED
 from skillet_tasks.kortex_tasks.factory import create_kortex_env
@@ -69,6 +65,7 @@ def main() -> None:
     #     poll_rate_hz=30,
     # )
     arm_policy = TwistPidPosePolicy(env.batched_env.obs_spec_twist_tcp, env.batched_env.action_spec_twist_tcp)
+    # arm_policy = TcpCartPolicy(env.batched_env.obs_spec_tcp_cart, env.batched_env.action_spec_tcp_cart)
 
     # Skills
     skill_length = 1e9
@@ -83,6 +80,8 @@ def main() -> None:
         torch.as_tensor(
             [
                 [0.4, 0.1, 0.2, 0.0, 0.7071, 0.7071, 0.0],
+                [0.5, 0.1, 0.2, 0.0, 0.7071, 0.7071, 0.0],
+                [0.5, -0.1, 0.2, 0.0, 0.7071, 0.7071, 0.0],
             ],
             device=env.batched_env.device,
         ),

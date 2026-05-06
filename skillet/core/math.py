@@ -2173,3 +2173,32 @@ def np_euler_xyz_degrees_from_quat(
     if wrap_to_2pi:
         return roll % (2 * np.pi), pitch % (2 * np.pi), yaw % (2 * np.pi)
     return np.degrees(roll), np.degrees(pitch), np.degrees(yaw)
+
+
+def np_quat_from_euler_xyz(roll: np.ndarray, pitch: np.ndarray, yaw: np.ndarray) -> np.ndarray:
+    """Convert rotations given as Euler angles in radians to Quaternions.
+
+    The euler angles are assumed in XYZ convention.
+
+    Args:
+        roll: Rotation around x-axis (in radians). Shape is (1,).
+        pitch: Rotation around y-axis (in radians). Shape is (1,).
+        yaw: Rotation around z-axis (in radians). Shape is (1,).
+
+    Returns:
+        The quaternion in (w, x, y, z). Shape is (N, 4).
+
+    """
+    cy = np.cos(yaw * 0.5)
+    sy = np.sin(yaw * 0.5)
+    cr = np.cos(roll * 0.5)
+    sr = np.sin(roll * 0.5)
+    cp = np.cos(pitch * 0.5)
+    sp = np.sin(pitch * 0.5)
+    # compute quaternion
+    qw = cy * cr * cp + sy * sr * sp
+    qx = cy * sr * cp - sy * cr * sp
+    qy = cy * cr * sp + sy * sr * cp
+    qz = sy * cr * cp - cy * sr * sp
+
+    return np.stack([qw, qx, qy, qz], axis=0)
