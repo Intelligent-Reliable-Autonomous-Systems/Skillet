@@ -167,16 +167,14 @@ class KortexEnv(SkilletGymEnv):
     @property
     def _robot_dof_lower_limits(self) -> torch.Tensor:
         """Return the lower limits of the robot joints."""
-        lower_lim = torch.as_tensor(self._current_lower_joint_limits, device=self.device, dtype=torch.float32)
-        lower_lim[lower_lim == 0] = -2 * torch.pi
-        return lower_lim
+        return torch.as_tensor(self._current_lower_joint_limits, device=self.device, dtype=torch.float32)
+        # lower_lim[lower_lim == 0] = -2 * torch.pi
 
     @property
     def _robot_dof_upper_limits(self) -> torch.Tensor:
         """Return the upper limits of the robot joints."""
-        upper_lim = torch.as_tensor(self._current_upper_joint_limits, device=self.device, dtype=torch.float32)
-        upper_lim[upper_lim == 0] = 2 * torch.pi
-        return upper_lim
+        return torch.as_tensor(self._current_upper_joint_limits, device=self.device, dtype=torch.float32)
+        # upper_lim[upper_lim == 0] = 2 * torch.pi
 
     @property
     def _gravity_vector(self) -> torch.Tensor:
@@ -503,7 +501,7 @@ class KortexEnv(SkilletGymEnv):
 
         # Compute the current joint positions, velocities, and efforts
         curr_arm_positions = deg_to_rad_wrapped(np.asarray([actuator.position for actuator in feedback.actuators]))
-        curr_gripper_positions = np.deg2rad([feedback.interconnect.gripper_feedback.motor[0].position])
+        curr_gripper_positions = np.asarray([feedback.interconnect.gripper_feedback.motor[0].position]) / 100
         self._current_joint_positions = np.concatenate((curr_arm_positions, curr_gripper_positions), axis=0)
 
         curr_arm_velocities = np.deg2rad([actuator.velocity for actuator in feedback.actuators])
@@ -519,6 +517,8 @@ class KortexEnv(SkilletGymEnv):
 
         self._current_lower_joint_limits = np.asarray(self.kortex_model.lowerPositionLimit, dtype=float)
         self._current_upper_joint_limits = np.asarray(self.kortex_model.upperPositionLimit, dtype=float)
+        self._current_lower_joint_limits[[self._find_joint_idx(j) for j in self.cfg.gripper_joint_names]] = 0.0
+        self._current_upper_joint_limits[[self._find_joint_idx(j) for j in self.cfg.gripper_joint_names]] = 1.0
         self._current_joint_centers = (self._current_upper_joint_limits + self._current_lower_joint_limits) / 2
 
         jacobians = []

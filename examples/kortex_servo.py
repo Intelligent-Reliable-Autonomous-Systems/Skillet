@@ -49,23 +49,8 @@ def main() -> None:
     env = BatchToSingleWrapper(env)
     env.reset()
 
-    # Low-level policies
-    # arm_policy = PidRlJointPolicy(
-    #     env.batched_env.obs_spec_joints,
-    #     env.batched_env.action_spec_joints,
-    #     XYZ_RPY_Params_Spec.replace(**env.batched_env._spec_args),
-    #     agent_fpath="data/rl/gen3lite_reach",
-    #     poll_rate_hz=30,
-    # )
-    # arm_policy = PidRlCartPolicy(
-    #     env.batched_env.obs_spec_twist_tcp,
-    #     env.batched_env.action_spec_twist_tcp,
-    #     XYZ_RPY_Params_Spec.replace(**env.batched_env._spec_args),
-    #     agent_fpath="data/rl/gen3_reach_xyz",
-    #     poll_rate_hz=30,
-    # )
-    arm_policy = TwistPidPosePolicy(env.batched_env.obs_spec_twist_tcp, env.batched_env.action_spec_twist_tcp)
-    # arm_policy = TcpCartPolicy(env.batched_env.obs_spec_tcp_cart, env.batched_env.action_spec_tcp_cart)
+    # arm_policy = TwistPidPosePolicy(env.batched_env.obs_spec_twist_tcp, env.batched_env.action_spec_twist_tcp)
+    arm_policy = TcpCartPolicy(env.batched_env.obs_spec_tcp_cart, env.batched_env.action_spec_tcp_cart)
 
     # Skills
     skill_length = 1e9

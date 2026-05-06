@@ -75,13 +75,16 @@ class AbstractModel(BasePlanner):
 
         # Perform predicate grounding for on, clear, small, handempty and holding
         fluent_state = {}
-        on_pred, clear_pred = ground_cube_on_relations(self._scene)
+        on_pred, clear_pred, north_pred = ground_cube_on_relations(self._scene)
         empty_pred, holding_pred = ground_gripper_relations(self._scene)
         if "on" in [f.name for f in self._problem.fluents]:
             for op in on_pred:
                 o_fluent = self._problem.fluent(op[0])(*(object_state[op[1].name], object_state[op[2].name]))
                 fluent_state[o_fluent] = True
-
+        if "north-of" in [f.name for f in self._problem.fluents]:
+            for np in north_pred:
+                n_fluent = self._problem.fluent(np[0])(*(object_state[np[1].name], object_state[np[2].name]))
+                fluent_state[n_fluent] = True
         if "clear" in [f.name for f in self._problem.fluents]:
             for cp in clear_pred:
                 fluent = self._problem.fluent(cp[0])(*(object_state[cp[1].name],))

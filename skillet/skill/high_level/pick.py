@@ -194,7 +194,7 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         reach_actions = self._reach_policy.get_action(obs)
         reach_actions[:, -1] = torch.where(
             self._pick_status >= PickStatusCodes.GRASP,
-            torch.ones_like(reach_actions[:, -1]) * 0.8,  # Close gripper
+            torch.ones_like(reach_actions[:, -1]) * 0.5,  # Close gripper
             torch.zeros_like(reach_actions[:, -1]),  # Open gripper
         )
 

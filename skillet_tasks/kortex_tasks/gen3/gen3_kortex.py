@@ -10,7 +10,7 @@ import pathlib
 import threading
 import time
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Literal
 
 import gymnasium as gym
 import numpy as np
@@ -213,6 +213,7 @@ class Gen3KortexEnv(KortexEnv):
         action_spec: ActionSpec,
         duration: int = 3,
         close_time: float = 0.5,
+        mode: Literal["position", "velocity"] = "velocity",
     ) -> None:
         """Publish a joint position to the joint trajectory controller.
 
@@ -221,31 +222,59 @@ class Gen3KortexEnv(KortexEnv):
             action_spec: what stationary action to specify
             duration: what duration to specify
             close_time: time the gripper takes to close
+            mode: The mode to operate the gripper in
 
         """
         gripper_val = float(joint_pos[-1])
         gripper_goal = max(0, min(gripper_val, 1))
+        if mode == "position":
+            if gripper_goal != self._curr_gripper_goal:
+                gripper_command = Base_pb2.GripperCommand()
+                finger = gripper_command.gripper.finger.add()
+                gripper_command.mode = Base_pb2.GRIPPER_POSITION
+                finger.finger_identifier = 1
+                finger.value = gripper_goal
 
-        if gripper_goal != self._curr_gripper_goal:
-            gripper_command = Base_pb2.GripperCommand()
-            finger = gripper_command.gripper.finger.add()
-            gripper_command.mode = Base_pb2.GRIPPER_POSITION
-            finger.finger_identifier = 1
-            finger.value = gripper_goal
-
-            if action_spec is None or action_spec.name == "joints_vel":
-                self._publish_joint_vel_spec(np.zeros_like(joint_pos), duration)
-            elif action_spec.name == "twist_tcp":
-                self._publish_twist_tcp_spec(np.zeros_like(joint_pos))
-            self.kortex.SendGripperCommand(gripper_command)
-            self._curr_gripper_goal = gripper_goal
-            self._new_gripper_goal = True
-            self._gripper_goal_start = time.perf_counter()
-        elif (time.perf_counter() - self._gripper_goal_start) < close_time:
-            self._new_gripper_goal = True
-        else:
-            self._new_gripper_goal = False
-
+                if action_spec is None or action_spec.name == "joints_vel":
+                    self._publish_joint_vel_spec(np.zeros_like(joint_pos), duration)
+                elif action_spec.name == "twist_tcp":
+                    self._publish_twist_tcp_spec(np.zeros_like(joint_pos))
+                self.kortex.SendGripperCommand(gripper_command)
+                self._curr_gripper_goal = gripper_goal
+                self._new_gripper_goal = True
+                self._gripper_goal_start = time.perf_counter()
+            elif (time.perf_counter() - self._gripper_goal_start) < close_time:
+                self._new_gripper_goal = True
+            else:
+                self._new_gripper_goal = False
+        elif mode == "velocity":
+            if gripper_goal != self._curr_gripper_goal:
+                self._count = 0
+                gripper_command = Base_pb2.GripperCommand()
+                finger = gripper_command.gripper.finger.add()
+                gripper_command.mode = Base_pb2.GRIPPER_SPEED
+                finger.finger_identifier = 1
+                finger.value = -0.2 if gripper_goal > self._current_joint_positions[-1] else 0.2
+                self.kortex.SendGripperCommand(gripper_command)
+                self._curr_gripper_goal = gripper_goal
+                self._new_gripper_goal = True
+                self._gripper_goal_start = time.perf_counter()
+            elif (
+                (time.perf_counter() - self._gripper_goal_start) > close_time
+                or np.abs(gripper_goal - self._current_joint_positions[-1]) < 0.001
+                or (self._count > 1 and self._current_joint_velocities[-1] < 0.05)
+            ):
+                gripper_command = Base_pb2.GripperCommand()
+                finger = gripper_command.gripper.finger.add()
+                gripper_command.mode = Base_pb2.GRIPPER_SPEED
+                finger.finger_identifier = 1
+                finger.value = 0.0
+                self.kortex.SendGripperCommand(gripper_command)
+                self._new_gripper_goal = False
+                self._count = 0
+            else:
+                self._new_gripper_goal = True
+                self._count += 1
         return self._new_gripper_goal
 
     def _publish_joint_vel_spec(self, joint_vel: np.ndarray, duration: float = 20) -> None:

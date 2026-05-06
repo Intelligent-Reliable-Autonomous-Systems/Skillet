@@ -201,7 +201,7 @@ class PlaceSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAct
         reach_actions[:, -1] = torch.where(
             self._place_status >= PlaceStatusCodes.RELEASE,
             torch.zeros_like(reach_actions[:, -1]) + 0.0,  # Open gripper
-            torch.ones_like(reach_actions[:, -1]) * 0.8,  # Close gripper
+            torch.ones_like(reach_actions[:, -1]) * 0.5,  # Close gripper
         )
 
         self._n_steps += 1
