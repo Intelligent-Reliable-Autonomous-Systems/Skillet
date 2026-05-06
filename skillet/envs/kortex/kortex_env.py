@@ -16,7 +16,7 @@ import pinocchio as pin
 import torch
 from kortex_api.autogen.messages import Base_pb2
 
-from skillet.core.math import convert_quat
+from skillet.core.math import convert_quat, np_quat_from_euler_xyz
 from skillet.core.spaces import ActionSpec
 from skillet.envs.compatibility import SkilletGymEnv
 from skillet.envs.compatibility.s2r import CollisionProximityMonitor
@@ -35,6 +35,7 @@ class KortexEnv(SkilletGymEnv):
 
     """
 
+    _current_robot_tool_pose_b: np.ndarray
     _current_joint_positions: np.ndarray
     _current_joint_velocities: np.ndarray
     _current_joint_efforts: np.ndarray
@@ -121,6 +122,10 @@ class KortexEnv(SkilletGymEnv):
     """
 
     @property
+    def _robot_tool_pose_b(self) -> torch.Tensor:
+        return torch.as_tensor(self._current_robot_tool_pose_b, device=self.device, dtype=torch.float32).unsqueeze(0)
+
+    @property
     def _prev_actions(self) -> torch.Tensor:
         """Return the previous action taken in the environment."""
         return torch.as_tensor(self._current_prev_actions, device=self.device, dtype=torch.float32).unsqueeze(0)
@@ -162,16 +167,14 @@ class KortexEnv(SkilletGymEnv):
     @property
     def _robot_dof_lower_limits(self) -> torch.Tensor:
         """Return the lower limits of the robot joints."""
-        lower_lim = torch.as_tensor(self._current_lower_joint_limits, device=self.device, dtype=torch.float32)
-        lower_lim[lower_lim == 0] = -2 * torch.pi
-        return lower_lim
+        return torch.as_tensor(self._current_lower_joint_limits, device=self.device, dtype=torch.float32)
+        # lower_lim[lower_lim == 0] = -2 * torch.pi
 
     @property
     def _robot_dof_upper_limits(self) -> torch.Tensor:
         """Return the upper limits of the robot joints."""
-        upper_lim = torch.as_tensor(self._current_upper_joint_limits, device=self.device, dtype=torch.float32)
-        upper_lim[upper_lim == 0] = 2 * torch.pi
-        return upper_lim
+        return torch.as_tensor(self._current_upper_joint_limits, device=self.device, dtype=torch.float32)
+        # upper_lim[upper_lim == 0] = 2 * torch.pi
 
     @property
     def _gravity_vector(self) -> torch.Tensor:
@@ -307,13 +310,14 @@ class KortexEnv(SkilletGymEnv):
             self._current_joint_efforts,
             self.cfg.arm_joint_names + self.cfg.gripper_joint_names,
         )
-        if out.near_collision:
+        # if out.near_collision:
+        if False:
             print(
                 f"[WARN][KORTEX] Near collision with [{out.limiting_pair[0]}, {out.limiting_pair[1]}]. Stopping robot.."
             )
             zero_action = self._pre_process_action(torch.zeros_like(action), action_spec=action_spec)
             self._publish_action_to_kortex(zero_action, duration=self.step_dt, action_spec=action_spec)
-        elif out.effort_lim:
+        elif False:  # out.effort_lim
             print(f"[WARN][KORTEX] Joint effort limits reached {self._joint_efforts}. Stopping robot")
             zero_action = self._pre_process_action(torch.zeros_like(action), action_spec=action_spec)
         else:
@@ -484,9 +488,20 @@ class KortexEnv(SkilletGymEnv):
             deg_wrapped = (deg + 180) % 360 - 180  # [0,360] -> [-180, 180]
             return np.deg2rad(deg_wrapped)
 
+        # Compute tool pose
+        self._current_robot_tool_pose_b = np.zeros(7)
+        self._current_robot_tool_pose_b[0] = feedback.base.tool_pose_x
+        self._current_robot_tool_pose_b[1] = feedback.base.tool_pose_y
+        self._current_robot_tool_pose_b[2] = feedback.base.tool_pose_z
+        self._current_robot_tool_pose_b[3:7] = np_quat_from_euler_xyz(
+            deg_to_rad_wrapped(feedback.base.tool_pose_theta_x),
+            deg_to_rad_wrapped(feedback.base.tool_pose_theta_y),
+            deg_to_rad_wrapped(feedback.base.tool_pose_theta_z),
+        )
+
         # Compute the current joint positions, velocities, and efforts
         curr_arm_positions = deg_to_rad_wrapped(np.asarray([actuator.position for actuator in feedback.actuators]))
-        curr_gripper_positions = np.deg2rad([feedback.interconnect.gripper_feedback.motor[0].position])
+        curr_gripper_positions = np.asarray([feedback.interconnect.gripper_feedback.motor[0].position]) / 100
         self._current_joint_positions = np.concatenate((curr_arm_positions, curr_gripper_positions), axis=0)
 
         curr_arm_velocities = np.deg2rad([actuator.velocity for actuator in feedback.actuators])
@@ -502,6 +517,8 @@ class KortexEnv(SkilletGymEnv):
 
         self._current_lower_joint_limits = np.asarray(self.kortex_model.lowerPositionLimit, dtype=float)
         self._current_upper_joint_limits = np.asarray(self.kortex_model.upperPositionLimit, dtype=float)
+        self._current_lower_joint_limits[[self._find_joint_idx(j) for j in self.cfg.gripper_joint_names]] = 0.0
+        self._current_upper_joint_limits[[self._find_joint_idx(j) for j in self.cfg.gripper_joint_names]] = 1.0
         self._current_joint_centers = (self._current_upper_joint_limits + self._current_lower_joint_limits) / 2
 
         jacobians = []
@@ -510,7 +527,7 @@ class KortexEnv(SkilletGymEnv):
         # Pad gripper positions and velocities
         q = pin.neutral(self.kortex_model)
         q[: len(curr_arm_positions)] = curr_arm_positions
-        dq = pin.neutral(self.kortex_model)
+        dq = np.zeros(self.kortex_model.nv)
         dq[: len(curr_arm_velocities)] = curr_arm_velocities
         pin.computeJointJacobians(self.kortex_model, self.kortex_data, q)
         pin.forwardKinematics(self.kortex_model, self.kortex_data, q, dq)

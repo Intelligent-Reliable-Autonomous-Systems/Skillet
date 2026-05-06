@@ -10,7 +10,7 @@ import pathlib
 import threading
 import time
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Literal
 
 import gymnasium as gym
 import numpy as np
@@ -31,7 +31,7 @@ class Gen3KortexEnvCfg(KortexEnvCfg):
     """Robot configuration"""
 
     urdf_path = f"{pathlib.Path.cwd()}/skillet_tasks/assets/kortex/kinova_gen3/gen3_2f85.urdf"
-    urdf_path = f"{pathlib.Path.cwd()}/skillet_tasks/assets/kortex/kinova_gen3/gen3_2f85.srdf"
+    srdf_path = f"{pathlib.Path.cwd()}/skillet_tasks/assets/kortex/kinova_gen3/gen3_2f85.srdf"
     assets_dir = [f"{pathlib.Path.cwd()}/skillet_tasks/assets/kortex/kinova_gen3/"]
     # IP of the robot
     robot_ip = "www.xxx.yyy.zzz"
@@ -57,17 +57,19 @@ class Gen3KortexEnvCfg(KortexEnvCfg):
 
     joint_ids = [0, 1, 2, 3, 4, 5, 6, 7]
 
-    tcp_offset = [0.0, 0.0, 0.12, 1.0, 0.0, 0.0, 0.0]
+    tcp_offset = [0.0, 0.0, 0.12, 0.0, 0.7071, -0.7071, 0.0]
+    # tcp_offset = [0.0, 0.0, 0.12, 0.70710678, 0, 0, 0.70710678]
+    # tcp_offset = [0.0, 0.0, 0.12, 1.0, 0.0, 0.0, 0.0]
 
     ee_link_name = "end_effector_link"
 
     base_link_name = "base_link"
 
-    gripper_joint_names = ["robotiq_85_left_knuckle_joint"]
+    gripper_joint_names = ["robotiq_85_left_inner_knuckle_joint"]
 
     arm_joint_names = ["joint_1", "joint_2", "joint_3", "joint_4", "joint_5", "joint_6", "joint_7"]
 
-    base_apriltag_id = 3
+    base_apriltag_id = 2
 
 
 class Gen3KortexEnv(KortexEnv):
@@ -211,6 +213,7 @@ class Gen3KortexEnv(KortexEnv):
         action_spec: ActionSpec,
         duration: int = 3,
         close_time: float = 0.5,
+        mode: Literal["position", "velocity"] = "position",
     ) -> None:
         """Publish a joint position to the joint trajectory controller.
 
@@ -219,32 +222,59 @@ class Gen3KortexEnv(KortexEnv):
             action_spec: what stationary action to specify
             duration: what duration to specify
             close_time: time the gripper takes to close
+            mode: The mode to operate the gripper in
 
         """
         gripper_val = float(joint_pos[-1])
         gripper_goal = max(0, min(gripper_val, 1))
+        if mode == "position":
+            if gripper_goal != self._curr_gripper_goal:
+                gripper_command = Base_pb2.GripperCommand()
+                finger = gripper_command.gripper.finger.add()
+                gripper_command.mode = Base_pb2.GRIPPER_POSITION
+                finger.finger_identifier = 1
+                finger.value = gripper_goal
 
-        if gripper_goal != self._curr_gripper_goal:
-            gripper_command = Base_pb2.GripperCommand()
-            finger = gripper_command.gripper.finger.add()
-            gripper_command.mode = Base_pb2.GRIPPER_POSITION
-            finger.finger_identifier = 1
-            finger.value = gripper_goal
-
-            if action_spec is None or action_spec.name == "joints_vel":
-                self._publish_joint_vel_spec(np.zeros_like(joint_pos), duration)
-            elif action_spec.name == "twist_tcp":
-                self._publish_twist_tcp_spec(np.zeros_like(joint_pos))
-
-            self.kortex.SendGripperCommand(gripper_command)
-            self._curr_gripper_goal = gripper_goal
-            self._new_gripper_goal = True
-            self._gripper_goal_start = time.perf_counter()
-        elif (time.perf_counter() - self._gripper_goal_start) < close_time:
-            self._new_gripper_goal = True
-        else:
-            self._new_gripper_goal = False
-
+                if action_spec is None or action_spec.name == "joints_vel":
+                    self._publish_joint_vel_spec(np.zeros_like(joint_pos), duration)
+                elif action_spec.name == "twist_tcp":
+                    self._publish_twist_tcp_spec(np.zeros_like(joint_pos))
+                self.kortex.SendGripperCommand(gripper_command)
+                self._curr_gripper_goal = gripper_goal
+                self._new_gripper_goal = True
+                self._gripper_goal_start = time.perf_counter()
+            elif (time.perf_counter() - self._gripper_goal_start) < close_time:
+                self._new_gripper_goal = True
+            else:
+                self._new_gripper_goal = False
+        elif mode == "velocity":
+            if gripper_goal != self._curr_gripper_goal:
+                self._count = 0
+                gripper_command = Base_pb2.GripperCommand()
+                finger = gripper_command.gripper.finger.add()
+                gripper_command.mode = Base_pb2.GRIPPER_SPEED
+                finger.finger_identifier = 1
+                finger.value = -0.2 if gripper_goal > self._current_joint_positions[-1] else 0.2
+                self.kortex.SendGripperCommand(gripper_command)
+                self._curr_gripper_goal = gripper_goal
+                self._new_gripper_goal = True
+                self._gripper_goal_start = time.perf_counter()
+            elif (
+                (time.perf_counter() - self._gripper_goal_start) > close_time
+                or np.abs(gripper_goal - self._current_joint_positions[-1]) < 0.001
+                or (self._count > 1 and self._current_joint_velocities[-1] < 0.05)
+            ):
+                gripper_command = Base_pb2.GripperCommand()
+                finger = gripper_command.gripper.finger.add()
+                gripper_command.mode = Base_pb2.GRIPPER_SPEED
+                finger.finger_identifier = 1
+                finger.value = 0.0
+                self.kortex.SendGripperCommand(gripper_command)
+                self._new_gripper_goal = False
+                self._count = 0
+            else:
+                self._new_gripper_goal = True
+                self._count += 1
         return self._new_gripper_goal
 
     def _publish_joint_vel_spec(self, joint_vel: np.ndarray, duration: float = 20) -> None:
@@ -332,7 +362,7 @@ class Gen3KortexEnv(KortexEnv):
             cartesian_pose.theta_z = np.rad2deg(tcp_cart[5])
             speed = action.reach_pose.constraint.speed
             speed.translation = 0.08
-            speed.orientation = 20
+            speed.orientation = 30
 
             self._motion_event = threading.Event()
             self._motion_handle = self.kortex.OnNotificationActionTopic(

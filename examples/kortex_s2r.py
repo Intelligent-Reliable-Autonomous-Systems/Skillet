@@ -10,7 +10,14 @@ from skillet.agents import S2RAgent
 from skillet.core.env import BatchToSingleWrapper
 from skillet.envs import SkilletEnv
 from skillet.perception.perception import SkilletPerception
-from skillet.policy import FixedSequencePolicy, PidRlCartPolicy, PidRlJointPolicy, RandomPolicy
+from skillet.policy import (
+    FixedSequencePolicy,
+    PidRlCartPolicy,
+    PidRlJointPolicy,
+    RandomPolicy,
+    TcpCartPolicy,
+    TwistPidPosePolicy,
+)
 from skillet.scene import EMPTY_SCENE, SIX_CUBE_APRIL_SCENE, Open3DVisualizer
 from skillet.skill import ReachXYZRPYSkill
 from skillet.skill.specs import SELECT_OPTIONS_SPEC_BATCHED, XYZ_RPY_Params_Spec
@@ -83,13 +90,15 @@ def main() -> None:
     #     agent_fpath="data/rl/gen3lite_reach",
     #     poll_rate_hz=30,
     # )
-    arm_policy = PidRlCartPolicy(
-        env.batched_env.obs_spec_twist_tcp,
-        env.batched_env.action_spec_twist_tcp,
-        XYZ_RPY_Params_Spec.replace(**env.batched_env._spec_args),
-        agent_fpath="data/rl/gen3_reach_xyz",
-        poll_rate_hz=30,
-    )
+    # arm_policy = PidRlCartPolicy(
+    #     env.batched_env.obs_spec_twist_tcp,
+    #     env.batched_env.action_spec_twist_tcp,
+    #     XYZ_RPY_Params_Spec.replace(**env.batched_env._spec_args),
+    #     agent_fpath="data/rl/gen3_reach_xyz",
+    #     poll_rate_hz=30,
+    # )
+    arm_policy = TwistPidPosePolicy(env.batched_env.obs_spec_twist_tcp, env.batched_env.action_spec_twist_tcp)
+
     # Skills
     skill_length = 1e9
 
@@ -98,7 +107,7 @@ def main() -> None:
 
     # Parameters policy
     fixed_param_policy = FixedSequencePolicy(
-        env.batched_env.obs_spec_policy,
+        env.batched_env.obs_spec_twist_tcp,
         reach_pose_skill.params_spec,
         torch.as_tensor(
             [

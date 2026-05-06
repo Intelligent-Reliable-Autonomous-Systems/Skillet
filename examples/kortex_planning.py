@@ -26,7 +26,7 @@ parser.add_argument("--num_envs", type=int, default=1, help="Number of environme
 parser.add_argument("--device", type=str, default="cpu", help="Device to use")
 parser.add_argument("--robot_ip", type=str, default="192.168.1.10", help="Robot IP.")
 parser.add_argument("--poll_rate_hz", type=int, default=10, help="Tick rate of the perception")
-parser.add_argument("--task", type=str, default="Kortex-Gen3Lite-v0", help="Kortex Environment")
+parser.add_argument("--task", type=str, default="Kortex-Gen3-v0", help="Kortex Environment")
 parser.add_argument("--build_scene", type=argparse.BooleanOptionalAction, default=False, help="If to build the scene")
 parser.add_argument("--reconstruction", type=str, choices=["sam3", "april", "vlm", "sam+vlm"], default="sam3")
 parser.add_argument(

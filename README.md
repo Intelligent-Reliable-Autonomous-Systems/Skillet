@@ -63,3 +63,10 @@ Launch rosbridge
 ros2 launch rosbridge_server rosbridge_websocket_launch.xml
 ```
 
+sudo ip addr add 192.168.1.100/24 dev enx<your_usb_adapter>
+sudo ip link set enx<your_usb_adapter> up
+sudo ip route replace 192.168.1.0/24 dev enx<your_usb_adapter>
+
+sudo ip addr add 192.168.1.100/24 dev enx6c6e072d4846
+sudo ip link set enx6c6e072d4846 up
+sudo ip route add 192.168.1.0/24 dev enx6c6e072d4846

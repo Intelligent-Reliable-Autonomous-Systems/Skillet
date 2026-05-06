@@ -78,8 +78,9 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         self._params = None
 
         # 180 degree rotation about X axis + -90 degree yaw
-        # self._default_quat = torch.as_tensor([[0.0, 0.0, -1.0, 0.0]])
-        self._default_quat = torch.as_tensor([[0.0, 0.7071, -0.7071, 0.0]])
+        # self._default_quat = torch.as_tensor([[0.0, 0.7071, -0.7071, 0.0]])
+        # self._default_quat = torch.as_tensor([[0.0, 1.0, 0.0, 0.0]])
+        self._default_quat = torch.as_tensor([[0.0, 0.7071, 0.7071, 0.0]])
 
     @property
     def param_dim(self) -> int:
@@ -124,7 +125,7 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         self._default_quat = self._default_quat.to(self.obs_spec.device)
         goal_quat = quat_mul(quat_from_yaw(params[:, 3]), self._default_quat.repeat(self.n_envs, 1))
 
-        self._pos_threshold = 0.005
+        self._pos_threshold = 0.01
         self._quat_threshold = 0.05
         self._vel_threshold = 0.001
         self._joint_threshold = 0.001
@@ -180,9 +181,9 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
             valid_idx = (self._status == SkillStatusCodes.RUNNING) & (reached_pose)
             self._pick_status[valid_idx] += 1
             valid_idx = valid_idx & (self._pick_status < PickStatusCodes.DONE)
-            # print(
-            #     f"[INFO][PICK STATUS UPDATE]: {PickStatusCodes(self._pick_status.cpu().numpy()[0]).name} | reached_pose: {reached_pose.cpu().numpy()}"
-            # )
+            print(
+                f"[INFO][PICK STATUS UPDATE]: {PickStatusCodes(self._pick_status.cpu().numpy()[0]).name} | reached_pose: {reached_pose.cpu().numpy()}"
+            )
             # Update the target pose based on the new pick status
             self._current_target_poses[valid_idx] = self._target_poses[idx[valid_idx], self._pick_status[valid_idx]]
 
@@ -193,8 +194,8 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         reach_actions = self._reach_policy.get_action(obs)
         reach_actions[:, -1] = torch.where(
             self._pick_status >= PickStatusCodes.GRASP,
-            torch.ones_like(reach_actions[:, -1]) * 0.8,  # Close gripper
-            torch.zeros_like(reach_actions[:, -1]) + 0.4,  # Open gripper
+            torch.ones_like(reach_actions[:, -1]) * 0.5,  # Close gripper
+            torch.zeros_like(reach_actions[:, -1]),  # Open gripper
         )
 
         self._n_steps += 1
