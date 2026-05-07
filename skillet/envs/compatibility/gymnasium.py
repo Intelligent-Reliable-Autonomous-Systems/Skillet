@@ -195,6 +195,16 @@ class SkilletGymEnv(gym.Env):
         raise NotImplementedError
 
     @property
+    def _robot_tool_vel_b(self) -> torch.Tensor:
+        """Return current tool frame velocity."""
+        raise NotImplementedError
+
+    @property
+    def _robot_tool_wrench_b(self) -> torch.Tensor:
+        """Return current tool frame wrench (force + torque)."""
+        raise NotImplementedError
+
+    @property
     def _tcp_pose_b(self) -> torch.Tensor:
         """Return current tool frame position."""
         raise NotImplementedError

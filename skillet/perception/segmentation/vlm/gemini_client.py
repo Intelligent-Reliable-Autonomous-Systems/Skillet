@@ -15,7 +15,7 @@ class GeminiClient(VLMClient):
     def __init__(
         self,
         prompt_name: str = "detect_goal",
-        model_id: str = "gemini-robotics-er-1.5-preview",  # "gemini-robotics-er-1.5-preview",  # gemini-2.5-flash",
+        model_id: str = "gemini-robotics-er-1.6-preview",  # gemini-2.5-flash",
         device: str = "cuda",
     ) -> None:
         super().__init__(prompt_name, model_id, device)
@@ -57,7 +57,15 @@ class GeminiClient(VLMClient):
     def detect_goal(self, task_instruction: str) -> str:
         """Parse a task goal to PDDL based on the task instruction."""
         message = self.prompt.format(task_instruction=task_instruction)
-        return self.parse_response(self.query_text(message))
+        response = self.client.models.generate_content(
+            model=self.model_id,
+            contents=[message],
+            config=types.GenerateContentConfig(
+                temperature=None, thinking_config=types.ThinkingConfig(thinking_budget=0)
+            ),
+        )
+        result = self.parse_response(response.text)
+        return np.asarray([o["goal"] for o in result if "goal" in o])
 
     def parse_response(self, response_text: str) -> tuple[list, list, list]:
         """Parse Gemini response text into bboxes, grounded goal atoms, and grounded scene atoms."""
@@ -68,7 +76,7 @@ class GeminiClient(VLMClient):
                 f"Gemini returned a non-JSON response; check for a discrepancy in your image: {response_text}"
             )
 
-        return self._parse_response(result)
+        return result
 
     def _parse_response(self, result: list | dict) -> tuple[list, list, list]:
         """Parse the response from the VLM. Assumes a prompt in ./prompts/.

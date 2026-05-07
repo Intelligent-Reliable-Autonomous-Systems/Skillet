@@ -332,6 +332,8 @@ class SkilletEnv(
             return obs_spec.cast(
                 {
                     "tcp_pose_b": self._get_tcp_pose_b(ee_link=self._ee_link_name),
+                    "tcp_wrench_b": self._env._robot_tool_wrench_b,
+                    "tcp_vel_b": self._env._robot_tool_vel_b,
                     "gripper_lim": self._get_gripper_lims(gripper_joints=self._gripper_joint_names),
                     "gripper": self._get_gripper_state(gripper_joints=self._gripper_joint_names),
                     "dt": torch.tensor([self._env.step_dt]).expand(self.num_envs),
@@ -346,6 +348,8 @@ class SkilletEnv(
             return obs_spec.cast(
                 {
                     "tcp_pose_b": self._get_tcp_pose_b(ee_link=self._ee_link_name),
+                    "tcp_wrench_b": self._env._robot_tool_wrench_b,
+                    "tcp_vel_b": self._env._robot_tool_vel_b,
                     "gripper_lim": self._get_gripper_lims(gripper_joints=self._gripper_joint_names),
                     "gripper": self._get_gripper_state(gripper_joints=self._gripper_joint_names),
                     "dt": torch.tensor([self._env.step_dt]).expand(self.num_envs),
@@ -382,7 +386,9 @@ class SkilletEnv(
         return self.get_observation(self.obs_spec_state)
 
     @override
-    def step(self, action: BxM_Action, action_spec: ActionSpec[Any] | None = None) -> tuple[
+    def step(
+        self, action: BxM_Action, action_spec: ActionSpec[Any] | None = None
+    ) -> tuple[
         BxN_Obs,
         Float[torch.Tensor, "b"],  # noqa: F821
         Bool[torch.Tensor, "b"],  # noqa: F821

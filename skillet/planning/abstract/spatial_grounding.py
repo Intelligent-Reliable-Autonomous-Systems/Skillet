@@ -146,7 +146,8 @@ def ground_cube_on_relations(scene: Scene) -> list[tuple[Literal["on"], SceneObj
             if obj.object_id != other_obj.object_id and _is_on(obj, other_obj):
                 on_relations.append(("on", obj, other_obj))
             if obj.object_id != other_obj.object_id and _is_north_of(obj, other_obj):
-                north_relations.append(("north-of"), obj, other_obj)
+                north_relations.append(("north-of", obj, other_obj))
+                print(("north-of", obj.name, other_obj.name))
 
     # Remove cubes from clear list if they have an object on top
     for o in on_relations:

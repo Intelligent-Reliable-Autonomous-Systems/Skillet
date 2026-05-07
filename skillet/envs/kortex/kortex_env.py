@@ -36,6 +36,8 @@ class KortexEnv(SkilletGymEnv):
     """
 
     _current_robot_tool_pose_b: np.ndarray
+    _current_robot_tool_vel_b: np.ndarray
+    _current_robot_tool_wrench_b: np.ndarray
     _current_joint_positions: np.ndarray
     _current_joint_velocities: np.ndarray
     _current_joint_efforts: np.ndarray
@@ -120,6 +122,14 @@ class KortexEnv(SkilletGymEnv):
     """
     Skillet Gymansium Interface Properties.
     """
+
+    @property
+    def _robot_tool_wrench_b(self) -> torch.Tensor:
+        return torch.as_tensor(self._current_robot_tool_wrench_b, device=self.device, dtype=torch.float32).unsqueeze(0)
+
+    @property
+    def _robot_tool_vel_b(self) -> torch.Tensor:
+        return torch.as_tensor(self._current_robot_tool_vel_b, device=self.device, dtype=torch.float32).unsqueeze(0)
 
     @property
     def _robot_tool_pose_b(self) -> torch.Tensor:
@@ -498,6 +508,24 @@ class KortexEnv(SkilletGymEnv):
             deg_to_rad_wrapped(feedback.base.tool_pose_theta_y),
             deg_to_rad_wrapped(feedback.base.tool_pose_theta_z),
         )
+
+        # Compute tool velocity
+        self._current_robot_tool_vel_b = np.zeros(6)
+        self._current_robot_tool_vel_b[0] = feedback.base.tool_twist_linear_x
+        self._current_robot_tool_vel_b[1] = feedback.base.tool_twist_linear_y
+        self._current_robot_tool_vel_b[2] = feedback.base.tool_twist_linear_z
+        self._current_robot_tool_vel_b[3] = feedback.base.tool_twist_angular_x
+        self._current_robot_tool_vel_b[4] = feedback.base.tool_twist_angular_y
+        self._current_robot_tool_vel_b[5] = feedback.base.tool_twist_angular_z
+
+        # Compute tool wrench
+        self._current_robot_tool_wrench_b = np.zeros(6)
+        self._current_robot_tool_wrench_b[0] = feedback.base.tool_external_wrench_force_x
+        self._current_robot_tool_wrench_b[1] = feedback.base.tool_external_wrench_force_x
+        self._current_robot_tool_wrench_b[2] = feedback.base.tool_external_wrench_force_x
+        self._current_robot_tool_wrench_b[3] = feedback.base.tool_external_wrench_torque_x
+        self._current_robot_tool_wrench_b[4] = feedback.base.tool_external_wrench_torque_y
+        self._current_robot_tool_wrench_b[5] = feedback.base.tool_external_wrench_torque_z
 
         # Compute the current joint positions, velocities, and efforts
         curr_arm_positions = deg_to_rad_wrapped(np.asarray([actuator.position for actuator in feedback.actuators]))

@@ -58,6 +58,36 @@ XYZ_RPY_Params_Spec = ActionSpec[XYZ_RPY_Params](
 )
 """Action specification for XYZ + RPY parameters."""
 
+XYZ_XYZ_Params = Float[torch.Tensor, "b 6"]
+"""XYZ + RPY parameters: torch.Tensor[(b, 6), float]"""
+XYZ_XYZ_Params_Spec = ActionSpec[XYZ_XYZ_Params](
+    space=gym.spaces.Box(
+        low=np.array([-3.0, -3.0, -3.0, -3.0, -3.0, -3.0]),
+        high=np.array([3.0, 3.0, 3.0, 3.0, 3.0, 3.0]),
+        shape=(6,),
+    ),
+    name="xyz_xyz",
+    is_torch=True,
+    is_batched=True,
+    n_envs=-1,
+)
+
+XYZ_Yaw_XYZ_Params = Float[torch.Tensor, "b 7"]
+"""XYZ + yaw + XYZ parameters: torch.Tensor[(b, 7), float]"""
+XYZ_Yaw_XYZ_Params_Spec = ActionSpec[XYZ_Yaw_XYZ_Params](
+    space=gym.spaces.Box(
+        low=np.array([-3.0, -3.0, -3.0, -np.pi, -3.0, -3.0, -3.0]),
+        high=np.array([3.0, 3.0, 3.0, np.pi, 3.0, 3.0, 3.0]),
+        shape=(7,),
+    ),
+    name="xyz_yaw_xyz",
+    is_torch=True,
+    is_batched=True,
+    n_envs=-1,
+)
+"""Action specification for XYZ +Yaw+ XYZ parameters."""
+
+
 ROLL_PITCH_YAW_Params = Float[torch.Tensor, "b 3"]
 """Roll Pitch Yaw parameters: torch.Tensor[(b, 3), float]"""
 ROLL_PITCH_YAW_Params_Spec = ActionSpec[ROLL_PITCH_YAW_Params](

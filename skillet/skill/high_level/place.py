@@ -119,11 +119,11 @@ class PlaceSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAct
         self._default_quat = self._default_quat.to(self.obs_spec.device)
         goal_quat = quat_mul(quat_from_yaw(params[:, 3]), self._default_quat.repeat(self.n_envs, 1))
 
-        self._pos_threshold = 0.01
+        self._pos_threshold = 0.005
         self._quat_threshold = 0.04
         self._vel_threshold = 0.001  #
         self._joint_threshold = 0.001
-        self._joint_effort_threshold = 9
+        self._tcp_effort_threshold = 6
 
         ee_pose_b = obs["tcp_pose_b"]
 
@@ -157,7 +157,7 @@ class PlaceSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAct
 
     def get_action(self, obs: TBSkillObs) -> TBAction:  # noqa: D102
         ee_pose_b = obs["tcp_pose_b"]
-        joint_efforts = obs["joint_eff"]
+        tcp_wrench_b = obs["tcp_wrench_b"]
 
         reached_pos = (
             torch.linalg.vector_norm(ee_pose_b[:, 0:3] - self._current_target_poses[:, 0:3], dim=1)
@@ -172,24 +172,25 @@ class PlaceSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAct
         reached_pose = (reached_pos & reached_quat) | reached_height
         self._n_lower_steps = self._n_lower_steps + (self._place_status == PlaceStatusCodes.LOWER)
         next_pose = reached_pose | (
-            (torch.abs(joint_efforts) > self._joint_effort_threshold).any(dim=-1)
+            (torch.abs(tcp_wrench_b) > self._tcp_effort_threshold).any(dim=-1)
             & (self._place_status == PlaceStatusCodes.LOWER)
-            & (self._n_lower_steps > 10)
         )  # Avoids dropping due to initial acceleration
 
-        flag = (
-            (torch.abs(joint_efforts) > self._joint_effort_threshold).any(dim=-1)
-            & (self._place_status == PlaceStatusCodes.LOWER)
-            & (self._n_lower_steps > 10)
+        flag = (torch.abs(tcp_wrench_b) > self._tcp_effort_threshold).any(dim=-1) & (
+            self._place_status == PlaceStatusCodes.LOWER
         )
         if flag.item():
-            print(f"[WARN][PICK BLOCK] Joint efforts exceeded limit of {self._joint_effort_threshold}. Stopping Place.")
+            print(
+                f"[WARN][PICK BLOCK] TCP Wrench efforts exceeded limit of {self._tcp_effort_threshold}. Stopping Place."
+            )
         if next_pose.any():
             idx = torch.arange(self.n_envs, device=next_pose.device)
             valid_idx = (self._status == SkillStatusCodes.RUNNING) & (next_pose)
             self._place_status[valid_idx] += 1
             valid_idx = valid_idx & (self._place_status < PlaceStatusCodes.DONE)
-            # print(f"[INFO][PLACE STATUS UPDATE]: {self._place_status.cpu().numpy()[0]} | reached_pose: {next_pose.cpu().numpy()}")
+            print(
+                f"[INFO][PLACE STATUS UPDATE]: {PlaceStatusCodes(self._place_status.cpu().numpy()[0]).name} | reached_pose: {next_pose.cpu().numpy()}"
+            )
             # Update the target pose based on the new place status
             self._current_target_poses[valid_idx] = self._target_poses[idx[valid_idx], self._place_status[valid_idx]]
 
@@ -201,7 +202,7 @@ class PlaceSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAct
         reach_actions[:, -1] = torch.where(
             self._place_status >= PlaceStatusCodes.RELEASE,
             torch.zeros_like(reach_actions[:, -1]) + 0.0,  # Open gripper
-            torch.ones_like(reach_actions[:, -1]) * 0.5,  # Close gripper
+            torch.ones_like(reach_actions[:, -1]) * 0.6,  # Close gripper
         )
 
         self._n_steps += 1
