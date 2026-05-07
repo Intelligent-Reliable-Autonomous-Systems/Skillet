@@ -37,11 +37,16 @@ class Sam3Reconstructor(ReconstructorBase):
         scene: Scene | None = None,
         device: str = "cuda",
         visualize: bool = True,
+        vlm: Literal["qwen", "gemini"] = "gemini",
     ) -> None:
         """Initialize the SAM reconstructor."""
         super().__init__(scene, device=device)
         self._sam_model: SAMClient = get_sam_client("sam3")(use_server=True)
-        self._vlm_client: VLMClient = GeminiClient(prompt_name="detect_goal_qwen")
+        self._vlm_client: VLMClient = (
+            GeminiClient(prompt_name="detect_goal_qwen")
+            if vlm == "gemini"
+            else QwenClient(prompt_name="detect_goal_qwen")
+        )
         self._visualize = visualize
 
         self._masks = None
@@ -170,23 +175,14 @@ class Sam3Reconstructor(ReconstructorBase):
 
         """
         if self._task_instruction is None:
-            self._task_instruction = "Put the red block on the purple block."
-        rgb = obs["rgb"]
-        depth = obs["depth"]
-        camera_pose = obs["camera_pose"]
-        intrinsic_k = obs["intrinsic_k"]
-        if isinstance(rgb, torch.Tensor):
-            rgb = rgb.cpu().numpy()
-            depth = depth.cpu().numpy()
-            camera_pose = camera_pose.cpu().numpy()
-            intrinsic_k = intrinsic_k.cpu().numpy()
+            self._task_instruction = "Put the dark red block on the purple block."
+
         if call_vlm:
-            _, _, self._vlm_goal_atoms = self._vlm_client.detect_goal(self._task_instruction)
+            self._vlm_goal_atoms = self._vlm_client.detect_goal(self._task_instruction)
             for atom in self._vlm_goal_atoms:
                 atom["args"] = [arg.replace(" ", "_") for arg in atom["args"]]
 
         self._scene.goal = self._vlm_goal_atoms
-        print(self._scene.goal)
 
         pathlib.Path("data/test/").mkdir(exist_ok=True, parents=True)
         with pathlib.Path("data/test/vlm_out_multi.pkl").open("wb") as f:

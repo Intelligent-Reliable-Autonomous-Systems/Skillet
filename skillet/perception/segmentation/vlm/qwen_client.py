@@ -135,34 +135,8 @@ class QwenClient(VLMClient):
             image = image.cpu().numpy()
 
         image = image.transpose((1, 2, 0))
-        return self.parse_response(self.query_image(task_instruction, image))
+        result = self.parse_response(self.query_image(task_instruction, image))
 
-    def detect_goal(self, task_instruction: str) -> str:
-        """Parse a task goal to PDDL based on the task instruction."""
-        message = self.prompt.format(task_instruction=task_instruction)
-        return self.parse_response(self.query_text(message))
-
-    def parse_response(self, response_text: str) -> tuple[list, list, list]:
-        """Parse Qwen response text into bboxes, grounded goal atoms, and grounded scene atoms."""
-        try:
-            result = self._load_json(response_text)
-        except Exception:
-            raise ValueError(
-                f"Qwen returned a non-JSON response; check for a discrepancy in your image: {response_text}"
-            )
-
-        return self._parse_response(result)
-
-    def _parse_response(self, result: list | dict) -> tuple[list, list, list]:
-        """Parse the response from the VLM. Assumes a prompt in ./prompts/.
-
-        Args:
-            result: JSON formatted result from VLM
-
-        Returns:
-            Lists of bounding boxes
-
-        """
         bboxes = []
         labels = []
         goals = []
@@ -176,6 +150,24 @@ class QwenClient(VLMClient):
                 goals.append(o["goal"])
 
         return np.asarray(bboxes), np.asarray(labels), np.asarray(goals)
+
+    def detect_goal(self, task_instruction: str) -> str:
+        """Parse a task goal to PDDL based on the task instruction."""
+        message = self.prompt.format(task_instruction=task_instruction)
+        result = self.parse_response(self.query_text(message))
+
+        return np.asarray([o["goal"] for o in result if "goal" in o])
+
+    def parse_response(self, response_text: str) -> tuple[list, list, list]:
+        """Parse Qwen response text into bboxes, grounded goal atoms, and grounded scene atoms."""
+        try:
+            result = self._load_json(response_text)
+        except Exception:
+            raise ValueError(
+                f"Qwen returned a non-JSON response; check for a discrepancy in your image: {response_text}"
+            )
+
+        return result
 
 
 def main() -> None:

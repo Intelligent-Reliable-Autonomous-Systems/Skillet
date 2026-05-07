@@ -17,7 +17,7 @@ from skillet.core.skill import (
 )
 from skillet.core.spaces import ArrayLike, SkillParamsSpec
 from skillet.envs.specs import IKEE_Obs
-from skillet.skill.specs import XYZ_YAW_Params, XYZ_YAW_Params_Spec
+from skillet.skill.specs import XYZ_Yaw_XYZ_Params, XYZ_Yaw_XYZ_Params_Spec
 
 
 class DragStatusCodes(IntEnum):
@@ -39,20 +39,20 @@ class DragStatusCodes(IntEnum):
     """The skill has lifted the ojbect."""
 
 
-class DragSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAction]):
+class DragSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params], Generic[TBAction]):
     """A drag skill for dragging an object to a desired location.
 
     Generic Args:
         TBAction: The type of the action for the skill.
 
-    Parameterized by [x,y,z, yaw, heading, dist] the x y z location to perform the drag action, orientation (yaw)
-    of the gripper, and heading and distance to drag
+    Parameterized by [x,y,z, yaw, xyz] the x y z location to perform the drag action, orientation (yaw)
+    of the gripper, and the new xyz position to drag to
     """
 
     def __init__(
         self,
-        reach_policy: BatchedPolicy[IKEE_Obs, TBAction, XYZ_YAW_Params],
-        gripper_policy: BatchedPolicy[IKEE_Obs, TBAction, XYZ_YAW_Params] | None,
+        reach_policy: BatchedPolicy[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params],
+        gripper_policy: BatchedPolicy[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params] | None,
         lift_height: float,
         length: int,
     ) -> None:
@@ -80,15 +80,16 @@ class DragSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
 
         # 180 degree rotation about X axis + -90 degree yaw
         # self._default_quat = torch.as_tensor([[0.0, 0.7071, -0.7071, 0.0]])
-        self._default_quat = torch.as_tensor([[0.7071, 0.0, 0.0, 0.7071]])
+        # self._default_quat = torch.as_tensor([[0.7071, 0.0, 0.0, 0.7071]])
+        self._default_quat = torch.as_tensor([[0.0, 0.7071, 0.7071, 0.0]])
 
     @property
     def param_dim(self) -> int:
-        return 6
+        return 7
 
     @property
-    def params_spec(self) -> SkillParamsSpec[XYZ_YAW_Params]:
-        return XYZ_YAW_Params_Spec
+    def params_spec(self) -> SkillParamsSpec[XYZ_Yaw_XYZ_Params]:
+        return XYZ_Yaw_XYZ_Params_Spec
 
     @property
     def name(self) -> str:  # noqa: D102
@@ -125,8 +126,8 @@ class DragSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         self._default_quat = self._default_quat.to(self.obs_spec.device)
         goal_quat = quat_mul(quat_from_yaw(params[:, 3]), self._default_quat.repeat(self.n_envs, 1))
 
-        self._pos_threshold = 0.01
-        self._quat_threshold = 0.1
+        self._pos_threshold = 0.005
+        self._quat_threshold = 0.05
         self._vel_threshold = 0.001
         self._joint_threshold = 0.001
 
@@ -149,10 +150,8 @@ class DragSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         # GRASP[4]: Close gripper
         target_poses[:, DragStatusCodes.GRASP, :7] = target_poses[:, DragStatusCodes.LOWER, :7]
         # DRAG[5]: Drag the object to the target location
-        target_poses[:, DragStatusCodes.DRAG, 2:] = target_poses[:, DragStatusCodes.LOWER, 2:]
-        target_poses[:, DragStatusCodes.DRAG, :2] = target_poses[:, DragStatusCodes.LOWER, :2] + params[
-            :, 5
-        ] * torch.cat((torch.cos(params[:, 4]), torch.sin(params[:, 4])), dim=-1)
+        target_poses[:, DragStatusCodes.DRAG, 3:7] = target_poses[:, DragStatusCodes.LOWER, 3:7]
+        target_poses[:, DragStatusCodes.DRAG, 0:3] = params[:, 4:7]
 
         self._target_poses = target_poses
 
@@ -198,8 +197,8 @@ class DragSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         reach_actions = self._reach_policy.get_action(obs)
         reach_actions[:, -1] = torch.where(
             self._drag_status >= DragStatusCodes.GRASP,
-            torch.ones_like(reach_actions[:, -1]) * 0.8,  # Close gripper
-            torch.ones_like(reach_actions[:, -1]) * 0.8,  # Close gripper
+            torch.ones_like(reach_actions[:, -1]) * 0.6,  # Close gripper
+            torch.zeros_like(reach_actions[:, -1]),  # Open gripper
         )
 
         self._n_steps += 1

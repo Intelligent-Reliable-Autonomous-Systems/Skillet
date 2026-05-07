@@ -1,25 +1,29 @@
 """Run a tabletop block stacking task."""
 
 import argparse
+import os
 import pathlib
-from typing import TYPE_CHECKING
+import sys
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any
 
+import gymnasium as gym
 import torch
 
-from skillet.agents import PlanningAgent
-from skillet.core import ObservationSpec
+from skillet.agents.policy_over_options import PolicyOverOptionsAgent, SelectedSkill
+from skillet.core import ActionSpec, ObservationSpec
 from skillet.core.env import BatchToSingleWrapper
 from skillet.envs import SkilletEnv
-from skillet.logging import SkilletDataLogger
 from skillet.perception.perception import SkilletPerception
-from skillet.planning import AbstractModel
-from skillet.policy import TcpCartPolicy, TwistPidPosePolicy
+from skillet.policy import TcpCartPolicy
+from skillet.policy.dummy import FixedSequencePolicy
 from skillet.scene import EMPTY_SCENE, SIX_CUBE_APRIL_SCENE, SIX_CUBE_SCENE, Open3DVisualizer
-from skillet.skill import PickBlock2Skill, PickSkill, PlaceBlock2Skill, PlaceSkill
+from skillet.skill import DragBlock2Skill, DragSkill, PickBlock2Skill, PickSkill, PlaceBlock2Skill, PlaceSkill
 from skillet_tasks.kortex_tasks.factory import create_kortex_env
 
 if TYPE_CHECKING:
-    from skillet.envs.specs import RGBD_Gripper_Obs
+    from skillet.envs.specs import RGBD_Gripper_Obs, RGBD_Obs
+
 
 parser = argparse.ArgumentParser(description="Visualize latest RGB-D frame from ROS2 service.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
@@ -87,7 +91,7 @@ def main() -> None:
             b = scene.get_objects_from_name(["red_block"])[0]
             scene.tcp_pose = b.pose.clone()
             scene.gripper_pos = 0.8
-
+    rgbd_spec: ObservationSpec[RGBD_Obs] = env.coerce_obs_spec("rgb-d")
     # Low-level policies
     # arm_policy = TwistPidPosePolicy(env.batched_env.obs_spec_twist_tcp, env.batched_env.action_spec_twist_tcp)
     arm_policy = TcpCartPolicy(env.batched_env.obs_spec_tcp_cart, env.batched_env.action_spec_tcp_cart)
@@ -95,20 +99,43 @@ def main() -> None:
     skill_length = 1e9
     place_skill = PlaceSkill(reach_policy=arm_policy, gripper_policy=None, lift_height=0.23, length=skill_length)
     pick_skill = PickSkill(reach_policy=arm_policy, gripper_policy=None, lift_height=0.23, length=skill_length)
+    drag_skill = DragSkill(reach_policy=arm_policy, gripper_policy=None, lift_height=0.23, length=skill_length)
 
     pick_block_skill = PickBlock2Skill(scene, pick_skill, vis_target_pos=target_pose_func)
     place_block_skill = PlaceBlock2Skill(scene, place_skill, vis_target_pos=target_pose_func)
+    drag_block_skill = DragBlock2Skill(scene, drag_skill, vis_target_pos=target_pose_func)
 
-    ACTION_MAP = {"place_block": place_block_skill, "pick_block": pick_block_skill}
-    block_domain = "skillet/planning/abstract/assets/blocks.domain.pddl"
-    block_task = None  # "skillet/scene/abstract/assets/3-block-table.problem.pddl"
+    skills = [pick_block_skill, place_block_skill, drag_block_skill]
+    # High-level policy
+    options_spec = ActionSpec[SelectedSkill](
+        space=gym.spaces.Discrete(len(skills)),
+        name="options",
+        is_torch=True,
+        is_batched=False,
+    )
+    policy_over_options = FixedSequencePolicy[Any, SelectedSkill](
+        rgbd_spec,
+        options_spec,
+        torch.as_tensor(
+            [2, 2],
+            device=rgbd_spec.device,
+            dtype=torch.int32,
+        ),
+    )
+    fixed_param_policy = FixedSequencePolicy(
+        rgbd_spec,
+        drag_block_skill.params_spec,
+        torch.as_tensor(
+            [[4, 0], [2, 0]],
+            device=rgbd_spec.device,
+            dtype=torch.int32,
+        ),
+    )
 
-    abs_model = AbstractModel(block_domain, block_task, scene)
-    planning_agent = PlanningAgent(scene, abstract_model=abs_model, action_to_skill_map=ACTION_MAP)
-
-    # simulate environment
-    logger = SkilletDataLogger(
-        "data/test/", env, scene, perception, abs_model, planning_agent, obs_spec=rgbd_grip_spec, visualize=False
+    policy_over_options_agent = PolicyOverOptionsAgent(
+        skills=skills,
+        high_level_policy=policy_over_options,
+        params_policy=fixed_param_policy,
     )
     if args_cli.build_scene:
         input("Press Enter to start the scene building...\n")
@@ -116,15 +143,12 @@ def main() -> None:
         perception.build_scene = args_cli.build_scene
 
     input("Press Enter to start the skill execution...\n")
-    logger.write_video = True
-    logger.run_thread()
 
     while True:
         with torch.inference_mode():
             env.reset()
-            planning_agent.execute(env)
+            policy_over_options_agent.execute(env)
             print("[INFO][Main] finished run of skill executor, resetting")
-            logger.save_video()
             break
 
 

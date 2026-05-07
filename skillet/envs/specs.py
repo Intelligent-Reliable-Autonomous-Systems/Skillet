@@ -163,6 +163,8 @@ TWIST_SPEC_BATCHED = ObservationSpec[TWIST_TCP_Obs](
     space=gym.spaces.Dict(
         {
             "tcp_pose_b": gym.spaces.Box(low=-1.0, high=1.0, shape=(7,)),
+            "tcp_vel_b": gym.spaces.Box(low=-1.0, high=1.0, shape=(6,)),
+            "tcp_wrench_b": gym.spaces.Box(low=-1.0, high=1.0, shape=(6,)),
             "gripper_lim": gym.spaces.Box(low=0.0, high=1.0, shape=(2,)),
             "gripper": ParameterizedBox(low=0.0, high=1.0, shape=("n_gripper_joints",)),
             "dt": gym.spaces.Box(low=0.0, high=1.0, shape=(1,)),
@@ -183,6 +185,8 @@ TCP_CART_SPEC_BATCHED = ObservationSpec[TCP_Obs](
     space=gym.spaces.Dict(
         {
             "tcp_pose_b": gym.spaces.Box(low=-1.0, high=1.0, shape=(7,)),
+            "tcp_vel_b": gym.spaces.Box(low=-1.0, high=1.0, shape=(6,)),
+            "tcp_wrench_b": gym.spaces.Box(low=-1.0, high=1.0, shape=(6,)),
             "gripper_lim": gym.spaces.Box(low=0.0, high=1.0, shape=(2,)),
             "gripper": ParameterizedBox(low=0.0, high=1.0, shape=("n_gripper_joints",)),
             "joint_eff": ParameterizedBox(low=-np.pi, high=np.pi, shape=("n_joints",)),

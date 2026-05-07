@@ -1,5 +1,6 @@
 """Init file for high level skills."""
 
+from .drag import DragSkill as DragSkill
 from .grasp_xyz import GraspXYZSkill as GraspXYZSkill
 from .pick import PickSkill as PickSkill
 from .place import PlaceSkill as PlaceSkill
