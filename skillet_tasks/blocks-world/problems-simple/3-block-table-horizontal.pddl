@@ -80,11 +80,6 @@
             (at-loc green loc3_1)
             (at-loc blue loc4_1)
         )
-        (and
-            (at-loc red loc3_1)
-            (at-loc green loc4_1)
-            (at-loc blue loc5_1)
-        )
     )
 )
 )
