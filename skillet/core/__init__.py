@@ -15,6 +15,7 @@ from skillet.core.env import (
     Environment,
 )
 from skillet.core.policy import BatchedPolicy, BatchedUPolicy, Policy, UPolicy
+from skillet.core.checked_skill import CheckedSkill, FailureReason, SkillResult
 from skillet.core.skill import BatchedSkill, CompositeSkill, SingleSkill, Skill
 from skillet.core.spaces import (
     ActionSpec,
@@ -26,6 +27,9 @@ from skillet.core.spaces import (
 
 __all__ = [
     "ActionSpec",
+    "CheckedSkill",
+    "FailureReason",
+    "SkillResult",
     "BasicBatchedEnvironment",
     "BasicEnvironment",
     "BatchedEnvironment",
