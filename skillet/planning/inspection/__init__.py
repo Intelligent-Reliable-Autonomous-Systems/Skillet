@@ -1,0 +1,1 @@
+from .problem_factory import make_inspection_problem as make_inspection_problem
