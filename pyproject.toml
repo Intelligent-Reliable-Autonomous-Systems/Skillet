@@ -58,6 +58,9 @@ perception = [
     "python-multipart",
     "sam3",
 ]
+vlm = [
+    "openai",
+]
 ros = [
     "roslibpy",
 ]
