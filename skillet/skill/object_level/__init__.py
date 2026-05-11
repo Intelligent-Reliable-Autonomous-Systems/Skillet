@@ -1,3 +1,4 @@
+from .discard import DiscardSkill as DiscardSkill
 from .drag_block import DragBlock2Skill as DragBlock2Skill
 from .drag_block import DragBlockSkill as DragBlockSkill
 from .pick_block import PickBlock2Skill as PickBlock2Skill
