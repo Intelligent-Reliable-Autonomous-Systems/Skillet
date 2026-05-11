@@ -1,9 +1,11 @@
-"""Tests for the MuJoCo inspection pick-and-place scene factory (Step 2)."""
+"""Tests for the MuJoCo inspection pick-and-place scene factory and env (Steps 2.1–2.2)."""
 
 from __future__ import annotations
 
 import mujoco
+import numpy as np
 import pytest
+import torch
 
 from skillet_tasks.mj_tasks.planning.inspection_pick_and_place.scene_factory import (
     make_inspection_scene,
@@ -208,4 +210,100 @@ def test_platform_size_mult() -> None:
     plat_id_big = mujoco.mj_name2id(spec_big.model, mujoco.mjtObj.mjOBJ_GEOM, "platform")
 
     # geom_size stores half-extents; x half-extent should be larger in big spec
+<<<<<<< HEAD
     assert spec_big.model.geom_size[plat_id_big][0] > spec_default.model.geom_size[plat_id_default][0]
+=======
+    assert (
+        spec_big.model.geom_size[plat_id_big][0]
+        > spec_default.model.geom_size[plat_id_default][0]
+    )
+
+
+# ---------------------------------------------------------------------------
+# Step 2.1 — include_robot
+# ---------------------------------------------------------------------------
+
+@pytest.fixture()
+def robot_scene():
+    """Scene with 3 blocks and the Gen3 arm included."""
+    return make_inspection_scene([False, True, False], include_robot=True)
+
+
+def test_robot_scene_has_base_link(robot_scene) -> None:
+    """base_link body must be present when include_robot=True."""
+    body_id = mujoco.mj_name2id(robot_scene.model, mujoco.mjtObj.mjOBJ_BODY, "base_link")
+    assert body_id >= 0
+
+
+def test_robot_scene_has_block_body(robot_scene) -> None:
+    """block_0 body must be present alongside the robot."""
+    body_id = mujoco.mj_name2id(robot_scene.model, mujoco.mjtObj.mjOBJ_BODY, "block_0")
+    assert body_id >= 0
+
+
+def test_robot_scene_physics_100_steps(robot_scene) -> None:
+    """100 mj_step calls must not produce NaN in qpos."""
+    data = mujoco.MjData(robot_scene.model)
+    if robot_scene.model.nkey > 0:
+        mujoco.mj_resetDataKeyframe(robot_scene.model, data, robot_scene.model.key("home").id)
+    for _ in range(100):
+        mujoco.mj_step(robot_scene.model, data)
+    assert not np.isnan(data.qpos).any()
+
+
+# ---------------------------------------------------------------------------
+# Step 2.2 — InspectionMjEnv
+# ---------------------------------------------------------------------------
+
+from skillet_tasks.mj_tasks.planning.inspection_pick_and_place.env import InspectionMjEnv  # noqa: E402
+
+
+@pytest.fixture()
+def inspection_env(robot_scene):
+    """InspectionMjEnv wrapping the 3-block robot scene."""
+    return InspectionMjEnv(robot_scene)
+
+
+def test_env_obs_shapes(inspection_env) -> None:
+    """reset() must return IKEE_Obs tensors with correct shapes (batch=1)."""
+    obs, _ = inspection_env.reset()
+    assert obs["ee_pose_b"].shape == (1, 7)
+    assert obs["tcp_pose_b"].shape == (1, 7)
+    assert obs["jacobians"].shape == (1, 6, 7)
+    assert obs["joint_pos"].shape == (1, 8)
+    assert obs["joint_vel"].shape == (1, 8)
+    assert obs["tcp_offset"].shape == (1, 7)
+    assert obs["gripper"].shape == (1, 1)
+    assert obs["gripper_lim"].shape == (1, 2)
+    assert obs["joint_lims"].shape == (1, 2, 8)
+
+
+def test_env_obs_no_nan_after_200_steps(inspection_env) -> None:
+    """200 random-action steps must not produce NaN in ee_pose_b."""
+    obs, _ = inspection_env.reset()
+    for _ in range(200):
+        action = inspection_env.action_space.sample()
+        obs, _, _, _, _ = inspection_env.step(action)
+    assert not torch.isnan(obs["ee_pose_b"]).any()
+
+
+def test_env_coerce_obs_spec(inspection_env) -> None:
+    """coerce_obs_spec('ik_ee') must return the ik_ee spec without error."""
+    spec = inspection_env.coerce_obs_spec("ik_ee")
+    assert spec.name == "ik_ee"
+
+
+def test_env_action_spec_name(inspection_env) -> None:
+    """action_spec must have name 'joints_vel' for skill_lib compatibility."""
+    assert inspection_env.action_spec.name == "joints_vel"
+
+
+def test_env_get_observation_matches_step(inspection_env) -> None:
+    """get_observation() must return the same tensors as the last step()."""
+    obs, _ = inspection_env.reset()
+    action = inspection_env.action_space.sample()
+    obs_step, _, _, _, _ = inspection_env.step(action)
+    obs_get = inspection_env.get_observation()
+    for k in obs_step:
+        assert torch.allclose(obs_step[k], obs_get[k]), f"Mismatch for key {k!r}"
+>>>>>>> 65634d3 (Create  Mujoco Gym env)
