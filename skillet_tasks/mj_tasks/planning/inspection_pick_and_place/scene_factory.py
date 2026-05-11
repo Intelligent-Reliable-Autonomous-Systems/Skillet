@@ -41,6 +41,9 @@ _GEN3_XML: Path = (
 CUBE_SIZE: float = 0.044
 
 DEFAULT_TABLE_HEIGHT: float = 0.5
+# Robot base position in world frame.  The Gen3 is attached at the rear edge of
+# the table at table-surface height; see _build_full_spec for the attachment site.
+ROBOT_BASE_WORLD_POS: tuple[float, float, float] = (0.05, 0.0, DEFAULT_TABLE_HEIGHT)
 _TABLE_THICKNESS: float = 0.05
 _TABLE_HALF_X: float = 0.30
 _TABLE_HALF_Y: float = 0.50

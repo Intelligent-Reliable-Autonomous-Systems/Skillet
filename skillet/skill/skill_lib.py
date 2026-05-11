@@ -57,19 +57,13 @@ def make_joint_pos_policy(env: GymVectorInterface) -> JointPosPolicy:
 
 
 def make_reach_xyzrpy_skill(env: GymVectorInterface, skill_length: int = 15) -> Skill:
-    return ReachXYZRPYSkill[BxM_Action, None](
-        name="reach_xyzrpy_skill", policy=make_ik_ee_pose_policy(env), length=skill_length
+    return ReachXYZRPYSkill[BxN_Obs, BxM_Action, None](
+        name="reach_xyzrpy_skill", policy=make_ik_ee_xyzrpy_policy(env), length=skill_length
     )
 
 
 def make_rel_reach_xyzrpy_skill(env: GymVectorInterface, skill_length: int = 5) -> Skill:
-    return ReachXYZRPYSkill[BxM_Action, None](
-        name="rel_reach_xyzrpy_skill", policy=make_rel_ik_ee_pose_policy(env), length=skill_length
-    )
-
-
-def make_rel_reach_xyzrpy_skill(env: GymVectorInterface, skill_length: int = 5) -> Skill:
-    return ReachXYZRPYSkill[BxM_Action, None](
+    return ReachXYZRPYSkill[BxN_Obs, BxM_Action, None](
         name="rel_reach_xyzrpy_skill", policy=make_rel_ik_ee_pose_policy(env), length=skill_length
     )
 

@@ -121,7 +121,11 @@ class InspectionMjEnv:
         # Pin device to CPU — MuJoCo always runs on CPU, and DifferentialIKController
         # is constructed from obs_spec.device, so we must keep everything on the same device.
         _cpu = torch.device("cpu")
-        self._obs_spec: ObservationSpec = IK_EE_SPEC_BATCHED.replace(device=_cpu)
+        self._obs_spec: ObservationSpec = IK_EE_SPEC_BATCHED.bind(
+            n_joints=n_q,
+            n_arm_joints=self._N_ARM_JOINTS,
+            n_gripper_joints=1,
+        ).replace(device=_cpu)
         self._action_spec: ActionSpec = JOINT_VEL_SPEC.bind(n_joints=n_q).replace(device=_cpu)
 
         self._last_obs: dict[str, torch.Tensor] | None = None
@@ -189,11 +193,20 @@ class InspectionMjEnv:
 
         """
         a = _to_numpy_1d(actions)
-        self._data.ctrl[: self._N_ARM_JOINTS] = a[: self._N_ARM_JOINTS]
+        _N_SIM_STEPS = 100
+        _MAX_DELTA = 0.05  # rad per IK step
+        current_arm = self._data.qpos[
+            self._arm_qpos_start : self._arm_qpos_start + self._N_ARM_JOINTS
+        ].copy()
+        target_arm = a[: self._N_ARM_JOINTS]
+        delta = target_arm - current_arm
+        max_abs = float(np.abs(delta).max()) + 1e-8
+        scale = min(1.0, _MAX_DELTA / max_abs)
+        self._data.ctrl[: self._N_ARM_JOINTS] = current_arm + scale * delta
         self._data.ctrl[self._N_ARM_JOINTS] = float(a[self._N_ARM_JOINTS]) * self._GRIPPER_CTRL_MAX
-        mujoco.mj_step(self._model, self._data)
-        # mj_step integrates but leaves derived quantities (xpos, xquat, …)
-        # stale; mj_forward brings them up to date for the new qpos.
+        for _ in range(_N_SIM_STEPS):
+            mujoco.mj_step(self._model, self._data)
+        # mj_forward brings derived quantities (xpos, xquat, …) up to date.
         mujoco.mj_forward(self._model, self._data)
 
         obs = self._get_obs()
@@ -222,6 +235,13 @@ class InspectionMjEnv:
         else:
             mujoco.mj_resetData(self._model, self._data)
         mujoco.mj_forward(self._model, self._data)
+        # mj_resetDataKeyframe sets qpos but leaves ctrl at zero.  The position
+        # servos reference ctrl as their setpoint, so we must sync ctrl to the
+        # keyframe joint positions — otherwise the first env.step() clamps a
+        # delta relative to 0, driving the arm away from home.
+        self._data.ctrl[: self._N_ARM_JOINTS] = self._data.qpos[
+            self._arm_qpos_start : self._arm_qpos_start + self._N_ARM_JOINTS
+        ].copy()
 
     def _get_obs(self) -> dict[str, torch.Tensor]:
         """Compute the IKEE_Obs dict from the current MuJoCo state.

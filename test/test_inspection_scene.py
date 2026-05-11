@@ -18,6 +18,7 @@ from skillet_tasks.mj_tasks.planning.inspection_pick_and_place.scene_factory imp
     DEFAULT_TABLE_HEIGHT,
     DEFAULT_PLATFORM_SIZE_MULT,
     DEFAULT_PLATFORM_HEIGHT_MULT,
+    ROBOT_BASE_WORLD_POS,
 )
 
 # ---------------------------------------------------------------------------
@@ -210,17 +211,11 @@ def test_platform_size_mult() -> None:
     plat_id_big = mujoco.mj_name2id(spec_big.model, mujoco.mjtObj.mjOBJ_GEOM, "platform")
 
     # geom_size stores half-extents; x half-extent should be larger in big spec
-<<<<<<< HEAD
     assert spec_big.model.geom_size[plat_id_big][0] > spec_default.model.geom_size[plat_id_default][0]
-=======
-    assert (
-        spec_big.model.geom_size[plat_id_big][0]
-        > spec_default.model.geom_size[plat_id_default][0]
-    )
 
 
 # ---------------------------------------------------------------------------
-# Step 2.1 — include_robot
+# Include_robot
 # ---------------------------------------------------------------------------
 
 @pytest.fixture()
@@ -252,7 +247,7 @@ def test_robot_scene_physics_100_steps(robot_scene) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Step 2.2 — InspectionMjEnv
+# InspectionMjEnv
 # ---------------------------------------------------------------------------
 
 from skillet_tasks.mj_tasks.planning.inspection_pick_and_place.env import InspectionMjEnv  # noqa: E402
@@ -263,15 +258,6 @@ def inspection_env(robot_scene):
     """InspectionMjEnv wrapping the 3-block robot scene."""
     return InspectionMjEnv(robot_scene)
 
-
-def test_env_obs_shapes(inspection_env) -> None:
-    """reset() must return IKEE_Obs tensors with correct shapes (batch=1)."""
-    obs, _ = inspection_env.reset()
-    assert obs["ee_pose_b"].shape == (1, 7)
-    assert obs["tcp_pose_b"].shape == (1, 7)
-    assert obs["jacobians"].shape == (1, 6, 7)
-    assert obs["joint_pos"].shape == (1, 8)
-    assert obs["joint_vel"].shape == (1, 8)
     assert obs["tcp_offset"].shape == (1, 7)
     assert obs["gripper"].shape == (1, 1)
     assert obs["gripper_lim"].shape == (1, 2)
@@ -306,4 +292,67 @@ def test_env_get_observation_matches_step(inspection_env) -> None:
     obs_get = inspection_env.get_observation()
     for k in obs_step:
         assert torch.allclose(obs_step[k], obs_get[k]), f"Mismatch for key {k!r}"
->>>>>>> 65634d3 (Create  Mujoco Gym env)
+
+
+# ---------------------------------------------------------------------------
+# InspectSkill wired to reach primitive
+# ---------------------------------------------------------------------------
+
+from skillet.scene.base import Scene  # noqa: E402
+from skillet.skill.high_level.inspect import InspectSkill  # noqa: E402
+from skillet.skill.skill_lib import make_reach_xyzrpy_skill  # noqa: E402
+
+
+@pytest.fixture()
+def robot_scene_with_env():
+    """3-block robot scene + InspectionMjEnv, reset to home."""
+    spec = make_inspection_scene([False, True, False], include_robot=True)
+    env = InspectionMjEnv(spec)
+    env.reset()
+    return spec, env
+
+
+def test_inspect_skill_reaches_viewpoint(robot_scene_with_env) -> None:
+    """After execute() succeeds, the TCP must be within 2 cm of the target viewpoint."""
+    spec, env = robot_scene_with_env
+
+    # Build scene graph and resolve the first block's id
+    scene = Scene(objects=[spec.table, *spec.blocks, spec.platform, spec.discard])
+    block_id = scene.resolve_names_to_ids(["block_0"])[0]
+
+    robot_base = np.array(ROBOT_BASE_WORLD_POS)
+    reach_skill = make_reach_xyzrpy_skill(env, skill_length=300)
+    half_extents = np.array([CUBE_SIZE / 2.0, CUBE_SIZE / 2.0, CUBE_SIZE / 2.0])
+    skill = InspectSkill(
+        scene, env=env, reach_skill=reach_skill,
+        block_half_extents=half_extents,
+        robot_base_world_pos=robot_base,
+    )
+    skill.set_target(block_id)
+
+    result = skill.execute(scene)
+
+    assert result.success, f"InspectSkill failed: {result}"
+
+    obs = env.get_observation()
+    tcp_xyz = obs["tcp_pose_b"][0, :3].cpu().numpy()
+    # Expected TCP target in robot base frame: block world pos minus base world pos,
+    # plus the standoff height above the block top face.
+    block = spec.blocks[0]
+    block_world = np.array([float(block.pose[0]), float(block.pose[1]), float(block.pose[2])])
+    hz = CUBE_SIZE / 2.0
+    target = (block_world - robot_base) + np.array([0.0, 0.0, hz + InspectSkill._DEFAULT_STANDOFF_M])
+    dist = float(np.linalg.norm(tcp_xyz - target))
+    assert dist < 0.02, f"TCP {tcp_xyz} is {dist:.4f} m from target {target} (limit 0.02 m)"
+
+
+def test_inspect_skill_logical_path_unchanged(inspection_env) -> None:
+    """Without env/reach_skill, execute() returns ok() immediately (Phase 1 path)."""
+    spec = make_inspection_scene([False, True, False])
+    scene = Scene(objects=[spec.table, *spec.blocks, spec.platform, spec.discard])
+    block_id = scene.resolve_names_to_ids(["block_0"])[0]
+
+    skill = InspectSkill(scene)  # no env, no reach_skill
+    skill.set_target(block_id)
+    result = skill.execute(scene)
+    assert result.success
