@@ -15,14 +15,27 @@ Workspace convention (robot base at origin, +x forward, +y left):
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import mujoco  # type: ignore[import-untyped]
 import torch
 
 from skillet.scene.objects import DiscardLocation, InspectableCube, Platform
 from skillet.scene.scene_objs import Cube, Table
 from skillet_tasks.assets.mujoco.inspection_scene import load_texture
+from skillet_tasks.assets.utils import update_assets
 from skillet_tasks.mj_tasks.planning.inspection_pick_and_place.scene_spec import (
     InspectionSceneSpec,
+)
+
+_GEN3_XML: Path = (
+    Path(__file__).parents[4]
+    / "skillet_tasks"
+    / "assets"
+    / "mujoco"
+    / "kinova_gen3"
+    / "xmls"
+    / "gen3_gripper.xml"
 )
 
 CUBE_SIZE: float = 0.044
@@ -48,6 +61,7 @@ def make_inspection_scene(
     table_height: float = DEFAULT_TABLE_HEIGHT,
     platform_size_mult: float = DEFAULT_PLATFORM_SIZE_MULT,
     platform_height_mult: float = DEFAULT_PLATFORM_HEIGHT_MULT,
+    include_robot: bool = False,
 ) -> InspectionSceneSpec:
     """Build and compile a MuJoCo inspection scene.
 
@@ -62,6 +76,9 @@ def make_inspection_scene(
         table_height: Height of the table surface above the world origin in metres.
         platform_size_mult: Platform footprint as a multiple of ``cube_size``.
         platform_height_mult: Platform height as a multiple of ``cube_size``.
+        include_robot: When ``True``, compose the Gen3 + 2F-85 MJCF into the
+            scene so the returned model contains both the workspace and the arm.
+            Defaults to ``False`` for backwards compatibility.
 
     Returns:
         An ``InspectionSceneSpec`` with the compiled model and scene-graph objects.
@@ -110,8 +127,11 @@ def make_inspection_scene(
         for i, defective in enumerate(block_defective)
     ]
 
-    xml, assets = make_inspection_scene_xml(table, blocks, platform, discard)
-    model = mujoco.MjModel.from_xml_string(xml, assets)
+    if include_robot:
+        model = _compile_full_scene(table, blocks, platform, discard)
+    else:
+        xml, assets = make_inspection_scene_xml(table, blocks, platform, discard)
+        model = mujoco.MjModel.from_xml_string(xml, assets)
     return InspectionSceneSpec(model=model, table=table, blocks=blocks, platform=platform, discard=discard)
 
 
@@ -139,6 +159,7 @@ def make_inspection_scene_xml(
     """
     table_centre_z = table.height - _TABLE_THICKNESS / 2.0
     table_x = _TABLE_HALF_X / 2.0 + 0.17  # shifted forward to cover workspace
+    leg_fragments = _table_leg_xml(table_x, table.height)
 
     for b in blocks:
         if b.defective is None:
@@ -172,6 +193,7 @@ def make_inspection_scene_xml(
           size="{_TABLE_HALF_X:.6f} {_TABLE_HALF_Y:.6f} {_TABLE_THICKNESS / 2.0:.6f}"
           pos="{table_x:.6f} 0 {table_centre_z:.6f}"
           material="table_mat"/>
+{leg_fragments}
 {block_fragments}
     <geom name="platform"
           type="box"
@@ -193,9 +215,102 @@ def make_inspection_scene_xml(
     return xml, assets
 
 
+def make_full_scene_xml(
+    table: Table,
+    blocks: list[InspectableCube],
+    platform: Platform,
+    discard: DiscardLocation,
+) -> tuple[str, dict[str, bytes]]:
+    """Return the composed inspection + Gen3 scene as ``(xml_string, assets_dict)``.
+
+    Uses ``mujoco.MjSpec.attach()`` to embed the Gen3 into the scene worldbody
+    at the world origin (robot base frame = world frame).  Body names, joint
+    names, and actuator names from ``gen3_gripper.xml`` are preserved unchanged.
+
+    The resulting model has:
+      - ``nq = 7 * len(blocks) + 15`` (7 freejoint DOF per block + 15 robot DOF)
+      - ``nu = 8`` (7 arm position actuators + 1 ``fingers_actuator`` tendon)
+
+    Args:
+        table: Table scene object.
+        blocks: List of inspectable blocks.
+        platform: Platform scene object.
+        discard: Discard-location scene object.
+
+    Returns:
+        A ``(xml_string, assets_dict)`` pair.  The XML is serialised via
+        ``MjSpec.to_xml()`` after composition; use ``_compile_full_scene``
+        when you need a compiled ``MjModel`` directly.
+
+    """
+    spec = _build_full_spec(table, blocks, platform, discard)
+    return spec.to_xml(), dict(spec.assets)
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+
+def _build_full_spec(
+    table: Table,
+    blocks: list[InspectableCube],
+    platform: Platform,
+    discard: DiscardLocation,
+) -> mujoco.MjSpec:
+    """Build a composed ``MjSpec`` containing the inspection scene + Gen3 robot."""
+    scene_xml, scene_assets = make_inspection_scene_xml(table, blocks, platform, discard)
+
+    scene_spec = mujoco.MjSpec.from_string(scene_xml, scene_assets)
+    scene_spec.assets = scene_assets
+
+    gen3_spec = mujoco.MjSpec.from_file(str(_GEN3_XML))
+    gen3_assets: dict[str, bytes] = {}
+    update_assets(gen3_assets, _GEN3_XML.parent / gen3_spec.meshdir, gen3_spec.meshdir)
+    gen3_spec.assets = gen3_assets
+
+    # Attach robot at the rear edge of the table, at table surface height
+    attach_site = scene_spec.worldbody.add_site()
+    attach_site.name = "robot_attach"
+    attach_site.pos = [0.05, 0.0, table.height]
+    scene_spec.attach(gen3_spec, prefix="", site=attach_site)
+    return scene_spec
+
+
+def _compile_full_scene(
+    table: Table,
+    blocks: list[InspectableCube],
+    platform: Platform,
+    discard: DiscardLocation,
+) -> mujoco.MjModel:
+    """Compile and return a ``MjModel`` containing the inspection scene + Gen3 robot.WW"""
+    return _build_full_spec(table, blocks, platform, discard).compile()
+
+
+def _table_leg_xml(table_x: float, table_height: float) -> str:
+    """Return four table-leg geom fragments connecting the table top to the floor."""
+    leg_radius = 0.025
+    leg_half_h = (table_height - _TABLE_THICKNESS) / 2.0
+    leg_z = leg_half_h
+
+    x_back = table_x - _TABLE_HALF_X + leg_radius + 0.02
+    x_front = table_x + _TABLE_HALF_X - leg_radius - 0.02
+    y_side = _TABLE_HALF_Y - leg_radius - 0.02
+
+    corners = [
+        ("bl", x_back, -y_side),
+        ("br", x_back,  y_side),
+        ("fl", x_front, -y_side),
+        ("fr", x_front,  y_side),
+    ]
+    frags = [
+        f'    <geom name="table_leg_{tag}" type="cylinder"'
+        f' size="{leg_radius:.4f} {leg_half_h:.4f}"'
+        f' pos="{x:.6f} {y:.6f} {leg_z:.6f}"'
+        f' material="table_mat"/>'
+        for tag, x, y in corners
+    ]
+    return "\n".join(frags)
 
 
 def _block_positions(n: int, cube_size: float) -> list[tuple[float, float]]:

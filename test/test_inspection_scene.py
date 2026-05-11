@@ -47,18 +47,18 @@ def single_block_scene():
 
 
 def test_ngeom_three_blocks(mixed_scene) -> None:
-    """floor + table + platform + discard_region + 3 block geoms = 7."""
-    assert mixed_scene.model.ngeom == 7
+    """floor + table + 4 legs + platform + discard_region + 3 block geoms = 11."""
+    assert mixed_scene.model.ngeom == 11
 
 
 def test_ngeom_two_blocks(all_defective_scene) -> None:
-    """floor + table + platform + discard_region + 2 block geoms = 6."""
-    assert all_defective_scene.model.ngeom == 6
+    """floor + table + 4 legs + platform + discard_region + 2 block geoms = 10."""
+    assert all_defective_scene.model.ngeom == 10
 
 
 def test_ngeom_one_block(single_block_scene) -> None:
-    """floor + table + platform + discard_region + 1 block geom = 5."""
-    assert single_block_scene.model.ngeom == 5
+    """floor + table + 4 legs + platform + discard_region + 1 block geom = 9."""
+    assert single_block_scene.model.ngeom == 9
 
 
 # ---------------------------------------------------------------------------
