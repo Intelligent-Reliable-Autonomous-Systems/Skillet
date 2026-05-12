@@ -1,4 +1,5 @@
 """Smoke test — verifies pytest infrastructure collects and runs at least one test."""
+
 from __future__ import annotations
 
 

@@ -18,10 +18,10 @@ from skillet_tasks.mj_tasks.planning.inspection_pick_and_place.scene_factory imp
     DEFAULT_PLATFORM_HEIGHT_MULT,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def mixed_scene():
@@ -45,6 +45,7 @@ def single_block_scene():
 # Geometry counts
 # ---------------------------------------------------------------------------
 
+
 def test_ngeom_three_blocks(mixed_scene) -> None:
     """floor + table + platform + discard_region + 3 block geoms = 7."""
     assert mixed_scene.model.ngeom == 7
@@ -64,6 +65,7 @@ def test_ngeom_one_block(single_block_scene) -> None:
 # Free joints (one per block)
 # ---------------------------------------------------------------------------
 
+
 def test_njnt_three_blocks(mixed_scene) -> None:
     assert mixed_scene.model.njnt == 3
 
@@ -75,6 +77,7 @@ def test_njnt_two_blocks(all_defective_scene) -> None:
 # ---------------------------------------------------------------------------
 # Material / texture assignment matches defect flags
 # ---------------------------------------------------------------------------
+
 
 def _geom_matname(model: mujoco.MjModel, geom_name: str) -> str:
     """Return the material name for a named geom."""
@@ -104,6 +107,7 @@ def test_all_defective_materials(all_defective_scene) -> None:
 # Physics step runs without error
 # ---------------------------------------------------------------------------
 
+
 def test_physics_step_no_error(mixed_scene) -> None:
     """mj_step must not raise for a freshly compiled model."""
     data = mujoco.MjData(mixed_scene.model)
@@ -119,8 +123,10 @@ def test_physics_step_all_defective(all_defective_scene) -> None:
 # XML + asset pair
 # ---------------------------------------------------------------------------
 
+
 def _make_default_xml():
     import torch
+
     table = Table(height=DEFAULT_TABLE_HEIGHT, name="table")
     platform_size = CUBE_SIZE * DEFAULT_PLATFORM_SIZE_MULT
     platform_height = CUBE_SIZE * DEFAULT_PLATFORM_HEIGHT_MULT
@@ -129,23 +135,20 @@ def _make_default_xml():
         depth=platform_size,
         height=platform_height,
         name="platform",
-        init_pose=torch.tensor([0.45, 0.28, DEFAULT_TABLE_HEIGHT + platform_height / 2.0,
-                                1.0, 0.0, 0.0, 0.0]),
+        init_pose=torch.tensor([0.45, 0.28, DEFAULT_TABLE_HEIGHT + platform_height / 2.0, 1.0, 0.0, 0.0, 0.0]),
     )
     discard = DiscardLocation(
         width=platform_size,
         depth=platform_size,
         name="discard",
-        init_pose=torch.tensor([0.45, -0.28, DEFAULT_TABLE_HEIGHT + 0.001,
-                                1.0, 0.0, 0.0, 0.0]),
+        init_pose=torch.tensor([0.45, -0.28, DEFAULT_TABLE_HEIGHT + 0.001, 1.0, 0.0, 0.0, 0.0]),
     )
     blocks = [
         InspectableCube(
             size=CUBE_SIZE,
             defective=False,
             name="block_0",
-            init_pose=torch.tensor([0.35, 0.0, DEFAULT_TABLE_HEIGHT + CUBE_SIZE / 2.0,
-                                    1.0, 0.0, 0.0, 0.0]),
+            init_pose=torch.tensor([0.35, 0.0, DEFAULT_TABLE_HEIGHT + CUBE_SIZE / 2.0, 1.0, 0.0, 0.0, 0.0]),
         )
     ]
     return make_inspection_scene_xml(table, blocks, platform, discard)
@@ -168,12 +171,13 @@ def test_xml_assets_are_bytes() -> None:
 def test_xml_contains_worldbody() -> None:
     xml, _ = _make_default_xml()
     assert "<worldbody>" in xml
-    assert "<geom name=\"floor\"" in xml
+    assert '<geom name="floor"' in xml
 
 
 # ---------------------------------------------------------------------------
 # InspectionSceneSpec fields
 # ---------------------------------------------------------------------------
+
 
 def test_spec_block_names(mixed_scene) -> None:
     assert mixed_scene.block_names == ["block_0", "block_1", "block_2"]
@@ -194,20 +198,14 @@ def test_spec_carries_scene_objects(mixed_scene) -> None:
 # Platform size mult changes platform geometry
 # ---------------------------------------------------------------------------
 
+
 def test_platform_size_mult() -> None:
     """Doubling platform_size_mult should widen the platform geom."""
     spec_default = make_inspection_scene([False], platform_size_mult=DEFAULT_PLATFORM_SIZE_MULT)
     spec_big = make_inspection_scene([False], platform_size_mult=DEFAULT_PLATFORM_SIZE_MULT * 2)
 
-    plat_id_default = mujoco.mj_name2id(
-        spec_default.model, mujoco.mjtObj.mjOBJ_GEOM, "platform"
-    )
-    plat_id_big = mujoco.mj_name2id(
-        spec_big.model, mujoco.mjtObj.mjOBJ_GEOM, "platform"
-    )
+    plat_id_default = mujoco.mj_name2id(spec_default.model, mujoco.mjtObj.mjOBJ_GEOM, "platform")
+    plat_id_big = mujoco.mj_name2id(spec_big.model, mujoco.mjtObj.mjOBJ_GEOM, "platform")
 
     # geom_size stores half-extents; x half-extent should be larger in big spec
-    assert (
-        spec_big.model.geom_size[plat_id_big][0]
-        > spec_default.model.geom_size[plat_id_default][0]
-    )
+    assert spec_big.model.geom_size[plat_id_big][0] > spec_default.model.geom_size[plat_id_default][0]

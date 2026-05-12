@@ -36,9 +36,7 @@ def make_inspection_problem(
     """
     for b in blocks:
         if b.defective is None:
-            raise ValueError(
-                f"block {b.name!r} has no defect label — cannot generate PDDL problem"
-            )
+            raise ValueError(f"block {b.name!r} has no defect label — cannot generate PDDL problem")
 
     block_names = " ".join(b.name for b in blocks)
 

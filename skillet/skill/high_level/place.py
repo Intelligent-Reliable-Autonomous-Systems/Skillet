@@ -74,6 +74,7 @@ class PlaceSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAct
         # self._default_quat = torch.as_tensor([[0.0, 0.7071, -0.7071, 0.0]])
         # self._default_quat = torch.as_tensor([[0.0, 1.0, 0.0, 0.0]])
         self._default_quat = torch.as_tensor([[0.0, 0.7071, 0.7071, 0.0]])
+        self._default_pose = torch.as_tensor([[0.35, 0.0, 0.25, 0.0, 0.7071, 0.7071, 0.0]])
 
     @property
     def param_dim(self) -> int:
@@ -118,10 +119,10 @@ class PlaceSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAct
         self._n_lower_steps = spec.zeros(shape=(self.n_envs,), dtype=int)
         self._default_quat = self._default_quat.to(self.obs_spec.device)
         goal_quat = quat_mul(quat_from_yaw(params[:, 3]), self._default_quat.repeat(self.n_envs, 1))
-
+        self._fail_action = self._default_pose.repeat(self.n_envs, 1).to(self.obs_spec.device)
         self._pos_threshold = 0.005
         self._quat_threshold = 0.04
-        self._vel_threshold = 0.001  #
+        self._vel_threshold = 0.001
         self._joint_threshold = 0.001
         self._tcp_effort_threshold = 6
 
@@ -179,10 +180,12 @@ class PlaceSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAct
         flag = (torch.abs(tcp_wrench_b) > self._tcp_effort_threshold).any(dim=-1) & (
             self._place_status == PlaceStatusCodes.LOWER
         )
-        if flag.item():
+        if flag.any(dim=-1):
             print(
                 f"[WARN][PICK BLOCK] TCP Wrench efforts exceeded limit of {self._tcp_effort_threshold}. Stopping Place."
             )
+            # self._place_status[flag] = PlaceStatusCodes.FAILED
+            # return self._fail_action
         if next_pose.any():
             idx = torch.arange(self.n_envs, device=next_pose.device)
             valid_idx = (self._status == SkillStatusCodes.RUNNING) & (next_pose)

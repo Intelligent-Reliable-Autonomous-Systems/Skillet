@@ -9,6 +9,7 @@ from typing_extensions import override
 from skillet.core import SkillParamsSpec
 from skillet.core.skill import SingleSkill, SkillStatus, SkillStatusCodes
 from skillet.envs.specs import BxM_Action, IKEE_Obs, M_Action
+from skillet.planning.abstract.spatial_grounding import _is_on
 from skillet.scene import Cube, Table
 from skillet.scene.base import Scene, SceneObject
 from skillet.scene.utils import find_valid_table_xy
@@ -130,6 +131,9 @@ class PlaceBlock2Skill(PlaceBlockSkill):
         else:
             raise ValueError(f"Unknown place object: {self._target}.")
 
+        # Check for blocks under the grasped block
+        target_xyz = target_xyz + self._resolve_offset(objs[0]).to(target_xyz.device)
+
         if self._vis_target_pos is not None:
             self._vis_target_pos(target_xyz)
         yaw = 0
@@ -143,3 +147,12 @@ class PlaceBlock2Skill(PlaceBlockSkill):
             names = self._scene.resolve_ids_to_names(self._params)
             return f"Place Block: | {names[0]} | {names[1]} |"
         return "Place Block: | Unset | Unset |"
+
+    def _resolve_offset(self, grasped_blk: Cube, cube_size: float = 0.044) -> torch.Tensor:
+        """Resolve the offset due to any blocks that might be below the grasped block."""
+        offset = torch.as_tensor([0.0, 0.0, 0.0])
+        for obj in self._scene.objects:
+            if isinstance(obj, Cube) and (obj != grasped_blk) and _is_on(grasped_blk, obj):
+                offset = self._resolve_offset(obj, cube_size=cube_size) + torch.as_tensor([0.0, 0.0, cube_size])
+                break
+        return offset

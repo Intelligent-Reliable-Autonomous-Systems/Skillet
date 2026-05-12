@@ -1,13 +1,19 @@
 """An abstract model of the scene."""
 
+import copy
+import random
 from typing import Any
 
 from unified_planning.engines import PlanGenerationResultStatus as PGResultStatus
+from unified_planning.engines import UPSequentialSimulator
 from unified_planning.io import PDDLReader
-from unified_planning.model import Object, Problem
+from unified_planning.model import Object, Problem, UPState
 from unified_planning.shortcuts import And, OneshotPlanner
 
+from unified_planning.plans import ActionInstance
+
 from skillet.planning.abstract import (
+    AbstractAction,
     AbstractGoal,
     AbstractPlan,
     AbstractState,
@@ -62,6 +68,8 @@ class AbstractModel(BasePlanner):
         try:
             # If task file is none, will return an incomplete problem which can be filled in get_abstract_state
             self._problem: Problem = self._pddl_reader.parse_problem(self._domain_file, self._task_file)
+            self._simulator = UPSequentialSimulator(self._problem)
+
         except Exception as e:
             raise PDDLParsingError(f"Error parsing PDDL file: {e}") from e
 
@@ -113,7 +121,7 @@ class AbstractModel(BasePlanner):
             print("[WARN][ABSTRACT MODEL] Empty goal list!")
         return ParsedUpProblem(fluents=fluent_state, objects=object_state, goals=goals)
 
-    def reset_abstract_state(self, problem: Problem, state: ParsedUpProblem) -> None:
+    def reset_abstract_state(self, problem: Problem, state: ParsedUpProblem) -> Problem:
         """Update the initial state of the problem based on a ParsedUpProblem.
 
         Note: Assumes that the problem is empty (no objects, goals, initial values).
@@ -125,6 +133,24 @@ class AbstractModel(BasePlanner):
         [problem.set_initial_value(fluent, value) for fluent, value in state.fluents.items()]
 
         return problem
+
+    def reset_up_problem_state(self) -> UPDictFluent:
+        """Copy the problem and return a new instantance of the problem."""
+        self._problem: Problem = self._pddl_reader.parse_problem(self._domain_file, self._task_file)
+        state = self.get_abstract_state()
+        print(state)
+        self._problem.add_objects(list(state.objects.values()))
+        self._problem.add_goal(And(*list(state.goals)))
+        [self._problem.set_initial_value(fluent, value) for fluent, value in state.fluents.items()]
+        self._simulator = UPSequentialSimulator(self._problem)
+        return self._problem._initial_value
+
+    def get_random_action(self, state: UPDictFluent) -> UPDictFluent:
+        """Get a random action from the available actions in the state."""
+        applicable = list(self._simulator.get_applicable_actions(UPState(state, self._problem)))
+        action_instance = random.choice(applicable)
+        action, params = action_instance
+        return parse_action(str(ActionInstance(action, params)))
 
     def plan(
         self,

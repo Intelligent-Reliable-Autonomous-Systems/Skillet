@@ -1,4 +1,4 @@
-"""CheckedSkill ABC for checking pre/post conditions on scene """
+"""CheckedSkill ABC for checking pre/post conditions on scene"""
 
 from __future__ import annotations
 
