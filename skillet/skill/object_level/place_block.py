@@ -117,7 +117,7 @@ class PlaceBlock2Skill(PlaceBlockSkill):
     def initiate(self, obs, params):
         """Initiate the skill with the given observation and parameters."""
         self._status = None
-        self._params = self.params_spec.cast(params)
+        self._params = self.params_spec.cast(params[:2])
 
         objs = self._scene.get_objects_from_id(self._params)
         self._target = objs[1]
@@ -148,11 +148,11 @@ class PlaceBlock2Skill(PlaceBlockSkill):
             return f"Place Block: | {names[0]} | {names[1]} |"
         return "Place Block: | Unset | Unset |"
 
-    def _resolve_offset(self, grasped_blk: Cube, cube_size: float = 0.044) -> torch.Tensor:
+    def _resolve_offset(self, grasped_block: Cube, cube_size: float = 0.044) -> torch.Tensor:
         """Resolve the offset due to any blocks that might be below the grasped block."""
         offset = torch.as_tensor([0.0, 0.0, 0.0])
         for obj in self._scene.objects:
-            if isinstance(obj, Cube) and (obj != grasped_blk) and _is_on(grasped_blk, obj):
+            if isinstance(obj, Cube) and (obj != grasped_block) and _is_on(grasped_block, obj):
                 offset = self._resolve_offset(obj, cube_size=cube_size) + torch.as_tensor([0.0, 0.0, cube_size])
                 break
         return offset

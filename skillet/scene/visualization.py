@@ -17,6 +17,7 @@ from skillet.scene.utils import (
     quat_to_roll_pitch_yaw,
     tilt_from_quat_wxyz,
 )
+import contextlib
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -136,10 +137,12 @@ class Open3DVisualizer:
         if isinstance(geom, list):
             for g in geom:
                 if self._is_valid_geometry(g):
-                    scene.add_geometry(name, g, mat)
+                    with contextlib.suppress(BaseException):
+                        scene.add_geometry(name, g, mat)
         else:
             if self._is_valid_geometry(geom):
-                scene.add_geometry(name, geom, mat)
+                with contextlib.suppress(BaseException):
+                    scene.add_geometry(name, geom, mat)
         self._added_geometries.add(name)
 
     def _remove_geometry(self, name: str) -> None:

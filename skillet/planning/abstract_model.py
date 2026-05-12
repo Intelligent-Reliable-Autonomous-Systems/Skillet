@@ -8,9 +8,8 @@ from unified_planning.engines import PlanGenerationResultStatus as PGResultStatu
 from unified_planning.engines import UPSequentialSimulator
 from unified_planning.io import PDDLReader
 from unified_planning.model import Object, Problem, UPState
-from unified_planning.shortcuts import And, OneshotPlanner
-
 from unified_planning.plans import ActionInstance
+from unified_planning.shortcuts import And, OneshotPlanner
 
 from skillet.planning.abstract import (
     AbstractAction,
@@ -20,14 +19,15 @@ from skillet.planning.abstract import (
     ParsedUpProblem,
     UPDictFluent,
     UPListGoal,
-    ground_cube_on_relations,
+    ground_cube_relations,
     ground_gripper_relations,
+    ground_location_relations,
     parse_action,
     parse_value,
 )
 from skillet.planning.base_planner import BasePlanner
 from skillet.scene.base import Scene
-from skillet.scene.scene_objs import Cube
+from skillet.scene.scene_objs import Cube, Location, Target
 
 
 class AbstractModel(BasePlanner):
@@ -76,15 +76,27 @@ class AbstractModel(BasePlanner):
     def get_abstract_state(self, goal: dict[str, Any] | None = None) -> ParsedUpProblem:
         """Get the current abstract state of the scene."""
         assert self._scene is not None
-        # Create all the objects in the scene (Cubes + Table)
-        block_type = self._problem.user_type("block")
-        object_state = {ob_name: Object(ob_name, block_type) for ob_name in self._scene.get_object_names(Cube)}
-        object_state[self._scene.table.name] = Object(self._scene.table.name, self._problem.user_type("table"))
 
-        # Perform predicate grounding for on, clear, small, handempty and holding
+        # Create all the objects in the scene (Cubes + Table + Locations + Targets)
+        if "block" in [t.name for t in self._problem.user_types]:
+            block_type = self._problem.user_type("block")
+            object_state = {ob_name: Object(ob_name, block_type) for ob_name in self._scene.get_object_names(Cube)}
+        if "table" in [t.name for t in self._problem.user_types]:
+            object_state[self._scene.table.name] = Object(self._scene.table.name, self._problem.user_type("table"))
+        if "location" in [t.name for t in self._problem.user_types]:
+            location_type = self._problem.user_type("location")
+            for ob_name in self._scene.get_object_names(Location):
+                object_state[ob_name] = Object(ob_name, location_type)
+        if "target" in [t.name for t in self._problem.user_types]:
+            target_type = self._problem.user_type("target")
+            for ob_name in self._scene.get_object_names(Target):
+                object_state[ob_name] = Object(ob_name, target_type)
+
+        # Perform predicate grounding
         fluent_state = {}
-        on_pred, clear_pred, north_pred = ground_cube_on_relations(self._scene)
-        empty_pred, holding_pred = ground_gripper_relations(self._scene)
+        on_pred, clear_pred, north_pred = ground_cube_relations(self._scene)
+        empty_pred, grasping_pred, lifted_pred = ground_gripper_relations(self._scene)
+        above_loc_pred, north_loc_pred, at_pred, occ_pred = ground_location_relations(self._scene)
         if "on" in [f.name for f in self._problem.fluents]:
             for op in on_pred:
                 o_fluent = self._problem.fluent(op[0])(*(object_state[op[1].name], object_state[op[2].name]))
@@ -102,14 +114,32 @@ class AbstractModel(BasePlanner):
                 if ob.type == block_type:
                     fluent = self._problem.fluent("small")(*(ob,))
                     fluent_state[fluent] = True
-        if "handempty" in [f.name for f in self._problem.fluents]:
-            fluent = self._problem.fluent("handempty")
-            fluent_state[fluent] = empty_pred
-        if "holding" in [f.name for f in self._problem.fluents]:
-            for hp in holding_pred:
+        if "gripper-full" in [f.name for f in self._problem.fluents]:
+            fluent = self._problem.fluent("gripper-full")
+            fluent_state[fluent] = not empty_pred
+        if "gripper-lifted" in [f.name for f in self._problem.fluents]:
+            fluent = self._problem.fluent("gripper-lifted")
+            fluent_state[fluent] = lifted_pred
+        if "grasping" in [f.name for f in self._problem.fluents]:
+            for hp in grasping_pred:
                 fluent = self._problem.fluent(hp[0])(*(object_state[hp[1].name],))
                 fluent_state[fluent] = True
-
+        if "loc-above" in [f.name for f in self._problem.fluents]:
+            for la in above_loc_pred:
+                fluent = self._problem.fluent(la[0])(*(object_state[la[1].name], object_state[la[2].name]))
+                fluent_state[fluent] = True
+        if "loc-north-of" in [f.name for f in self._problem.fluents]:
+            for ln in north_loc_pred:
+                fluent = self._problem.fluent(ln[0])(*(object_state[ln[1].name], object_state[ln[2].name]))
+                fluent_state[fluent] = True
+        if "at-loc" in [f.name for f in self._problem.fluents]:
+            for al in at_pred:
+                fluent = self._problem.fluent(al[0])(*(object_state[al[1].name], object_state[al[2].name]))
+                fluent_state[fluent] = True
+        if "occupied" in [f.name for f in self._problem.fluents]:
+            for op in occ_pred:
+                fluent = self._problem.fluent(op[0])(*(object_state[op[1].name],))
+                fluent_state[fluent] = True
         # Parse the goal
         if goal is not None:
             self._scene.goal = goal
@@ -138,7 +168,6 @@ class AbstractModel(BasePlanner):
         """Copy the problem and return a new instantance of the problem."""
         self._problem: Problem = self._pddl_reader.parse_problem(self._domain_file, self._task_file)
         state = self.get_abstract_state()
-        print(state)
         self._problem.add_objects(list(state.objects.values()))
         self._problem.add_goal(And(*list(state.goals)))
         [self._problem.set_initial_value(fluent, value) for fluent, value in state.fluents.items()]
@@ -167,7 +196,7 @@ class AbstractModel(BasePlanner):
             self._problem = self.reset_abstract_state(self._problem, abstract_state)
 
         self._init_state = AbstractState(
-            states=[parse_value(str(v)) for v in list(self._problem.explicit_initial_values.keys())]
+            states=[parse_value(str(f), v) for f, v in self._problem.explicit_initial_values.items()]
         )
         self._goal = AbstractGoal(goals=[parse_value(str(g)) for g in abstract_state.goals])
 

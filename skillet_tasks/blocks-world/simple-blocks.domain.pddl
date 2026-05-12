@@ -42,7 +42,7 @@
 ;;; the gripper must be empty
 ;;; the physical interpretation of this action is that the gripper will raise up,
 ;;;     move to ?target's location, lower down, close the gripper around it, then lift the block up
-(:action pick
+(:action pick-block
     :parameters (?target - block ?support - surface ?targetloc ?supportloc - location)
     :precondition (and
         (at-loc ?target ?targetloc)
@@ -66,7 +66,7 @@
 ;;; the physical interpretation of this action is that the arm will move over
 ;;;     the target location ?freeloc, descend to the ?target surface, and release
 ;;; precondition: it needs to already be grasping and lifted in the air
-(:action place
+(:action place-block
     :parameters (?grasped - block ?target - surface ?freeloc ?targetloc - location)
     :precondition (and
         (gripper-full)
@@ -89,7 +89,7 @@
 ;;; drag the grasped block horizontally 1 unit north or south
 ;;; the physical interpretation of this action is that the block will be grasped
 ;;;     and then the arm will drag it to a new location
-(:action drag
+(:action drag-block
     :parameters (?grasped - block ?fromloc ?toloc ?belowfromloc ?belowtoloc - location)
     :precondition (and
         (at-loc ?grasped ?fromloc)

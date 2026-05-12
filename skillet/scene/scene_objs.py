@@ -14,7 +14,7 @@ from skillet.scene.base import SceneObject
 class EMAFilter:
     """EMA filter for cube positions."""
 
-    def __init__(self, alpha: float = 0.6, init: torch.Tensor | None = None):
+    def __init__(self, alpha: float = 0.7, init: torch.Tensor | None = None):
         self.alpha = alpha
         self.x = None if init is None else torch.as_tensor(init, dtype=torch.float32)
 
@@ -313,6 +313,63 @@ class Target(SceneObject):
     def radius(self) -> float:
         """The radius of the target."""
         return self._radius
+
+    def __str__(self) -> str:
+        """Return a printable string."""
+        return f"Target | ID: {self.object_id} | Name: {self.name} | Center: {self.pose.cpu().numpu()[:2]}"
+
+
+class Location(SceneObject):
+    """A location in a scene."""
+
+    def __init__(
+        self,
+        size: float = 0.05,
+        init_pose: torch.Tensor | None = None,  # (x, y, z, w, x, y, z)
+        name: str | None = None,
+    ) -> None:
+        """Initialize the target.
+
+        Args:
+            size: size of the location
+            init_pose: The initial pose of the target in the world frame.
+
+        """
+        super().__init__(name=name)
+        self._size = size
+        self._pose = init_pose
+
+    @property
+    def pose(self) -> torch.Tensor:
+        """The pose of the target in the world frame."""
+        return self._pose
+
+    @pose.setter
+    def pose(self, pose: torch.Tensor) -> None:
+        """Set the pose of the target in the world frame."""
+        self._pose = pose
+
+    @property
+    def object_type(self) -> str:
+        """The type of the location."""
+        return "location"
+
+    def is_pose_known(self) -> bool:
+        """If the pose of the target is known.
+
+        Return false to avoid plotting.
+        """
+        return False
+
+    @property
+    def size(self) -> float:
+        """The size of the location."""
+        return self._size
+
+    @property
+    def aabb(self) -> torch.Tensor:
+        """The axis-aligned bounding box of the cube."""
+        return torch.cat([self._pose[:3] - self._size / 2.0, self._pose[:3] + self._size / 2.0], dim=-1)
 
     def __str__(self) -> str:
         """Return a printable string."""

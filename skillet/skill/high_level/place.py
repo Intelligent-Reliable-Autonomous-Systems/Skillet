@@ -124,7 +124,7 @@ class PlaceSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAct
         self._quat_threshold = 0.04
         self._vel_threshold = 0.001
         self._joint_threshold = 0.001
-        self._tcp_effort_threshold = 6
+        self._tcp_effort_threshold = 8
 
         ee_pose_b = obs["tcp_pose_b"]
 
