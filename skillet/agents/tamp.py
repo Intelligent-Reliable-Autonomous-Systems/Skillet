@@ -75,6 +75,7 @@ class PlanningAgent(Agent):
                 break
             if terminated:
                 break
+            time.sleep(2)  # Give the EMA filter time to catch up
 
 
 class RandomTampAgent(Agent):

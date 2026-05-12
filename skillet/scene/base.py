@@ -231,7 +231,13 @@ class Scene:
         print_str = ""
         np.set_printoptions(suppress=True, precision=3)
         for ob in self._objects:
+            if ob.object_type == "location" or ob.object_type == "table":
+                continue
             print_str += (
                 f"{ob.name} | ID: {ob.object_id} | Pose: {ob.pose.cpu().numpy()[:3] if ob.pose is not None else None}\n"
             )
+        if self.gripper_pos is not None:
+            print_str += f"Gripper Position | {self.gripper_pos.cpu().numpy()}\n"
+        if self.tcp_pose is not None:
+            print_str += f"TCP Position     | {self.tcp_pose.cpu().numpy()[:3]}\n"
         return print_str

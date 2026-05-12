@@ -56,10 +56,10 @@ class Trace:
 
 
 def _parse_predicate(s: str) -> tuple:
-    """Parse a single predicate string like '(on red table0)' or '(handempty )'.
+    """Parse a single predicate string like '(on red table0)' or '(gripper-full )'.
 
     Returns:
-        a tuple, e.g. ('on', 'red', 'table0') or ('handempty',).
+        a tuple, e.g. ('on', 'red', 'table0') or ('gripper-full',).
 
     """
     s = s.strip().lstrip("(").rstrip(")")

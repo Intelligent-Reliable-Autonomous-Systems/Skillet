@@ -116,13 +116,13 @@ def make_joint_pos_skill(env: GymVectorInterface, skill_length: int = 15) -> Ski
     )
 
 
-def make_pick_skill(env: GymVectorInterface, lift_height: float = 0.23, skill_length: int = 15) -> Skill:
+def make_pick_skill(env: GymVectorInterface, lift_height: float = 0.3, skill_length: int = 15) -> Skill:
     return PickSkill[BxN_Obs, BxM_Action, None](
         reach_policy=make_ik_ee_pose_policy(env), gripper_policy=None, lift_height=lift_height, length=skill_length
     )
 
 
-def make_place_skill(env: GymVectorInterface, lift_height: float = 0.23, skill_length: int = 15) -> Skill:
+def make_place_skill(env: GymVectorInterface, lift_height: float = 0.3, skill_length: int = 15) -> Skill:
     return PlaceSkill[BxN_Obs, BxM_Action, None](
         reach_policy=make_ik_ee_pose_policy(env), gripper_policy=None, lift_height=lift_height, length=skill_length
     )

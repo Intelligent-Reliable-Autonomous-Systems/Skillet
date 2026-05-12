@@ -3,10 +3,10 @@
 from typing import Literal
 
 from skillet.scene.base import Scene, SceneObject
-from skillet.scene.scene_objs import Cube, Table
+from skillet.scene.scene_objs import Cube, Location, Table
 
 
-def _is_on(a: Cube, b: Cube, height_tol_frac: float = 0.3, xy_slack_frac: float = 0.5) -> bool:
+def _is_on(a: Cube | Location, b: Cube | Location, height_tol_frac: float = 0.3, xy_slack_frac: float = 0.5) -> bool:
     """Return True if cube *a* is resting on top of cube *b*.
 
     Args:
@@ -18,7 +18,7 @@ def _is_on(a: Cube, b: Cube, height_tol_frac: float = 0.3, xy_slack_frac: float 
             edges, as a fraction of the smaller cube's side length.
 
     """
-    if not (a.is_pose_known() and b.is_pose_known()):
+    if isinstance(a, Cube) and isinstance(b, Cube) and not (a.is_pose_known() and b.is_pose_known()):
         return False
 
     aabb_a = a.aabb  # [xmin, ymin, zmin, xmax, ymax, zmax]
@@ -41,7 +41,9 @@ def _is_on(a: Cube, b: Cube, height_tol_frac: float = 0.3, xy_slack_frac: float 
     return bool(within_x and within_y)
 
 
-def _is_north_of(a: Cube, b: Cube, north_tol_frac: float = 0.3, yz_slack_frac: float = 0.5) -> bool:
+def _is_north_of(
+    a: Cube | Location, b: Cube | Location, north_tol_frac: float = 0.3, yz_slack_frac: float = 0.5
+) -> bool:
     """Return True if cube *a* is north of cube *b*.
 
     Args:
@@ -53,7 +55,7 @@ def _is_north_of(a: Cube, b: Cube, north_tol_frac: float = 0.3, yz_slack_frac: f
             edges, as a fraction of the smaller cube's side length.
 
     """
-    if not (a.is_pose_known() and b.is_pose_known()):
+    if isinstance(a, Cube) and isinstance(b, Cube) and not (a.is_pose_known() and b.is_pose_known()):
         return False
 
     aabb_a = a.aabb  # [xmin, ymin, zmin, xmax, ymax, zmax]
@@ -97,7 +99,9 @@ def _is_on_table(a: Cube, table: Table, height_tol_frac: float = 0.5) -> bool:
     return abs(aabb_a[2] - table.height) < tol
 
 
-def _is_holding(a: Cube, scene: Scene, xyz_slack_frac: float = 0.8, gripper_thresh: float = 0.5) -> bool:
+def _is_grasping(
+    a: Cube, scene: Scene, z_slack_frac: float = 1.0, xy_slack_frac: float = 0.5, gripper_thresh: float = 0.4
+) -> bool:
     """Test if the gripper is holding a cube.
 
     The cube xyz position must be sufficiently close to the tcp pose
@@ -106,7 +110,8 @@ def _is_holding(a: Cube, scene: Scene, xyz_slack_frac: float = 0.8, gripper_thre
     Args:
         a: Cube to test against
         scene: scene containing tcp pose and gripper position
-        xyz_slack_frac: slack around xyz to still be considered holding
+        z_slack_frac: the z fraction tolerance to be inside
+        xy_slack_frac: slack around xy to still be considered holding
         gripper_thresh: threshold for gripper to be considered closed
 
     """
@@ -115,18 +120,56 @@ def _is_holding(a: Cube, scene: Scene, xyz_slack_frac: float = 0.8, gripper_thre
         return False
 
     aabb_a = a.aabb  # [xmin, ymin, zmin, xmax, ymax, zmax]
-    slack = a.size * xyz_slack_frac
+    xy_slack = a.size * xy_slack_frac
+    z_slack = a.size * z_slack_frac
 
     # tcp pose should be within a's footprint (plus a little slack)
-    within_x = (aabb_a[0] - slack) <= scene.tcp_pose[0] <= (aabb_a[3] + slack)
-    within_y = (aabb_a[1] - slack) <= scene.tcp_pose[1] <= (aabb_a[4] + slack)
-    within_z = (aabb_a[1] - slack) <= scene.tcp_pose[2] <= (aabb_a[5] + slack)
+    within_x = (aabb_a[0] - xy_slack) <= scene.tcp_pose[0] <= (aabb_a[3] + xy_slack)
+    within_y = (aabb_a[1] - xy_slack) <= scene.tcp_pose[1] <= (aabb_a[4] + xy_slack)
+    within_z = (aabb_a[1] - z_slack) <= scene.tcp_pose[2] <= (aabb_a[5] + z_slack)
 
     # To be holding must be within footprint and gripper must be closed
     return bool(within_x and within_y and within_z and scene.gripper_pos > gripper_thresh)
 
 
-def ground_cube_on_relations(scene: Scene) -> list[tuple[Literal["on"], SceneObject, SceneObject]]:
+def _is_lifted(scene: Scene, lift_height: float = 0.2) -> bool:
+    if scene.tcp_pose is None or scene.gripper_pos is None:
+        return False
+    return bool((scene.tcp_pose[2] > lift_height).item())
+
+
+def _is_at(a: Cube, l: Location, z_slack_frac: float = 0.07, xy_slack_frac: float = 0.2) -> bool:
+    """Test if a cube is at a location.
+
+    The cube xyz position must be sufficiently close to the tcp pose
+    in the scene and the gripper must be closed.
+
+    Args:
+        a: Cube to test against
+        l: Location to test against
+        z_slack_frac: the z fraction tolerance to be inside
+        xy_slack_frac: slack around xy to still be considered holding
+
+    """
+    # Check that the scene has both gripper and tcp pose
+    if not a.is_pose_known():
+        return False
+
+    aabb_a = a.aabb  # [xmin, ymin, zmin, xmax, ymax, zmax]
+    xy_slack = a.size * xy_slack_frac
+    z_slack = a.size * z_slack_frac
+
+    # tcp pose should be within a's footprint (plus a little slack)
+    within_x = l.pose[0] - xy_slack <= a.pose[0] <= (l.pose[0] + l.size + xy_slack)
+    within_y = True
+    within_z = l.pose[2] - z_slack <= a.pose[2] <= (l.pose[2] + l.size) + z_slack
+    # (aabb_a[1] - z_slack) <= l.pose[2] + l.size / 2 <= (aabb_a[5] + z_slack)
+
+    # To be holding must be within footprint and gripper must be closed
+    return bool(within_x and within_y and within_z)
+
+
+def ground_cube_relations(scene: Scene) -> list[tuple[str, SceneObject, SceneObject]]:
     """Ground the on relations in the scene."""
     on_relations = []
     north_relations = []
@@ -158,13 +201,32 @@ def ground_cube_on_relations(scene: Scene) -> list[tuple[Literal["on"], SceneObj
 
 def ground_gripper_relations(scene: Scene) -> tuple[bool, list[tuple[Literal["holding"], SceneObject]]]:
     """Grounding for if the gripper hand is empty and the object it is holding."""
-    holding_relations = []
+    grasping_relations = []
     for obj in scene.objects:
         if not isinstance(obj, Cube):
             continue
-        if _is_holding(obj, scene):
-            holding_relations.append(("holding", obj))
-    return len(holding_relations) == 0, holding_relations
+        if _is_grasping(obj, scene):
+            grasping_relations.append(("grasping", obj))
+    return len(grasping_relations) == 0, grasping_relations, _is_lifted(scene)
 
 
-# get relations for north of/south of above/below by hard coding locations on the table
+def ground_location_relations(scene: Scene) -> list[tuple[str, SceneObject, SceneObject]]:
+    """Grounding of the location relations in the scene."""
+    above_relations = []
+    north_relations = []
+    at_relations = []
+    occupied_relations = []
+    for obj in scene.objects:
+        if not isinstance(obj, Location):
+            continue
+        for other_obj in scene.objects:
+            if isinstance(other_obj, Location):
+                if obj.object_id != other_obj.object_id and _is_on(obj, other_obj, xy_slack_frac=0.01):
+                    above_relations.append(("loc-above", obj, other_obj))
+                if obj.object_id != other_obj.object_id and _is_north_of(obj, other_obj, yz_slack_frac=0.01):
+                    north_relations.append(("loc-north-of", obj, other_obj))
+            elif isinstance(other_obj, Cube):
+                if _is_at(other_obj, obj):
+                    at_relations.append(("at-loc", other_obj, obj))
+                    occupied_relations.append(("occupied", obj))
+    return above_relations, north_relations, at_relations, occupied_relations

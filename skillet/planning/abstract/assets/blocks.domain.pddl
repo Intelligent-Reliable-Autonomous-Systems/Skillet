@@ -8,10 +8,10 @@
     (:predicates
         (small ?s - surface) ; the surface can only fit one object
 
-        (handempty)
+        (gripper-full)
         (clear ?s - surface)
         (on ?b - block ?s - surface)
-        (holding ?b - block)
+        (grasping ?b - block)
     )
 
 (:action pick-block
@@ -19,11 +19,11 @@
     :precondition (and
         (clear ?b)
         (on ?b ?s)
-        (handempty)
+        (not (gripper-full))
     )
     :effect (and
-        (not (handempty))
-        (holding ?b)
+        (gripper-full)
+        (grasping ?b)
         (not (on ?b ?s))
         (not (clear ?b))
         (when
@@ -37,13 +37,13 @@
 (:action place-block
     :parameters (?b - block ?s - surface)
     :precondition (and
-        (not (handempty))
-        (holding ?b)
+        (gripper-full)
+        (grasping ?b)
         (clear ?s)
     )
     :effect (and
-        (handempty)
-        (not (holding ?b))
+        (not (gripper-full))
+        (not (grasping ?b))
         (on ?b ?s)
         (clear ?b)
         (when

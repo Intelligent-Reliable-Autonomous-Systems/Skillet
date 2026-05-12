@@ -14,7 +14,7 @@ from skillet.logging import SkilletDataLogger
 from skillet.perception.perception import SkilletPerception
 from skillet.planning import AbstractModel
 from skillet.policy import TcpCartPolicy, TwistPidPosePolicy
-from skillet.scene import EMPTY_SCENE, SIX_CUBE_APRIL_SCENE, SIX_CUBE_SCENE, Open3DVisualizer
+from skillet.scene import EMPTY_SCENE, LOC_CUBE_SCENE, SIX_CUBE_APRIL_SCENE, Open3DVisualizer
 from skillet.skill import PickBlock2Skill, PickSkill, PlaceBlock2Skill, PlaceSkill
 from skillet_tasks.kortex_tasks.factory import create_kortex_env
 
@@ -51,7 +51,7 @@ def main() -> None:
     elif args_cli.reconstruction == "sam+vlm" or args_cli.reconstruction == "vlm":
         scene = EMPTY_SCENE
     elif args_cli.reconstruction == "sam3":
-        scene = SIX_CUBE_SCENE
+        scene = LOC_CUBE_SCENE
     env_cfg = {
         "robot_ip": args_cli.robot_ip,
         "device": "cuda",
@@ -93,8 +93,8 @@ def main() -> None:
     arm_policy = TcpCartPolicy(env.batched_env.obs_spec_tcp_cart, env.batched_env.action_spec_tcp_cart)
     # Skills
     skill_length = 1e9
-    place_skill = PlaceSkill(reach_policy=arm_policy, gripper_policy=None, lift_height=0.23, length=skill_length)
-    pick_skill = PickSkill(reach_policy=arm_policy, gripper_policy=None, lift_height=0.23, length=skill_length)
+    place_skill = PlaceSkill(reach_policy=arm_policy, gripper_policy=None, lift_height=0.3, length=skill_length)
+    pick_skill = PickSkill(reach_policy=arm_policy, gripper_policy=None, lift_height=0.3, length=skill_length)
 
     pick_block_skill = PickBlock2Skill(scene, pick_skill, vis_target_pos=target_pose_func)
     place_block_skill = PlaceBlock2Skill(scene, place_skill, vis_target_pos=target_pose_func)

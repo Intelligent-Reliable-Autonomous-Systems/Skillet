@@ -9,7 +9,6 @@
         (small green)
         (small blue)
 
-        (handempty)
         (clear table0)
         (clear green)
 

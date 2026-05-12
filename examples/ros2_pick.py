@@ -56,7 +56,7 @@ def main() -> None:
     ik_ee_pose_policy = TwistPidPosePolicy(env.obs_spec_twist_tcp, env.action_spec_twist_tcp)
     # Skills
     skill_length = 1e9
-    pick_skill = PickSkill(reach_policy=ik_ee_pose_policy, gripper_policy=None, lift_height=0.23, length=skill_length)
+    pick_skill = PickSkill(reach_policy=ik_ee_pose_policy, gripper_policy=None, lift_height=0.3, length=skill_length)
     skills: list[BatchedSkill[IKEE_Obs, BxM_Action, XYZ_YAW_Params]] = [pick_skill]
 
     # Parameters policy

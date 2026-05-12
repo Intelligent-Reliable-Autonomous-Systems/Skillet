@@ -28,12 +28,12 @@ class ParsedUpProblem:
     fluents: UPDictFluent
     objects: UPDictObject
     goals: UPListGoal
-    exclude_list = ["clear", "small"]
+    exclude_list = ["clear", "small", "loc_north_of", "loc_above", "occupied"]
 
     def __str__(self) -> str:
         print_str = "Abstract State:\n"
-        for f in self.fluents:
-            f = parse_value(str(f))
+        for f, v in self.fluents.items():
+            f = parse_value(str(f), v)
             if f.value in self.exclude_list:
                 continue
             print_str += f"{f!s}\n"
@@ -81,7 +81,7 @@ class AbstractPlan:
 @dataclass
 class AbstractState:
     states: list[AbstractValue]
-    exclude_list = ["clear", "small"]
+    exclude_list = ["clear", "small", "loc_north_of", "loc_above", "occupied"]
 
     def __str__(self) -> str:
         print_str = "Abstract State:\n"
@@ -113,7 +113,7 @@ def parse_action(action_str: str) -> AbstractAction:
     return AbstractAction(action=action, parameters=parameters)
 
 
-def parse_value(value_str: str) -> AbstractValue:
+def parse_value(value_str: str, v: bool | None = None) -> AbstractValue:
     """Parse a UP FNode into a string for an AbstractValue."""
     match = re.match(r"([\w-]+)\((.*)\)", value_str.strip())
 
@@ -122,7 +122,7 @@ def parse_value(value_str: str) -> AbstractValue:
         parameters = [p.strip() for p in match.group(2).split(",")]
     else:
         value = value_str.strip().replace("-", "_")
-        parameters = []
+        parameters = [v]
 
     return AbstractValue(value=value, parameters=parameters)
 

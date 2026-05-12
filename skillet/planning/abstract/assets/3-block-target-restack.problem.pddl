@@ -12,7 +12,6 @@
         (small target0)
         (small target1)
 
-        (handempty)
         (clear target1)
         (clear green)
 

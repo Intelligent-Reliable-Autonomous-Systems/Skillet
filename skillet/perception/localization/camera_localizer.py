@@ -10,7 +10,7 @@ import pupil_apriltags as apriltags
 import pyrealsense2 as rs
 from scipy.spatial.transform import Rotation
 
-DEFAULT_APRILTAG_POSE = np.array([0.13, 0.000, 0.0, 0.0, 0.0, 0.7071068, 0.7071068])
+DEFAULT_APRILTAG_POSE = np.array([0.13, -0.01, 0.0, 0.0, 0.0, 0.7071068, 0.7071068])
 DEFAULT_APRILTAG_SIZE_M = 0.100
 DEFAULT_APRILTAG_ID = 2
 

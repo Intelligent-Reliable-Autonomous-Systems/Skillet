@@ -114,7 +114,7 @@ class PickBlock2Skill(PickBlockSkill):
     def initiate(self, obs, params):
         """Initiate the skill with the given observation and parameters."""
         self._status = None
-        self._params = self.params_spec.cast(params)
+        self._params = self.params_spec.cast(params[:2])
 
         self._target_block: SceneObject = self._scene.get_objects_from_id(self._params)[0]
         if not self._target_block.is_pose_known():

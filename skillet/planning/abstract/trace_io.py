@@ -247,8 +247,8 @@ class PDDLTraceIO:
         Examples:
             "(at robot loc1)"           -> ("at", ["robot", "loc1"], True)
             "(not (at robot loc1))"     -> ("at", ["robot", "loc1"], False)
-            "(handempty)"               -> ("handempty", [], True)
-            "(not (handempty))"         -> ("handempty", [], False)
+            "(gripper-full)"               -> ("gripper-full", [], True)
+            "(not (gripper-full))"         -> ("gripper-full", [], False)
 
         """
         s = predicate.strip()
