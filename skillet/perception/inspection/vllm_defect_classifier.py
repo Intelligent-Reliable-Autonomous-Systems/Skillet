@@ -35,8 +35,7 @@ class VLLMDefectClassifier(DefectClassifier):
             from openai import OpenAI  # noqa: PLC0415
         except ImportError as exc:
             raise ImportError(
-                "VLLMDefectClassifier requires the 'openai' package. "
-                "Install it with: pip install 'skillet[vlm]'"
+                "VLLMDefectClassifier requires the 'openai' package. " "Install it with: pip install 'skillet[vlm]'"
             ) from exc
         self._client = OpenAI(base_url=base_url, api_key=api_key)
         self._model = model

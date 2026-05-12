@@ -27,6 +27,7 @@ PLATFORM_HEIGHT = CUBE_SIZE * 2.0
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_table() -> Table:
     return Table(height=TABLE_HEIGHT, name="table")
 
@@ -68,6 +69,7 @@ def _make_blocks(defective_flags: list[bool]) -> list[InspectableCube]:
 # Domain parsing
 # ---------------------------------------------------------------------------
 
+
 def test_domain_file_exists() -> None:
     assert DOMAIN_FILE.exists(), f"domain file not found: {DOMAIN_FILE}"
 
@@ -98,6 +100,7 @@ def test_domain_has_expected_predicates() -> None:
 # ---------------------------------------------------------------------------
 # Problem factory — string structure
 # ---------------------------------------------------------------------------
+
 
 def test_problem_factory_single_clean_block() -> None:
     table, platform, discard = _make_table(), _make_platform(), _make_discard()
@@ -136,11 +139,16 @@ def test_problem_factory_uses_scene_object_names() -> None:
     """Object names in the PDDL must match the scene-graph names."""
     table = Table(height=TABLE_HEIGHT, name="worktable")
     platform = Platform(
-        width=PLATFORM_SIZE, depth=PLATFORM_SIZE, height=PLATFORM_HEIGHT, name="good_pile",
+        width=PLATFORM_SIZE,
+        depth=PLATFORM_SIZE,
+        height=PLATFORM_HEIGHT,
+        name="good_pile",
         init_pose=torch.tensor([0.45, 0.28, TABLE_HEIGHT + PLATFORM_HEIGHT / 2.0, 1.0, 0.0, 0.0, 0.0]),
     )
     discard = DiscardLocation(
-        width=PLATFORM_SIZE, depth=PLATFORM_SIZE, name="bad_bin",
+        width=PLATFORM_SIZE,
+        depth=PLATFORM_SIZE,
+        name="bad_bin",
         init_pose=torch.tensor([0.45, -0.28, TABLE_HEIGHT + 0.001, 1.0, 0.0, 0.0, 0.0]),
     )
     blocks = _make_blocks([True])
@@ -154,6 +162,7 @@ def test_problem_factory_uses_scene_object_names() -> None:
 # ---------------------------------------------------------------------------
 # End-to-end planning
 # ---------------------------------------------------------------------------
+
 
 def _parse_full_problem(pddl_str: str):
     reader = PDDLReader()

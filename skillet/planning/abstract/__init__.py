@@ -3,6 +3,7 @@ from .spatial_grounding import ground_gripper_relations as ground_gripper_relati
 from .up_utils import AbstractGoal as AbstractGoal
 from .up_utils import AbstractPlan as AbstractPlan
 from .up_utils import AbstractState as AbstractState
+from .up_utils import AbstractAction as AbstractAction
 from .up_utils import ParsedUpProblem as ParsedUpProblem
 from .up_utils import UPDictFluent as UPDictFluent
 from .up_utils import UPListGoal as UPListGoal

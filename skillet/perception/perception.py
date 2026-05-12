@@ -229,22 +229,20 @@ class SkilletPerception:
         if self._thread is not None and self._thread.is_alive():
             self._thread.join(timeout=2.0)
 
+    def update_state(self) -> None:
+        """Update the perception state."""
+        self._build_reconstructor()
+        obs = self.env.get_observation(self.obs_spec)
+        obs_unbatched = self._apply_far_plane(self._maybe_unbatch(obs))
+
+        # Update the state based on reconstruction
+        self._reconstructor.update_state(obs_unbatched, update=True)
+        self.scene.tcp_pose = obs_unbatched["tcp_pose_b"]
+        self.scene.gripper_pos = obs_unbatched["gripper"]
+
     def run(self) -> None:
         """Run the SkilletPerception pipeline."""
-        if self._reconstructor is None:
-            if self._reconstructor_type == "sam+vlm":
-                print("[INFO][PERCEPTION] Loading SAM reconstructor")
-                self._reconstructor = SamVlmReconstructor(scene=self._scene, device=self.device)
-            elif self._reconstructor_type == "april":
-                print("[INFO][PERCEPTION] Loading AprilTag reconstructor")
-                assert (
-                    self._scene is not None
-                ), "[ERROR] Perception Scene cannot be None when using AprilTagStateReconstructor."
-                self._reconstructor = ApriltagStateReconstructor(self._scene)
-            elif self._reconstructor_type == "sam3":
-                self._reconstructor = Sam3Reconstructor(self._scene, device=self.device)
-            elif self._reconstructor_type == "vlm":
-                self._reconstructor = VlmReconstructor(scene=self._scene)
+        self._build_reconstructor()
         poll_period_s = 1.0 / self.poll_rate_hz
         next_poll_t = time.perf_counter()
 
@@ -328,3 +326,20 @@ class SkilletPerception:
         cv2.namedWindow(self._perception_window_name, cv2.WINDOW_NORMAL)
         cv2.resizeWindow(self._perception_window_name, self._perception_width, self._perception_height)
         self._perception_window_active = True
+
+    def _build_reconstructor(self) -> None:
+        """Build the reconstructor."""
+        if self._reconstructor is None:
+            if self._reconstructor_type == "sam+vlm":
+                print("[INFO][PERCEPTION] Loading SAM reconstructor")
+                self._reconstructor = SamVlmReconstructor(scene=self._scene, device=self.device)
+            elif self._reconstructor_type == "april":
+                print("[INFO][PERCEPTION] Loading AprilTag reconstructor")
+                assert (
+                    self._scene is not None
+                ), "[ERROR] Perception Scene cannot be None when using AprilTagStateReconstructor."
+                self._reconstructor = ApriltagStateReconstructor(self._scene)
+            elif self._reconstructor_type == "sam3":
+                self._reconstructor = Sam3Reconstructor(self._scene, device=self.device)
+            elif self._reconstructor_type == "vlm":
+                self._reconstructor = VlmReconstructor(scene=self._scene)

@@ -78,15 +78,22 @@ def test_scene_serialize_mixed_objects() -> None:
     objects = [
         Cube(size=0.044, init_pose=torch.tensor([0.26, 0.04, 0.022, 1.0, 0.0, 0.0, 0.0]), name="blue_block"),
         InspectableCube(
-            size=0.044, defective=True, name="red_block",
+            size=0.044,
+            defective=True,
+            name="red_block",
             init_pose=torch.tensor([0.35, 0.04, 0.022, 1.0, 0.0, 0.0, 0.0]),
         ),
         Platform(
-            width=0.2, depth=0.2, height=0.05, name="platform",
+            width=0.2,
+            depth=0.2,
+            height=0.05,
+            name="platform",
             init_pose=torch.tensor([0.5, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]),
         ),
         DiscardLocation(
-            width=0.15, depth=0.15, name="discard",
+            width=0.15,
+            depth=0.15,
+            name="discard",
             init_pose=torch.tensor([0.1, 0.4, 0.0, 1.0, 0.0, 0.0, 0.0]),
         ),
     ]

@@ -95,15 +95,14 @@ yellow_cube = Cube(size=CUBE_SIZE, name="yellow_block")
 purple_cube = Cube(size=CUBE_SIZE, name="dark_purple_block")
 red_cube = Cube(size=CUBE_SIZE, name="dark_red_block")
 
-blue_target = Target(name="blue_circle")
 
 SIX_CUBE_SCENE = Scene(
-    objects=[table_0, orange_cube, blue_cube, green_cube, pink_cube, yellow_cube, purple_cube, red_cube, blue_target],
+    objects=[table_0, orange_cube, blue_cube, green_cube, pink_cube, yellow_cube, purple_cube, red_cube],
     closed_set=True,
     bounds=WORLD_BOUNDS,
     contains_objects=True,
 )
 
 SIX_CUBE_SCENE.goal = [
-    {"predicate": "on", "args": ["yellow_block", "green_block"]},
+    {"predicate": "on", "args": ["light_blue_block", "green_block"]},
 ]

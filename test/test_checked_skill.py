@@ -8,10 +8,10 @@ from skillet.core.checked_skill import CheckedSkill, FailureReason, SkillResult
 from skillet.core.skill import SingleSkill, Skill
 from skillet.scene.base import Scene
 
-
 # ---------------------------------------------------------------------------
 # Minimal concrete CheckedSkill for structural tests
 # ---------------------------------------------------------------------------
+
 
 class _StubCheckedSkill(CheckedSkill):
     """Minimal concrete implementation that satisfies all abstract methods."""
@@ -38,6 +38,7 @@ class _StubCheckedSkill(CheckedSkill):
 # CheckedSkill inheritance
 # ---------------------------------------------------------------------------
 
+
 def test_checked_skill_is_single_skill() -> None:
     """CheckedSkill subclasses SingleSkill."""
     assert issubclass(CheckedSkill, SingleSkill)
@@ -60,11 +61,18 @@ def test_missing_preconditions_raises() -> None:
 
     class _Bad(CheckedSkill):
         @property
-        def policy(self): raise NotImplementedError
+        def policy(self):
+            raise NotImplementedError
+
         @property
-        def status(self): return 0
-        def get_action(self, obs): raise NotImplementedError
-        def postconditions(self, world: Scene) -> bool: return True
+        def status(self):
+            return 0
+
+        def get_action(self, obs):
+            raise NotImplementedError
+
+        def postconditions(self, world: Scene) -> bool:
+            return True
 
     with pytest.raises(TypeError):
         _Bad()
@@ -75,18 +83,27 @@ def test_missing_postconditions_raises() -> None:
 
     class _Bad(CheckedSkill):
         @property
-        def policy(self): raise NotImplementedError
+        def policy(self):
+            raise NotImplementedError
+
         @property
-        def status(self): return 0
-        def get_action(self, obs): raise NotImplementedError
-        def preconditions(self, world: Scene) -> bool: return True
+        def status(self):
+            return 0
+
+        def get_action(self, obs):
+            raise NotImplementedError
+
+        def preconditions(self, world: Scene) -> bool:
+            return True
 
     with pytest.raises(TypeError):
         _Bad()
 
+
 # ---------------------------------------------------------------------------
 # SkillResult
 # ---------------------------------------------------------------------------
+
 
 def test_skill_result_ok() -> None:
     result = SkillResult.ok()

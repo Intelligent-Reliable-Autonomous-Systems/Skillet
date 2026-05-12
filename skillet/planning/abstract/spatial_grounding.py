@@ -97,7 +97,7 @@ def _is_on_table(a: Cube, table: Table, height_tol_frac: float = 0.5) -> bool:
     return abs(aabb_a[2] - table.height) < tol
 
 
-def _is_holding(a: Cube, scene: Scene, xyz_slack_frac: float = 0.5, gripper_thresh: float = 0.5) -> bool:
+def _is_holding(a: Cube, scene: Scene, xyz_slack_frac: float = 0.8, gripper_thresh: float = 0.5) -> bool:
     """Test if the gripper is holding a cube.
 
     The cube xyz position must be sufficiently close to the tcp pose
@@ -147,7 +147,6 @@ def ground_cube_on_relations(scene: Scene) -> list[tuple[Literal["on"], SceneObj
                 on_relations.append(("on", obj, other_obj))
             if obj.object_id != other_obj.object_id and _is_north_of(obj, other_obj):
                 north_relations.append(("north-of", obj, other_obj))
-                print(("north-of", obj.name, other_obj.name))
 
     # Remove cubes from clear list if they have an object on top
     for o in on_relations:
@@ -166,3 +165,6 @@ def ground_gripper_relations(scene: Scene) -> tuple[bool, list[tuple[Literal["ho
         if _is_holding(obj, scene):
             holding_relations.append(("holding", obj))
     return len(holding_relations) == 0, holding_relations
+
+
+# get relations for north of/south of above/below by hard coding locations on the table

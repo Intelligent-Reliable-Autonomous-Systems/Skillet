@@ -36,8 +36,8 @@ DEFAULT_PLATFORM_SIZE_MULT: float = 3.0
 DEFAULT_PLATFORM_HEIGHT_MULT: float = 2.0
 
 # Workspace placement (metres, robot frame).
-_PLATFORM_XY: tuple[float, float] = (0.45, 0.28)   # forward-left
-_DISCARD_XY: tuple[float, float] = (0.45, -0.28)   # forward-right
+_PLATFORM_XY: tuple[float, float] = (0.45, 0.28)  # forward-left
+_DISCARD_XY: tuple[float, float] = (0.45, -0.28)  # forward-right
 _BLOCK_X: float = 0.35
 _BLOCK_SPACING_MULT: float = 3.0
 
@@ -95,11 +95,17 @@ def make_inspection_scene(
             size=cube_size,
             defective=defective,
             name=f"block_{i}",
-            init_pose=torch.tensor([
-                xy_positions[i][0], xy_positions[i][1],
-                table_height + cube_size / 2.0,
-                1.0, 0.0, 0.0, 0.0,
-            ]),
+            init_pose=torch.tensor(
+                [
+                    xy_positions[i][0],
+                    xy_positions[i][1],
+                    table_height + cube_size / 2.0,
+                    1.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                ]
+            ),
         )
         for i, defective in enumerate(block_defective)
     ]
@@ -138,8 +144,7 @@ def make_inspection_scene_xml(
         if b.defective is None:
             raise ValueError(f"block {b.name!r} has no defect label — cannot generate XML")
     block_fragments = "\n".join(
-        _block_xml(i, b, "defect_mat" if b.defective else "clean_mat")
-        for i, b in enumerate(blocks)
+        _block_xml(i, b, "defect_mat" if b.defective else "clean_mat") for i, b in enumerate(blocks)
     )
 
     px, py, pz = (v.item() for v in platform.pose[:3])
