@@ -172,14 +172,17 @@ class AbstractModel(BasePlanner):
         self._problem.add_goal(And(*list(state.goals)))
         [self._problem.set_initial_value(fluent, value) for fluent, value in state.fluents.items()]
         self._simulator = UPSequentialSimulator(self._problem)
+        self._init_state = AbstractState(
+            states=[parse_value(str(f), v) for f, v in self._problem.explicit_initial_values.items()]
+        )
         return self._problem._initial_value
 
-    def get_random_action(self, state: UPDictFluent) -> UPDictFluent:
+    def get_random_action(self, state: UPDictFluent) -> tuple[AbstractAction, ActionInstance]:
         """Get a random action from the available actions in the state."""
         applicable = list(self._simulator.get_applicable_actions(UPState(state, self._problem)))
         action_instance = random.choice(applicable)
         action, params = action_instance
-        return parse_action(str(ActionInstance(action, params)))
+        return parse_action(str(ActionInstance(action, params))), ActionInstance(action, params)
 
     def plan(
         self,

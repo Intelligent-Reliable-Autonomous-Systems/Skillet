@@ -46,8 +46,12 @@ def main() -> None:
     metrics = run_demo(block_defective, log_dir=log_dir)
 
     print(f"\nResults:")
-    print(f"  Defect detection accuracy : {metrics.defect_accuracy:.1%}  ({metrics.n_correct_verdict}/{metrics.n_blocks})")
-    print(f"  Routing accuracy          : {metrics.routing_accuracy:.1%}  ({metrics.n_correct_route}/{metrics.n_blocks})")
+    print(
+        f"  Defect detection accuracy : {metrics.defect_accuracy:.1%}  ({metrics.n_correct_verdict}/{metrics.n_blocks})"
+    )
+    print(
+        f"  Routing accuracy          : {metrics.routing_accuracy:.1%}  ({metrics.n_correct_route}/{metrics.n_blocks})"
+    )
     print(f"  Events log                : {log_dir / 'events.jsonl'}")
 
 

@@ -40,7 +40,7 @@ class ParsedUpProblem:
     exclude_list = ["clear", "small", "loc_north_of", "loc_above", "occupied"]
 
     def __str__(self) -> str:
-        print_str = "Abstract State:\n"
+        print_str = ""
         for f, v in self.fluents.items():
             f = parse_value(str(f), v)
             if f.value in self.exclude_list:
@@ -93,7 +93,7 @@ class AbstractState:
     exclude_list = ["clear", "small", "loc_north_of", "loc_above", "occupied"]
 
     def __str__(self) -> str:
-        print_str = "Abstract State:\n"
+        print_str = ""
         for s in self.states:
             if s.value in self.exclude_list:
                 continue
@@ -148,8 +148,10 @@ class ObjectExpLike(Protocol):
 
     def object(self) -> UPObject: ...
 
+
 class FluentExpLike(Protocol):
     """A UP Expression representing a fluent."""
+
     @property
     def node_type(self) -> Literal[OperatorKind.FLUENT_EXP]: ...
 
@@ -161,8 +163,10 @@ class FluentExpLike(Protocol):
 
     def fluent(self) -> UPFluent: ...
 
+
 class NotFluentExpLike(Protocol):
     """A UP Expression representing a negated fluent."""
+
     @property
     def node_type(self) -> Literal[OperatorKind.NOT]: ...
 
@@ -172,8 +176,10 @@ class NotFluentExpLike(Protocol):
     @property
     def args(self) -> list[FluentExpLike]: ...
 
+
 class ParameterExpLike(Protocol):
     """A UP Expression representing a parameter."""
+
     @property
     def node_type(self) -> Literal[OperatorKind.PARAM_EXP]: ...
 
@@ -182,8 +188,11 @@ class ParameterExpLike(Protocol):
 
     def parameter(self) -> UPParameter: ...
 
+
 ### State conversions
-def up_state_to_dict(state: UPState | Sequence[FluentExpLike | NotFluentExpLike], closed_world: bool = False) -> dict[FluentExpLike, bool]:
+def up_state_to_dict(
+    state: UPState | Sequence[FluentExpLike | NotFluentExpLike], closed_world: bool = False
+) -> dict[FluentExpLike, bool]:
     """Convert a UP State to a dictionary of fluent expressions and their boolean assignments.
 
     Args:
@@ -210,13 +219,16 @@ def up_state_to_dict(state: UPState | Sequence[FluentExpLike | NotFluentExpLike]
                 state_dict[fluent] = False
     return state_dict
 
+
 def dict_state_to_up_state(state: dict[FluentExpLike, bool], problem: Problem) -> UPState:
     """Convert a dictionary of fluent expressions and their boolean assignments to a UP State."""
     return UPState({k: UPBool(v) for k, v in state.items()}, problem)
 
+
 def all_objects_from_state(state: dict[FluentExpLike, bool]) -> list[UPObject]:
     """Get all objects referenced in a dictionary of fluent expressions and their boolean assignments."""
     return list(set([oexp.object() for fexp in state.keys() for oexp in fexp.args]))
+
 
 def enumerate_groundings_from_state(state: dict[FluentExpLike, bool]) -> Iterator[FluentExpLike]:
     """Enumerate all grounded fluent expressions using fluents and objects from the state.
@@ -240,7 +252,10 @@ def enumerate_groundings_from_state(state: dict[FluentExpLike, bool]) -> Iterato
         for objects in itertools.product(*compatible_objects):
             yield fluent(*objects)
 
-def get_all_literal_expressions(problem: Problem, with_positive: bool = True, with_negated: bool = False) -> Iterator[FluentExpLike]:
+
+def get_all_literal_expressions(
+    problem: Problem, with_positive: bool = True, with_negated: bool = False
+) -> Iterator[FluentExpLike]:
     """Get all possible grounded literal assignments for a problem.
 
     Args:
@@ -258,6 +273,7 @@ def get_all_literal_expressions(problem: Problem, with_positive: bool = True, wi
             if with_negated:
                 negated = literal.Not()
                 yield negated
+
 
 def get_fluent_possible_parameters(problem: Problem, fluent: UPFluent) -> Iterator[tuple[ParameterExpLike, ...]]:
     """Get all possible parameter groundings for a fluent.
@@ -290,11 +306,10 @@ def get_fluent_possible_parameters(problem: Problem, fluent: UPFluent) -> Iterat
         ground_size *= ds
     items_list: list[list[FNode]] = []
     for size, type in zip(domain_sizes, type_list):
-        items_list.append(
-            [domain_item(problem, type, j) for j in range(size)]
-        )
+        items_list.append([domain_item(problem, type, j) for j in range(size)])
 
     return itertools.product(*items_list)
+
 
 ### Action utilities
 def action_for_problem(action: ActionInstance, problem: Problem) -> ActionInstance:
@@ -304,6 +319,7 @@ def action_for_problem(action: ActionInstance, problem: Problem) -> ActionInstan
     problem_action = problem.action(action.action.name)
     args = [problem.object(obj.object().name) for obj in action.actual_parameters]
     return ActionInstance(problem_action, args)
+
 
 def ground_action_instances(problem) -> Iterator[ActionInstance]:
     """Ground all actions in the problem.
@@ -319,7 +335,7 @@ def ground_action_instances(problem) -> Iterator[ActionInstance]:
         domains = []
         for parameter in action.parameters:
             objs = list(problem.objects(parameter.type))
-            np.random.shuffle(objs) # randomize to mitigate bias slightly
+            np.random.shuffle(objs)  # randomize to mitigate bias slightly
             domains.append(objs)
         if not domains:
             yield ActionInstance(action)
@@ -328,7 +344,10 @@ def ground_action_instances(problem) -> Iterator[ActionInstance]:
             yield ActionInstance(action, actual_parameters)
     return grounded
 
-def get_possible_actions(problem: Problem, action: Action, partial_params: tuple[ObjectExpLike, ...]) -> Iterator[ActionInstance]:
+
+def get_possible_actions(
+    problem: Problem, action: Action, partial_params: tuple[ObjectExpLike, ...]
+) -> Iterator[ActionInstance]:
     grounder = GrounderHelper(problem)
     partial_action = action.clone()
     for _ in partial_params:
@@ -337,12 +356,14 @@ def get_possible_actions(problem: Problem, action: Action, partial_params: tuple
     for grounded_params in params_iter:
         yield ActionInstance(action, (*partial_params, *grounded_params))
 
+
 def sample_action_from_state(
-        problem: Problem,
-        state: UPState | dict[FluentExpLike, bool],
-        action_name: str | None = None,
-        applicable_only: bool = True,
-        relax_terms: int = 0) -> ActionInstance:
+    problem: Problem,
+    state: UPState | dict[FluentExpLike, bool],
+    action_name: str | None = None,
+    applicable_only: bool = True,
+    relax_terms: int = 0,
+) -> ActionInstance:
     """Sample an action based on the state and present objects.
 
     Can sample either an applicable action or a random action grounding.
@@ -391,7 +412,7 @@ def sample_action_from_state(
                                 children.append((or_child, True))
                             elif or_child.is_not():
                                 children.append((or_child.args[0], False))
-                        pre_fluents.append((('or', *children), True))
+                        pre_fluents.append((("or", *children), True))
             elif precondition.is_or():
                 children = []
                 for child in precondition.args:
@@ -399,7 +420,7 @@ def sample_action_from_state(
                         children.append((child, True))
                     elif child.is_not():
                         children.append((child.args[0], False))
-                pre_fluents.append((('or', *children), True))
+                pre_fluents.append((("or", *children), True))
 
         for _ in range(relax_terms):
             # randomly remove a precondition
@@ -410,9 +431,13 @@ def sample_action_from_state(
         else:
             partial = {}
     # fill in any unbound parameters randomly
-    return _uniform_action_grounding(problem, up_action, partial)
+    action_instance = _uniform_action_grounding(problem, up_action, partial)
+    return parse_action(str(action_instance)), action_instance
 
-def _unify_pattern(pattern: list[FluentExpLike, bool], state: dict[FluentExpLike, bool], problem: Problem) -> Iterator[dict[UPParameter, UPObject]]:
+
+def _unify_pattern(
+    pattern: list[FluentExpLike, bool], state: dict[FluentExpLike, bool], problem: Problem
+) -> Iterator[dict[UPParameter, UPObject]]:
     """Find all valid groundings of pattern against state.
 
     Args:
@@ -432,13 +457,15 @@ def _unify_pattern(pattern: list[FluentExpLike, bool], state: dict[FluentExpLike
     # Find candidate atoms for each pattern literal
     candidate_lists: tuple[tuple[ParameterExpLike], list[ObjectExpLike]] = []
     for literal, value in pattern:
-        if isinstance(literal, tuple) and literal[0] == 'or':
+        if isinstance(literal, tuple) and literal[0] == "or":
             dict_candidates = []
             args = []
             for child, cvalue in literal[1:]:
                 child_candidates = by_predicate.get(child.fluent().name, [])
                 if not cvalue:
-                    child_candidates = list(set(get_fluent_possible_parameters(problem, child.fluent())) - set(child_candidates))
+                    child_candidates = list(
+                        set(get_fluent_possible_parameters(problem, child.fluent())) - set(child_candidates)
+                    )
                 for candidate in child_candidates:
                     dict_candidates.append({param: obj for param, obj in zip(child.args, candidate)})
                 for arg in child.args:
@@ -452,12 +479,13 @@ def _unify_pattern(pattern: list[FluentExpLike, bool], state: dict[FluentExpLike
                 all_bindings = get_fluent_possible_parameters(problem, literal.fluent())
                 candidates = list(set(all_bindings) - set(candidates))
         if not candidates:
-            return None # No way to satisfy this literal
+            return None  # No way to satisfy this literal
         np.random.shuffle(candidates)
         candidate_lists.append((args, candidates))
     # satisfy (not) predicates first
     # least constrained variables first heuristic
     candidate_lists.sort(key=lambda x: len(x[1]))
+
     # Backtracking search
     def search(idx, bindings):
         if idx == len(candidate_lists):
@@ -481,17 +509,25 @@ def _unify_pattern(pattern: list[FluentExpLike, bool], state: dict[FluentExpLike
 
     yield from search(0, {})
 
-def _uniform_action_grounding(problem: Problem, action: InstantaneousAction, partial: dict[UPParameter, UPObject]) -> ActionInstance:
+
+def _uniform_action_grounding(
+    problem: Problem, action: InstantaneousAction, partial: dict[UPParameter, UPObject]
+) -> ActionInstance:
     grounding = dict(partial)
     for param in action.parameters:
         if param not in grounding:
             param: UPParameter
             # avoid grounding the same object to multiple parameters -- identifiability assumption
-            compatible = [obj for obj in problem.all_objects if obj not in grounding.values() and param.type.is_compatible(obj.type)]
+            compatible = [
+                obj
+                for obj in problem.all_objects
+                if obj not in grounding.values() and param.type.is_compatible(obj.type)
+            ]
             if not compatible:
                 return None
             grounding[param] = np.random.choice(compatible)
     return ActionInstance(action, [grounding.get(param, None) for param in action.parameters])
+
 
 ### Problem utilities
 def initialize_problem_from_state(problem: Problem, state: dict[FluentExpLike, bool]) -> Problem:
@@ -502,18 +538,20 @@ def initialize_problem_from_state(problem: Problem, state: dict[FluentExpLike, b
         new_problem.set_initial_value(fexp, val)
     return new_problem
 
+
 def reorder_problem_actions(problem: Problem, target: Problem):
     """Reorder the actions of a problem to match the actions of a target problem."""
     new_actions = []
     for target_action in target.actions:
         for action in problem.actions:
-            root = action.name.split('__')[0]
+            root = action.name.split("__")[0]
             if root == target_action.name:
                 new_actions.append(action)
     for action in problem.actions:
         if action not in new_actions:
             new_actions.append(action)
     problem._actions = new_actions
+
 
 def flatten_preconditions(problem: Problem):
     for action in problem.actions:
@@ -525,6 +563,7 @@ def flatten_preconditions(problem: Problem):
                 all_preconditions.append(precondition)
         action._preconditions = all_preconditions
 
+
 def sort_preconditions(problem: Problem):
     flatten_preconditions(problem)
     for action in problem.actions:
@@ -532,6 +571,7 @@ def sort_preconditions(problem: Problem):
         for precondition in action.preconditions:
             all_preconditions.append(precondition)
         action._preconditions = sorted(all_preconditions, key=lambda x: str(x.args[0]) if x.is_not() else str(x))
+
 
 def sort_effects(problem: Problem):
     for action in problem.actions:

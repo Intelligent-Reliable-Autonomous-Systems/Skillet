@@ -218,6 +218,7 @@ def test_platform_size_mult() -> None:
 # Include_robot
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def robot_scene():
     """Scene with 3 blocks and the Gen3 arm included."""
@@ -324,7 +325,9 @@ def test_inspect_skill_reaches_viewpoint(robot_scene_with_env) -> None:
     reach_skill = make_reach_xyzrpy_skill(env, skill_length=300)
     half_extents = np.array([CUBE_SIZE / 2.0, CUBE_SIZE / 2.0, CUBE_SIZE / 2.0])
     skill = InspectSkill(
-        scene, env=env, reach_skill=reach_skill,
+        scene,
+        env=env,
+        reach_skill=reach_skill,
         block_half_extents=half_extents,
         robot_base_world_pos=robot_base,
     )

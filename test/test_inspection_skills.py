@@ -41,6 +41,7 @@ def _blank_image() -> np.ndarray:
 # InspectSkill
 # ---------------------------------------------------------------------------
 
+
 class TestInspectSkill:
     def _make_scene(self, block: InspectableCube) -> Scene:
         return Scene(objects=[block])
@@ -93,12 +94,15 @@ class TestInspectSkill:
 # InspectForDefectsSkill
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def mock_classifier() -> MockDefectClassifier:
-    return MockDefectClassifier({
-        "good_block": DefectResult(defective=False, confidence=0.95),
-        "bad_block": DefectResult(defective=True, confidence=0.91),
-    })
+    return MockDefectClassifier(
+        {
+            "good_block": DefectResult(defective=False, confidence=0.95),
+            "bad_block": DefectResult(defective=True, confidence=0.91),
+        }
+    )
 
 
 class TestInspectForDefectsSkill:
@@ -177,6 +181,7 @@ class TestInspectForDefectsSkill:
 # ---------------------------------------------------------------------------
 # DiscardSkill
 # ---------------------------------------------------------------------------
+
 
 class TestDiscardSkill:
     def _make_scene(self, block: InspectableCube, discard: DiscardLocation) -> Scene:

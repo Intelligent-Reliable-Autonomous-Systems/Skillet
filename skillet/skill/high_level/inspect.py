@@ -1,4 +1,4 @@
-"""InspectSkill: moves arm to an inspection viewpoint above a block  """
+"""InspectSkill: moves arm to an inspection viewpoint above a block"""
 
 from __future__ import annotations
 
@@ -53,8 +53,7 @@ class InspectSkill(CheckedSkill):
         self._env = env
         self._reach_skill = reach_skill
         self._block_half_extents = (
-            block_half_extents if block_half_extents is not None
-            else np.array([0.022, 0.022, 0.022])
+            block_half_extents if block_half_extents is not None else np.array([0.022, 0.022, 0.022])
         )
         self._standoff_m = standoff_m
         self._robot_base_world_pos = robot_base_world_pos
@@ -82,8 +81,7 @@ class InspectSkill(CheckedSkill):
         return float(block.pose[0]) > 0.0
 
     def postconditions(self, world: Scene) -> bool:
-        """Return True iff the block is still visible after the approach.
-        """
+        """Return True iff the block is still visible after the approach."""
         if self._target_block_id is None:
             return False
         try:

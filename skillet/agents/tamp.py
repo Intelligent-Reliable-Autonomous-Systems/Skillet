@@ -7,8 +7,10 @@ from skillet.agents.base_agent import Agent
 from skillet.core.env import Environment
 from skillet.core.policy import Unparameterized
 from skillet.core.skill import SingleSkill, SkillStatusCodes
+from skillet.logging import SkilletDataLogger
 from skillet.perception.perception import SkilletPerception
 from skillet.planning import AbstractModel
+from skillet.planning.abstract.up_utils import sample_action_from_state
 from skillet.scene.base import Scene
 
 
@@ -103,7 +105,13 @@ class RandomTampAgent(Agent):
         self.action_to_skill_map = action_to_skill_map
         self._perception = perception
 
-    def execute(self, env: Environment[Any, Any], task: str | None = None, num_actions: int = 10) -> None:
+    def execute(
+        self,
+        env: Environment[Any, Any],
+        task: str | None = None,
+        num_actions: int = 10,
+        logger: SkilletDataLogger = None,
+    ) -> None:
         """Execute the policy over the options configured.
 
         Args:
@@ -120,16 +128,32 @@ class RandomTampAgent(Agent):
 
         for i in range(num_actions):
             # self._perception.update_state()
-            print(self._scene)
             up_state = self.abstract_model.reset_up_problem_state()
 
-            ab_action = self.abstract_model.get_random_action(up_state)
+            # ab_action, up_action = self.abstract_model.get_random_action(up_state)
+            ab_action, up_action = sample_action_from_state(self.abstract_model._problem, up_state)
             self._selected_skill = self.action_to_skill_map[ab_action.action]
             args = self._scene.resolve_names_to_ids(ab_action.parameters)
 
             obs = env.get_observation(self._selected_skill.obs_spec)
             self._selected_skill.initiate(obs, args)
             skill_done = self._selected_skill.is_terminated(env.get_observation(self._selected_skill.obs_spec))
+
+            if logger is not None:
+                obs_log = env.get_observation(logger._obs_spec)
+                logger.log(
+                    save_log=True,
+                    rgb=obs_log["rgb"],
+                    depth=obs_log["depth"],
+                    tcp_pose_b=self._scene.tcp_pose,
+                    gripper=self._scene.gripper_pos,
+                    parsed_scene=self._scene,
+                    skill=ab_action,
+                    skill_status=self._selected_skill.status,
+                    states=up_state,
+                    actions=up_action,
+                    executions="applicable",
+                )
             while not skill_done and not bool(terminated):
                 # Get the next action with the low-level observation
                 action = self._selected_skill.get_action(env.get_observation(self._selected_skill.obs_spec))
@@ -139,9 +163,21 @@ class RandomTampAgent(Agent):
                 terminated = terminated | term | trunc
                 # Check if the skill is terminated
                 skill_done = self._selected_skill.is_terminated(env.get_observation(self._selected_skill.obs_spec))
-            # Check if the skill was successful
-            if self._selected_skill.status != SkillStatusCodes.SUCCESS:
-                break
             if terminated:
                 break
-            time.sleep(5)
+            time.sleep(3)
+        if logger is not None:
+            obs_log = env.get_observation(logger._obs_spec)
+            logger.log(
+                save_log=True,
+                rgb=obs_log["rgb"],
+                depth=obs_log["depth"],
+                tcp_pose_b=self._scene.tcp_pose,
+                gripper=self._scene.gripper_pos,
+                parsed_scene=self._scene,
+                skill=ab_action,
+                skill_status=self._selected_skill.status,
+                states=up_state,
+                actions=up_action,
+                executions="applicable",
+            )

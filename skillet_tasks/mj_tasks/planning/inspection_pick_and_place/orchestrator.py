@@ -2,7 +2,7 @@
 
 Drives the PDDL plan using skill execute() calls and logs each event.
 
-The MuJoCo model is loaded for scene validation and can be rendered, 
+The MuJoCo model is loaded for scene validation and can be rendered,
 but actual arm motion control (IK/PickSkill/PlaceSkill) is yet to be implemented.
 """
 
@@ -89,10 +89,9 @@ def run_demo(
 
     # Save ground truth and build classifier BEFORE resetting blocks
     ground_truth: dict[str, bool] = {b.name: b.defective for b in spec.blocks}  # type: ignore[assignment]
-    classifier = MockDefectClassifier({
-        name: DefectResult(defective=label, confidence=0.95)
-        for name, label in ground_truth.items()
-    })
+    classifier = MockDefectClassifier(
+        {name: DefectResult(defective=label, confidence=0.95) for name, label in ground_truth.items()}
+    )
 
     # Build PDDL problem from ground-truth-labelled scene
     problem_str = make_inspection_problem(spec.table, spec.blocks, spec.platform, spec.discard)
@@ -214,7 +213,9 @@ def _compute_metrics(
         gt_defective = ground_truth[b.name]
         target_aabb = discard.aabb if gt_defective else platform.aabb
         bx, by = float(b.pose[0]), float(b.pose[1])
-        if float(target_aabb[0]) <= bx <= float(target_aabb[3]) and float(target_aabb[1]) <= by <= float(target_aabb[4]):
+        if float(target_aabb[0]) <= bx <= float(target_aabb[3]) and float(target_aabb[1]) <= by <= float(
+            target_aabb[4]
+        ):
             n_correct_route += 1
 
     return TaskMetrics(

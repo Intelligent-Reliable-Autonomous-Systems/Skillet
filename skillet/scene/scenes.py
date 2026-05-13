@@ -177,3 +177,44 @@ LOC_CUBE_SCENE = Scene(
 LOC_CUBE_SCENE.goal = [
     {"predicate": "on", "args": ["light_pink_block", "dark_purple_block"]},
 ]
+
+FOUR_CUBE_SCENE = Scene(
+    objects=[
+        table_0,
+        green_cube,
+        pink_cube,
+        yellow_cube,
+        blue_cube,
+        loc_00,
+        loc_01,
+        loc_02,
+        loc_03,
+        loc_04,
+        loc_05,
+        loc_06,
+        loc_07,
+        loc_10,
+        loc_11,
+        loc_12,
+        loc_13,
+        loc_14,
+        loc_15,
+        loc_16,
+        loc_17,
+        loc_20,
+        loc_21,
+        loc_22,
+        loc_23,
+        loc_24,
+        loc_25,
+        loc_26,
+        loc_27,
+    ],
+    closed_set=True,
+    bounds=WORLD_BOUNDS,
+    contains_objects=True,
+)
+
+LOC_CUBE_SCENE.goal = [
+    {"predicate": "on", "args": ["light_pink_block", "dark_purple_block"]},
+]

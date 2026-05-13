@@ -57,11 +57,13 @@ class SkillEventLogger:
             params: Skill parameters (must be JSON-serialisable or None).
 
         """
-        self._write({
-            "event": "skill_start",
-            "skill": skill_name,
-            "params": params,
-        })
+        self._write(
+            {
+                "event": "skill_start",
+                "skill": skill_name,
+                "params": params,
+            }
+        )
 
     def log_skill_end(self, skill_name: str, result: SkillResult) -> None:
         """Record that a skill has terminated.
@@ -71,13 +73,15 @@ class SkillEventLogger:
             result: Structured outcome from the skill.
 
         """
-        self._write({
-            "event": "skill_end",
-            "skill": skill_name,
-            "success": result.success,
-            "failure_reason": result.failure_reason.name if result.failure_reason else None,
-            "message": result.message,
-        })
+        self._write(
+            {
+                "event": "skill_end",
+                "skill": skill_name,
+                "success": result.success,
+                "failure_reason": result.failure_reason.name if result.failure_reason else None,
+                "message": result.message,
+            }
+        )
 
     def log_planner_decision(self, action: str, parameters: list[str]) -> None:
         """Record a PDDL planner action selection.
@@ -87,11 +91,13 @@ class SkillEventLogger:
             parameters: Symbolic parameter list (e.g. ``["block_0", "table"]``).
 
         """
-        self._write({
-            "event": "planner_decision",
-            "action": action,
-            "parameters": parameters,
-        })
+        self._write(
+            {
+                "event": "planner_decision",
+                "action": action,
+                "parameters": parameters,
+            }
+        )
 
     def log_classifier_verdict(
         self,
@@ -107,12 +113,14 @@ class SkillEventLogger:
             confidence: Confidence score in [0, 1].
 
         """
-        self._write({
-            "event": "classifier_verdict",
-            "object_id": object_id,
-            "defective": defective,
-            "confidence": confidence,
-        })
+        self._write(
+            {
+                "event": "classifier_verdict",
+                "object_id": object_id,
+                "defective": defective,
+                "confidence": confidence,
+            }
+        )
 
     def log_world_model_snapshot(self, scene: Scene) -> None:
         """Record a snapshot of the current scene state.
@@ -147,7 +155,6 @@ class SkillEventLogger:
 
     def __exit__(self, *_: object) -> None:
         self.close()
-
 
     def _write(self, payload: dict[str, Any]) -> None:
         payload["run_id"] = self._run_id

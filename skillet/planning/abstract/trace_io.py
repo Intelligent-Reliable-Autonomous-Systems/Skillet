@@ -11,7 +11,7 @@ from unified_planning.model import Fluent, Object, Problem
 from unified_planning.model import Type as UPType
 from unified_planning.plans import ActionInstance
 
-from skillet.planning.abstract.up_utils import FluentExpLike, UPDictState
+from skillet.planning.abstract.up_utils import FluentExpLike, UPDictFluent
 
 PREDICATE_RE = re.compile(r"\(([a-zA-Z0-9_-]+)(?:[ \t]+([a-zA-Z0-9_-]+))*\)")
 
@@ -42,7 +42,7 @@ class PDDLTraceIO:
     def write_trace_file(
         self,
         plan_file: Path,
-        states: list[UPDictState],
+        states: list[UPDictFluent],
         actions: list[ActionInstance],
         executions: list[Literal["applicable", "goal_reached", "inapplicable"]] | None = None,
     ) -> None:
@@ -103,7 +103,7 @@ class PDDLTraceIO:
                     elif execution == "inapplicable":
                         f.write(f"{INAPPLICABLE_STR}\n")
 
-    def parse_trace_file(self, trace_file: Path) -> tuple[list[UPDictState], list[ActionInstance], list[str]]:
+    def parse_trace_file(self, trace_file: Path) -> tuple[list[UPDictFluent], list[ActionInstance], list[str]]:
         """Parse a PDDL trace file into a list of states, actions, and executions.
 
         Args:

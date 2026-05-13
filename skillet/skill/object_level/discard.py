@@ -92,7 +92,7 @@ class DiscardSkill(CheckedSkill):
     # ------------------------------------------------------------------
 
     def execute(self, scene: Scene) -> SkillResult:
-        """Check preconditions and return a structured result """
+        """Check preconditions and return a structured result"""
         if not self.preconditions(scene):
             return SkillResult.fail(FailureReason.PRECONDITION_NOT_MET)
         return SkillResult.ok()

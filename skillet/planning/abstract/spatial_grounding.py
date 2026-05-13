@@ -100,7 +100,7 @@ def _is_on_table(a: Cube, table: Table, height_tol_frac: float = 0.5) -> bool:
 
 
 def _is_grasping(
-    a: Cube, scene: Scene, z_slack_frac: float = 1.0, xy_slack_frac: float = 0.5, gripper_thresh: float = 0.4
+    a: Cube, scene: Scene, z_slack_frac: float = 0.7, xy_slack_frac: float = 0.5, gripper_thresh: float = 0.4
 ) -> bool:
     """Test if the gripper is holding a cube.
 

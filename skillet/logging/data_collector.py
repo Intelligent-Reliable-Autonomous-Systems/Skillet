@@ -1,8 +1,10 @@
-"""data_collector.py
+"""data_collector.py.
 
 Controls logging of data and messages within Skillet.
 """
 
+import copy
+import pickle
 import threading
 import time
 from datetime import datetime
@@ -14,13 +16,17 @@ import matplotlib
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
+import torch
 from matplotlib.axes import Axes
+from unified_planning.plans import ActionInstance
 
 from skillet.agents.base_agent import Agent
 from skillet.core import ObservationSpec
 from skillet.envs import SkilletEnv
 from skillet.perception.perception import SkilletPerception
 from skillet.planning import AbstractModel
+from skillet.planning.abstract.trace_io import PDDLTraceIO
+from skillet.planning.abstract.up_utils import AbstractAction
 from skillet.scene.base import Scene
 from skillet.scene.utils import depth_to_colormap_np
 
@@ -51,6 +57,7 @@ class SkilletDataLogger:
         self._num_points = 0
         self._exp_id = -1
         self._start_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self._pddl_trace = PDDLTraceIO(self._abs_model._problem)
 
         # For display
         self._write_video = False
@@ -315,13 +322,13 @@ class SkilletDataLogger:
         """
         self._show_image(self.ax_main, main_rgb, title="RGB")
 
-        grid_titles = ["Depth", "SAM3 BBoxes", "VLM Masks", "3D Scene"]
+        grid_titles = ["Depth", "SAM3 BBoxes", "SAM3 Masks", "3D Scene"]
         for ax, img, title in zip(self.ax_grid, perception_images, grid_titles, strict=False):
             self._show_image(ax, img, title=title)
 
-        self._show_image(self.ax_vlm, scene_img, title="VLM Reconstruction")
+        # self._show_image(self.ax_vlm, scene_img, title="VLM Reconstruction")
 
-        text_titles = ["Initial State", "Goal", "Plan", "Current Action"]
+        text_titles = ["Current State", "Goal", "Plan", "Current Action"]
         for ax, text, title in zip(self.ax_text, abstract_texts, text_titles, strict=False):
             self._show_text_box(ax, title, text, title_color="#000000")
 
@@ -425,3 +432,48 @@ class SkilletDataLogger:
         cv2.namedWindow(self._data_window_name, cv2.WINDOW_NORMAL)
         cv2.resizeWindow(self._data_window_name, self._width, self._height)
         self._window_active = True
+
+    def log(self, log_dir: str | None = None, save_log: bool = False, **kwargs) -> None:
+        """Save data."""
+        self._log_dir = log_dir if log_dir is not None else self._log_dir
+        for k, v in kwargs.items():
+            if isinstance(v, torch.Tensor):
+                v = v.cpu().numpy().squeeze()
+            elif isinstance(v, np.ndarray):
+                v = v.squeeze()
+
+            if not hasattr(self, f"_{k}"):
+                if isinstance(v, np.ndarray):
+                    setattr(self, f"_{k}", v[None, ...])
+                elif isinstance(v, Scene):
+                    setattr(self, f"_{k}", [copy.deepcopy(v)])
+                elif isinstance(v, (AbstractAction, ActionInstance, dict)):
+                    setattr(self, f"_{k}", [v])
+                else:
+                    setattr(self, f"_{k}", [v])
+
+            else:
+                if isinstance(v, np.ndarray):
+                    new_v = np.concatenate((getattr(self, f"_{k}"), v[None, ...]))
+                    setattr(self, f"_{k}", new_v)
+                elif isinstance(v, Scene):
+                    getattr(self, f"_{k}").append(copy.deepcopy(v))
+                elif isinstance(v, (AbstractAction, ActionInstance, dict)):
+                    getattr(self, f"_{k}").append(v)
+                else:
+                    getattr(self, f"_{k}").append(v)
+        if save_log:
+            print("[INFO][LOGGER] Saving datafile")
+            fpath = Path(f"{self._log_dir}/{self._start_time}/exp_{self._exp_id}")
+            fpath.mkdir(exist_ok=True, parents=True)
+            for k in kwargs:
+                v = getattr(self, f"_{k}")
+                if isinstance(v, np.ndarray):
+                    np.save(f"{fpath}/_{k}.npy", v)
+                if isinstance(v, list):
+                    with open(f"{fpath}/_{k}.pkl", "wb") as f:
+                        pickle.dump(v, f)
+            if hasattr(self, "_states") and hasattr(self, "_actions") and hasattr(self, "_executions"):
+                self._pddl_trace.write_trace_file(
+                    f"{fpath}/_pddl_trace.pddl", self._states, self._actions, self._executions
+                )

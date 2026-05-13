@@ -12,7 +12,10 @@ pytest.importorskip("hppfcl")
 
 import pinocchio as pin  # noqa: E402
 
-from skillet.perception.inspection.viewpoint_planner import InspectionViewpointPlanner, ViewpointPlanResult  # noqa: E402
+from skillet.perception.inspection.viewpoint_planner import (
+    InspectionViewpointPlanner,
+    ViewpointPlanResult,
+)  # noqa: E402
 
 _REPO_ROOT = pathlib.Path(__file__).parents[1]
 _URDF = _REPO_ROOT / "skillet_tasks/assets/kortex/kinova_gen3/gen3_2f85.urdf"

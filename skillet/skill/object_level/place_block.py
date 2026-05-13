@@ -122,8 +122,9 @@ class PlaceBlock2Skill(PlaceBlockSkill):
         objs = self._scene.get_objects_from_id(self._params)
         self._target = objs[1]
         if isinstance(self._target, Cube):
-            if not self._target.is_pose_known():
-                self._status = SkillStatusCodes.FAILED.value
+            if not self._target.is_pose_known() or self._params[0] == self._params[1]:
+                self._status = torch.as_tensor(SkillStatusCodes.FAILED, device=self.params_spec.device)
+
                 return
             target_xyz = self._target.pose[:3].to(self.obs_spec.device) + self._offset
         elif isinstance(self._target, Table):

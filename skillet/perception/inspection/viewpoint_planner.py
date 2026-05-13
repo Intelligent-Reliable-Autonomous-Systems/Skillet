@@ -27,7 +27,7 @@ class InspectionViewpointPlanner:
 
     _EE_FRAME: str = "end_effector_link"
     # EE rotation for top-face inspection: z-axis pointing down
-    _R_EE_DOWN: np.ndarray = np.array([[1., 0., 0.], [0., -1., 0.], [0., 0., -1.]])
+    _R_EE_DOWN: np.ndarray = np.array([[1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, -1.0]])
     _COLLISION_DISTANCE_THRESHOLD: float = 0.02  # metres
 
     def __init__(
@@ -39,7 +39,8 @@ class InspectionViewpointPlanner:
     ) -> None:
         self._standoff_m = standoff_m
         self._kin_model, self._col_model, _ = pin.buildModelsFromUrdf(
-            urdf_path, list(package_dirs) if package_dirs else [],
+            urdf_path,
+            list(package_dirs) if package_dirs else [],
         )
         self._kin_data = self._kin_model.createData()
         self._col_model.addAllCollisionPairs()
@@ -66,7 +67,9 @@ class InspectionViewpointPlanner:
 
         if viewpoint.translation[0] <= 0.0:
             return ViewpointPlanResult(
-                viewpoints=(), reachable=False, failure_reason="not_in_workspace",
+                viewpoints=(),
+                reachable=False,
+                failure_reason="not_in_workspace",
             )
 
         q = self._solve_ik(viewpoint)
@@ -118,7 +121,9 @@ class InspectionViewpointPlanner:
                     return q
 
                 J = pin.getFrameJacobian(
-                    self._kin_model, self._kin_data, self._ee_frame_id,
+                    self._kin_model,
+                    self._kin_data,
+                    self._ee_frame_id,
                     pin.ReferenceFrame.LOCAL_WORLD_ALIGNED,
                 )
                 JJt = J @ J.T
@@ -129,9 +134,10 @@ class InspectionViewpointPlanner:
 
     def _is_collision_free(self, q: np.ndarray) -> bool:
         pin.computeDistances(
-            self._kin_model, self._kin_data, self._col_model, self._col_data, q,
+            self._kin_model,
+            self._kin_data,
+            self._col_model,
+            self._col_data,
+            q,
         )
-        return all(
-            r.min_distance > self._COLLISION_DISTANCE_THRESHOLD
-            for r in self._col_data.distanceResults
-        )
+        return all(r.min_distance > self._COLLISION_DISTANCE_THRESHOLD for r in self._col_data.distanceResults)

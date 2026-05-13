@@ -14,7 +14,14 @@ from skillet.logging import SkilletDataLogger
 from skillet.perception.perception import SkilletPerception
 from skillet.planning import AbstractModel
 from skillet.policy import TcpCartPolicy
-from skillet.scene import EMPTY_SCENE, LOC_CUBE_SCENE, SIX_CUBE_APRIL_SCENE, SIX_CUBE_SCENE, Open3DVisualizer
+from skillet.scene import (
+    EMPTY_SCENE,
+    FOUR_CUBE_SCENE,
+    LOC_CUBE_SCENE,
+    SIX_CUBE_APRIL_SCENE,
+    SIX_CUBE_SCENE,
+    Open3DVisualizer,
+)
 from skillet.skill import PickBlock2Skill, PickSkill, PlaceBlock2Skill, PlaceSkill
 from skillet_tasks.kortex_tasks.factory import create_kortex_env
 
@@ -32,7 +39,7 @@ parser.add_argument("--reconstruction", type=str, choices=["sam3", "april", "vlm
 parser.add_argument(
     "--perception", type=argparse.BooleanOptionalAction, default=True, help="If to run the perception pipeline"
 )
-parser.add_argument("--o3d", type=argparse.BooleanOptionalAction, default=True, help="If to visualize with open3d")
+parser.add_argument("--o3d", type=argparse.BooleanOptionalAction, default=False, help="If to visualize with open3d")
 parser.add_argument(
     "--goal",
     type=str,
@@ -51,7 +58,7 @@ def main() -> None:
     elif args_cli.reconstruction == "sam+vlm" or args_cli.reconstruction == "vlm":
         scene = EMPTY_SCENE
     elif args_cli.reconstruction == "sam3":
-        scene = LOC_CUBE_SCENE
+        scene = FOUR_CUBE_SCENE
     env_cfg = {
         "robot_ip": args_cli.robot_ip,
         "device": "cuda",
@@ -71,7 +78,7 @@ def main() -> None:
         reconstructor=args_cli.reconstruction,
         poll_rate_hz=args_cli.poll_rate_hz,
         device="cuda",
-        vis_perception=True,
+        vis_perception=False,
     )
     target_pose_func = None
     if args_cli.o3d:
@@ -116,7 +123,7 @@ def main() -> None:
     while True:
         with torch.inference_mode():
             env.reset()
-            tamp_agent.execute(env)
+            tamp_agent.execute(env, logger=logger, num_actions=20)
             print("[INFO][Main] finished run of skill executor, resetting")
             logger.save_video()
             break

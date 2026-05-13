@@ -29,13 +29,7 @@ from skillet_tasks.mj_tasks.planning.inspection_pick_and_place.scene_spec import
 )
 
 _GEN3_XML: Path = (
-    Path(__file__).parents[4]
-    / "skillet_tasks"
-    / "assets"
-    / "mujoco"
-    / "kinova_gen3"
-    / "xmls"
-    / "gen3_gripper.xml"
+    Path(__file__).parents[4] / "skillet_tasks" / "assets" / "mujoco" / "kinova_gen3" / "xmls" / "gen3_gripper.xml"
 )
 
 CUBE_SIZE: float = 0.044
@@ -302,9 +296,9 @@ def _table_leg_xml(table_x: float, table_height: float) -> str:
 
     corners = [
         ("bl", x_back, -y_side),
-        ("br", x_back,  y_side),
+        ("br", x_back, y_side),
         ("fl", x_front, -y_side),
-        ("fr", x_front,  y_side),
+        ("fr", x_front, y_side),
     ]
     frags = [
         f'    <geom name="table_leg_{tag}" type="cylinder"'

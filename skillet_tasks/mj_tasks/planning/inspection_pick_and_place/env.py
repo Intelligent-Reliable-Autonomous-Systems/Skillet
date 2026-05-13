@@ -79,8 +79,7 @@ class InspectionMjEnv:
 
         # Arm joint limits: build (1, 2, 8) tensor [lower; upper] for 7 arm + 1 driver
         arm_jnt_ids = [
-            mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_JOINT, name)
-            for name in self._ARM_JOINT_NAMES
+            mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_JOINT, name) for name in self._ARM_JOINT_NAMES
         ]
         drv_jnt_id = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_JOINT, self._DRIVER_JOINT_NAME)
         arm_limits = torch.tensor(
@@ -96,21 +95,23 @@ class InspectionMjEnv:
 
         # Fixed tensors
         self._tcp_offset = torch.tensor(self._TCP_OFFSET, dtype=torch.float32).unsqueeze(0)  # (1, 7)
-        self._gripper_lim = torch.tensor([[0.0, self._GRIPPER_MAX]], dtype=torch.float32)     # (1, 2)
+        self._gripper_lim = torch.tensor([[0.0, self._GRIPPER_MAX]], dtype=torch.float32)  # (1, 2)
 
         # Gymnasium spaces
         n_q = self._N_ARM_JOINTS + 1  # 8
-        single_obs = gym.spaces.Dict({
-            "ee_pose_b":   gym.spaces.Box(-np.inf, np.inf, (7,), np.float32),
-            "tcp_pose_b":  gym.spaces.Box(-np.inf, np.inf, (7,), np.float32),
-            "jacobians":   gym.spaces.Box(-np.inf, np.inf, (6, self._N_ARM_JOINTS), np.float32),
-            "joint_pos":   gym.spaces.Box(-np.pi, np.pi, (n_q,), np.float32),
-            "joint_vel":   gym.spaces.Box(-10.0, 10.0, (n_q,), np.float32),
-            "tcp_offset":  gym.spaces.Box(-np.inf, np.inf, (7,), np.float32),
-            "gripper":     gym.spaces.Box(0.0, self._GRIPPER_MAX, (1,), np.float32),
-            "gripper_lim": gym.spaces.Box(0.0, self._GRIPPER_MAX, (2,), np.float32),
-            "joint_lims":  gym.spaces.Box(-np.pi, np.pi, (2, n_q), np.float32),
-        })
+        single_obs = gym.spaces.Dict(
+            {
+                "ee_pose_b": gym.spaces.Box(-np.inf, np.inf, (7,), np.float32),
+                "tcp_pose_b": gym.spaces.Box(-np.inf, np.inf, (7,), np.float32),
+                "jacobians": gym.spaces.Box(-np.inf, np.inf, (6, self._N_ARM_JOINTS), np.float32),
+                "joint_pos": gym.spaces.Box(-np.pi, np.pi, (n_q,), np.float32),
+                "joint_vel": gym.spaces.Box(-10.0, 10.0, (n_q,), np.float32),
+                "tcp_offset": gym.spaces.Box(-np.inf, np.inf, (7,), np.float32),
+                "gripper": gym.spaces.Box(0.0, self._GRIPPER_MAX, (1,), np.float32),
+                "gripper_lim": gym.spaces.Box(0.0, self._GRIPPER_MAX, (2,), np.float32),
+                "joint_lims": gym.spaces.Box(-np.pi, np.pi, (2, n_q), np.float32),
+            }
+        )
         single_act = gym.spaces.Box(-np.pi, np.pi, (n_q,), np.float32)
         self.single_observation_space = single_obs
         self.single_action_space = single_act
@@ -195,9 +196,7 @@ class InspectionMjEnv:
         a = _to_numpy_1d(actions)
         _N_SIM_STEPS = 100
         _MAX_DELTA = 0.05  # rad per IK step
-        current_arm = self._data.qpos[
-            self._arm_qpos_start : self._arm_qpos_start + self._N_ARM_JOINTS
-        ].copy()
+        current_arm = self._data.qpos[self._arm_qpos_start : self._arm_qpos_start + self._N_ARM_JOINTS].copy()
         target_arm = a[: self._N_ARM_JOINTS]
         delta = target_arm - current_arm
         max_abs = float(np.abs(delta).max()) + 1e-8
@@ -252,7 +251,7 @@ class InspectionMjEnv:
         m = self._model
 
         # EE and base poses in world frame (MuJoCo xquat convention: w, x, y, z)
-        ee_pos_w = torch.tensor(d.xpos[self._ee_body_id], dtype=torch.float32).unsqueeze(0)    # (1, 3)
+        ee_pos_w = torch.tensor(d.xpos[self._ee_body_id], dtype=torch.float32).unsqueeze(0)  # (1, 3)
         ee_quat_w = torch.tensor(d.xquat[self._ee_body_id], dtype=torch.float32).unsqueeze(0)  # (1, 4)
         base_pos_w = torch.tensor(d.xpos[self._base_body_id], dtype=torch.float32).unsqueeze(0)
         base_quat_w = torch.tensor(d.xquat[self._base_body_id], dtype=torch.float32).unsqueeze(0)
@@ -292,15 +291,15 @@ class InspectionMjEnv:
         gripper = drv_q.unsqueeze(0)  # (1, 1)
 
         return {
-            "ee_pose_b":   ee_pose_b,          # (1, 7)
-            "tcp_pose_b":  tcp_pose_b,          # (1, 7)
-            "jacobians":   jacobians,            # (1, 6, 7)
-            "joint_pos":   joint_pos,            # (1, 8)
-            "joint_vel":   joint_vel,            # (1, 8)
-            "tcp_offset":  self._tcp_offset,     # (1, 7)
-            "gripper":     gripper,              # (1, 1)
-            "gripper_lim": self._gripper_lim,    # (1, 2)
-            "joint_lims":  self._joint_lims,     # (1, 2, 8)
+            "ee_pose_b": ee_pose_b,  # (1, 7)
+            "tcp_pose_b": tcp_pose_b,  # (1, 7)
+            "jacobians": jacobians,  # (1, 6, 7)
+            "joint_pos": joint_pos,  # (1, 8)
+            "joint_vel": joint_vel,  # (1, 8)
+            "tcp_offset": self._tcp_offset,  # (1, 7)
+            "gripper": gripper,  # (1, 1)
+            "gripper_lim": self._gripper_lim,  # (1, 2)
+            "joint_lims": self._joint_lims,  # (1, 2, 8)
         }
 
 

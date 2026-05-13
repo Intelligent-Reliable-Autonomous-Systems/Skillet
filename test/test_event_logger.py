@@ -15,10 +15,10 @@ from skillet.scene.base import Scene
 from skillet.scene.objects.inspectable_cube import InspectableCube
 from skillet.scene.objects.discard_location import DiscardLocation
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _read_events(path: Path) -> list[dict]:
     lines = path.read_text(encoding="utf-8").strip().splitlines()
@@ -33,7 +33,8 @@ def _make_scene() -> Scene:
         name="block_0",
     )
     discard = DiscardLocation(
-        width=0.3, depth=0.3,
+        width=0.3,
+        depth=0.3,
         init_pose=torch.tensor([0.6, -0.3, 0.0, 1.0, 0.0, 0.0, 0.0]),
         name="discard_0",
     )
@@ -43,6 +44,7 @@ def _make_scene() -> Scene:
 # ---------------------------------------------------------------------------
 # Construction and file creation
 # ---------------------------------------------------------------------------
+
 
 def test_logger_creates_file(tmp_path: Path) -> None:
     log_file = tmp_path / "events.jsonl"
@@ -71,6 +73,7 @@ def test_all_events_have_ts_field(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 # Event types
 # ---------------------------------------------------------------------------
+
 
 def test_skill_start_event(tmp_path: Path) -> None:
     log_file = tmp_path / "events.jsonl"
@@ -157,6 +160,7 @@ def test_world_model_snapshot_includes_position(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 # Order and count
 # ---------------------------------------------------------------------------
+
 
 def test_events_written_in_order(tmp_path: Path) -> None:
     """A fake skill sequence produces events in the expected order."""
