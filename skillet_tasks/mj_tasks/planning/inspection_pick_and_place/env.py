@@ -162,6 +162,16 @@ class InspectionMjEnv:
         """Return ``True`` iff ``obs_spec.name == 'ik_ee'``."""
         return obs_spec.name == "ik_ee"
 
+    @property
+    def robot_base_world_pos(self) -> np.ndarray:
+        """World-frame XYZ of the robot base link, shape (3,).
+
+        Read live from MuJoCo data so it stays correct even if the base is
+        moved between resets.  Used by InspectSkill to convert block world
+        poses to robot-base frame before computing IK targets.
+        """
+        return self._data.xpos[self._base_body_id].copy()
+
     def supports_action_spec(self, action_spec: ActionSpec) -> bool:
         """Accept any (1, 8) action tensor; spec is treated as advisory."""
         return True

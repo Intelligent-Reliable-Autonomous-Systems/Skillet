@@ -2,8 +2,10 @@
 
 Drives the PDDL plan using skill execute() calls and logs each event.
 
-The MuJoCo model is loaded for scene validation and can be rendered, 
-but actual arm motion control (IK/PickSkill/PlaceSkill) is yet to be implemented.
+Pass ``env`` (an ``InspectionMjEnv``) to ``run_demo()`` to enable physical arm
+motion.  Without it the orchestrator runs in world-model-only mode (Phase 1
+behaviour): preconditions are checked, the scene graph is updated, but MuJoCo
+never steps.
 """
 
 from __future__ import annotations
@@ -11,6 +13,7 @@ from __future__ import annotations
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 from unified_planning.engines import PlanGenerationResultStatus as PGStatus
@@ -28,9 +31,13 @@ from skillet.scene.objects.inspectable_cube import InspectableCube
 from skillet.scene.objects.platform import Platform
 from skillet.skill.high_level.inspect import InspectSkill
 from skillet.skill.high_level.inspect_for_defects import InspectForDefectsSkill
+from skillet.skill.skill_lib import make_reach_xyzrpy_skill
 from skillet_tasks.mj_tasks.planning.inspection_pick_and_place.scene_factory import (
     make_inspection_scene,
 )
+
+if TYPE_CHECKING:
+    from skillet_tasks.mj_tasks.planning.inspection_pick_and_place.env import InspectionMjEnv
 
 _DOMAIN_FILE = Path(__file__).parents[4] / "skillet" / "planning" / "inspection" / "inspection.domain.pddl"
 _BLANK_IMAGE = np.zeros((64, 64, 3), dtype=np.uint8)
@@ -61,6 +68,7 @@ def run_demo(
     run_id: str | None = None,
     planner_name: str = "fast-downward",
     planner_timeout: float = 30.0,
+    env: InspectionMjEnv | None = None,
 ) -> TaskMetrics:
     """Execute the inspection pick-and-place task.
 
@@ -110,7 +118,7 @@ def run_demo(
     # Execute with logging
     with SkillEventLogger(log_dir / "events.jsonl", run_id=run_id) as logger:
         logger.log_world_model_snapshot(scene)
-        _execute_plan(scene, plan_actions, classifier, logger)
+        _execute_plan(scene, plan_actions, classifier, logger, env)
         logger.log_world_model_snapshot(scene)
 
     return _compute_metrics(spec.blocks, ground_truth, spec.platform, spec.discard)
@@ -147,8 +155,14 @@ def _execute_plan(
     plan_actions: list,
     classifier: DefectClassifier,
     logger: SkillEventLogger,
+    env: InspectionMjEnv | None = None,
 ) -> None:
-    """Execute each grounded PDDL action via the appropriate skill."""
+    """Execute each grounded PDDL action via the appropriate skill.
+
+    When ``env`` is provided the arm physically moves in MuJoCo.
+    When ``env`` is None (default) only the world model is updated (Phase 1
+    behaviour).
+    """
     held_block: InspectableCube | None = None
 
     for action_instance in plan_actions:
@@ -159,7 +173,19 @@ def _execute_plan(
         block_id = scene.resolve_names_to_ids([block_name])[0]
 
         if action_name == "approach-block":
-            skill = InspectSkill(scene)
+            if env is not None:
+                # Phase 2: arm physically moves to the inspection viewpoint above the block.
+                # InspectSkill._compute_viewpoint converts the block's world-frame pose to
+                # robot-base frame using robot_base_world_pos, then calls reach_skill.
+                reach_skill = make_reach_xyzrpy_skill(env, skill_length=200)
+                skill = InspectSkill(
+                    scene,
+                    env=env,
+                    reach_skill=reach_skill,
+                    robot_base_world_pos=env.robot_base_world_pos,
+                )
+            else:
+                skill = InspectSkill(scene)
             skill.set_target(block_id)
             logger.log_skill_start("InspectSkill", params=block_id)
             result = skill.execute(scene)
