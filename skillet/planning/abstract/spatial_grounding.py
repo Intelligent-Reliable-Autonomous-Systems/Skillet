@@ -169,7 +169,7 @@ def _is_at(a: Cube, l: Location, z_slack_frac: float = 0.07, xy_slack_frac: floa
     return bool(within_x and within_y and within_z)
 
 
-def ground_cube_relations(scene: Scene) -> list[tuple[str, SceneObject, SceneObject]]:
+def ground_cube_relations(scene: Scene) -> tuple[list[tuple[str, SceneObject, SceneObject]], ...]:
     """Ground the on relations in the scene."""
     on_relations = []
     north_relations = []
