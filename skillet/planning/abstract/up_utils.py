@@ -353,7 +353,7 @@ def sample_action_from_state(
         state: The state to sample an action in
         action_name: Optionally, the name of the action to sample
         applicable_only: Whether to only sample applicable actions. If False, will sample a random grounding.
-        relax_terms: The number of terms to relax in the preconditions. Only used if applicable_only is False.
+        relax_terms: The number of terms to relax in the preconditions. Only used if applicable_only is True.
 
     Returns:
         An action instance
