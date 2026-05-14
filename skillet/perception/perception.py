@@ -20,6 +20,7 @@ from skillet.perception.reconstruction.sam_reconstructor import Sam3Reconstructo
 from skillet.perception.reconstruction.sam_vlm_reconstructor import SamVlmReconstructor
 from skillet.perception.reconstruction.vlm_reconstructor import VlmReconstructor
 from skillet.scene.utils import arrange_panels, depth_to_colormap_np, segmented_rgbd_to_point_cloud
+from skillet.planning import AbstractModel
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -42,6 +43,7 @@ class SkilletPerception:
         env: Environment | BatchedEnvironment,
         scene: Scene,
         obs_spec: ObservationSpec,
+        abstract_model: AbstractModel | None = None,
         reconstructor: Literal["sam3", "april", "vlm", "sam+vlm"] = "april",
         poll_rate_hz: float = 10,
         device: str | torch.device | None = None,
@@ -52,6 +54,7 @@ class SkilletPerception:
         """Initialize the perception pipeline."""
         self.env = env
         self._scene = scene
+        self._abs_model = abstract_model
         if isinstance(device, str):
             device = torch.device(device)
         self.device = device or obs_spec.device
@@ -253,6 +256,9 @@ class SkilletPerception:
 
             # Update the state based on reconstruction
             self._reconstructor.update_state(obs_unbatched, update=True)
+            if self._abs_model is not None:
+                problem = self._abs_model.get_abstract_state()
+                self._scene.abstract_scene = str(problem)
 
             self.scene.tcp_pose = obs_unbatched["tcp_pose_b"]
             self.scene.gripper_pos = obs_unbatched["gripper"]

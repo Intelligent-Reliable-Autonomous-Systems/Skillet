@@ -37,7 +37,16 @@ class ParsedUpProblem:
     fluents: UPDictFluent
     objects: UPDictObject
     goals: UPListGoal
-    exclude_list = ["clear", "small", "loc_north_of", "loc_above", "occupied"]
+    exclude_list = [
+        "clear",
+        "small",
+        "loc_north_of",
+        "loc_above",
+        "occupied",
+        "obstructed-north",
+        "obstructed-above",
+        "obstructed-south",
+    ]
 
     def __str__(self) -> str:
         print_str = ""
@@ -67,9 +76,11 @@ class AbstractValue:
     parameters: list[str]
 
     def __str__(self) -> str:
-        print_str = f"{self.value}: |"
-        for p in self.parameters:
-            print_str += f" {p} |"
+        print_str = f"{self.value} ("
+        for i, p in enumerate(self.parameters):
+            print_str += f"{str(p).replace('_', ' ')}"
+            print_str += ", " if i + 1 < len(self.parameters) else ""
+        print_str += ")"
         return print_str
 
 
@@ -382,7 +393,7 @@ def sample_action_from_state(
     """
     if isinstance(state, UPState):
         state = up_state_to_dict(state)
-    max_tries = 5
+    max_tries = 50
     for _ in range(max_tries):
         if action_name is None:
             up_action: InstantaneousAction = np.random.choice(problem.actions)

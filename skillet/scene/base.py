@@ -112,6 +112,7 @@ class Scene:
         self._tcp_pose = None
         self._gripper_pos = None
         self._goal = None
+        self._abstract_scene = None
 
     @property
     def objects(self) -> list[SceneObject]:
@@ -134,6 +135,16 @@ class Scene:
             if isinstance(obj, Table):
                 return obj
         return None
+
+    @property
+    def abstract_scene(self) -> str:
+        """Return a string for the abstract scene."""
+        return self._abstract_scene
+
+    @abstract_scene.setter
+    def abstract_scene(self, abs_scene: str) -> None:
+        """Set the abstract scene."""
+        self._abstract_scene = abs_scene
 
     @property
     def tcp_pose(self) -> torch.Tensor:

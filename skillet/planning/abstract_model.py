@@ -76,7 +76,8 @@ class AbstractModel(BasePlanner):
     def get_abstract_state(self, goal: dict[str, Any] | None = None) -> ParsedUpProblem:
         """Get the current abstract state of the scene."""
         assert self._scene is not None
-
+        if self._problem is None:
+            self.initialize()
         # Create all the objects in the scene (Cubes + Table + Locations + Targets)
         if "block" in [t.name for t in self._problem.user_types]:
             block_type = self._problem.user_type("block")
@@ -96,49 +97,64 @@ class AbstractModel(BasePlanner):
         fluent_state = {}
         on_pred, clear_pred, north_pred = ground_cube_relations(self._scene)
         empty_pred, grasping_pred, lifted_pred = ground_gripper_relations(self._scene)
-        above_loc_pred, north_loc_pred, at_pred, occ_pred = ground_location_relations(self._scene)
-        if "on" in [f.name for f in self._problem.fluents]:
+        above_loc_pred, north_loc_pred, at_pred, occ_pred, ob_above_pred, ob_north_pred, ob_south_pred = (
+            ground_location_relations(self._scene)
+        )
+        prob_fluents = [f.name for f in self._problem.fluents]
+        if "on" in prob_fluents:
             for op in on_pred:
                 o_fluent = self._problem.fluent(op[0])(*(object_state[op[1].name], object_state[op[2].name]))
                 fluent_state[o_fluent] = True
-        if "north-of" in [f.name for f in self._problem.fluents]:
+        if "north-of" in prob_fluents:
             for np in north_pred:
                 n_fluent = self._problem.fluent(np[0])(*(object_state[np[1].name], object_state[np[2].name]))
                 fluent_state[n_fluent] = True
-        if "clear" in [f.name for f in self._problem.fluents]:
+        if "clear" in prob_fluents:
             for cp in clear_pred:
                 fluent = self._problem.fluent(cp[0])(*(object_state[cp[1].name],))
                 fluent_state[fluent] = True
-        if "small" in [f.name for f in self._problem.fluents]:
+        if "small" in prob_fluents:
             for ob in object_state.values():
                 if ob.type == block_type:
                     fluent = self._problem.fluent("small")(*(ob,))
                     fluent_state[fluent] = True
-        if "gripper-full" in [f.name for f in self._problem.fluents]:
+        if "gripper-full" in prob_fluents:
             fluent = self._problem.fluent("gripper-full")
             fluent_state[fluent] = not empty_pred
-        if "gripper-lifted" in [f.name for f in self._problem.fluents]:
+        if "gripper-lifted" in prob_fluents:
             fluent = self._problem.fluent("gripper-lifted")
             fluent_state[fluent] = lifted_pred
-        if "grasping" in [f.name for f in self._problem.fluents]:
+        if "grasping" in prob_fluents:
             for hp in grasping_pred:
                 fluent = self._problem.fluent(hp[0])(*(object_state[hp[1].name],))
                 fluent_state[fluent] = True
-        if "loc-above" in [f.name for f in self._problem.fluents]:
+        if "loc-above" in prob_fluents:
             for la in above_loc_pred:
                 fluent = self._problem.fluent(la[0])(*(object_state[la[1].name], object_state[la[2].name]))
                 fluent_state[fluent] = True
-        if "loc-north-of" in [f.name for f in self._problem.fluents]:
+        if "loc-north-of" in prob_fluents:
             for ln in north_loc_pred:
                 fluent = self._problem.fluent(ln[0])(*(object_state[ln[1].name], object_state[ln[2].name]))
                 fluent_state[fluent] = True
-        if "at-loc" in [f.name for f in self._problem.fluents]:
+        if "at-loc" in prob_fluents:
             for al in at_pred:
                 fluent = self._problem.fluent(al[0])(*(object_state[al[1].name], object_state[al[2].name]))
                 fluent_state[fluent] = True
-        if "occupied" in [f.name for f in self._problem.fluents]:
+        if "occupied" in prob_fluents:
             for op in occ_pred:
                 fluent = self._problem.fluent(op[0])(*(object_state[op[1].name],))
+                fluent_state[fluent] = True
+        if "obstructed-above" in prob_fluents:
+            for oa in ob_above_pred:
+                fluent = self._problem.fluent(oa[0])(*(object_state[oa[1].name],))
+                fluent_state[fluent] = True
+        if "obstructed-north" in prob_fluents:
+            for on in ob_north_pred:
+                fluent = self._problem.fluent(on[0])(*(object_state[on[1].name],))
+                fluent_state[fluent] = True
+        if "obstructed-south" in prob_fluents:
+            for os in ob_south_pred:
+                fluent = self._problem.fluent(os[0])(*(object_state[os[1].name],))
                 fluent_state[fluent] = True
         # Parse the goal
         if goal is not None:
@@ -147,8 +163,7 @@ class AbstractModel(BasePlanner):
         goals = (
             self._create_goal(self._scene.goal, object_state) if self._scene.goal is not None else self._problem.goals
         )
-        if len(goals) == 0:
-            print("[WARN][ABSTRACT MODEL] Empty goal list!")
+
         return ParsedUpProblem(fluents=fluent_state, objects=object_state, goals=goals)
 
     def reset_abstract_state(self, problem: Problem, state: ParsedUpProblem) -> Problem:
@@ -168,6 +183,7 @@ class AbstractModel(BasePlanner):
         """Copy the problem and return a new instantance of the problem."""
         self._problem: Problem = self._pddl_reader.parse_problem(self._domain_file, self._task_file)
         state = self.get_abstract_state()
+
         self._problem.add_objects(list(state.objects.values()))
         self._problem.add_goal(And(*list(state.goals)))
         [self._problem.set_initial_value(fluent, value) for fluent, value in state.fluents.items()]

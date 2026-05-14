@@ -2202,3 +2202,36 @@ def np_quat_from_euler_xyz(roll: np.ndarray, pitch: np.ndarray, yaw: np.ndarray)
     qz = sy * cr * cp - cy * sr * sp
 
     return np.stack([qw, qx, qy, qz], axis=0)
+
+
+def np_convert_quat(quat: np.ndarray, to: str = "xyzw") -> np.ndarray:
+    """Convert quaternion from one convention to another.
+
+    The convention to convert TO is specified as an optional argument. If to == 'xyzw',
+    then the input is in 'wxyz' format, and vice-versa.
+
+    Args:
+        quat: The quaternion of shape (4,).
+        to: Convention to convert quaternion to.. Defaults to "xyzw".
+
+    Returns:
+        The converted quaternion in specified convention.
+
+    Raises:
+        ValueError: Invalid input argument `to`, i.e. not "xyzw" or "wxyz".
+        ValueError: Invalid shape of input `quat`, i.e. not (..., 4,).
+
+    """
+    # check input is correct
+    if quat.shape[-1] != 4:
+        msg = f"Expected input quaternion shape mismatch: {quat.shape} != (..., 4)."
+        raise ValueError(msg)
+    if to not in ["xyzw", "wxyz"]:
+        msg = f"Expected input argument `to` to be 'xyzw' or 'wxyz'. Received: {to}."
+        raise ValueError(msg)
+    # convert to specified quaternion type
+    if to == "xyzw":
+        # wxyz -> xyzw
+        return np.roll(quat, -1, axis=0)
+    # xyzw -> wxyz
+    return np.roll(quat, 1, axis=0)

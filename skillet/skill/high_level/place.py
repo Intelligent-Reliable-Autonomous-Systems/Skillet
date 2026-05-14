@@ -184,9 +184,7 @@ class PlaceSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAct
             print(
                 f"[WARN][PICK BLOCK] TCP Wrench efforts exceeded limit of {self._tcp_effort_threshold}. Stopping Place."
             )
-            # self._place_status[flag] = PlaceStatusCodes.FAILED
-            # return self._fail_action
-        if next_pose.any():
+        if next_pose.any() or flag:
             idx = torch.arange(self.n_envs, device=next_pose.device)
             valid_idx = (self._status == SkillStatusCodes.RUNNING) & (next_pose)
             self._place_status[valid_idx] += 1

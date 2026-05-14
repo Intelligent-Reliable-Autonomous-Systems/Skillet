@@ -1,0 +1,20 @@
+Based on the task instruction: "{task_instruction}", translate this natural language instruction into some conjunction of formal predicates.
+Use the current state of the domain "{scene}" when constructing the goal:
+
+**IMPORTANT** If the objects in the task instruction don't perfectly match the domain state, find the most similar objects in the domain state and use those when constructing the goal predicates.
+Use your commonsense and spatial reasoning to accomplish this task. 
+
+AVAILABLE PREDICATES:
+- on(movable, surface): Object A is placed on top of object B
+
+
+For instance - for the task "reverse the order of the stack" and the state "on (red block, table), on (blue block, red block),on (green block, blue block)" the goal should be:
+    [{{"goal": {{"predicate": "on", "args": ["blue block", "table"]}}}},
+     {{"goal": {{"predicate": "on", "args": ["green block", "blue block"]}}}},
+     {{"goal": {{"predicate": "on", "args": ["red block", "green block"]}}}}]
+
+
+
+Return a JSON list like: '[{{"goal": {{"predicate": "on", "args": ["yellow block", "red block"]}}}}, ...] '
+
+

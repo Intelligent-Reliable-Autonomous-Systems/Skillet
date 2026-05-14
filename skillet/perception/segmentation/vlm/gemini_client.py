@@ -54,9 +54,13 @@ class GeminiClient(VLMClient):
         )
         return self.parse_response(response.text)
 
-    def detect_goal(self, task_instruction: str) -> str:
+    def detect_goal(self, task_instruction: str | None = None, scene: str | None = None) -> str:
         """Parse a task goal to PDDL based on the task instruction."""
-        message = self.prompt.format(task_instruction=task_instruction)
+        if scene is not None:
+            message = self.prompt.format(task_instruction=task_instruction, scene=scene)
+        else:
+            message = self.prompt.format(task_instruction=task_instruction)
+
         response = self.client.models.generate_content(
             model=self.model_id,
             contents=[message],

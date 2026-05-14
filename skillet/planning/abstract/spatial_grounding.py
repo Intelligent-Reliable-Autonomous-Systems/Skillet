@@ -2,6 +2,8 @@
 
 from typing import Literal
 
+import torch
+
 from skillet.scene.base import Scene, SceneObject
 from skillet.scene.scene_objs import Cube, Location, Table
 
@@ -42,7 +44,7 @@ def _is_on(a: Cube | Location, b: Cube | Location, height_tol_frac: float = 0.3,
 
 
 def _is_north_of(
-    a: Cube | Location, b: Cube | Location, north_tol_frac: float = 0.3, yz_slack_frac: float = 0.5
+    a: Cube | Location, b: Cube | Location, north_tol_frac: float = 0.3, yz_slack_frac: float = 0.2
 ) -> bool:
     """Return True if cube *a* is north of cube *b*.
 
@@ -78,6 +80,28 @@ def _is_north_of(
     return bool(within_y and within_z)
 
 
+def _is_north_of_loc(a: Location, b: Location) -> bool:
+    """Return True if location *a* is north of location *b*.
+
+    Args:
+        a: The candidate upper cube.
+        b: The candidate lower cube.
+
+    """
+    return bool(torch.isclose((a.pose[0] + a.size), b.pose[0]) and torch.isclose(a.pose[2], b.pose[2]).item())
+
+
+def _is_above_loc(a: Location, b: Location) -> bool:
+    """Return True if location *a* is above location *b*.
+
+    Args:
+        a: The candidate upper cube.
+        b: The candidate lower cube.
+
+    """
+    return a.pose[0] == b.pose[0] and (a.pose[2] + a.size) == b.pose[2]
+
+
 def _is_on_table(a: Cube, table: Table, height_tol_frac: float = 0.5) -> bool:
     """Return True if cube *a* is resting on the table.
 
@@ -100,7 +124,7 @@ def _is_on_table(a: Cube, table: Table, height_tol_frac: float = 0.5) -> bool:
 
 
 def _is_grasping(
-    a: Cube, scene: Scene, z_slack_frac: float = 0.7, xy_slack_frac: float = 0.5, gripper_thresh: float = 0.4
+    a: Cube, scene: Scene, z_slack_frac: float = 0.5, xy_slack_frac: float = 0.3, gripper_thresh: float = 0.4
 ) -> bool:
     """Test if the gripper is holding a cube.
 
@@ -215,18 +239,41 @@ def ground_location_relations(scene: Scene) -> list[tuple[str, SceneObject, Scen
     above_relations = []
     north_relations = []
     at_relations = []
-    occupied_relations = []
+    occupied_relations = set()
+    obstructed_above_relations = []
+    obstructed_south_relations = []
+    obstructed_north_relations = []
     for obj in scene.objects:
         if not isinstance(obj, Location):
             continue
         for other_obj in scene.objects:
             if isinstance(other_obj, Location):
-                if obj.object_id != other_obj.object_id and _is_on(obj, other_obj, xy_slack_frac=0.01):
+                if obj.object_id != other_obj.object_id and _is_above_loc(obj, other_obj):
                     above_relations.append(("loc-above", obj, other_obj))
-                if obj.object_id != other_obj.object_id and _is_north_of(obj, other_obj, yz_slack_frac=0.01):
+                if obj.object_id != other_obj.object_id and _is_north_of_loc(obj, other_obj):
                     north_relations.append(("loc-north-of", obj, other_obj))
             elif isinstance(other_obj, Cube):
                 if _is_at(other_obj, obj):
                     at_relations.append(("at-loc", other_obj, obj))
-                    occupied_relations.append(("occupied", obj))
-    return above_relations, north_relations, at_relations, occupied_relations
+                    occupied_relations.add(("occupied", obj))
+    occupied_relations = list(occupied_relations)
+    above = [a[2] for a in above_relations]
+    north_of = [n[2] for n in north_relations]
+    south_of = [s[1] for s in north_relations]
+    for o in occupied_relations:
+        l = o[1]
+        if l in above:
+            obstructed_above_relations.append(("obstructed-above", above_relations[above.index(l)][1]))
+        if l in north_of:
+            obstructed_north_relations.append(("obstructed-north", north_relations[north_of.index(l)][1]))
+        if l in south_of:
+            obstructed_south_relations.append(("obstructed-south", north_relations[south_of.index(l)][2]))
+    return (
+        above_relations,
+        north_relations,
+        at_relations,
+        occupied_relations,
+        obstructed_above_relations,
+        obstructed_north_relations,
+        obstructed_south_relations,
+    )

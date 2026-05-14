@@ -33,9 +33,11 @@ class DragStatusCodes(IntEnum):
     """The skill is lowering to the object."""
     GRASP = 4
     """The skill is grasping the object."""
-    DRAG = 5
-    """The skill dragging the object."""
-    DONE = 6
+    RAISE = 5
+    """The skill is dragging the object."""
+    DRAG = 6
+    """The skill is raising the object."""
+    DONE = 7
     """The skill has lifted the ojbect."""
 
 
@@ -135,7 +137,7 @@ class DragSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params], Generic[TB
 
         # Define the target poses for each stage of the drag skill, indexed by DragStatusCodes
         # (n_envs, num_drag_stages, 7)
-        target_poses = spec.zeros(shape=(self.n_envs, 7, 7), dtype=float)
+        target_poses = spec.zeros(shape=(self.n_envs, 8, 7), dtype=float)
         # ASCEND[1]: Go up to lift height (gripper open)
         target_poses[:, DragStatusCodes.ASCEND, :7] = ee_pose_b
         target_poses[:, DragStatusCodes.ASCEND, 2] = self._lift_height
@@ -149,9 +151,13 @@ class DragSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params], Generic[TB
         target_poses[:, DragStatusCodes.LOWER, 2] = params[:, 2]
         # GRASP[4]: Close gripper
         target_poses[:, DragStatusCodes.GRASP, :7] = target_poses[:, DragStatusCodes.LOWER, :7]
-        # DRAG[5]: Drag the object to the target location
-        target_poses[:, DragStatusCodes.DRAG, 3:7] = target_poses[:, DragStatusCodes.LOWER, 3:7]
+        # RAISE[5]: Close gripper
+        target_poses[:, DragStatusCodes.RAISE, :7] = target_poses[:, DragStatusCodes.GRASP, :7]
+        target_poses[:, DragStatusCodes.RAISE, 2] = target_poses[:, DragStatusCodes.GRASP, 2] + 0.01
+        # DRAG[6]: Drag the object to the target location
+        target_poses[:, DragStatusCodes.DRAG, 3:7] = target_poses[:, DragStatusCodes.RAISE, 3:7]
         target_poses[:, DragStatusCodes.DRAG, 0:3] = params[:, 4:7]
+        target_poses[:, DragStatusCodes.DRAG, 2] = params[:, 6] + 0.01
 
         self._target_poses = target_poses
 

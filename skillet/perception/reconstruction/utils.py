@@ -1,11 +1,14 @@
 from typing import Literal
 
 import numpy as np
+import open3d as o3d
 import torch
 from scipy.linalg import svd
 from scipy.optimize import linear_sum_assignment
+from scipy.spatial.transform import Rotation
 
 from skillet.scene.base import Scene, SceneObject
+from skillet.core.math import np_convert_quat
 
 
 def assign_objects_to_id_hungarian(
@@ -192,6 +195,7 @@ def find_cube_centers_mean(
     """
     depth = depth.squeeze(0)
     centers = []
+    quats = []
     for mask in masks:
         mask = mask.to(torch.bool)
 
@@ -208,18 +212,117 @@ def find_cube_centers_mean(
         proj_u = points_3d[:, 0]
         proj_v = points_3d[:, 1]
         proj_w = points_3d[:, 2]
-        # centroid_u = torch.median(proj_u)
-        # centroid_v = torch.median(proj_v)
         centroid_u = torch.sort(proj_u)[0][len(proj_u) // 2]
         centroid_v = torch.sort(proj_v)[0][len(proj_v) // 2]
         mask_v = torch.abs(centroid_v - proj_v) < 0.008
         mask_u = torch.abs(centroid_u - proj_u) < 0.008
-        # centroid_w = proj_w[mask_u & mask_v].max() + (cube_size * (3 / 4))  # TODO this might break sometimes
         centroid_w = proj_w[mask_u & mask_v].mean() + (cube_size * (3 / 4))  # helps with partial occlusion
         centroid = torch.as_tensor([centroid_u, centroid_v, centroid_w], device=masks.device)
         centers.append(centroid)
 
+        # normals = compute_normals(points_3d.cpu().numpy())
+        # dirs = pca_normal_directions(normals, n=3)
+        # quats.append(torch.as_tensor(roll_quaternion_from_directions(dirs), device=masks.device))
+
     return torch.stack(centers, dim=0)
+
+
+def compute_normals(points: np.ndarray) -> np.ndarray:
+    """Compute the normal vectors of each point using local neighbor clustering."""
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(points)
+
+    pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamKNN(knn=20))
+    pcd.orient_normals_consistent_tangent_plane(k=15)
+    return np.asarray(pcd.normals)
+
+
+def pca_normal_directions(normals: np.ndarray, n: int = 3) -> np.ndarray:
+    """Compute the primary normals using PCA."""
+    unit_normals = normals / np.linalg.norm(normals, axis=1, keepdims=True)
+    cov = unit_normals.T @ unit_normals
+    eigenvalues, eigenvectors = np.linalg.eigh(cov)
+    idx = np.argsort(eigenvalues)[::-1]
+    return eigenvectors[:, idx[:n]].T
+
+
+def normals_to_quaternion_scipy(d0: np.ndarray, d1: np.ndarray, d2: np.ndarray) -> np.ndarray:
+    """Convert the normal vectors to quaternion in [x,y,z,w]."""
+    x = d0 / np.linalg.norm(d0)
+    y = d1 - np.dot(d1, x) * x
+    y = y / np.linalg.norm(y)
+    z = np.cross(x, y)
+    z = z / np.linalg.norm(z)
+
+    R = np.column_stack([x, y, z])
+
+    r = Rotation.from_matrix(R)
+    return np_convert_quat(r.as_quat(), to="wxyz")
+
+
+FORWARD_COL = None
+
+
+def pitch_quaternion_from_directions(dirs: np.ndarray) -> np.ndarray:
+    """Extract pitch-only quaternion from direction vectors."""
+    # Find the most horizontal column (lowest Z component) = "forward" vector
+    global FORWARD_COL
+    z_components = np.abs(dirs[2, :])
+    if FORWARD_COL is None:
+        FORWARD_COL = np.argmin(z_components)
+    forward = dirs[:, FORWARD_COL]
+
+    # Project onto XZ plane and normalize (pitch = rotation around Y axis)
+    forward_xz = np.array([forward[0], 0.0, forward[2]])
+    forward_xz /= np.linalg.norm(forward_xz)
+
+    # Pitch = angle of "forward" vector from world X, in the XZ plane
+    pitch = np.arctan2(-forward_xz[2], forward_xz[0])
+
+    # Build quaternion from pitch only (rotation around Y axis)
+    q = Rotation.from_euler("y", pitch)
+    return np_convert_quat(q.as_quat(), to="wxyz")
+
+
+def roll_quaternion_from_directions(dirs: np.ndarray) -> np.ndarray:
+    """Extract roll-only quaternion from direction vectors."""
+    # Find the most vertical column (highest Z component) = "up" vector
+    global FORWARD_COL
+    z_components = np.abs(dirs[2, :])
+    if FORWARD_COL is None:
+        FORWARD_COL = np.argmax(z_components)
+    up = dirs[:, FORWARD_COL]
+
+    # Project onto YZ plane and normalize (roll = rotation around X axis)
+    up_yz = np.array([0.0, up[1], up[2]])
+    up_yz /= np.linalg.norm(up_yz)
+
+    # Roll = angle of "up" vector from world Z, in the YZ plane
+    roll = np.arctan2(up_yz[1], up_yz[2])
+
+    # Build quaternion from roll only (rotation around X axis)
+    q = Rotation.from_euler("x", roll)
+    return np_convert_quat(q.as_quat(), to="wxyz")
+
+
+def yaw_quaternion_from_directions(dirs: np.ndarray) -> np.ndarray:
+    """Extract yaw-only quaternion from a rotation matrix."""
+    global FORWARD_COL
+    z_components = np.abs(dirs[2, :])
+    if FORWARD_COL is None:
+        FORWARD_COL = np.argmin(z_components)
+
+    forward = dirs[:, FORWARD_COL]
+
+    # Project onto XY plane and normalize
+    forward_xy = np.array([forward[0], forward[1], 0.0])
+    forward_xy /= np.linalg.norm(forward_xy)
+
+    yaw = np.arctan2(forward_xy[1], forward_xy[0])
+
+    # Build quaternion from yaw only (rotation around Z)
+    q = Rotation.from_euler("z", yaw)
+    return np_convert_quat(q.as_quat(), to="wxyz")
 
 
 def find_cube_centers_ransac(

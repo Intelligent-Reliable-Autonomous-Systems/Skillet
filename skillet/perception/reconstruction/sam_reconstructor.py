@@ -11,6 +11,7 @@ import cv2
 import numpy as np
 import torch
 
+from skillet.core.math import quat_mul
 from skillet.perception.reconstruction.reconstructor_base import ReconstructorBase
 from skillet.perception.reconstruction.utils import (
     find_cube_centers_mean,
@@ -43,7 +44,7 @@ class Sam3Reconstructor(ReconstructorBase):
         super().__init__(scene, device=device)
         self._sam_model: SAMClient = get_sam_client("sam3")(use_server=True)
         self._vlm_client: VLMClient = (
-            GeminiClient(prompt_name="detect_goal_qwen")
+            GeminiClient(prompt_name="detect_goal_with_scene")
             if vlm == "gemini"
             else QwenClient(prompt_name="detect_goal_qwen")
         )
@@ -114,7 +115,7 @@ class Sam3Reconstructor(ReconstructorBase):
             return
         cube_masks = torch.stack(agg_cube_masks, dim=0)
 
-        # Find cube centers in the camera frame
+        # Find cube centers and orientation in the camera frame
         centers = find_cube_centers_mean(
             cube_masks,
             depth,
@@ -124,8 +125,6 @@ class Sam3Reconstructor(ReconstructorBase):
             camera_quat=camera_pose[3:7],
             frame=frame,
         )
-
-        # TODO localize target centers as well
 
         centers = (
             transform_xyz_to_world(centers, camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7])
@@ -178,7 +177,7 @@ class Sam3Reconstructor(ReconstructorBase):
             self._task_instruction = "Put the dark red block on the purple block."
 
         if call_vlm:
-            self._vlm_goal_atoms = self._vlm_client.detect_goal(self._task_instruction)
+            self._vlm_goal_atoms = self._vlm_client.detect_goal(self._task_instruction, self._scene.abstract_scene)
             for atom in self._vlm_goal_atoms:
                 atom["args"] = [arg.replace(" ", "_") for arg in atom["args"]]
 

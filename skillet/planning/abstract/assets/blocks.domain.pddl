@@ -53,4 +53,20 @@
     )
 )
 
+(:action drag-block
+    :parameters (?b - block ?s - surface)
+    :precondition (and
+        (clear ?b)
+        (on ?b ?s)
+        (not (gripper-full))
+        (not (small ?s))
+    )
+    :effect (and
+        (gripper-full)
+        (grasping ?b)
+        (not (on ?b ?s))
+        (not (clear ?b))
+    )
+)
+
 )

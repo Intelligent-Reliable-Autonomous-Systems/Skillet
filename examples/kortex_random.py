@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import torch
 
 from skillet.agents import RandomTampAgent
+from skillet.agents.tamp import RandomStateAgent
 from skillet.core import ObservationSpec
 from skillet.core.env import BatchToSingleWrapper
 from skillet.envs import SkilletEnv
@@ -22,7 +23,7 @@ from skillet.scene import (
     SIX_CUBE_SCENE,
     Open3DVisualizer,
 )
-from skillet.skill import PickBlock2Skill, PickSkill, PlaceBlock2Skill, PlaceSkill
+from skillet.skill import DragBlock2Skill, DragSkill, PickBlock2Skill, PickSkill, PlaceBlock2Skill, PlaceSkill
 from skillet_tasks.kortex_tasks.factory import create_kortex_env
 
 if TYPE_CHECKING:
@@ -35,7 +36,6 @@ parser.add_argument("--robot_ip", type=str, default="192.168.1.10", help="Robot 
 parser.add_argument("--poll_rate_hz", type=int, default=10, help="Tick rate of the perception")
 parser.add_argument("--task", type=str, default="Kortex-Gen3-v0", help="Kortex Environment")
 parser.add_argument("--build_scene", type=argparse.BooleanOptionalAction, default=False, help="If to build the scene")
-parser.add_argument("--reconstruction", type=str, choices=["sam3", "april", "vlm", "sam+vlm"], default="sam3")
 parser.add_argument(
     "--perception", type=argparse.BooleanOptionalAction, default=True, help="If to run the perception pipeline"
 )
@@ -43,22 +43,16 @@ parser.add_argument("--o3d", type=argparse.BooleanOptionalAction, default=False,
 parser.add_argument(
     "--goal",
     type=str,
-    default="Place the dark red block on the yellow block.",
+    default="Place the pink block between the yellow block and green block",
     help="Natural language goal for the block scene.",
 )
 args_cli = parser.parse_args()
 
 
 def main() -> None:
-    """Visualize RGB + depth color map from _get_latest_rgbd()."""
-    import pickle
+    scene = FOUR_CUBE_SCENE
+    block_domain = "skillet/planning/abstract/assets/blocks.domain.pddl"
 
-    if args_cli.reconstruction == "april":
-        scene = SIX_CUBE_APRIL_SCENE
-    elif args_cli.reconstruction == "sam+vlm" or args_cli.reconstruction == "vlm":
-        scene = EMPTY_SCENE
-    elif args_cli.reconstruction == "sam3":
-        scene = FOUR_CUBE_SCENE
     env_cfg = {
         "robot_ip": args_cli.robot_ip,
         "device": "cuda",
@@ -71,11 +65,14 @@ def main() -> None:
     env.reset()
     rgbd_grip_spec: ObservationSpec[RGBD_Gripper_Obs] = env.coerce_obs_spec("rgbd-gripper")
 
+    abs_model = AbstractModel(block_domain, None, scene)
+
     perception = SkilletPerception(
         env=env,
         scene=scene,
         obs_spec=rgbd_grip_spec,
-        reconstructor=args_cli.reconstruction,
+        abstract_model=abs_model,
+        reconstructor="sam3",
         poll_rate_hz=args_cli.poll_rate_hz,
         device="cuda",
         vis_perception=False,
@@ -90,24 +87,18 @@ def main() -> None:
         perception.run_thread()
 
     # Low-level policies
-    # arm_policy = TwistPidPosePolicy(env.batched_env.obs_spec_twist_tcp, env.batched_env.action_spec_twist_tcp)
-    arm_policy = TcpCartPolicy(env.batched_env.obs_spec_tcp_cart, env.batched_env.action_spec_tcp_cart)
-    # Skills
     skill_length = 1e9
+    arm_policy = TcpCartPolicy(env.batched_env.obs_spec_tcp_cart, env.batched_env.action_spec_tcp_cart)
     place_skill = PlaceSkill(reach_policy=arm_policy, gripper_policy=None, lift_height=0.3, length=skill_length)
     pick_skill = PickSkill(reach_policy=arm_policy, gripper_policy=None, lift_height=0.3, length=skill_length)
-
+    drag_skill = DragSkill(reach_policy=arm_policy, gripper_policy=None, lift_height=0.3, length=skill_length)
     pick_block_skill = PickBlock2Skill(scene, pick_skill, vis_target_pos=target_pose_func)
     place_block_skill = PlaceBlock2Skill(scene, place_skill, vis_target_pos=target_pose_func)
+    drag_block_skill = DragBlock2Skill(scene, drag_skill, vis_target_pos=target_pose_func)
+    ACTION_MAP = {"place_block": place_block_skill, "pick_block": pick_block_skill, "drag_block": drag_block_skill}
 
-    ACTION_MAP = {"place_block": place_block_skill, "pick_block": pick_block_skill}
-    block_domain = "skillet/planning/abstract/assets/blocks.domain.pddl"
-    block_task = None  # "skillet/scene/abstract/assets/3-block-table.problem.pddl"
-
-    abs_model = AbstractModel(block_domain, block_task, scene)
     tamp_agent = RandomTampAgent(scene, abstract_model=abs_model, action_to_skill_map=ACTION_MAP, perception=perception)
 
-    # simulate environment
     logger = SkilletDataLogger(
         "data/test/", env, scene, perception, abs_model, tamp_agent, obs_spec=rgbd_grip_spec, visualize=False
     )
@@ -123,7 +114,7 @@ def main() -> None:
     while True:
         with torch.inference_mode():
             env.reset()
-            tamp_agent.execute(env, logger=logger, num_actions=20)
+            tamp_agent.execute(env, logger=logger, num_actions=100)
             print("[INFO][Main] finished run of skill executor, resetting")
             logger.save_video()
             break

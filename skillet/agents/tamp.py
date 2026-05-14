@@ -181,3 +181,61 @@ class RandomTampAgent(Agent):
                 actions=up_action,
                 executions="applicable",
             )
+
+
+class RandomStateAgent(Agent):
+    """A Task-Planning agent that randomly executes a sequence of valid actions."""
+
+    def __init__(
+        self,
+        scene: Scene,
+        abstract_model: AbstractModel,
+        action_to_skill_map: dict[str, SingleSkill[Any, Any, Unparameterized]],
+        perception: SkilletPerception | None = None,
+    ) -> None:
+        """Initialize the planning agent.
+
+        Args:
+            scene: The scene to execute the skills in.
+            abstract_model: The abstract model of the scene.
+            action_to_skill_map: A map of actions to skills.
+
+        """
+        super().__init__()
+
+        self._scene = scene
+        self.abstract_model = abstract_model
+        self.action_to_skill_map = action_to_skill_map
+        self._perception = perception
+
+    def execute(
+        self,
+        env: Environment[Any, Any],
+        task: str | None = None,
+        num_actions: int = 10,
+        logger: SkilletDataLogger = None,
+    ) -> None:
+        """Execute the policy over the options configured.
+
+        Args:
+            env: The environment to execute the policy over.
+            task: The task to execute.
+            num_actions: the number of actions to execute
+
+        """
+        # Get the current symbolic state
+        self.abstract_model.initialize(self._scene, task)
+
+        terminated = False
+        cum_reward = 0.0
+
+        for i in range(num_actions):
+            # self._perception.update_state()
+            up_state = self.abstract_model.get_abstract_state()
+            print(up_state)
+            print("\n")
+
+            # ab_action, up_action = self.abstract_model.get_random_action(up_state)
+            # ab_action, up_action = sample_action_from_state(self.abstract_model._problem, up_state)
+
+            time.sleep(3)
