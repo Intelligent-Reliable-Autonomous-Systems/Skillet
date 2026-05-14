@@ -25,6 +25,7 @@ from skillet.planning.abstract import (
     parse_action,
     parse_value,
 )
+from skillet.planning.abstract.up_utils import up_state_to_dict
 from skillet.planning.base_planner import BasePlanner
 from skillet.scene.base import Scene
 from skillet.scene.scene_objs import Cube, Location, Target
@@ -191,7 +192,7 @@ class AbstractModel(BasePlanner):
         self._init_state = AbstractState(
             states=[parse_value(str(f), v) for f, v in self._problem.explicit_initial_values.items()]
         )
-        return self._problem._initial_value
+        return up_state_to_dict(self._simulator.get_initial_state())
 
     def get_random_action(self, state: UPDictFluent) -> tuple[AbstractAction, ActionInstance]:
         """Get a random action from the available actions in the state."""
