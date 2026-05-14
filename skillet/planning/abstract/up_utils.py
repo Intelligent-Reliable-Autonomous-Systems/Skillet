@@ -374,6 +374,7 @@ def sample_action_from_state(
     action_name: str | None = None,
     applicable_only: bool = True,
     relax_terms: int = 0,
+    max_tries: int = 50,
 ) -> ActionInstance:
     """Sample an action based on the state and present objects.
 
