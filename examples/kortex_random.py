@@ -2,6 +2,7 @@
 
 import argparse
 import pathlib
+import time
 from typing import TYPE_CHECKING
 
 import torch
@@ -16,14 +17,21 @@ from skillet.perception.perception import SkilletPerception
 from skillet.planning import AbstractModel
 from skillet.policy import TcpCartPolicy
 from skillet.scene import (
-    EMPTY_SCENE,
+    FIVE_CUBE_SCENE,
     FOUR_CUBE_SCENE,
     LOC_CUBE_SCENE,
-    SIX_CUBE_APRIL_SCENE,
-    SIX_CUBE_SCENE,
     Open3DVisualizer,
 )
-from skillet.skill import DragBlock2Skill, DragSkill, PickBlock2Skill, PickSkill, PlaceBlock2Skill, PlaceSkill
+from skillet.skill import (
+    DragBlock2Skill,
+    DragBlock5Skill,
+    DragSkill,
+    PickBlock2Skill,
+    PickSkill,
+    PlaceBlock2Skill,
+    PlaceBlock4Skill,
+    PlaceSkill,
+)
 from skillet_tasks.kortex_tasks.factory import create_kortex_env
 
 if TYPE_CHECKING:
@@ -50,9 +58,9 @@ args_cli = parser.parse_args()
 
 
 def main() -> None:
-    scene = FOUR_CUBE_SCENE
+    scene = FIVE_CUBE_SCENE
     # block_domain = "skillet/planning/abstract/assets/blocks.domain.pddl"
-    block_domain = "skillet_tasks/blocks-world/simple-blocks.domain.pddl"
+    block_domain = "skillet_tasks/blocks-world/simple-blocks-a2.domain.pddl"
     env_cfg = {
         "robot_ip": args_cli.robot_ip,
         "device": "cuda",
@@ -93,21 +101,24 @@ def main() -> None:
     pick_skill = PickSkill(reach_policy=arm_policy, gripper_policy=None, lift_height=0.3, length=skill_length)
     drag_skill = DragSkill(reach_policy=arm_policy, gripper_policy=None, lift_height=0.3, length=skill_length)
     pick_block_skill = PickBlock2Skill(scene, pick_skill, vis_target_pos=target_pose_func)
-    place_block_skill = PlaceBlock2Skill(scene, place_skill, vis_target_pos=target_pose_func)
-    drag_block_skill = DragBlock2Skill(scene, drag_skill, vis_target_pos=target_pose_func)
+    # place_block_skill = PlaceBlock2Skill(scene, place_skill, vis_target_pos=target_pose_func)
+    place_block_skill = PlaceBlock4Skill(scene, place_skill, vis_target_pos=target_pose_func)
+    # drag_block_skill = DragBlock2Skill(scene, drag_skill, vis_target_pos=target_pose_func)
+    drag_block_skill = DragBlock5Skill(scene, drag_skill, vis_target_pos=target_pose_func)
     ACTION_MAP = {"place_block": place_block_skill, "pick_block": pick_block_skill, "drag_block": drag_block_skill}
 
     tamp_agent = RandomTampAgent(scene, abstract_model=abs_model, action_to_skill_map=ACTION_MAP, perception=perception)
 
     logger = SkilletDataLogger(
-        "data/test/", env, scene, perception, abs_model, tamp_agent, obs_spec=rgbd_grip_spec, visualize=False
+        "_robot_data/exp/", env, scene, perception, abs_model, tamp_agent, obs_spec=rgbd_grip_spec, visualize=False
     )
     if args_cli.build_scene:
         input("Press Enter to start the scene building...\n")
         perception.task_instruction = args_cli.goal
         perception.build_scene = args_cli.build_scene
 
-    input("Press Enter to start the skill execution...\n")
+    print("[INFO] Warming up Perception...")
+    time.sleep(5)
     logger.write_video = True
     logger.run_thread()
 

@@ -40,8 +40,8 @@ class ParsedUpProblem:
     exclude_list = [
         "clear",
         "small",
-        "loc_north_of",
-        "loc_above",
+        "loc-north-of",
+        "loc-above",
         "occupied",
         "obstructed-north",
         "obstructed-above",
@@ -216,12 +216,14 @@ def up_state_to_dict(
         state._condense_state()
         state_dict = {k: v.bool_constant_value() for k, v in state._values.items()}
     elif isinstance(state, dict):
+
         def as_bool(value: bool | FNode) -> bool:
             if isinstance(value, bool):
                 return value
             if isinstance(value, FNode) and value.is_fluent_exp():
                 return value.bool_constant_value()
             raise ValueError(f"Invalid value: {value}")
+
         state_dict = {k: as_bool(v) for k, v in state.items()}
     else:
         dict_state = {}
@@ -402,7 +404,7 @@ def sample_action_from_state(
     """
     if isinstance(state, UPState):
         state = up_state_to_dict(state)
-    for _ in range(max_tries):
+    for i in range(max_tries):
         if action_name is None:
             up_action: InstantaneousAction = np.random.choice(problem.actions)
         else:
@@ -495,7 +497,7 @@ def _unify_pattern(
             args = literal.args
             candidates = by_predicate.get(literal.fluent().name, [])
             if not value:
-                all_bindings = get_fluent_possible_parameters(problem, literal.fluent())
+                all_bindings = set(get_fluent_possible_parameters(problem, literal.fluent()))
                 candidates = list(set(all_bindings) - set(candidates))
         if not candidates:
             return None  # No way to satisfy this literal

@@ -88,7 +88,7 @@ def _is_north_of_loc(a: Location, b: Location) -> bool:
         b: The candidate lower cube.
 
     """
-    return bool(torch.isclose((a.pose[0] + a.size), b.pose[0]) and torch.isclose(a.pose[2], b.pose[2]).item())
+    return bool(torch.isclose(a.pose[0], b.pose[0] + b.size).item() and torch.isclose(a.pose[2], b.pose[2]).item())
 
 
 def _is_above_loc(a: Location, b: Location) -> bool:
@@ -99,7 +99,7 @@ def _is_above_loc(a: Location, b: Location) -> bool:
         b: The candidate lower cube.
 
     """
-    return a.pose[0] == b.pose[0] and (a.pose[2] + a.size) == b.pose[2]
+    return bool(torch.isclose(a.pose[0], b.pose[0]).item() and torch.isclose(a.pose[2], b.pose[2] + b.size).item())
 
 
 def _is_on_table(a: Cube, table: Table, height_tol_frac: float = 0.5) -> bool:
@@ -244,8 +244,14 @@ def ground_location_relations(scene: Scene) -> list[tuple[str, SceneObject, Scen
     obstructed_south_relations = []
     obstructed_north_relations = []
     for obj in scene.objects:
+        if isinstance(obj, Table):
+            for other_obj in scene.objects:
+                if isinstance(other_obj, Location) and other_obj.pose[2] < -0.05:
+                    at_relations.append(("at-loc", obj, other_obj))
         if not isinstance(obj, Location):
             continue
+        if obj.pose[2] < -0.05:
+            occupied_relations.add(("occupied", obj))
         for other_obj in scene.objects:
             if isinstance(other_obj, Location):
                 if obj.object_id != other_obj.object_id and _is_above_loc(obj, other_obj):
@@ -256,18 +262,19 @@ def ground_location_relations(scene: Scene) -> list[tuple[str, SceneObject, Scen
                 if _is_at(other_obj, obj):
                     at_relations.append(("at-loc", other_obj, obj))
                     occupied_relations.add(("occupied", obj))
+
     occupied_relations = list(occupied_relations)
-    above = [a[2] for a in above_relations]
-    north_of = [n[2] for n in north_relations]
-    south_of = [s[1] for s in north_relations]
+    above = [a[1] for a in above_relations]
+    north_of = [n[1] for n in north_relations]
+    south_of = [s[2] for s in north_relations]
     for o in occupied_relations:
         l = o[1]
         if l in above:
-            obstructed_above_relations.append(("obstructed-above", above_relations[above.index(l)][1]))
+            obstructed_above_relations.append(("obstructed-above", above_relations[above.index(l)][2]))
         if l in north_of:
-            obstructed_north_relations.append(("obstructed-north", north_relations[north_of.index(l)][1]))
+            obstructed_north_relations.append(("obstructed-north", north_relations[north_of.index(l)][2]))
         if l in south_of:
-            obstructed_south_relations.append(("obstructed-south", north_relations[south_of.index(l)][2]))
+            obstructed_south_relations.append(("obstructed-south", north_relations[south_of.index(l)][1]))
     return (
         above_relations,
         north_relations,

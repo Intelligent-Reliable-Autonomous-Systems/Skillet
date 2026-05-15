@@ -98,7 +98,7 @@
         (loc-above ?toloc ?belowtoloc)
         (loc-above ?fromloc ?belowfromloc)
         (not (gripper-full))
-        (occupied ?belowfromloc)
+        (occupied ?belowtoloc)
     )
     :effect (and
         ; fromloc

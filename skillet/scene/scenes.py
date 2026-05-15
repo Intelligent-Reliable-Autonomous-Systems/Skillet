@@ -87,40 +87,50 @@ SIX_CUBE_APRIL_SCENE = Scene(
 )
 SIX_CUBE_APRIL_SCENE.goal = [{"predicate": "on", "args": ["yellow_block", "green_block"]}]
 
-orange_cube = Cube(size=CUBE_SIZE, name="orange_block")
-blue_cube = Cube(size=CUBE_SIZE, name="light_blue_block")
-green_cube = Cube(size=CUBE_SIZE, name="green_block")
-pink_cube = Cube(size=CUBE_SIZE, name="light_pink_block")
-yellow_cube = Cube(size=CUBE_SIZE, name="yellow_block")
-purple_cube = Cube(size=CUBE_SIZE, name="dark_purple_block")
-red_cube = Cube(size=CUBE_SIZE, name="dark_red_block")
+orange_cube = Cube(size=CUBE_SIZE, name="orange_block", material="plastic", color="orange")
+blue_cube = Cube(size=CUBE_SIZE, name="light_blue_block", material="plastic", color="light_blue")
+green_cube = Cube(size=CUBE_SIZE, name="green_block", material="wooden", color="green")
+pink_cube = Cube(size=CUBE_SIZE, name="light_pink_block", material="plastic", color="light_pink")
+yellow_cube = Cube(size=CUBE_SIZE, name="yellow_block", material="wooden", color="yellow")
+purple_cube = Cube(size=CUBE_SIZE, name="dark_purple_block", material="wooden", color="dark_purple")
+red_cube = Cube(size=CUBE_SIZE, name="dark_red_block", material="plastic", color="dark_red", moveable=False)
 
-loc_00 = Location(init_pose=torch.as_tensor([0.225, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_00")
-loc_01 = Location(init_pose=torch.as_tensor([0.275, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_01")
-loc_02 = Location(init_pose=torch.as_tensor([0.325, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_02")
-loc_03 = Location(init_pose=torch.as_tensor([0.375, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_03")
-loc_04 = Location(init_pose=torch.as_tensor([0.425, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_04")
-loc_05 = Location(init_pose=torch.as_tensor([0.475, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_05")
-loc_06 = Location(init_pose=torch.as_tensor([0.525, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_06")
-loc_07 = Location(init_pose=torch.as_tensor([0.575, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_07")
+loc_00 = Location(init_pose=torch.as_tensor([0.225, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_00")
+loc_01 = Location(init_pose=torch.as_tensor([0.275, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_01")
+loc_02 = Location(init_pose=torch.as_tensor([0.325, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_02")
+loc_03 = Location(init_pose=torch.as_tensor([0.375, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_03")
+loc_04 = Location(init_pose=torch.as_tensor([0.425, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_04")
+loc_05 = Location(init_pose=torch.as_tensor([0.475, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_05")
+loc_06 = Location(init_pose=torch.as_tensor([0.525, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_06")
+loc_07 = Location(init_pose=torch.as_tensor([0.575, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_07")
 
-loc_10 = Location(init_pose=torch.as_tensor([0.225, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_10")
-loc_11 = Location(init_pose=torch.as_tensor([0.275, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_11")
-loc_12 = Location(init_pose=torch.as_tensor([0.325, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_12")
-loc_13 = Location(init_pose=torch.as_tensor([0.375, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_13")
-loc_14 = Location(init_pose=torch.as_tensor([0.425, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_14")
-loc_15 = Location(init_pose=torch.as_tensor([0.475, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_15")
-loc_16 = Location(init_pose=torch.as_tensor([0.525, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_16")
-loc_17 = Location(init_pose=torch.as_tensor([0.575, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_17")
 
-loc_20 = Location(init_pose=torch.as_tensor([0.225, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_20")
-loc_21 = Location(init_pose=torch.as_tensor([0.275, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_21")
-loc_22 = Location(init_pose=torch.as_tensor([0.325, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_22")
-loc_23 = Location(init_pose=torch.as_tensor([0.375, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_23")
-loc_24 = Location(init_pose=torch.as_tensor([0.425, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_24")
-loc_25 = Location(init_pose=torch.as_tensor([0.475, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_25")
-loc_26 = Location(init_pose=torch.as_tensor([0.525, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_26")
-loc_27 = Location(init_pose=torch.as_tensor([0.575, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_27")
+loc_10 = Location(init_pose=torch.as_tensor([0.225, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_10")
+loc_11 = Location(init_pose=torch.as_tensor([0.275, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_11")
+loc_12 = Location(init_pose=torch.as_tensor([0.325, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_12")
+loc_13 = Location(init_pose=torch.as_tensor([0.375, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_13")
+loc_14 = Location(init_pose=torch.as_tensor([0.425, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_14")
+loc_15 = Location(init_pose=torch.as_tensor([0.475, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_15")
+loc_16 = Location(init_pose=torch.as_tensor([0.525, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_16")
+loc_17 = Location(init_pose=torch.as_tensor([0.575, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_17")
+
+loc_20 = Location(init_pose=torch.as_tensor([0.225, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_20")
+loc_21 = Location(init_pose=torch.as_tensor([0.275, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_21")
+loc_22 = Location(init_pose=torch.as_tensor([0.325, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_22")
+loc_23 = Location(init_pose=torch.as_tensor([0.375, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_23")
+loc_24 = Location(init_pose=torch.as_tensor([0.425, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_24")
+loc_25 = Location(init_pose=torch.as_tensor([0.475, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_25")
+loc_26 = Location(init_pose=torch.as_tensor([0.525, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_26")
+loc_27 = Location(init_pose=torch.as_tensor([0.575, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_27")
+
+loc_30 = Location(init_pose=torch.as_tensor([0.225, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_30")
+loc_31 = Location(init_pose=torch.as_tensor([0.275, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_31")
+loc_32 = Location(init_pose=torch.as_tensor([0.325, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_32")
+loc_33 = Location(init_pose=torch.as_tensor([0.375, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_33")
+loc_34 = Location(init_pose=torch.as_tensor([0.425, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_34")
+loc_35 = Location(init_pose=torch.as_tensor([0.475, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_35")
+loc_36 = Location(init_pose=torch.as_tensor([0.525, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_36")
+loc_37 = Location(init_pose=torch.as_tensor([0.575, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_37")
 
 
 SIX_CUBE_SCENE = Scene(
@@ -168,6 +178,14 @@ LOC_CUBE_SCENE = Scene(
         loc_25,
         loc_26,
         loc_27,
+        loc_30,
+        loc_31,
+        loc_32,
+        loc_33,
+        loc_34,
+        loc_35,
+        loc_36,
+        loc_37,
     ],
     closed_set=True,
     bounds=WORLD_BOUNDS,
@@ -209,12 +227,71 @@ FOUR_CUBE_SCENE = Scene(
         loc_25,
         loc_26,
         loc_27,
+        loc_30,
+        loc_31,
+        loc_32,
+        loc_33,
+        loc_34,
+        loc_35,
+        loc_36,
+        loc_37,
     ],
     closed_set=True,
     bounds=WORLD_BOUNDS,
     contains_objects=True,
 )
 
-LOC_CUBE_SCENE.goal = [
+FOUR_CUBE_SCENE.goal = [
     {"predicate": "on", "args": ["light_pink_block", "dark_purple_block"]},
+]
+
+
+FIVE_CUBE_SCENE = Scene(
+    objects=[
+        table_0,
+        green_cube,
+        pink_cube,
+        yellow_cube,
+        blue_cube,
+        red_cube,
+        loc_00,
+        loc_01,
+        loc_02,
+        loc_03,
+        loc_04,
+        loc_05,
+        loc_06,
+        loc_07,
+        loc_10,
+        loc_11,
+        loc_12,
+        loc_13,
+        loc_14,
+        loc_15,
+        loc_16,
+        loc_17,
+        loc_20,
+        loc_21,
+        loc_22,
+        loc_23,
+        loc_24,
+        loc_25,
+        loc_26,
+        loc_27,
+        loc_30,
+        loc_31,
+        loc_32,
+        loc_33,
+        loc_34,
+        loc_35,
+        loc_36,
+        loc_37,
+    ],
+    closed_set=True,
+    bounds=WORLD_BOUNDS,
+    contains_objects=True,
+)
+
+FIVE_CUBE_SCENE.goal = [
+    {"predicate": "on", "args": ["light_pink_block", "light_blue_block"]},
 ]

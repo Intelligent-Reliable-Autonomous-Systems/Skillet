@@ -1,8 +1,10 @@
 from .scene_objs import Cube as Cube
+from .scene_objs import Location as Location
 from .scene_objs import Table as Table
 from .scene_objs import Target as Target
 from .scenes import CUBE_SIZE as CUBE_SIZE
 from .scenes import EMPTY_SCENE as EMPTY_SCENE
+from .scenes import FIVE_CUBE_SCENE as FIVE_CUBE_SCENE
 from .scenes import FOUR_CUBE_SCENE as FOUR_CUBE_SCENE
 from .scenes import LOC_CUBE_SCENE as LOC_CUBE_SCENE
 from .scenes import SIX_CUBE_APRIL_SCENE as SIX_CUBE_APRIL_SCENE

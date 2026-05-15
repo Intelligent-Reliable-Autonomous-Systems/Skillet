@@ -107,7 +107,7 @@ class PickBlock2Skill(PickBlockSkill):
         """Initialize the pick block skill."""
         super().__init__(scene, pick_skill, vis_target_pos)
         self._block_params_spec = SkillParamsSpec(
-            space=gym.spaces.MultiDiscrete((self.max_objects, 2)), name="block_id", is_torch=False, is_batched=False
+            space=gym.spaces.MultiDiscrete((self.max_objects,) * 2), name="block_id", is_torch=False, is_batched=False
         )
         self._params = None
 
@@ -117,10 +117,17 @@ class PickBlock2Skill(PickBlockSkill):
         self._params = self.params_spec.cast(params[:2])
 
         self._target_block: SceneObject = self._scene.get_objects_from_id(self._params)[0]
-        if not self._target_block.is_pose_known() or self._params[0] == self._params[1]:
+        if (
+            not self._target_block.is_pose_known()
+            or self._target_block == self._params[1]
+            or not self._target_block.moveable
+        ):
             self._status = torch.as_tensor(SkillStatusCodes.FAILED, device=self.params_spec.device)
+            print(
+                f"[INFO][PICK BLOCK][FAILED]: {self._target_block.name} | {self._scene.get_objects_from_id(self._params)[1].name}"
+            )
             return
-        target_xyz = self._target_block.pose[:3].to(self.obs_spec.device) + self._offset
+        target_xyz = self._target_block.pose[:3].to(self.obs_spec.device).clone() + self._offset
         if self._vis_target_pos is not None:
             self._vis_target_pos(target_xyz)
         yaw = 0

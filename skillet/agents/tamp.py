@@ -12,6 +12,7 @@ from skillet.perception.perception import SkilletPerception
 from skillet.planning import AbstractModel
 from skillet.planning.abstract.up_utils import sample_action_from_state
 from skillet.scene.base import Scene
+from skillet.agents import SkilletModerator
 
 
 class PlanningAgent(Agent):
@@ -104,6 +105,7 @@ class RandomTampAgent(Agent):
         self.abstract_model = abstract_model
         self.action_to_skill_map = action_to_skill_map
         self._perception = perception
+        self._moderator = SkilletModerator()
 
     def execute(
         self,
@@ -124,20 +126,16 @@ class RandomTampAgent(Agent):
         self.abstract_model.initialize(self._scene, task)
 
         terminated = False
-        cum_reward = 0.0
 
         for i in range(num_actions):
             # self._perception.update_state()
             up_state = self.abstract_model.reset_up_problem_state()
-
             # ab_action, up_action = self.abstract_model.get_random_action(up_state)
             ab_action, up_action = sample_action_from_state(self.abstract_model._problem, up_state)
             self._selected_skill = self.action_to_skill_map[ab_action.action]
             args = self._scene.resolve_names_to_ids(ab_action.parameters)
 
-            obs = env.get_observation(self._selected_skill.obs_spec)
-            self._selected_skill.initiate(obs, args)
-            skill_done = self._selected_skill.is_terminated(env.get_observation(self._selected_skill.obs_spec))
+            self._moderator.run_skill(env, self._selected_skill, args)
 
             if logger is not None:
                 obs_log = env.get_observation(logger._obs_spec)
@@ -154,15 +152,7 @@ class RandomTampAgent(Agent):
                     actions=up_action,
                     executions="applicable",
                 )
-            while not skill_done and not bool(terminated):
-                # Get the next action with the low-level observation
-                action = self._selected_skill.get_action(env.get_observation(self._selected_skill.obs_spec))
-                # Take a step in the environment
-                _, r, term, trunc, _ = env.step(action, action_spec=self._selected_skill.action_spec)
-                cum_reward += r
-                terminated = terminated | term | trunc
-                # Check if the skill is terminated
-                skill_done = self._selected_skill.is_terminated(env.get_observation(self._selected_skill.obs_spec))
+
             if terminated:
                 break
             time.sleep(3)
@@ -232,8 +222,6 @@ class RandomStateAgent(Agent):
         for i in range(num_actions):
             # self._perception.update_state()
             up_state = self.abstract_model.get_abstract_state()
-            print(up_state)
-            print("\n")
 
             # ab_action, up_action = self.abstract_model.get_random_action(up_state)
             # ab_action, up_action = sample_action_from_state(self.abstract_model._problem, up_state)

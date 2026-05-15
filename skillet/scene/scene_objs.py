@@ -65,6 +65,9 @@ class Cube(SceneObject):
         init_pose: torch.Tensor | None = None,  # (x, y, z, w, x, y, z)
         face_apriltags: list[dict[str, Any]] | None = None,
         name: str | None = None,
+        material: str = "plastic",
+        color: str = "blue",
+        moveable: bool = True,
     ) -> None:
         """Initialize the cube.
 
@@ -85,6 +88,33 @@ class Cube(SceneObject):
         self._pose = init_pose if init_pose is not None else torch.rand(size=(7,), device=DEVICE)
         self._face_apriltags = face_apriltags or []
         self._ema_filter = EMAFilter()
+        self._material = material
+        self._color = color
+        self._moveable = moveable
+
+    @property
+    def material(self) -> str:
+        return self._material
+
+    @property
+    def color(self) -> str:
+        return self._color
+
+    @property
+    def moveable(self) -> bool:
+        return self._moveable
+
+    @material.setter
+    def material(self, m: str) -> None:
+        self._material = m
+
+    @color.setter
+    def color(self, c: str) -> None:
+        self._color = c
+
+    @moveable.setter
+    def moveable(self, b: bool) -> None:
+        self._moveable = b
 
     @property
     def pose(self) -> torch.Tensor:
