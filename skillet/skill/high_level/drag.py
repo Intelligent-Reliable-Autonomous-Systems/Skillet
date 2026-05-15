@@ -37,7 +37,11 @@ class DragStatusCodes(IntEnum):
     """The skill is dragging the object."""
     DRAG = 6
     """The skill is raising the object."""
-    DONE = 7
+    LOWER2 = 7
+    """The skill is raising the object."""
+    RELEASE = 8
+    """The skill is raising the object."""
+    DONE = 9
     """The skill has lifted the ojbect."""
 
 
@@ -137,7 +141,7 @@ class DragSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params], Generic[TB
 
         # Define the target poses for each stage of the drag skill, indexed by DragStatusCodes
         # (n_envs, num_drag_stages, 7)
-        target_poses = spec.zeros(shape=(self.n_envs, 8, 7), dtype=float)
+        target_poses = spec.zeros(shape=(self.n_envs, 10, 7), dtype=float)
         # ASCEND[1]: Go up to lift height (gripper open)
         target_poses[:, DragStatusCodes.ASCEND, :7] = ee_pose_b
         target_poses[:, DragStatusCodes.ASCEND, 2] = self._lift_height
@@ -158,6 +162,11 @@ class DragSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params], Generic[TB
         target_poses[:, DragStatusCodes.DRAG, 3:7] = target_poses[:, DragStatusCodes.RAISE, 3:7]
         target_poses[:, DragStatusCodes.DRAG, 0:3] = params[:, 4:7]
         target_poses[:, DragStatusCodes.DRAG, 2] = params[:, 6] + 0.01
+        # LOWER[7]: Go down to the target z position (gripper open)
+        target_poses[:, DragStatusCodes.LOWER2, :7] = target_poses[:, DragStatusCodes.DRAG, :7]
+        target_poses[:, DragStatusCodes.LOWER2, 2] = params[:, 6]
+        # RELEASE[8]
+        target_poses[:, DragStatusCodes.RELEASE, :7] = target_poses[:, DragStatusCodes.LOWER2, :7]
 
         self._target_poses = target_poses
 
@@ -191,7 +200,7 @@ class DragSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params], Generic[TB
             self._drag_status[valid_idx] += 1
             valid_idx = valid_idx & (self._drag_status < DragStatusCodes.DONE)
             print(
-                f"[INFO][DRAG STATUS UPDATE]: {DragStatusCodes(self._drag_status.cpu().numpy()[0]).name} | reached_pose: {reached_pose}"
+                f"[INFO][DRAG STATUS UPDATE]: {DragStatusCodes(self._drag_status.cpu().numpy()[0]).name} | reached_pose: {reached_pose.cpu().numpy()}"
             )
             # Update the target pose based on the new drag status
             self._current_target_poses[valid_idx] = self._target_poses[idx[valid_idx], self._drag_status[valid_idx]]
@@ -202,7 +211,7 @@ class DragSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params], Generic[TB
 
         reach_actions = self._reach_policy.get_action(obs)
         reach_actions[:, -1] = torch.where(
-            self._drag_status >= DragStatusCodes.GRASP,
+            (self._drag_status >= DragStatusCodes.GRASP) & (self._drag_status < DragStatusCodes.RELEASE),
             torch.ones_like(reach_actions[:, -1]) * 0.6,  # Close gripper
             torch.zeros_like(reach_actions[:, -1]),  # Open gripper
         )

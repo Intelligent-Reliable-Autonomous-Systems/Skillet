@@ -74,7 +74,6 @@ class SkilletDataLogger:
         self.fig = plt.figure(figsize=self.figsize, facecolor="#aaaaaa")
         self._build_layout()
 
-        self._cap = cv2.VideoCapture(0)
         self._fourcc = cv2.VideoWriter_fourcc(*"mp4v")  # .mp4 output
         self._writer = None
 
@@ -91,7 +90,6 @@ class SkilletDataLogger:
 
     def save_video(self):
         if self._write_video:
-            self._cap.release()
             self._writer.release()
             self._write_video = False
             self._writer = None
@@ -172,7 +170,6 @@ class SkilletDataLogger:
         fpath = Path(f"{self._log_dir}/{self._start_time}/exp_{self._exp_id}")
         fpath.mkdir(exist_ok=True, parents=True)
         if self._write_video:
-            self._cap.release()
             self._writer.release()
         with h5py.File(f"{fpath}/data.h5", "w") as f:
             ep = f.create_group("episode")
@@ -401,12 +398,15 @@ class SkilletDataLogger:
             if self._writer is None:
                 fpath = Path(f"{self._log_dir}/{self._start_time}/exp_{self._exp_id}")
                 fpath.mkdir(exist_ok=True, parents=True)
+                self._video_start_time = datetime.now().strftime("%H%M%S")
                 self._writer = cv2.VideoWriter(
-                    f"{self._log_dir}/{self._start_time}/exp_{self._exp_id}/output_{datetime.now().strftime('%H%M%S')}.mp4",
+                    f"{self._log_dir}/{self._start_time}/exp_{self._exp_id}/output_{self._video_start_time}.mp4",
                     self._fourcc,
                     self._fps,
                     (fw, fh),
                 )
+                self._frame_buffer = []
+            # self._frame_buffer.append(frame)
             self._writer.write(frame)
             if self._visualize:
                 self._ensure_window()
@@ -476,4 +476,15 @@ class SkilletDataLogger:
             if hasattr(self, "_states") and hasattr(self, "_actions") and hasattr(self, "_executions"):
                 self._pddl_trace.write_trace_file(
                     f"{fpath}/_pddl_trace.pddl", self._states, self._actions, self._executions
+                )
+            if False:
+                for frame in self._frame_buffer:
+                    self._writer.write(frame)
+                    fh, fw, _ = frame.shape
+                self._writer.release()
+                self._writer = cv2.VideoWriter(
+                    f"{self._log_dir}/{self._start_time}/exp_{self._exp_id}/output_{self._video_start_time}.mp4",
+                    self._fourcc,
+                    self._fps,
+                    (fw, fh),
                 )

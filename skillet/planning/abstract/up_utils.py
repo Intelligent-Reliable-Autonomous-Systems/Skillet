@@ -394,7 +394,6 @@ def sample_action_from_state(
     """
     if isinstance(state, UPState):
         state = up_state_to_dict(state)
-    max_tries = 50
     for _ in range(max_tries):
         if action_name is None:
             up_action: InstantaneousAction = np.random.choice(problem.actions)

@@ -51,8 +51,8 @@ args_cli = parser.parse_args()
 
 def main() -> None:
     scene = FOUR_CUBE_SCENE
-    block_domain = "skillet/planning/abstract/assets/blocks.domain.pddl"
-
+    # block_domain = "skillet/planning/abstract/assets/blocks.domain.pddl"
+    block_domain = "skillet_tasks/blocks-world/simple-blocks.domain.pddl"
     env_cfg = {
         "robot_ip": args_cli.robot_ip,
         "device": "cuda",
@@ -114,7 +114,7 @@ def main() -> None:
     while True:
         with torch.inference_mode():
             env.reset()
-            tamp_agent.execute(env, logger=logger, num_actions=100)
+            tamp_agent.execute(env, logger=logger, num_actions=20)
             print("[INFO][Main] finished run of skill executor, resetting")
             logger.save_video()
             break

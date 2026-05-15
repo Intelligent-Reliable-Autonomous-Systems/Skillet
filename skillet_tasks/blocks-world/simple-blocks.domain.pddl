@@ -97,6 +97,7 @@
         (or (loc-north-of ?toloc ?fromloc) (loc-north-of ?fromloc ?toloc))
         (loc-above ?toloc ?belowtoloc)
         (loc-above ?fromloc ?belowfromloc)
+
     )
     :effect (and
         ; gripper
