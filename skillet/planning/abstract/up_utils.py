@@ -215,6 +215,14 @@ def up_state_to_dict(
     if isinstance(state, UPState):
         state._condense_state()
         state_dict = {k: v.bool_constant_value() for k, v in state._values.items()}
+    elif isinstance(state, dict):
+        def as_bool(value: bool | FNode) -> bool:
+            if isinstance(value, bool):
+                return value
+            if isinstance(value, FNode) and value.is_fluent_exp():
+                return value.bool_constant_value()
+            raise ValueError(f"Invalid value: {value}")
+        state_dict = {k: as_bool(v) for k, v in state.items()}
     else:
         dict_state = {}
         for fexp in state:
