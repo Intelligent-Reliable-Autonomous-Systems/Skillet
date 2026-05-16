@@ -181,9 +181,9 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
             valid_idx = (self._status == SkillStatusCodes.RUNNING) & (reached_pose)
             self._pick_status[valid_idx] += 1
             valid_idx = valid_idx & (self._pick_status < PickStatusCodes.DONE)
-            print(
-                f"[INFO][PICK STATUS UPDATE]: {PickStatusCodes(self._pick_status.cpu().numpy()[0]).name} | reached_pose: {reached_pose.cpu().numpy()}"
-            )
+            # print(
+            #     f"[INFO][PICK STATUS UPDATE]: {PickStatusCodes(self._pick_status.cpu().numpy()[0]).name} | reached_pose: {reached_pose.cpu().numpy()}"
+            # )
             # Update the target pose based on the new pick status
             self._current_target_poses[valid_idx] = self._target_poses[idx[valid_idx], self._pick_status[valid_idx]]
 

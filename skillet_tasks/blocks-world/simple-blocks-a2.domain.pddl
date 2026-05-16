@@ -94,6 +94,7 @@
     :precondition (and
         (at-loc ?grasped ?fromloc)
         (not (occupied ?toloc))
+        (not (obstructed-above ?fromloc))
         (or (loc-north-of ?toloc ?fromloc) (loc-north-of ?fromloc ?toloc))
         (loc-above ?toloc ?belowtoloc)
         (loc-above ?fromloc ?belowfromloc)

@@ -97,9 +97,9 @@ def main() -> None:
     # Low-level policies
     skill_length = 1e9
     arm_policy = TcpCartPolicy(env.batched_env.obs_spec_tcp_cart, env.batched_env.action_spec_tcp_cart)
-    place_skill = PlaceSkill(reach_policy=arm_policy, gripper_policy=None, lift_height=0.3, length=skill_length)
-    pick_skill = PickSkill(reach_policy=arm_policy, gripper_policy=None, lift_height=0.3, length=skill_length)
-    drag_skill = DragSkill(reach_policy=arm_policy, gripper_policy=None, lift_height=0.3, length=skill_length)
+    place_skill = PlaceSkill(reach_policy=arm_policy, gripper_policy=None, lift_height=0.25, length=skill_length)
+    pick_skill = PickSkill(reach_policy=arm_policy, gripper_policy=None, lift_height=0.25, length=skill_length)
+    drag_skill = DragSkill(reach_policy=arm_policy, gripper_policy=None, lift_height=0.25, length=skill_length)
     pick_block_skill = PickBlock2Skill(scene, pick_skill, vis_target_pos=target_pose_func)
     # place_block_skill = PlaceBlock2Skill(scene, place_skill, vis_target_pos=target_pose_func)
     place_block_skill = PlaceBlock4Skill(scene, place_skill, vis_target_pos=target_pose_func)
@@ -122,13 +122,10 @@ def main() -> None:
     logger.write_video = True
     logger.run_thread()
 
-    while True:
-        with torch.inference_mode():
-            env.reset()
-            tamp_agent.execute(env, logger=logger, num_actions=20)
-            print("[INFO][Main] finished run of skill executor, resetting")
-            logger.save_video()
-            break
+    env.reset()
+    tamp_agent.execute(env, logger=logger, num_actions=100)
+    logger.save_video()
+    print("[INFO][Main] finished experiment, exiting...")
 
 
 if __name__ == "__main__":

@@ -96,7 +96,7 @@ class AbstractModel(BasePlanner):
 
         # Perform predicate grounding
         fluent_state = {}
-        on_pred, clear_pred, north_pred = ground_cube_relations(self._scene)
+        on_pred, clear_pred, north_pred, color_pred, material_pred = ground_cube_relations(self._scene)
         empty_pred, grasping_pred, lifted_pred = ground_gripper_relations(self._scene)
         above_loc_pred, north_loc_pred, at_pred, occ_pred, ob_above_pred, ob_north_pred, ob_south_pred = (
             ground_location_relations(self._scene)
@@ -157,6 +157,13 @@ class AbstractModel(BasePlanner):
             for os in ob_south_pred:
                 fluent = self._problem.fluent(os[0])(*(object_state[os[1].name],))
                 fluent_state[fluent] = True
+        for mp in material_pred:
+            if mp[0] in prob_fluents:
+                fluent = self._problem.fluent(mp[0])(*(object_state[mp[1].name],))
+        for cp in color_pred:
+            if cp[0] in prob_fluents:
+                fluent = self._problem.fluent(cp[0])(*(object_state[cp[1].name],))
+
         # Parse the goal
         if goal is not None:
             self._scene.goal = goal

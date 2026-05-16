@@ -198,6 +198,8 @@ def ground_cube_relations(scene: Scene) -> tuple[list[tuple[str, SceneObject, Sc
     on_relations = []
     north_relations = []
     clear_relations = [("clear", scene.table)]
+    color_relations = []
+    material_relations = []
     table = scene.table
 
     cube_list = []
@@ -205,6 +207,10 @@ def ground_cube_relations(scene: Scene) -> tuple[list[tuple[str, SceneObject, Sc
         if not isinstance(obj, Cube):
             continue
         cube_list.append(obj)
+        if obj.material is not None:
+            material_relations.append((obj.material, obj))
+        if obj.color is not None:
+            color_relations.append((obj.color, obj))
         if table is not None and _is_on_table(obj, table):
             on_relations.append(("on", obj, table))
         for other_obj in scene.objects:
@@ -220,7 +226,7 @@ def ground_cube_relations(scene: Scene) -> tuple[list[tuple[str, SceneObject, Sc
         if o[2] in cube_list:
             cube_list.remove(o[2])
     [clear_relations.append(("clear", obj)) for obj in cube_list]
-    return on_relations, clear_relations, north_relations
+    return on_relations, clear_relations, north_relations, color_relations, material_relations
 
 
 def ground_gripper_relations(scene: Scene) -> tuple[bool, list[tuple[Literal["holding"], SceneObject]]]:

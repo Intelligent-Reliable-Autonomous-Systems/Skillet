@@ -41,11 +41,18 @@ class ParsedUpProblem:
         "clear",
         "small",
         "loc-north-of",
+        "loc_north_of",
         "loc-above",
+        "loc_above",
         "occupied",
         "obstructed-north",
+        "obstructed_north",
         "obstructed-above",
+        "obstructed_above",
         "obstructed-south",
+        "obstructed_south",
+        "wooden",
+        "plastic",
     ]
 
     def __str__(self) -> str:
@@ -53,6 +60,8 @@ class ParsedUpProblem:
         for f, v in self.fluents.items():
             f = parse_value(str(f), v)
             if f.value in self.exclude_list:
+                continue
+            if (f.value == "at_loc" or f.value == "at-loc") and "table" in f.parameters[0]:
                 continue
             print_str += f"{f!s}\n"
         return print_str
@@ -101,12 +110,30 @@ class AbstractPlan:
 @dataclass
 class AbstractState:
     states: list[AbstractValue]
-    exclude_list = ["clear", "small", "loc_north_of", "loc_above", "occupied"]
+    exclude_list = [
+        "clear",
+        "small",
+        "loc-north-of",
+        "loc_north_of",
+        "loc-above",
+        "loc_above",
+        "occupied",
+        "obstructed-north",
+        "obstructed_north",
+        "obstructed-above",
+        "obstructed_above",
+        "obstructed-south",
+        "obstructed_south",
+        "wooden",
+        "plastic",
+    ]
 
     def __str__(self) -> str:
         print_str = ""
         for s in self.states:
             if s.value in self.exclude_list:
+                continue
+            if (s.value == "at_loc" or s.value == "at-loc") and "table" in s.parameters[0]:
                 continue
             print_str += f"{s}\n"
         return print_str

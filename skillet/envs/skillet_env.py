@@ -244,6 +244,22 @@ class SkilletEnv(
         ]
 
     @override
+    def coerce_action_spec(self, action_spec: str | ActionSpec[Any]) -> ActionSpec[Any]:
+        for spec in [
+            self.action_spec_joints_vel,
+            self.obs_spec_state,
+            self.action_spec_twist_tcp,
+            self.action_spec_tcp_cart,
+            self.action_spec_tcp_quat,
+            self.action_spec_state,
+        ]:
+            if spec.name == action_spec:
+                return spec
+            if isinstance(action_spec, str) and action_spec == spec.name:
+                return spec
+        raise ValueError(f"Action spec {action_spec} not supported by environment.")
+
+    @override
     def coerce_obs_spec(self, obs_spec: str | ObservationSpec[Any]) -> ObservationSpec[Any]:
         for spec in [
             self.obs_spec_policy,

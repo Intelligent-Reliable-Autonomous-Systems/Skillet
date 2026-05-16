@@ -166,7 +166,6 @@ class SkilletDataLogger:
 
     def save_log(self) -> None:
         """Save the log to a file."""
-        print("[INFO][LOGGER] Saving datafile")
         fpath = Path(f"{self._log_dir}/{self._start_time}/exp_{self._exp_id}")
         fpath.mkdir(exist_ok=True, parents=True)
         if self._write_video:
@@ -354,10 +353,12 @@ class SkilletDataLogger:
         while not self._stop_event.is_set():
             self.update_visualization()
 
-            next_poll_t += poll_period_s
-            sleep_s = max(0.0, next_poll_t - time.perf_counter())
-            if sleep_s > 0:
-                time.sleep(sleep_s)
+            sleep_time = (time.perf_counter() - next_poll_t) - poll_period_s
+            if sleep_time < 0:
+                time.sleep(min(-sleep_time, poll_period_s))
+            else:
+                ...
+                # print(f"[WARN][DATA] full loop overran by {sleep_time * 1000:.1f}ms")
 
         self.stop()
 
@@ -463,7 +464,6 @@ class SkilletDataLogger:
                 else:
                     getattr(self, f"_{k}").append(v)
         if save_log:
-            print("[INFO][LOGGER] Saving datafile")
             fpath = Path(f"{self._log_dir}/{self._start_time}/exp_{self._exp_id}")
             fpath.mkdir(exist_ok=True, parents=True)
             for k in kwargs:

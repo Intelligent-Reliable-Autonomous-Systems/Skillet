@@ -135,7 +135,7 @@ class RandomTampAgent(Agent):
             self._selected_skill = self.action_to_skill_map[ab_action.action]
             args = self._scene.resolve_names_to_ids(ab_action.parameters)
 
-            self._moderator.run_skill(env, self._selected_skill, args)
+            terminated = self._moderator.run_skill(env, self._selected_skill, args)
 
             if logger is not None:
                 obs_log = env.get_observation(logger._obs_spec)
@@ -155,7 +155,7 @@ class RandomTampAgent(Agent):
 
             if terminated:
                 break
-            time.sleep(3)
+            time.sleep(4)
         if logger is not None:
             obs_log = env.get_observation(logger._obs_spec)
             logger.log(

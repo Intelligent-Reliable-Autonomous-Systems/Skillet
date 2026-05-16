@@ -75,7 +75,7 @@ class DragBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
 
         self._target_block: SceneObject = self._scene.objects(params)
         if not self._target_block.is_pose_known():
-            self._status = SkillStatusCodes.FAILED.value
+            self._status = torch.as_tensor(SkillStatusCodes.FAILED, device=self.params_spec.device)
             return
         target_xyz = self._target_block.pose[:3] + self._offset
         if self._vis_target_pos is not None:
@@ -101,6 +101,10 @@ class DragBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
             return self._status
         return self._drag_skill.status[0]
 
+    @status.setter
+    def status(self, st: SkillStatus) -> None:
+        self._status = torch.as_tensor(st, device=self.params_spec.device)
+
 
 class DragBlock2Skill(DragBlockSkill):
     def __init__(
@@ -123,7 +127,7 @@ class DragBlock2Skill(DragBlockSkill):
 
         self._target_block: SceneObject = self._scene.get_objects_from_id(self._params)[0]
         if not self._target_block.is_pose_known() or not self._target_block.moveable:
-            self._status = SkillStatusCodes.FAILED.value
+            self._status = torch.as_tensor(SkillStatusCodes.FAILED, device=self.params_spec.device)
             print(
                 f"[INFO][DRAG BLOCK][FAILED]: {self._target_block.name} | {self._scene.get_objects_from_id(self._params)[1].name}"
             )
@@ -172,7 +176,7 @@ class DragBlock5Skill(DragBlockSkill):
         objs = self._scene.get_objects_from_id(self._params)
         self._target_block: SceneObject = objs[0]
         if not self._target_block.is_pose_known() or not self._target_block.moveable:
-            self._status = SkillStatusCodes.FAILED.value
+            self._status = torch.as_tensor(SkillStatusCodes.FAILED, device=self.params_spec.device)
             print(f"[INFO][DRAG BLOCK][FAILED]: {self._target_block.name} | {objs[1].name}")
             return
         target_xyz = self._target_block.pose[:3].to(self.obs_spec.device) + self._offset

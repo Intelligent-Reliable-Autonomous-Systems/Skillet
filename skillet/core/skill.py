@@ -98,6 +98,10 @@ class Skill(ABC, Generic[TSkillObs, TAction, TSkillParams]):
         """The status of the skill."""
         raise NotImplementedError
 
+    @status.setter
+    def status(self, st: SkillStatus | Int[ArrayLike, "b"]) -> None:
+        self._status = st
+
     @abstractmethod
     def get_action(self, obs: TSkillObs) -> TAction:
         """Get the next action for the skill based on the observation. Return the action if the skill is not terminated, otherwise return the result of the skill."""
@@ -157,6 +161,10 @@ class SingleSkill(
         """The status of the skills."""
         raise NotImplementedError
 
+    @status.setter
+    def status(self, st: SkillStatus | Int[ArrayLike, "b"]) -> None:
+        self._status = st
+
     def can_initiate(self, obs: TSkillObs) -> bool:
         return super().can_initiate(obs)
 
@@ -182,6 +190,10 @@ class BatchedSkill(
     def status(self) -> Int[ArrayLike, "b"]:  # noqa: F821
         """The status of the skills. Must call initiate() before using this property."""
         raise NotImplementedError
+
+    @status.setter
+    def status(self, st: SkillStatus | Int[ArrayLike, "b"]) -> None:
+        self._status = st
 
     def can_initiate(self, obs: TBSkillObs) -> Bool[ArrayLike, "b"]:  # noqa: F821
         return super().can_initiate(obs)
@@ -250,6 +262,10 @@ class CompositeSkill(
                 continue
             self._status[env_ids] = skill.status
         return self._status
+
+    @status.setter
+    def status(self, st: SkillStatus | Int[ArrayLike, "b"]) -> None:
+        self._status = st
 
     @property
     def policies(self) -> Sequence[BatchedPolicy[TBSkillObs, TBAction, TBSkillParams]]:

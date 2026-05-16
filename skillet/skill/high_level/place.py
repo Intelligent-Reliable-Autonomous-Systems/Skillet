@@ -189,9 +189,9 @@ class PlaceSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAct
             valid_idx = (self._status == SkillStatusCodes.RUNNING) & (next_pose)
             self._place_status[valid_idx] += 1
             valid_idx = valid_idx & (self._place_status < PlaceStatusCodes.DONE)
-            print(
-                f"[INFO][PLACE STATUS UPDATE]: {PlaceStatusCodes(self._place_status.cpu().numpy()[0]).name} | reached_pose: {next_pose.cpu().numpy()}"
-            )
+            # print(
+            #     f"[INFO][PLACE STATUS UPDATE]: {PlaceStatusCodes(self._place_status.cpu().numpy()[0]).name} | reached_pose: {next_pose.cpu().numpy()}"
+            # )
             # Update the target pose based on the new place status
             self._current_target_poses[valid_idx] = self._target_poses[idx[valid_idx], self._place_status[valid_idx]]
 

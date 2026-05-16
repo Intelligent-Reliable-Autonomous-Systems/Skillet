@@ -76,7 +76,7 @@ class PlaceBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
 
         self._target_block: SceneObject = self._scene.objects(params)
         if not self._target_block.is_pose_known():
-            self._status = SkillStatusCodes.FAILED.value
+            self._status = torch.as_tensor(SkillStatusCodes.FAILED, device=self.params_spec.device)
             return
         target_xyz = self._target_block.pose[:3] + self._offset
         if self._vis_target_pos is not None:
@@ -98,6 +98,10 @@ class PlaceBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
         if self._status is not None:
             return self._status
         return self._place_skill.status[0]
+
+    @status.setter
+    def status(self, st: SkillStatus) -> None:
+        self._status = torch.as_tensor(st, device=self.params_spec.device)
 
 
 class PlaceBlock2Skill(PlaceBlockSkill):
