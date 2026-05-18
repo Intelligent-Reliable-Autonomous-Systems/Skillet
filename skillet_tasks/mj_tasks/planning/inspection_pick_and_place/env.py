@@ -16,6 +16,7 @@ which is mapped to the MuJoCo ``fingers_actuator`` ctrl range [0, 255].
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 import mujoco
@@ -101,15 +102,18 @@ class InspectionMjEnv:
         # Gymnasium spaces
         n_q = self._N_ARM_JOINTS + 1  # 8
         single_obs = gym.spaces.Dict({
-            "ee_pose_b":   gym.spaces.Box(-np.inf, np.inf, (7,), np.float32),
-            "tcp_pose_b":  gym.spaces.Box(-np.inf, np.inf, (7,), np.float32),
-            "jacobians":   gym.spaces.Box(-np.inf, np.inf, (6, self._N_ARM_JOINTS), np.float32),
-            "joint_pos":   gym.spaces.Box(-np.pi, np.pi, (n_q,), np.float32),
-            "joint_vel":   gym.spaces.Box(-10.0, 10.0, (n_q,), np.float32),
-            "tcp_offset":  gym.spaces.Box(-np.inf, np.inf, (7,), np.float32),
-            "gripper":     gym.spaces.Box(0.0, self._GRIPPER_MAX, (1,), np.float32),
-            "gripper_lim": gym.spaces.Box(0.0, self._GRIPPER_MAX, (2,), np.float32),
-            "joint_lims":  gym.spaces.Box(-np.pi, np.pi, (2, n_q), np.float32),
+            "ee_pose_b":    gym.spaces.Box(-np.inf, np.inf, (7,), np.float32),
+            "tcp_pose_b":   gym.spaces.Box(-np.inf, np.inf, (7,), np.float32),
+            "jacobians":    gym.spaces.Box(-np.inf, np.inf, (6, self._N_ARM_JOINTS), np.float32),
+            "joint_pos":    gym.spaces.Box(-np.pi, np.pi, (n_q,), np.float32),
+            "joint_vel":    gym.spaces.Box(-10.0, 10.0, (n_q,), np.float32),
+            "tcp_offset":   gym.spaces.Box(-np.inf, np.inf, (7,), np.float32),
+            "gripper":      gym.spaces.Box(0.0, self._GRIPPER_MAX, (1,), np.float32),
+            "gripper_lim":  gym.spaces.Box(0.0, self._GRIPPER_MAX, (2,), np.float32),
+            "joint_lims":   gym.spaces.Box(-np.pi, np.pi, (2, n_q), np.float32),
+            # PlaceSkill reads tcp_wrench_b for contact detection; no force sensor
+            # in this MJCF so we always return zeros (contact check never fires).
+            "tcp_wrench_b": gym.spaces.Box(-np.inf, np.inf, (6,), np.float32),
         })
         single_act = gym.spaces.Box(-np.pi, np.pi, (n_q,), np.float32)
         self.single_observation_space = single_obs
@@ -129,6 +133,7 @@ class InspectionMjEnv:
         self._action_spec: ActionSpec = JOINT_VEL_SPEC.bind(n_joints=n_q).replace(device=_cpu)
 
         self._last_obs: dict[str, torch.Tensor] | None = None
+        self._step_callback: Callable[[], None] | None = None
         self._reset_to_home()
 
     # -----------------------------------------------------------------------
@@ -221,6 +226,8 @@ class InspectionMjEnv:
 
         obs = self._get_obs()
         self._last_obs = obs
+        if self._step_callback is not None:
+            self._step_callback()
         return (
             obs,
             torch.zeros(1),
@@ -234,6 +241,48 @@ class InspectionMjEnv:
         if self._last_obs is None:
             raise ValueError("Call reset() before get_observation().")
         return self._last_obs
+
+    def set_step_callback(self, callback: Callable[[], None] | None) -> None:
+        """Register a function called after every physics step (e.g. ``viewer.sync``)."""
+        self._step_callback = callback
+
+    def get_block_world_pos(self, block_name: str) -> np.ndarray:
+        """Return the world-frame XYZ of a block body, shape ``(3,)``.
+
+        Reads live from ``MjData.xpos`` so it reflects the current physics state.
+        Used to sync the scene-graph after a physical place action.
+        """
+        body_id = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_BODY, block_name)
+        if body_id == -1:
+            raise ValueError(f"No body named {block_name!r} in MuJoCo model")
+        return self._data.xpos[body_id].copy()
+
+    def capture_wrist_cam(self, width: int = 640, height: int = 480) -> np.ndarray:
+        """Render a frame from the wrist-mounted camera.
+
+        The Gen3 MJCF includes a ``wrist`` camera on the bracelet_link body
+        (fovy ≈ 42°, 640×480).  This method renders it off-screen and returns
+        an RGB image.  Caller is responsible for saving the array.
+
+        Returns:
+            ``(height, width, 3)`` uint8 RGB array.
+
+        """
+        renderer = mujoco.Renderer(self._model, height=height, width=width)
+        renderer.update_scene(self._data, camera="wrist")
+        pixels = renderer.render()
+        renderer.close()
+        return pixels
+
+    @property
+    def mj_model(self) -> mujoco.MjModel:
+        """The underlying ``MjModel`` (e.g. for launching a passive viewer)."""
+        return self._model
+
+    @property
+    def mj_data(self) -> mujoco.MjData:
+        """The underlying ``MjData`` (e.g. for launching a passive viewer)."""
+        return self._data
 
     # -----------------------------------------------------------------------
     # Internals
@@ -302,15 +351,16 @@ class InspectionMjEnv:
         gripper = drv_q.unsqueeze(0)  # (1, 1)
 
         return {
-            "ee_pose_b":   ee_pose_b,          # (1, 7)
-            "tcp_pose_b":  tcp_pose_b,          # (1, 7)
-            "jacobians":   jacobians,            # (1, 6, 7)
-            "joint_pos":   joint_pos,            # (1, 8)
-            "joint_vel":   joint_vel,            # (1, 8)
-            "tcp_offset":  self._tcp_offset,     # (1, 7)
-            "gripper":     gripper,              # (1, 1)
-            "gripper_lim": self._gripper_lim,    # (1, 2)
-            "joint_lims":  self._joint_lims,     # (1, 2, 8)
+            "ee_pose_b":    ee_pose_b,                                        # (1, 7)
+            "tcp_pose_b":   tcp_pose_b,                                       # (1, 7)
+            "jacobians":    jacobians,                                        # (1, 6, 7)
+            "joint_pos":    joint_pos,                                        # (1, 8)
+            "joint_vel":    joint_vel,                                        # (1, 8)
+            "tcp_offset":   self._tcp_offset,                                 # (1, 7)
+            "gripper":      gripper,                                          # (1, 1)
+            "gripper_lim":  self._gripper_lim,                                # (1, 2)
+            "joint_lims":   self._joint_lims,                                 # (1, 2, 8)
+            "tcp_wrench_b": torch.zeros(1, 6, dtype=torch.float32),          # (1, 6)
         }
 
 

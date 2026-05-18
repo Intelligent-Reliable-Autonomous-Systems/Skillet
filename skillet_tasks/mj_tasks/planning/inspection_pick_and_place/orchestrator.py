@@ -10,17 +10,20 @@ never steps.
 
 from __future__ import annotations
 
+import math
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
+import torch
 from unified_planning.engines import PlanGenerationResultStatus as PGStatus
 from unified_planning.io import PDDLReader
 from unified_planning.shortcuts import OneshotPlanner
 
 from skillet.core.checked_skill import SkillResult
+from skillet.core.skill import SkillStatusCodes
 from skillet.logging.event_logger import SkillEventLogger
 from skillet.perception.inspection.defect_classifier import DefectClassifier, DefectResult
 from skillet.perception.inspection.mock_defect_classifier import MockDefectClassifier
@@ -31,7 +34,7 @@ from skillet.scene.objects.inspectable_cube import InspectableCube
 from skillet.scene.objects.platform import Platform
 from skillet.skill.high_level.inspect import InspectSkill
 from skillet.skill.high_level.inspect_for_defects import InspectForDefectsSkill
-from skillet.skill.skill_lib import make_reach_xyzrpy_skill
+from skillet.skill.skill_lib import make_pick_skill, make_reach_xyzrpy_skill
 from skillet_tasks.mj_tasks.planning.inspection_pick_and_place.scene_factory import (
     make_inspection_scene,
 )
@@ -41,6 +44,10 @@ if TYPE_CHECKING:
 
 _DOMAIN_FILE = Path(__file__).parents[4] / "skillet" / "planning" / "inspection" / "inspection.domain.pddl"
 _BLANK_IMAGE = np.zeros((64, 64, 3), dtype=np.uint8)
+# Raise TCP above block centre so the 2F-85 4-bar follower joint clears the table.
+# At block-centre z (0.022 m base), the follower reaches ≈ −21 mm (table at 0 m).
+# Adding 30 mm shifts it to +9 mm, clearing the table while still grasping the block top.
+_PICK_LOWER_Z_OFFSET_M: float = 0.03
 
 
 @dataclass
@@ -69,6 +76,7 @@ def run_demo(
     planner_name: str = "fast-downward",
     planner_timeout: float = 30.0,
     env: InspectionMjEnv | None = None,
+    screenshot_dir: str | Path | None = None,
 ) -> TaskMetrics:
     """Execute the inspection pick-and-place task.
 
@@ -91,6 +99,10 @@ def run_demo(
     """
     log_dir = Path(log_dir)
     log_dir.mkdir(parents=True, exist_ok=True)
+    _screenshot_dir: Path | None = None
+    if screenshot_dir is not None:
+        _screenshot_dir = Path(screenshot_dir)
+        _screenshot_dir.mkdir(parents=True, exist_ok=True)
 
     # Build MuJoCo scene (validates MJCF + textures)
     spec = make_inspection_scene(block_defective)
@@ -118,7 +130,7 @@ def run_demo(
     # Execute with logging
     with SkillEventLogger(log_dir / "events.jsonl", run_id=run_id) as logger:
         logger.log_world_model_snapshot(scene)
-        _execute_plan(scene, plan_actions, classifier, logger, env)
+        _execute_plan(scene, plan_actions, classifier, logger, env, _screenshot_dir)
         logger.log_world_model_snapshot(scene)
 
     return _compute_metrics(spec.blocks, ground_truth, spec.platform, spec.discard)
@@ -127,6 +139,71 @@ def run_demo(
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+
+def _save_wrist_image(env: InspectionMjEnv, path: Path) -> None:
+    """Capture the wrist camera and save to *path* as PNG (falls back to .npy)."""
+    pixels = env.capture_wrist_cam()
+    try:
+        from PIL import Image  # type: ignore[import-untyped]
+        Image.fromarray(pixels).save(path)
+    except ImportError:
+        np.save(path.with_suffix(".npy"), pixels)
+
+
+def _run_skill_loop(skill: object, env: object, max_steps: int = 200) -> None:
+    """Step the env until skill reaches SUCCESS, FAILED, or the budget runs out."""
+    for _ in range(max_steps):
+        obs = env.get_observation()  # type: ignore[union-attr]
+        action = skill.get_action(obs)  # type: ignore[union-attr]
+        env.step(action)  # type: ignore[union-attr]
+        status_val = int(skill.status[0].item())  # type: ignore[union-attr]
+        if status_val == SkillStatusCodes.SUCCESS:
+            return
+        if status_val == SkillStatusCodes.FAILED:
+            raise RuntimeError(f"Skill {skill.name!r} returned FAILED")  # type: ignore[union-attr]
+    raise RuntimeError(f"Skill {skill.name!r} timed out after {max_steps} steps")  # type: ignore[union-attr]
+
+
+def _settle(env: object, n_steps: int = 20) -> None:
+    """Hold the arm still for ``n_steps`` to let released objects settle under gravity."""
+    obs = env.get_observation()  # type: ignore[union-attr]
+    action = obs["joint_pos"].clone()   # repeat last joint targets
+    for _ in range(n_steps):
+        env.step(action)  # type: ignore[union-attr]
+
+
+def _physical_place(
+    env: InspectionMjEnv,
+    dest_x_b: float,
+    dest_y_b: float,
+    lift_height_b: float = 0.3,
+    skill_length: int = 500,
+    n_gripper_steps: int = 40,
+    n_settle_steps: int = 120,
+) -> None:
+    """Hover above destination and open gripper so the held block drops onto the surface.
+
+    PlaceSkill's 5 mm IK threshold cannot be met at the extended platform/discard
+    positions (x ≈ 0.40 m, y ≈ ±0.28 m in base frame) when the arm must also lower
+    to z ≈ 0.14 m.  ReachXYZRPYSkill uses a 2 cm threshold and converges reliably
+    at lift height (z = 0.30 m), so we hover there and drop the block.  The settle
+    budget (120 steps at 500 Hz) covers a ≈ 0.20 m free-fall.
+    """
+    reach_skill = make_reach_xyzrpy_skill(env, skill_length=skill_length)
+    hover_params = torch.tensor([[dest_x_b, dest_y_b, lift_height_b, math.pi, 0.0, 0.0]], dtype=torch.float32)
+    obs = env.get_observation()
+    reach_skill.initiate(obs, hover_params)
+    _run_skill_loop(reach_skill, env, max_steps=skill_length)
+
+    # Open gripper — held block drops freely to the destination surface
+    obs = env.get_observation()
+    action = obs["joint_pos"].clone()
+    action[:, -1] = 0.0
+    for _ in range(n_gripper_steps):
+        env.step(action)
+
+    _settle(env, n_steps=n_settle_steps)
 
 
 def _plan(problem_str: str, planner_name: str, timeout: float) -> list:
@@ -156,6 +233,7 @@ def _execute_plan(
     classifier: DefectClassifier,
     logger: SkillEventLogger,
     env: InspectionMjEnv | None = None,
+    screenshot_dir: Path | None = None,
 ) -> None:
     """Execute each grounded PDDL action via the appropriate skill.
 
@@ -174,7 +252,7 @@ def _execute_plan(
 
         if action_name == "approach-block":
             if env is not None:
-                # Phase 2: arm physically moves to the inspection viewpoint above the block.
+                # arm physically moves to the inspection viewpoint above the block.
                 # InspectSkill._compute_viewpoint converts the block's world-frame pose to
                 # robot-base frame using robot_base_world_pos, then calls reach_skill.
                 reach_skill = make_reach_xyzrpy_skill(env, skill_length=200)
@@ -192,6 +270,8 @@ def _execute_plan(
             logger.log_skill_end("InspectSkill", result)
             if not result.success:
                 raise RuntimeError(f"InspectSkill failed for {block_name}: {result}")
+            if env is not None and screenshot_dir is not None:
+                _save_wrist_image(env, screenshot_dir / f"inspect_{block_name}.png")
 
         elif action_name == "inspect-for-defects":
             skill = InspectForDefectsSkill(scene, classifier)
@@ -210,6 +290,18 @@ def _execute_plan(
             assert isinstance(block, InspectableCube)
             held_block = block
             logger.log_skill_start("PickSkill", params=block_id)
+            if env is not None:
+                base_pos = env.robot_base_world_pos
+                skill_params = torch.tensor([[
+                    float(block.pose[0]) - float(base_pos[0]),
+                    float(block.pose[1]) - float(base_pos[1]),
+                    float(block.pose[2]) - float(base_pos[2]) + _PICK_LOWER_Z_OFFSET_M,
+                    0.0,
+                ]])
+                pick_skill = make_pick_skill(env, skill_length=1000)
+                obs = env.get_observation()
+                pick_skill.initiate(obs, skill_params)
+                _run_skill_loop(pick_skill, env, max_steps=1000)
             logger.log_skill_end("PickSkill", SkillResult.ok())
 
         elif action_name == "place":
@@ -217,9 +309,20 @@ def _execute_plan(
             dest_objs = scene.get_objects_from_name([dest_name])
             dest = dest_objs[0]
             assert held_block is not None, "place called without a prior pick"
-            # Move block to destination centre (simplified — no physics)
-            held_block._pose = dest.pose.clone()
             logger.log_skill_start("PlaceSkill", params={"block": block_name, "dest": dest_name})
+            if env is not None:
+                base_pos = env.robot_base_world_pos
+                dest_x_b = float(dest.pose[0]) - float(base_pos[0])
+                dest_y_b = float(dest.pose[1]) - float(base_pos[1])
+                _physical_place(env, dest_x_b, dest_y_b)
+                # Sync the scene-graph pose from the actual MuJoCo block position.
+                world_pos = env.get_block_world_pos(held_block.name)
+                held_block._pose = torch.tensor(
+                    [world_pos[0], world_pos[1], world_pos[2], 1.0, 0.0, 0.0, 0.0],
+                    dtype=torch.float32,
+                )
+            else:
+                held_block._pose = dest.pose.clone()
             logger.log_skill_end("PlaceSkill", SkillResult.ok())
             held_block = None
 
