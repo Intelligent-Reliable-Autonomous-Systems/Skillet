@@ -88,7 +88,7 @@ def assign_objects_to_id_mean(
     return np.asarray(valid_cube_idx, dtype=np.int32), np.asarray(valid_det_idx, dtype=np.int32)
 
 
-def get_sorted_object_poses(scene: Scene, obj: SceneObject) -> np.ndarray:
+def get_sorted_object_poses(scene: Scene, obj: tuple[SceneObject]) -> np.ndarray:
     """Return a list of scene objects of a specific type sorted by their ID.
 
     Args:

@@ -21,7 +21,7 @@ from skillet.perception.reconstruction.utils import (
 from skillet.perception.segmentation.sam import SAMClient, get_sam_client
 from skillet.perception.segmentation.vlm import GeminiClient, QwenClient
 from skillet.perception.segmentation.vlm.vlm_base import VLMClient
-from skillet.scene import CUBE_SIZE, Cube, Target
+from skillet.scene import CUBE_SIZE, Cube, Sponge, Target
 from skillet.scene.base import Scene
 
 
@@ -58,9 +58,7 @@ class Sam3Reconstructor(ReconstructorBase):
         self._vlm_goal_atoms = None
 
         self._concepts = ["robot arm"]
-        for o in self._scene.get_object_names(Cube):
-            self._concepts.append(o.replace("_", " "))
-        for o in self._scene.get_object_names(Target):
+        for o in self._scene.get_object_names((Cube, Target, Sponge)):
             self._concepts.append(o.replace("_", " "))
 
     @property
@@ -102,7 +100,9 @@ class Sam3Reconstructor(ReconstructorBase):
         # Grab only the cubes and combine overlapping indices
         agg_cube_masks = []
         _, mh, mw = masks.shape
-        cube_inds = [j for j, item in enumerate(self._concepts) if "block" in item]
+        cube_inds = [
+            j for j, item in enumerate(self._concepts) if ("block" in item or "sponge" in item or "spill" in item)
+        ]
         for i in cube_inds:  # grab only cube masks
             if i not in concept_indices:
                 continue
@@ -131,7 +131,7 @@ class Sam3Reconstructor(ReconstructorBase):
             if frame == "camera"
             else centers
         )
-        _, ids = get_sorted_object_poses(self._scene, Cube)
+        _, ids = get_sorted_object_poses(self._scene, (Cube, Sponge))
         cube_idx, det_idx = [], []
         for i, c in enumerate(torch.unique(concept_indices[concept_indices != 0]).cpu().numpy()):
             if c not in cube_inds:

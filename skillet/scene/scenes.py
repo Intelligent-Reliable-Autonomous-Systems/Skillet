@@ -4,7 +4,7 @@ import torch
 
 from skillet import DEVICE
 from skillet.scene.base import Scene
-from skillet.scene.scene_objs import Cube, Location, Table, Target
+from skillet.scene.scene_objs import Cube, Location, Table, Target, Sponge
 
 CUBE_SIZE = 0.044
 SM_APRIL_SZ = 0.036
@@ -294,4 +294,16 @@ FIVE_CUBE_SCENE = Scene(
 
 FIVE_CUBE_SCENE.goal = [
     {"predicate": "on", "args": ["light_pink_block", "light_blue_block"]},
+]
+
+blue_sponge = Sponge(size=0.085, name="water_spill")
+SPONGE_SCENE = Scene(
+    objects=[table_0, blue_sponge],
+    closed_set=True,
+    bounds=WORLD_BOUNDS,
+    contains_objects=True,
+)
+
+SPONGE_SCENE.goal = [
+    {"predicate": "on", "args": ["blue_sponge", "table0"]},
 ]

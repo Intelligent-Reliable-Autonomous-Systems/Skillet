@@ -57,7 +57,7 @@ class SkilletDataLogger:
         self._num_points = 0
         self._exp_id = -1
         self._start_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self._pddl_trace = PDDLTraceIO(self._abs_model._problem)
+        self._pddl_trace = PDDLTraceIO(self._abs_model._problem) if self._abs_model is not None else None
 
         # For display
         self._write_video = False
@@ -473,7 +473,12 @@ class SkilletDataLogger:
                 if isinstance(v, list):
                     with open(f"{fpath}/_{k}.pkl", "wb") as f:
                         pickle.dump(v, f)
-            if hasattr(self, "_states") and hasattr(self, "_actions") and hasattr(self, "_executions"):
+            if (
+                hasattr(self, "_states")
+                and hasattr(self, "_actions")
+                and hasattr(self, "_executions")
+                and self._pddl_trace is not None
+            ):
                 self._pddl_trace.write_trace_file(
                     f"{fpath}/_pddl_trace.pddl", self._states, self._actions, self._executions
                 )

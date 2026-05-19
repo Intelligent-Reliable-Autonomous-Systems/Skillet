@@ -404,3 +404,90 @@ class Location(SceneObject):
     def __str__(self) -> str:
         """Return a printable string."""
         return f"Target | ID: {self.object_id} | Name: {self.name} | Center: {self.pose.cpu().numpu()[:2]}"
+
+
+class Sponge(SceneObject):
+    """A sponge in a scene."""
+
+    def __init__(
+        self,
+        size: float,
+        init_pose: torch.Tensor | None = None,  # (x, y, z, w, x, y, z)
+        name: str | None = None,
+        material: str = "plastic",
+        color: str = "blue",
+        moveable: bool = True,
+    ) -> None:
+        """Initialize the cube.
+
+        Args:
+            size: The side length of the cube in meters.
+            init_pose: The initial pose of the cube in the world frame.
+
+        """
+        super().__init__(name=name)
+        self._size = size
+        self._pose = init_pose if init_pose is not None else torch.rand(size=(7,), device=DEVICE)
+        self._ema_filter = EMAFilter()
+        self._material = material
+        self._color = color
+        self._moveable = moveable
+
+    @property
+    def material(self) -> str:
+        return self._material
+
+    @property
+    def color(self) -> str:
+        return self._color
+
+    @property
+    def moveable(self) -> bool:
+        return self._moveable
+
+    @material.setter
+    def material(self, m: str) -> None:
+        self._material = m
+
+    @color.setter
+    def color(self, c: str) -> None:
+        self._color = c
+
+    @moveable.setter
+    def moveable(self, b: bool) -> None:
+        self._moveable = b
+
+    @property
+    def pose(self) -> torch.Tensor:
+        """The pose of the cube in the world frame."""
+        if self._pose is None:
+            raise AttributeError("The pose is not known.")
+        return self._pose
+
+    @pose.setter
+    def pose(self, pose: torch.Tensor) -> None:
+        """Set the pose of the cube in the world frame."""
+        self._pose = self._ema_filter.update(pose)
+
+    @property
+    def aabb(self) -> torch.Tensor:
+        """The axis-aligned bounding box of the sponge."""
+        return torch.cat([self._pose[:3] - self._size / 2.0, self._pose[:3] + self._size / 2.0], dim=-1)
+
+    @property
+    def object_type(self) -> str:
+        """The type of the sponge."""
+        return "sponge"
+
+    @property
+    def size(self) -> float:
+        """The size of the sponge."""
+        return self._size
+
+    @override
+    def is_pose_known(self) -> bool:
+        return self._pose is not None
+
+    def __str__(self) -> str:
+        """Return a printable string."""
+        return f"Cube | ID: {self.object_id} | Name: {self.name} | Center: {self.pose.cpu().numpy()[:3]}"

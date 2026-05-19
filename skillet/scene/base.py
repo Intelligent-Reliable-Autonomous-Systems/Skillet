@@ -211,7 +211,7 @@ class Scene:
         """
         return [self._objects[self.object_ids.index(i)].name for i in obj_ids]
 
-    def get_object_names(self, obj_type: SceneObject) -> list[str]:
+    def get_object_names(self, obj_type: tuple[SceneObject]) -> list[str]:
         """Get the name of all objecs of a specific type."""
         ob_names = []
         for ob in self._objects:
