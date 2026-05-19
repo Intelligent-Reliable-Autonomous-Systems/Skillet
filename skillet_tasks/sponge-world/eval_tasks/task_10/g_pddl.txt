@@ -1,0 +1,2 @@
+[{{"goal": {{"predicate": "on", "args": ["dark red block", "table"]}}}},
+{{"goal": {{"predicate": "on", "args": ["light blue block", "dark red block"]}}}}]

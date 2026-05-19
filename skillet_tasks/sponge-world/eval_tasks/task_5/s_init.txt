@@ -1,0 +1,7 @@
+on(yellow block, dark red block)
+on(dark red block, table) ; immovable
+on(green block, table)
+on(light blue block, green block) 
+on(light pink block, light blue block) ; magnetically attached
+
+
