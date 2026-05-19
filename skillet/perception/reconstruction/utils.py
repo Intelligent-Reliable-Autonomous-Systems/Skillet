@@ -7,8 +7,8 @@ from scipy.linalg import svd
 from scipy.optimize import linear_sum_assignment
 from scipy.spatial.transform import Rotation
 
-from skillet.scene.base import Scene, SceneObject
 from skillet.core.math import np_convert_quat
+from skillet.scene.base import Scene, SceneObject
 
 
 def assign_objects_to_id_hungarian(
@@ -165,38 +165,37 @@ def percentile_clip(pts: torch.Tensor | np.ndarray, lo: float, hi: float) -> tor
     return pts[mask]
 
 
-def find_cube_centers_mean(
+def find_obj_centers_mean(
     masks: torch.Tensor,
     depth: torch.Tensor,
     camera_matrix: torch.Tensor,
     camera_pos: torch.Tensor,
     camera_quat: torch.Tensor,
     depth_scale: float = 1.0,
-    cube_size: float = 0.044,
+    obj_size: float | np.ndarray = 0.044,
     frame: Literal["world", "camera"] = "camera",
 ) -> torch.Tensor:
-    """Find cube centers from segmentation masks and depth map in the camera frame.
+    """Find object centers from segmentation masks and depth map in the camera frame.
 
-    Assumes that each cube face is parallel to the camera, meaning we know the plane equation
+    Assumes that each object face is parallel to the camera, meaning we know the plane equation
 
     Args:
-        masks: Binary masks for each cube, shape (N, H, W) or list of (H, W) arrays
+        masks: Binary masks for each object, shape (N, H, W) or list of (H, W) arrays
         depth: Depth map, shape (1, H, W) in meters or scaled units
         camera_matrix: 3x3 camera intrinsics matrix
         camera_pos: (3,) array of camera position in world frame
         camera_quat: (4,) array of quaternion in wxyz of camera orientation in world frame
         depth_scale: Scale factor for depth values (if depth is in mm, use 1/1000)
-        cube_size: Expected cube size in meters (used for validation)
+        obj_size: Expected object size in meters (used for validation)
         frame: frame in which to compute RANSAC in (world or camera)
 
     Returns:
-        Centers: List of 3D cube centers in camera frame (N, 3)
+        Centers: List of 3D object centers in camera frame (N, 3)
 
     """
     depth = depth.squeeze(0)
     centers = []
-    quats = []
-    for mask in masks:
+    for i, mask in enumerate(masks):
         mask = mask.to(torch.bool)
 
         if mask.sum() < 10:
@@ -209,6 +208,7 @@ def find_cube_centers_mean(
         if frame == "world":
             points_3d = transform_xyz_to_world(points_3d, camera_pos=camera_pos, camera_quat=camera_quat)
 
+        o_size = obj_size if isinstance(obj_size, float) else obj_size[i]
         proj_u = points_3d[:, 0]
         proj_v = points_3d[:, 1]
         proj_w = points_3d[:, 2]
@@ -216,7 +216,7 @@ def find_cube_centers_mean(
         centroid_v = torch.sort(proj_v)[0][len(proj_v) // 2]
         mask_v = torch.abs(centroid_v - proj_v) < 0.008
         mask_u = torch.abs(centroid_u - proj_u) < 0.008
-        centroid_w = proj_w[mask_u & mask_v].mean() + (cube_size * (3 / 4))  # helps with partial occlusion
+        centroid_w = proj_w[mask_u & mask_v].mean() + (o_size * (3 / 4))  # helps with partial occlusion
         centroid = torch.as_tensor([centroid_u, centroid_v, centroid_w], device=masks.device)
         centers.append(centroid)
 

@@ -5,24 +5,25 @@ Reconstruct the scene from SAM3 concepts and bounding boxes.
 
 import pathlib
 import pickle
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import cv2
 import numpy as np
 import torch
 
-from skillet.core.math import quat_mul
 from skillet.perception.reconstruction.reconstructor_base import ReconstructorBase
 from skillet.perception.reconstruction.utils import (
-    find_cube_centers_mean,
+    find_obj_centers_mean,
     get_sorted_object_poses,
     transform_xyz_to_world,
 )
 from skillet.perception.segmentation.sam import SAMClient, get_sam_client
 from skillet.perception.segmentation.vlm import GeminiClient, QwenClient
-from skillet.perception.segmentation.vlm.vlm_base import VLMClient
-from skillet.scene import CUBE_SIZE, Cube, Sponge, Target
+from skillet.scene import CUBE_SIZE, SPILL_SIZE, SPONGE_SIZE, TARGET_SIZE, Cube, Spill, Sponge, Target
 from skillet.scene.base import Scene
+
+if TYPE_CHECKING:
+    from skillet.perception.segmentation.vlm.vlm_base import VLMClient
 
 
 class Sam3Reconstructor(ReconstructorBase):
@@ -58,7 +59,7 @@ class Sam3Reconstructor(ReconstructorBase):
         self._vlm_goal_atoms = None
 
         self._concepts = ["robot arm"]
-        for o in self._scene.get_object_names((Cube, Target, Sponge)):
+        for o in self._scene.get_object_names((Cube, Target, Sponge, Spill)):
             self._concepts.append(o.replace("_", " "))
 
     @property
@@ -97,30 +98,48 @@ class Sam3Reconstructor(ReconstructorBase):
         self._masks = masks
         self._segment_indices = torch.arange(masks.shape[0], device=masks.device)
 
-        # Grab only the cubes and combine overlapping indices
-        agg_cube_masks = []
+        # Grab only the objects that we want to localize
+        agg_obj_masks = []
         _, mh, mw = masks.shape
-        cube_inds = [
-            j for j, item in enumerate(self._concepts) if ("block" in item or "sponge" in item or "spill" in item)
+        obj_inds = [
+            j
+            for j, item in enumerate(self._concepts)
+            if ("block" in item or "sponge" in item or "spill" in item or "circle" in item)
         ]
-        for i in cube_inds:  # grab only cube masks
+        obj_types = []
+        obj_sizes = []
+        for item in self._concepts:
+            if "block" in item:
+                obj_types.append("block")
+                obj_sizes.append(CUBE_SIZE)
+            elif "sponge" in item:
+                obj_types.append("sponge")
+                obj_sizes.append(SPONGE_SIZE)
+            elif "spill" in item:
+                obj_types.append("spill")
+                obj_sizes.append(SPILL_SIZE)
+            elif "circle" in item:
+                obj_types.append("circle")
+                obj_sizes.append(TARGET_SIZE)
+
+        for i in obj_inds:
             if i not in concept_indices:
                 continue
             inds = torch.argwhere(i == concept_indices)[0]
-            c_mask = torch.zeros(size=(mh, mw), device=self._device)
+            o_mask = torch.zeros(size=(mh, mw), device=self._device)
             for j in inds:
-                c_mask = torch.logical_or(c_mask, masks[j].squeeze())
-            agg_cube_masks.append(c_mask)
-        if len(agg_cube_masks) == 0:
+                o_mask = torch.logical_or(o_mask, masks[j].squeeze())
+            agg_obj_masks.append(o_mask)
+        if len(agg_obj_masks) == 0:
             return
-        cube_masks = torch.stack(agg_cube_masks, dim=0)
+        obj_masks = torch.stack(agg_obj_masks, dim=0)
 
-        # Find cube centers and orientation in the camera frame
-        centers = find_cube_centers_mean(
-            cube_masks,
+        # Find object centers and orientation in the camera frame
+        centers = find_obj_centers_mean(
+            obj_masks,
             depth,
             intrinsic_k,
-            cube_size=CUBE_SIZE,
+            cube_size=np.asarray(obj_sizes),
             camera_pos=camera_pose[0:3],
             camera_quat=camera_pose[3:7],
             frame=frame,
@@ -132,27 +151,27 @@ class Sam3Reconstructor(ReconstructorBase):
             else centers
         )
         _, ids = get_sorted_object_poses(self._scene, (Cube, Sponge))
-        cube_idx, det_idx = [], []
+        obj_idx, det_idx = [], []
         for i, c in enumerate(torch.unique(concept_indices[concept_indices != 0]).cpu().numpy()):
-            if c not in cube_inds:
+            if c not in obj_inds:
                 continue
-            cube = self._scene.get_objects_from_name([self._concepts[c].replace(" ", "_")])[0]
-            cube.pose = torch.cat((centers[i], torch.as_tensor([1, 0, 0, 0], device=centers[i].device)), dim=0)
-            cube_idx.append(int(np.argwhere(cube.object_id == ids)[0][0]))
+            obj = self._scene.get_objects_from_name([self._concepts[c].replace(" ", "_")])[0]
+            obj.pose = torch.cat((centers[i], torch.as_tensor([1, 0, 0, 0], device=centers[i].device)), dim=0)
+            obj_idx.append(int(np.argwhere(obj.object_id == ids)[0][0]))
             det_idx.append(i)
 
         if self._visualize:
             self._bbox_frame = Sam3Reconstructor.show_bounding_boxes(
                 rgb.cpu().numpy(), masks.cpu().numpy(), concept_indices=concept_indices, concepts=self._concepts
             )
-            if cube_idx is not None and det_idx is not None:
+            if obj_idx is not None and det_idx is not None:
                 if not hasattr(self, "_colors"):
                     self._colors = [
                         (int(c[0]), int(c[1]), int(c[2]))
                         for c in np.random.randint(100, 255, size=(len(self._scene.objects), 3))
                     ]
-                self._mask_frame = Sam3Reconstructor.show_cube_masks(
-                    rgb.cpu().numpy(), cube_masks.cpu().numpy(), self._scene, ids, cube_idx, det_idx, self._colors
+                self._mask_frame = Sam3Reconstructor.show_obj_masks(
+                    rgb.cpu().numpy(), obj_masks.cpu().numpy(), self._scene, ids, obj_idx, det_idx, self._colors
                 )
 
     def get_observation(self) -> Scene:
@@ -252,7 +271,7 @@ class Sam3Reconstructor(ReconstructorBase):
         return bboxes
 
     @staticmethod
-    def show_cube_masks(
+    def show_obj_masks(
         rgb_image: np.ndarray,
         masks: np.ndarray,
         scene: Scene,

@@ -2,6 +2,7 @@ import contextlib
 
 from .scene_objs import Cube as Cube
 from .scene_objs import Location as Location
+from .scene_objs import Spill as Spill
 from .scene_objs import Sponge as Sponge
 from .scene_objs import Table as Table
 from .scene_objs import Target as Target
@@ -12,7 +13,10 @@ from .scenes import FOUR_CUBE_SCENE as FOUR_CUBE_SCENE
 from .scenes import LOC_CUBE_SCENE as LOC_CUBE_SCENE
 from .scenes import SIX_CUBE_APRIL_SCENE as SIX_CUBE_APRIL_SCENE
 from .scenes import SIX_CUBE_SCENE as SIX_CUBE_SCENE
+from .scenes import SPILL_SIZE as SPILL_SIZE
 from .scenes import SPONGE_SCENE as SPONGE_SCENE
+from .scenes import SPONGE_SIZE as SPONGE_SIZE
+from .scenes import TARGET_SIZE as TARGET_SIZE
 from .scenes import THREE_CUBE_APRIL_SCENE as THREE_CUBE_APRIL_SCENE
 from .scenes import THREE_CUBE_SCENE as THREE_CUBE_SCENE
 

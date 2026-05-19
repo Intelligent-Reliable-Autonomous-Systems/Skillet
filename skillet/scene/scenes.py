@@ -4,9 +4,12 @@ import torch
 
 from skillet import DEVICE
 from skillet.scene.base import Scene
-from skillet.scene.scene_objs import Cube, Location, Table, Target, Sponge
+from skillet.scene.scene_objs import Cube, Location, Sponge, Table
 
 CUBE_SIZE = 0.044
+SPONGE_SIZE = 0.060
+SPILL_SIZE = 0.060
+TARGET_SIZE = 0.090
 SM_APRIL_SZ = 0.036
 TABLE_X0 = 0.17
 TABLE_Y0 = -0.48
