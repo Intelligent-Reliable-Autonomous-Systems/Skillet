@@ -57,13 +57,14 @@ class PlanningAgent(Agent):
         self.abstract_model.initialize(self._scene, task)
 
         abstract_state = self.abstract_model.get_abstract_state()
-        self._result, self._plan = self.abstract_model.plan(abstract_state=abstract_state)
+        print(abstract_state)
+        self._result, self._plan, up_actions = self.abstract_model.plan(abstract_state=abstract_state)
 
         terminated = False
         if self._plan is None:
             print("[WARNING][TAMP] Failed to find plan.")
             return
-        for ab_action in self._plan.actions:
+        for ab_action, up_action in zip(self._plan.actions, up_actions):
             up_state = self.abstract_model.reset_up_problem_state()
             self._selected_skill = self.action_to_skill_map[ab_action.action]
             args = self._scene.resolve_names_to_ids(ab_action.parameters)
@@ -81,13 +82,13 @@ class PlanningAgent(Agent):
                     skill=self._selected_skill.name,
                     skill_status=self._selected_skill.status,
                     states=up_state,
-                    actions=ab_action,
+                    actions=up_action,
                     executions="applicable",
                 )
 
             if terminated:
                 break
-            time.sleep(4)
+            time.sleep(1)
         if logger is not None:
             obs_log = env.get_observation(logger._obs_spec)
             logger.log(
@@ -100,7 +101,7 @@ class PlanningAgent(Agent):
                 skill=self._selected_skill.name,
                 skill_status=self._selected_skill.status,
                 states=up_state,
-                actions=ab_action,
+                actions=up_action,
                 executions="applicable",
             )
 
@@ -152,7 +153,7 @@ class RandomTampAgent(Agent):
         for i in range(num_actions):
             up_state = self.abstract_model.reset_up_problem_state()
             # ab_action, up_action = self.abstract_model.get_random_action(up_state)
-            ab_action, _ = sample_action_from_state(self.abstract_model._problem, up_state)
+            ab_action, up_action = sample_action_from_state(self.abstract_model._problem, up_state)
             self._selected_skill = self.action_to_skill_map[ab_action.action]
             args = self._scene.resolve_names_to_ids(ab_action.parameters)
 
@@ -170,7 +171,7 @@ class RandomTampAgent(Agent):
                     skill=self._selected_skill.name,
                     skill_status=self._selected_skill.status,
                     states=up_state,
-                    actions=ab_action,
+                    actions=up_action,
                     executions="applicable",
                 )
 
@@ -189,7 +190,7 @@ class RandomTampAgent(Agent):
                 skill=self._selected_skill.name,
                 skill_status=self._selected_skill.status,
                 states=up_state,
-                actions=ab_action,
+                actions=up_action,
                 executions="applicable",
             )
 
@@ -236,12 +237,12 @@ class ActiveLearningAgent(Agent):
         self.abstract_model.initialize(self._scene, task)
 
         terminated = False
+        up_state = self.abstract_model.reset_up_problem_state()
 
         while True:
-            up_state = self.abstract_model.reset_up_problem_state()
-
             # TODO Sample an action from the learning agent
-            ab_action: AbstractAction = self._learning_agent.sample_action(up_state)
+            # ab_action: AbstractAction
+            ab_action, up_action = self._learning_agent.sample_action(up_state)
 
             self._selected_skill = self.action_to_skill_map[ab_action.action]
             args = self._scene.resolve_names_to_ids(ab_action.parameters)
@@ -260,15 +261,16 @@ class ActiveLearningAgent(Agent):
                     skill=self._selected_skill.name,
                     skill_status=self._selected_skill.status,
                     states=up_state,
-                    actions=ab_action,
+                    actions=up_action,
                     executions="applicable",
                 )
 
             if terminated:
                 break
             time.sleep(4)
+            up_state = self.abstract_model.reset_up_problem_state()
             # TODO update the learning agent with the success information of the skill/new model
-            self._learning_agent.update()
+            self._learning_agent.update(up_state)
 
         if logger is not None:
             obs_log = env.get_observation(logger._obs_spec)
@@ -282,6 +284,6 @@ class ActiveLearningAgent(Agent):
                 skill=self._selected_skill.name,
                 skill_status=self._selected_skill.status,
                 states=up_state,
-                actions=ab_action,
+                actions=up_action,
                 executions="applicable",
             )

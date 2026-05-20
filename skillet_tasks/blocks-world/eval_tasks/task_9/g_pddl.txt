@@ -1,2 +1,2 @@
-[{{"goal": {{"predicate": "on", "args": ["dark red block", "table"]}}}},
-{{"goal": {{"predicate": "on", "args": ["light blue block", "dark red block"]}}}}]
+[{"predicate": "on", "args": ["red_block", "table_0"]},
+{"predicate": "on", "args": ["blue_block", "red_block"]}]

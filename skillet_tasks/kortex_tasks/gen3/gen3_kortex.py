@@ -369,7 +369,7 @@ class Gen3KortexEnv(KortexEnv):
                 self._check_for_end_or_abort(self._motion_event), Base_pb2.NotificationOptions()
             )
 
-            self.kortex.ExecuteAction(action)
+            self.kortex.ExecuteAction(action)  # TODO can catch KServerException
 
             self._new_motion_goal = True
             self._gripper_goal_start = time.perf_counter()

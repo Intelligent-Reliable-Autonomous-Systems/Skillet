@@ -4,7 +4,7 @@ import argparse
 import time
 from typing import TYPE_CHECKING
 
-from skillet.agents import ActiveLearningAgent
+from skillet.agents import RandomTampAgent
 from skillet.core import ObservationSpec
 from skillet.core.env import BatchToSingleWrapper
 from skillet.envs import SkilletEnv
@@ -35,11 +35,16 @@ parser.add_argument("--device", type=str, default="cpu", help="Device to use")
 parser.add_argument("--robot_ip", type=str, default="192.168.1.10", help="Robot IP.")
 parser.add_argument("--poll_rate_hz", type=int, default=10, help="Tick rate of the perception")
 parser.add_argument("--task", type=str, default="Kortex-Gen3-v0", help="Kortex Environment")
+parser.add_argument("--build_scene", type=argparse.BooleanOptionalAction, default=False, help="If to build the scene")
+parser.add_argument(
+    "--perception", type=argparse.BooleanOptionalAction, default=True, help="If to run the perception pipeline"
+)
 parser.add_argument("--o3d", type=argparse.BooleanOptionalAction, default=False, help="If to visualize with open3d")
 parser.add_argument(
-    "--log_dir",
-    default="_robot_data/exp/",
+    "--goal",
     type=str,
+    default="Place the pink block between the yellow block and green block",
+    help="Natural language goal for the block scene.",
 )
 args_cli = parser.parse_args()
 
@@ -77,7 +82,8 @@ def main() -> None:
         perception.set_visualizer(visualizer, segment_point_cloud=True)
         visualizer.run_thread()
         target_pose_func = visualizer.set_target_pos
-    perception.run_thread()
+    if args_cli.perception:
+        perception.run_thread()
 
     # Low-level policies
     skill_length = 1e9
@@ -90,16 +96,18 @@ def main() -> None:
     drag_block_skill = DragBlock5Skill(scene, drag_skill, vis_target_pos=target_pose_func)
     ACTION_MAP = {"place_block": place_block_skill, "pick_block": pick_block_skill, "drag_block": drag_block_skill}
 
-    print("[INFO] Warming up Perception...")
-    time.sleep(5)
-    input("Press Enter to start the active learning experiment...")
-    tamp_agent = ActiveLearningAgent(
-        scene, abstract_model=abs_model, action_to_skill_map=ACTION_MAP, perception=perception
-    )
+    tamp_agent = RandomTampAgent(scene, abstract_model=abs_model, action_to_skill_map=ACTION_MAP)
 
     logger = SkilletDataLogger(
-        args_cli.log_dir, env, scene, perception, abs_model, tamp_agent, obs_spec=rgbd_grip_spec, visualize=False
+        "_robot_data/exp/", env, scene, perception, abs_model, tamp_agent, obs_spec=rgbd_grip_spec, visualize=False
     )
+    if args_cli.build_scene:
+        input("Press Enter to start the scene building...\n")
+        perception.task_instruction = args_cli.goal
+        perception.build_scene = args_cli.build_scene
+
+    print("[INFO] Warming up Perception...")
+    time.sleep(5)
     logger.write_video = True
     logger.run_thread()
 

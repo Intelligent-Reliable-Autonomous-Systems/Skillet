@@ -96,22 +96,21 @@ def main() -> None:
     drag_block_skill = DragBlock5Skill(scene, drag_skill, vis_target_pos=target_pose_func)
     ACTION_MAP = {"place_block": place_block_skill, "pick_block": pick_block_skill, "drag_block": drag_block_skill}
 
-    tamp_agent = PlanningAgent(scene, abstract_model=abs_model, action_to_skill_map=ACTION_MAP)
+    print("[INFO][MAIN] Warming up Perception...")
+    time.sleep(5)
 
-    # simulate environment
-    logger = SkilletDataLogger(
-        "_robot_data/exp/", env, scene, perception, abs_model, tamp_agent, obs_spec=rgbd_grip_spec, visualize=False
-    )
     if args_cli.build_scene:
         input("Press Enter to start the scene building...\n")
         perception.task_instruction = args_cli.goal
         perception.build_scene = args_cli.build_scene
 
-    print("[INFO] Warming up Perception...")
-    time.sleep(5)
+    input("Press Enter to start plan execution...")
+    tamp_agent = PlanningAgent(scene, abstract_model=abs_model, action_to_skill_map=ACTION_MAP)
+    logger = SkilletDataLogger(
+        "_robot_data/exp/", env, scene, perception, abs_model, tamp_agent, obs_spec=rgbd_grip_spec, visualize=False
+    )
     logger.write_video = True
     logger.run_thread()
-
     env.reset()
     tamp_agent.execute(env)
     logger.save_video()

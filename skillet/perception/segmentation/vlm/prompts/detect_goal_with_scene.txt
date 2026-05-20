@@ -6,15 +6,16 @@ Use your commonsense and spatial reasoning to accomplish this task.
 
 AVAILABLE PREDICATES:
 - on(movable, surface): Object A is placed on top of object B
+- north-of(movable, movable): Object A is north of object B, where north is to the right in the camera image orientation
 
 
 For instance - for the task "reverse the order of the stack" and the state "on (red block, table), on (blue block, red block),on (green block, blue block)" the goal should be:
-    [{{"goal": {{"predicate": "on", "args": ["blue block", "table"]}}}},
-     {{"goal": {{"predicate": "on", "args": ["green block", "blue block"]}}}},
-     {{"goal": {{"predicate": "on", "args": ["red block", "green block"]}}}}]
+    [{{{"predicate": "on", "args": ["blue block", "table"]}}}},
+     {{{"predicate": "on", "args": ["green block", "blue block"]}}}},
+     {{{"predicate": "on", "args": ["red block", "green block"]}}}}]
 
 
 
-Return a JSON list like: '[{{"goal": {{"predicate": "on", "args": ["yellow block", "red block"]}}}}, ...] '
+Return a JSON list like: '[{{{"predicate": "on", "args": ["yellow block", "red block"]}}}}, ...] '
 
 

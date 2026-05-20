@@ -1,5 +1,5 @@
-[{{"goal": {{"predicate": "on", "args": ["dark red block", "table"]}}}},
-{{"goal": {{"predicate": "on", "args": ["light pink block", "table"]}}}},
-{{"goal": {{"predicate": "on", "args": ["green block", "table"]}}}}
-{{"goal": {{"predicate": "north-of", "args": ["dark red block", "light pink block"]}}}},
-{{"goal": {{"predicate": "north-of", "args": ["green block", "dark red block"]}}}}]
+[{"predicate": "on", "args": ["red_block", "table_0"]},
+{"predicate": "on", "args": ["pink_block", "table_0"]},
+{"predicate": "on", "args": ["green_block", "table_0"]}
+{"predicate": "north-of", "args": ["red_block", "pink_block"]},
+{"predicate": "north-of", "args": ["green_block", "red_block"]}]

@@ -233,9 +233,13 @@ class AbstractModel(BasePlanner):
             status = result.status
 
             if status not in (PGResultStatus.SOLVED_SATISFICING, PGResultStatus.SOLVED_OPTIMALLY):
-                return (False, None)
+                return (False, None, None)
 
-        return True, AbstractPlan(actions=[parse_action(str(action)) for action in result.plan.actions])
+        return (
+            True,
+            AbstractPlan(actions=[parse_action(str(action)) for action in result.plan.actions]),
+            result.plan.actions,
+        )
 
     def _create_goal(self, goal: dict[str, Any], object_state: list[Object]) -> list[UPDictFluent]:
         """Parse the output of the VLM goal into the problem.

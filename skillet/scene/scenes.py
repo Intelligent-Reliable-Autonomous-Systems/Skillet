@@ -91,12 +91,12 @@ SIX_CUBE_APRIL_SCENE = Scene(
 SIX_CUBE_APRIL_SCENE.goal = [{"predicate": "on", "args": ["yellow_block", "green_block"]}]
 
 orange_cube = Cube(size=CUBE_SIZE, name="orange_block", material="plastic", color="orange")
-blue_cube = Cube(size=CUBE_SIZE, name="light_blue_block", material="plastic", color="light_blue")
+blue_cube = Cube(size=CUBE_SIZE, name="blue_block", material="plastic", color="blue")
 green_cube = Cube(size=CUBE_SIZE, name="green_block", material="wooden", color="green")
-pink_cube = Cube(size=CUBE_SIZE, name="light_pink_block", material="plastic", color="light_pink")
+pink_cube = Cube(size=CUBE_SIZE, name="pink_block", material="plastic", color="pink")
 yellow_cube = Cube(size=CUBE_SIZE, name="yellow_block", material="wooden", color="yellow")
 purple_cube = Cube(size=CUBE_SIZE, name="dark_purple_block", material="wooden", color="dark_purple")
-red_cube = Cube(size=CUBE_SIZE, name="dark_red_block", material="plastic", color="dark_red", moveable=False)
+red_cube = Cube(size=CUBE_SIZE, name="red_block", material="plastic", color="red", moveable=False)
 
 loc_00 = Location(init_pose=torch.as_tensor([0.225, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_00")
 loc_01 = Location(init_pose=torch.as_tensor([0.275, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_01")
@@ -144,7 +144,7 @@ SIX_CUBE_SCENE = Scene(
 )
 
 SIX_CUBE_SCENE.goal = [
-    {"predicate": "on", "args": ["light_blue_block", "green_block"]},
+    {"predicate": "on", "args": ["blue_block", "green_block"]},
 ]
 
 LOC_CUBE_SCENE = Scene(
@@ -164,7 +164,7 @@ LOC_CUBE_SCENE = Scene(
         loc_04,
         loc_05,
         loc_06,
-        loc_07,
+        # loc_07,
         loc_10,
         loc_11,
         loc_12,
@@ -172,7 +172,7 @@ LOC_CUBE_SCENE = Scene(
         loc_14,
         loc_15,
         loc_16,
-        loc_17,
+        # loc_17,
         loc_20,
         loc_21,
         loc_22,
@@ -180,7 +180,7 @@ LOC_CUBE_SCENE = Scene(
         loc_24,
         loc_25,
         loc_26,
-        loc_27,
+        # loc_27,
         loc_30,
         loc_31,
         loc_32,
@@ -188,7 +188,7 @@ LOC_CUBE_SCENE = Scene(
         loc_34,
         loc_35,
         loc_36,
-        loc_37,
+        # loc_37,
     ],
     closed_set=True,
     bounds=WORLD_BOUNDS,
@@ -295,9 +295,6 @@ FIVE_CUBE_SCENE = Scene(
     contains_objects=True,
 )
 
-FIVE_CUBE_SCENE.goal = [
-    {"predicate": "on", "args": ["light_pink_block", "light_blue_block"]},
-]
 
 loc_s00 = Location(init_pose=torch.as_tensor([0.25, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_00")
 loc_s01 = Location(init_pose=torch.as_tensor([0.35, -0.25, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_01")

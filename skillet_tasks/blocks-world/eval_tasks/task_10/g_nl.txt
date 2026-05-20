@@ -1,1 +1,1 @@
-"Place the dark red block on the light blue block"
+Place the red block on the blue block

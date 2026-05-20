@@ -4,9 +4,9 @@ AVAILABLE PREDICATES:
 - on(movable, surface): Object A is placed on top of object B
 
 For instance - for the task "place the red block on the purple block" the goal should be:
-    {{"goal": {{"predicate": "on", "args": ["red block", "purple block"]}}}}
+    {{{"predicate": "on", "args": ["red block", "purple block"]}}}}
 
 
-Return a JSON list like: '[{{"goal": {{"predicate": "on", "args": ["yellow block", "red block"]}}}}, ...] '
+Return a JSON list like: '[{{{"predicate": "on", "args": ["yellow block", "red block"]}}}}, ...] '
 
 

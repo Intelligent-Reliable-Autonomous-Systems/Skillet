@@ -59,7 +59,7 @@ class Sam3Reconstructor(ReconstructorBase):
         self._vlm_bboxes = None
         self._vlm_goal_atoms = None
 
-        self._concepts = {o.name.replace("_", " ") for o in self._scene.objects if o.localizable}
+        self._concepts = list({o.name.replace("_", " ") for o in self._scene.objects if o.localizable})
 
     @property
     def masks(self) -> torch.Tensor:
@@ -85,7 +85,6 @@ class Sam3Reconstructor(ReconstructorBase):
         if self._build_scene_flag:
             print("[INFO][SAM RECONSTRUCTOR] Building scene...")
             self._build_scene(obs, frame=frame)
-            print("[INFO][SAM RECONSTRUCTOR] Successfully built scene.")
             self._build_scene_flag = False
 
         # Segment with SAM3
@@ -129,7 +128,7 @@ class Sam3Reconstructor(ReconstructorBase):
         obj_masks = torch.stack(agg_obj_masks, dim=0)
         obj_types = np.asarray(agg_obj_types)
 
-        # Compute the object centers
+        # Compute the object centers # TODO this will crash with spill scene
         centers, spill_bboxes = self._get_object_centers(obj_masks, obj_types, depth, intrinsic_k, camera_pose, frame)
 
         # Assign the pose and bounding boxes to each object
@@ -168,7 +167,7 @@ class Sam3Reconstructor(ReconstructorBase):
         cube_inds = np.argwhere(obj_types == "block")
         target_inds = np.argwhere(obj_types == "target")
         sponge_inds = np.argwhere(obj_types == "sponge")
-        obj_inds = np.concatenate((cube_inds, target_inds, sponge_inds))
+        obj_inds = np.concatenate((cube_inds, target_inds, sponge_inds)).flatten()
         obj_sizes = np.zeros(obj_inds.shape[0])
         obj_sizes[cube_inds] = CUBE_SIZE
         obj_sizes[target_inds] = TARGET_SIZE
@@ -193,7 +192,7 @@ class Sam3Reconstructor(ReconstructorBase):
         )
         centers[obj_inds] = obj_centers
 
-        spill_inds = np.argwhere(obj_types == "spill")
+        """spill_inds = np.argwhere(obj_types == "spill")
         spill_centers, spill_bboxes = find_spill_centers_mean_bbox(
             obj_masks[spill_inds],
             depth,
@@ -207,9 +206,9 @@ class Sam3Reconstructor(ReconstructorBase):
             if frame == "camera"
             else spill_centers
         )
-        centers[spill_inds] = spill_centers
+        centers[spill_inds] = spill_centers"""
 
-        return centers, spill_bboxes
+        return centers, None
 
     def get_observation(self) -> Scene:
         """Return the scene."""
@@ -239,10 +238,7 @@ class Sam3Reconstructor(ReconstructorBase):
 
         self._scene.goal = self._vlm_goal_atoms
 
-        pathlib.Path("data/test/").mkdir(exist_ok=True, parents=True)
-        with pathlib.Path("data/test/vlm_out_multi.pkl").open("wb") as f:
-            pickle.dump(self._scene, f)
-        print(f"[INFO] Reconstructed Goal with VLM.\n{self._scene}")
+        print(f"[INFO] Reconstructed Goal with VLM")
 
     @staticmethod
     def show_vlm_image_and_masks(
@@ -326,13 +322,17 @@ class Sam3Reconstructor(ReconstructorBase):
 
         """
         rgb_image = rgb_image.transpose((1, 2, 0))
-        display = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2BGR).copy()
+        display = rgb_image.copy()
 
         for color_idx, ob in enumerate(scene.objects):
             if not ob.localizable:
                 continue
 
-            idx = np.argwhere(ob.object_id == ids)[0]
+            idx = np.argwhere(ob.object_id == ids)
+            if len(idx) != 0:
+                idx = idx[0]
+            else:
+                continue
             if idx.size > 0:
                 idx = idx[0]
             else:
@@ -392,7 +392,7 @@ class Sam3Reconstructor(ReconstructorBase):
         PADDING = 4
         # cv2 works in BGR
         rgb_image = rgb_image.transpose((1, 2, 0))
-        display = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2BGR).copy()
+        display = rgb_image.copy()
         overlay = display.copy()
 
         # Generate a distinct colour per mask

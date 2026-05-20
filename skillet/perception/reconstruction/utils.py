@@ -279,11 +279,9 @@ def find_spill_centers_mean_bbox(
         centers.append(centroid)
         bboxes.append([points_3d.min(dim=0), points_3d.max(dim=0)])
 
-        # normals = compute_normals(points_3d.cpu().numpy())
-        # dirs = pca_normal_directions(normals, n=3)
-        # quats.append(torch.as_tensor(roll_quaternion_from_directions(dirs), device=masks.device))
-
-    return torch.stack(centers, dim=0), torch.stack(bboxes, dim=0)
+    return torch.stack(centers, dim=0) if len(centers) != 0 else None, (
+        torch.stack(bboxes, dim=0) if len(bboxes) != 0 else None
+    )
 
 
 def compute_normals(points: np.ndarray) -> np.ndarray:

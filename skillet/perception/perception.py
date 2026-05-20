@@ -313,8 +313,9 @@ class SkilletPerception:
             if (self._viz is not None and self._viz.open3d_scene is not None)
             else None
         )
-        panels.append(self.bbox_frame) if self.bbox_frame is not None else None
-        panels.append(self.mask_frame) if self.mask_frame is not None else None
+
+        panels.append(cv2.cvtColor(self.bbox_frame, cv2.COLOR_RGB2BGR)) if self.bbox_frame is not None else None
+        panels.append(cv2.cvtColor(self.mask_frame, cv2.COLOR_RGB2BGR)) if self.mask_frame is not None else None
         if not panels:
             return
         frame = arrange_panels(panels)

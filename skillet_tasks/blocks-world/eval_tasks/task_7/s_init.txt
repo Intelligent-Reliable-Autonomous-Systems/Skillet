@@ -1,8 +1,8 @@
 on(yellow block, green block)
-on(dark red block, table) ; immovable
+on(red block, table) ; immovable
 on(green block, table)
-on(light pink block, table)
-on(light blue block, table) 
-north-of(light pink block, light blue block) ; magnetically attached
+on(pink block, table)
+on(blue block, table) 
+north-of(pink block, blue block) ; magnetically attached
 
 

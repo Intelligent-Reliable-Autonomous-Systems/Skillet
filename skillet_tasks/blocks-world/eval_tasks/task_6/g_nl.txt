@@ -1,1 +1,1 @@
-"Move each stack one location north"
+Move each stack one location north

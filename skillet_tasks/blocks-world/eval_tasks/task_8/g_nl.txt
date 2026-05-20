@@ -1,1 +1,1 @@
-"Make two stacks of blocks"
+Make two stacks of blocks

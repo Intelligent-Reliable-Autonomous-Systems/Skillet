@@ -1,1 +1,1 @@
-"Reverse the order of the stack"
+Reverse the order of the stack

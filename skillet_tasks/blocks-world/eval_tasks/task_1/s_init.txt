@@ -1,5 +1,5 @@
-on(light pink block, table)
-on(yellow block, light pink block)
+on(pink block, table)
+on(yellow block, pink block)
 on(blue block, yellow block)
-on(dark red block, table)
+on(red block, table)
 on(green block, table)

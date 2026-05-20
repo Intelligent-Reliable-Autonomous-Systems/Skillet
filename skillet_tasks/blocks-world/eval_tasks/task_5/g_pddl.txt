@@ -1,7 +1,7 @@
-[{{"goal": {{"predicate": "on", "args": ["dark red block", "table"]}}}},
-{{"goal": {{"predicate": "on", "args": ["light pink block", "table"]}}}},
-{{"goal": {{"predicate": "on", "args": ["green block", "table"]}}}}
-{{"goal": {{"predicate": "on", "args": ["light blue block", "table"]}}}},
-{{"goal": {{"predicate": "on", "args": ["yellow block", "table"]}}}},
+[{"predicate": "on", "args": ["red_block", "table_0"]},
+{"predicate": "on", "args": ["pink_block", "table_0"]},
+{"predicate": "on", "args": ["green_block", "table_0"]}
+{"predicate": "on", "args": ["blue_block", "table_0"]},
+{"predicate": "on", "args": ["yellow_block", "table_0"]},
 
 ]

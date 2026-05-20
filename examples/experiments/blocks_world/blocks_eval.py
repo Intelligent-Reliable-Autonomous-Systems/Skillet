@@ -1,10 +1,11 @@
 """Run a tabletop block stacking task."""
 
 import argparse
+import json
 import time
 from typing import TYPE_CHECKING
 
-from skillet.agents import ActiveLearningAgent
+from skillet.agents import PlanningAgent
 from skillet.core import ObservationSpec
 from skillet.core.env import BatchToSingleWrapper
 from skillet.envs import SkilletEnv
@@ -35,18 +36,26 @@ parser.add_argument("--device", type=str, default="cpu", help="Device to use")
 parser.add_argument("--robot_ip", type=str, default="192.168.1.10", help="Robot IP.")
 parser.add_argument("--poll_rate_hz", type=int, default=10, help="Tick rate of the perception")
 parser.add_argument("--task", type=str, default="Kortex-Gen3-v0", help="Kortex Environment")
+
 parser.add_argument("--o3d", type=argparse.BooleanOptionalAction, default=False, help="If to visualize with open3d")
 parser.add_argument(
-    "--log_dir",
-    default="_robot_data/exp/",
+    "--eval_dir", type=str, default="_robot_data/blocks_eval_tasks/task_10", help="Evaluation directory"
+)
+parser.add_argument(
+    "--vlm", type=argparse.BooleanOptionalAction, default=False, help="If to use the VLM for scene building"
+)
+parser.add_argument(
+    "--domain_path",
+    default="skillet_tasks/blocks-world/simple-blocks-a2.domain.pddl",
     type=str,
+    help="Path to .domain.pddl file",
 )
 args_cli = parser.parse_args()
 
 
 def main() -> None:
     scene = FIVE_CUBE_SCENE
-    block_domain = "skillet_tasks/blocks-world/simple-blocks-a2.domain.pddl"
+    block_domain = args_cli.domain_path
     env_cfg = {
         "robot_ip": args_cli.robot_ip,
         "device": "cuda",
@@ -90,23 +99,37 @@ def main() -> None:
     drag_block_skill = DragBlock5Skill(scene, drag_skill, vis_target_pos=target_pose_func)
     ACTION_MAP = {"place_block": place_block_skill, "pick_block": pick_block_skill, "drag_block": drag_block_skill}
 
+    with open(f"{args_cli.eval_dir}/g_pddl.txt") as f:
+        pddl_goal = json.load(f)
+    print(pddl_goal)
+    scene.goal = pddl_goal
     print("[INFO] Warming up Perception...")
     time.sleep(5)
-    input("Press Enter to start the active learning experiment...")
-    tamp_agent = ActiveLearningAgent(
-        scene, abstract_model=abs_model, action_to_skill_map=ACTION_MAP, perception=perception
-    )
 
+    if args_cli.vlm:
+        input("Press Enter to start the scene building...\n")
+        with open(f"{args_cli.eval_dir}/g_nl.txt") as f:
+            goal_txt = f.read()
+
+        perception.task_instruction = goal_txt
+        perception.build_scene = True
+        time.sleep(4)
+        with open(f"{args_cli.eval_dir}/g_vlm.txt", "w") as f:
+            f.write(str(scene.goal))
+        print(f"[INFO][VLM Goal]:\n{scene.goal}")
+
+    input("Press Enter to start the plan execution...\n")
+    tamp_agent = PlanningAgent(scene, abstract_model=abs_model, action_to_skill_map=ACTION_MAP)
+
+    # simulate environment
     logger = SkilletDataLogger(
-        args_cli.log_dir, env, scene, perception, abs_model, tamp_agent, obs_spec=rgbd_grip_spec, visualize=False
+        args_cli.eval_dir, env, scene, perception, abs_model, tamp_agent, obs_spec=rgbd_grip_spec, visualize=False
     )
     logger.write_video = True
     logger.run_thread()
-
     env.reset()
-    tamp_agent.execute(env, logger=logger, num_actions=100)
+    tamp_agent.execute(env, logger=logger)
     logger.save_video()
-    print("[INFO][Main] finished experiment, exiting...")
 
 
 if __name__ == "__main__":
