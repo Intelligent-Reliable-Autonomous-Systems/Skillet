@@ -17,20 +17,18 @@ from skillet.perception.perception import SkilletPerception
 from skillet.planning import AbstractModel
 from skillet.policy import TcpCartPolicy
 from skillet.scene import (
-    FIVE_CUBE_SCENE,
-    FOUR_CUBE_SCENE,
-    LOC_CUBE_SCENE,
+    SPONGE_SCENE,
     Open3DVisualizer,
 )
 from skillet.skill import (
-    DragBlock2Skill,
-    DragBlock5Skill,
-    DragSkill,
     PickBlock2Skill,
     PickSkill,
-    PlaceBlock2Skill,
-    PlaceBlock4Skill,
+    PlaceBlock3Skill,
     PlaceSkill,
+    SqueezeSkill,
+    SqueezeSpongeSkill,
+    WipeSkill,
+    WipeTableSkill,
 )
 from skillet_tasks.kortex_tasks.factory import create_kortex_env
 
@@ -47,7 +45,7 @@ parser.add_argument("--build_scene", type=argparse.BooleanOptionalAction, defaul
 parser.add_argument(
     "--perception", type=argparse.BooleanOptionalAction, default=True, help="If to run the perception pipeline"
 )
-parser.add_argument("--o3d", type=argparse.BooleanOptionalAction, default=False, help="If to visualize with open3d")
+parser.add_argument("--o3d", type=argparse.BooleanOptionalAction, default=True, help="If to visualize with open3d")
 parser.add_argument(
     "--goal",
     type=str,
@@ -58,9 +56,9 @@ args_cli = parser.parse_args()
 
 
 def main() -> None:
-    scene = FIVE_CUBE_SCENE
+    scene = SPONGE_SCENE
     # block_domain = "skillet/planning/abstract/assets/blocks.domain.pddl"
-    block_domain = "skillet_tasks/blocks-world/simple-blocks-a2.domain.pddl"
+    block_domain = "skillet_tasks/sponge-world/simple-sponge.domain.pddl"
     env_cfg = {
         "robot_ip": args_cli.robot_ip,
         "device": "cuda",
@@ -83,7 +81,7 @@ def main() -> None:
         reconstructor="sam3",
         poll_rate_hz=args_cli.poll_rate_hz,
         device="cuda",
-        vis_perception=False,
+        vis_perception=True,
     )
     target_pose_func = None
     if args_cli.o3d:
@@ -99,13 +97,20 @@ def main() -> None:
     arm_policy = TcpCartPolicy(env.batched_env.obs_spec_tcp_cart, env.batched_env.action_spec_tcp_cart)
     place_skill = PlaceSkill(reach_policy=arm_policy, lift_height=0.25, gripper_close=0.6, length=skill_length)
     pick_skill = PickSkill(reach_policy=arm_policy, lift_height=0.25, gripper_close=0.6, length=skill_length)
-    drag_skill = DragSkill(reach_policy=arm_policy, lift_height=0.25, gripper_close=0.6, length=skill_length)
-    pick_block_skill = PickBlock2Skill(scene, pick_skill, vis_target_pos=target_pose_func)
-    # place_block_skill = PlaceBlock2Skill(scene, place_skill, vis_target_pos=target_pose_func)
-    place_block_skill = PlaceBlock4Skill(scene, place_skill, vis_target_pos=target_pose_func)
-    # drag_block_skill = DragBlock2Skill(scene, drag_skill, vis_target_pos=target_pose_func)
-    drag_block_skill = DragBlock5Skill(scene, drag_skill, vis_target_pos=target_pose_func)
-    ACTION_MAP = {"place_block": place_block_skill, "pick_block": pick_block_skill, "drag_block": drag_block_skill}
+    squeeze_skill = SqueezeSkill(
+        reach_policy=arm_policy, lift_height=0.25, gripper_close=0.6, timeout=5, length=skill_length
+    )
+    wipe_skill = WipeSkill(reach_policy=arm_policy, lift_height=0.25, gripper_close=0.6, length=skill_length)
+    pick_obj_skill = PickBlock2Skill(scene, pick_skill, vis_target_pos=target_pose_func)
+    place_obj_skill = PlaceBlock3Skill(scene, place_skill, vis_target_pos=target_pose_func)
+    wipe_table_skill = WipeTableSkill(scene, wipe_skill, vis_target_pos=target_pose_func)
+    squeeze_sponge_skill = SqueezeSpongeSkill(scene, squeeze_skill, vis_target_pos=target_pose_func)
+    ACTION_MAP = {
+        "place_moveable": place_obj_skill,
+        "pick_movable": pick_obj_skill,
+        "squeeze_movable": squeeze_sponge_skill,
+        "wipe_movable": wipe_table_skill,
+    }
 
     tamp_agent = RandomTampAgent(scene, abstract_model=abs_model, action_to_skill_map=ACTION_MAP, perception=perception)
 

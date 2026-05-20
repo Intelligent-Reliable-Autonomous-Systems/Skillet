@@ -100,13 +100,15 @@ class Sam3Reconstructor(ReconstructorBase):
 
         agg_obj_masks = []
         agg_obj_types = []
+        if masks.shape[0] == 0:
+            return
         _, mh, mw = masks.shape
 
         # Group masks together on a per-concept basis
         for i, n in enumerate(self._concepts):
             if i not in concept_indices:
                 continue
-            o = self._scene.get_objects_from_name([n])[0]
+            o = self._scene.get_objects_from_name([n.replace(" ", "_")])[0]
             if isinstance(o, (Cube, Target, Sponge)):
                 inds = torch.argwhere(i == concept_indices)[0]
                 o_mask = torch.zeros(size=(mh, mw), device=self._device)
@@ -128,7 +130,7 @@ class Sam3Reconstructor(ReconstructorBase):
         obj_types = np.asarray(agg_obj_types)
 
         # Compute the object centers
-        centers, spill_bboxes = self._get_object_centers(obj_masks, obj_types)
+        centers, spill_bboxes = self._get_object_centers(obj_masks, obj_types, depth, intrinsic_k, camera_pose, frame)
 
         # Assign the pose and bounding boxes to each object
         ids = []

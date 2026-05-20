@@ -4,7 +4,7 @@ import torch
 
 from skillet import DEVICE
 from skillet.scene.base import Scene
-from skillet.scene.scene_objs import Cube, Location, Sponge, Table, Target
+from skillet.scene.scene_objs import Cube, Location, Sponge, Table, Target, Spill
 
 CUBE_SIZE = 0.044
 SPONGE_SIZE = 0.060
@@ -299,10 +299,16 @@ FIVE_CUBE_SCENE.goal = [
     {"predicate": "on", "args": ["light_pink_block", "light_blue_block"]},
 ]
 
+loc_s00 = Location(init_pose=torch.as_tensor([0.25, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_00")
+loc_s01 = Location(init_pose=torch.as_tensor([0.35, -0.25, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_01")
+loc_s02 = Location(init_pose=torch.as_tensor([0.45, 0.25, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_02")
+loc_s03 = Location(init_pose=torch.as_tensor([0.30, 0.4, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_03")
+
 yellow_sponge = Sponge(size=0.085, name="yellow_sponge")
 blue_sponge = Sponge(size=0.085, name="blue_sponge")
+spill = Spill(size=0.085, name="water_spill")
 SPONGE_SCENE = Scene(
-    objects=[table_0, blue_sponge],
+    objects=[table_0, yellow_sponge, blue_sponge, spill, loc_s00, loc_s01, loc_s02, loc_s03],
     closed_set=True,
     bounds=WORLD_BOUNDS,
     contains_objects=True,

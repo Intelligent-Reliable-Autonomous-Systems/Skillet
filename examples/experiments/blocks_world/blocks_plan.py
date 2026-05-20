@@ -1,14 +1,10 @@
 """Run a tabletop block stacking task."""
 
 import argparse
-import pathlib
 import time
 from typing import TYPE_CHECKING
 
-import torch
-
-from skillet.agents import RandomTampAgent
-from skillet.agents.tamp import RandomStateAgent
+from skillet.agents import PlanningAgent
 from skillet.core import ObservationSpec
 from skillet.core.env import BatchToSingleWrapper
 from skillet.envs import SkilletEnv
@@ -18,19 +14,15 @@ from skillet.planning import AbstractModel
 from skillet.policy import TcpCartPolicy
 from skillet.scene import (
     FIVE_CUBE_SCENE,
-    FOUR_CUBE_SCENE,
-    LOC_CUBE_SCENE,
     Open3DVisualizer,
 )
 from skillet.skill import (
+    DragBlock5Skill,
+    DragSkill,
     PickBlock2Skill,
-    PlaceBlock3Skill,
-    SqueezeSpongeSkill,
-    WipeTableSkill,
     PickSkill,
+    PlaceBlock4Skill,
     PlaceSkill,
-    WipeSkill,
-    SqueezeSkill,
 )
 from skillet_tasks.kortex_tasks.factory import create_kortex_env
 
@@ -47,11 +39,11 @@ parser.add_argument("--build_scene", type=argparse.BooleanOptionalAction, defaul
 parser.add_argument(
     "--perception", type=argparse.BooleanOptionalAction, default=True, help="If to run the perception pipeline"
 )
-parser.add_argument("--o3d", type=argparse.BooleanOptionalAction, default=False, help="If to visualize with open3d")
+parser.add_argument("--o3d", type=argparse.BooleanOptionalAction, default=True, help="If to visualize with open3d")
 parser.add_argument(
     "--goal",
     type=str,
-    default="Place the pink block between the yellow block and green block",
+    default="Place the dark red block on the yellow block.",
     help="Natural language goal for the block scene.",
 )
 args_cli = parser.parse_args()
@@ -59,7 +51,6 @@ args_cli = parser.parse_args()
 
 def main() -> None:
     scene = FIVE_CUBE_SCENE
-    # block_domain = "skillet/planning/abstract/assets/blocks.domain.pddl"
     block_domain = "skillet_tasks/blocks-world/simple-blocks-a2.domain.pddl"
     env_cfg = {
         "robot_ip": args_cli.robot_ip,
@@ -83,7 +74,7 @@ def main() -> None:
         reconstructor="sam3",
         poll_rate_hz=args_cli.poll_rate_hz,
         device="cuda",
-        vis_perception=False,
+        vis_perception=True,
     )
     target_pose_func = None
     if args_cli.o3d:
@@ -99,21 +90,15 @@ def main() -> None:
     arm_policy = TcpCartPolicy(env.batched_env.obs_spec_tcp_cart, env.batched_env.action_spec_tcp_cart)
     place_skill = PlaceSkill(reach_policy=arm_policy, lift_height=0.25, gripper_close=0.6, length=skill_length)
     pick_skill = PickSkill(reach_policy=arm_policy, lift_height=0.25, gripper_close=0.6, length=skill_length)
-    squeeze_skill = SqueezeSkill(reach_policy=arm_policy, lift_height=0.25, gripper_close=0.6, length=skill_length)
-    wipe_skill = WipeSkill(reach_policy=arm_policy, lift_height=0.25, gripper_close=0.6, length=skill_length)
-    pick_obj_skill = PickBlock2Skill(scene, pick_skill, vis_target_pos=target_pose_func)
-    place_obj_skill = PlaceBlock3Skill(scene, place_skill, vis_target_pos=target_pose_func)
-    wipe_table_skill = WipeTableSkill(scene, wipe_skill, vis_target_pos=target_pose_func)
-    squeeze_sponge_skill = SqueezeSpongeSkill(scene, squeeze_skill, vis_target_pos=target_pose_func)
-    ACTION_MAP = {
-        "place_moveable": place_obj_skill,
-        "pick_movable": pick_obj_skill,
-        "squeeze_movable": squeeze_sponge_skill,
-        "wipe_movable": wipe_table_skill,
-    }
+    drag_skill = DragSkill(reach_policy=arm_policy, lift_height=0.25, gripper_close=0.6, length=skill_length)
+    pick_block_skill = PickBlock2Skill(scene, pick_skill, vis_target_pos=target_pose_func)
+    place_block_skill = PlaceBlock4Skill(scene, place_skill, vis_target_pos=target_pose_func)
+    drag_block_skill = DragBlock5Skill(scene, drag_skill, vis_target_pos=target_pose_func)
+    ACTION_MAP = {"place_block": place_block_skill, "pick_block": pick_block_skill, "drag_block": drag_block_skill}
 
-    tamp_agent = RandomTampAgent(scene, abstract_model=abs_model, action_to_skill_map=ACTION_MAP, perception=perception)
+    tamp_agent = PlanningAgent(scene, abstract_model=abs_model, action_to_skill_map=ACTION_MAP)
 
+    # simulate environment
     logger = SkilletDataLogger(
         "_robot_data/exp/", env, scene, perception, abs_model, tamp_agent, obs_spec=rgbd_grip_spec, visualize=False
     )
@@ -128,9 +113,8 @@ def main() -> None:
     logger.run_thread()
 
     env.reset()
-    tamp_agent.execute(env, logger=logger, num_actions=100)
+    tamp_agent.execute(env)
     logger.save_video()
-    print("[INFO][Main] finished experiment, exiting...")
 
 
 if __name__ == "__main__":

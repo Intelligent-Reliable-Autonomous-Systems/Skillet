@@ -42,7 +42,7 @@
         (gripper-full)
         (grasping ?target)
         (gripper-lifted)
-        (clear ?support)) ; the support location is now free
+        (clear ?support) ; the support location is now free
         (not (at-loc ?target ?targetloc))
     )
 )
