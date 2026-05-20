@@ -5,7 +5,10 @@ from .drag_block import DragBlockSkill as DragBlockSkill
 from .pick_block import PickBlock2Skill as PickBlock2Skill
 from .pick_block import PickBlockSkill as PickBlockSkill
 from .place_block import PlaceBlock2Skill as PlaceBlock2Skill
+from .place_block import PlaceBlock3Skill as PlaceBlock3Skill
 from .place_block import PlaceBlock4Skill as PlaceBlock4Skill
 from .place_block import PlaceBlockSkill as PlaceBlockSkill
 from .place_table import PlaceTableSkill as PlaceTableSkill
 from .rotate_block import RotateBlockSkill as RotateBlockSkill
+from .squeeze_sponge import SqueezeSpongeSkill as SqueezeSpongeSkill
+from .wipe_spill import WipeTableSkill as WipeTableSkill

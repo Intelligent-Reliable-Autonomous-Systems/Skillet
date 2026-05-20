@@ -14,6 +14,7 @@ import torch
 from skillet.perception.reconstruction.reconstructor_base import ReconstructorBase
 from skillet.perception.reconstruction.utils import (
     find_obj_centers_mean,
+    find_spill_centers_mean_bbox,
     get_sorted_object_poses,
     transform_xyz_to_world,
 )
@@ -58,9 +59,7 @@ class Sam3Reconstructor(ReconstructorBase):
         self._vlm_bboxes = None
         self._vlm_goal_atoms = None
 
-        self._concepts = ["robot arm"]
-        for o in self._scene.get_object_names((Cube, Target, Sponge, Spill)):
-            self._concepts.append(o.replace("_", " "))
+        self._concepts = {o.name.replace("_", " ") for o in self._scene.objects if o.localizable}
 
     @property
     def masks(self) -> torch.Tensor:
@@ -89,6 +88,7 @@ class Sam3Reconstructor(ReconstructorBase):
             print("[INFO][SAM RECONSTRUCTOR] Successfully built scene.")
             self._build_scene_flag = False
 
+        # Segment with SAM3
         rgb = obs["rgb"]
         depth = obs["depth"]
         intrinsic_k = obs["intrinsic_k"]
@@ -98,81 +98,116 @@ class Sam3Reconstructor(ReconstructorBase):
         self._masks = masks
         self._segment_indices = torch.arange(masks.shape[0], device=masks.device)
 
-        # Grab only the objects that we want to localize
         agg_obj_masks = []
+        agg_obj_types = []
         _, mh, mw = masks.shape
-        obj_inds = [
-            j
-            for j, item in enumerate(self._concepts)
-            if ("block" in item or "sponge" in item or "spill" in item or "circle" in item)
-        ]
-        obj_types = []
-        obj_sizes = []
-        for item in self._concepts:
-            if "block" in item:
-                obj_types.append("block")
-                obj_sizes.append(CUBE_SIZE)
-            elif "sponge" in item:
-                obj_types.append("sponge")
-                obj_sizes.append(SPONGE_SIZE)
-            elif "spill" in item:
-                obj_types.append("spill")
-                obj_sizes.append(SPILL_SIZE)
-            elif "circle" in item:
-                obj_types.append("circle")
-                obj_sizes.append(TARGET_SIZE)
 
-        for i in obj_inds:
+        # Group masks together on a per-concept basis
+        for i, n in enumerate(self._concepts):
             if i not in concept_indices:
                 continue
-            inds = torch.argwhere(i == concept_indices)[0]
-            o_mask = torch.zeros(size=(mh, mw), device=self._device)
-            for j in inds:
-                o_mask = torch.logical_or(o_mask, masks[j].squeeze())
+            o = self._scene.get_objects_from_name([n])[0]
+            if isinstance(o, (Cube, Target, Sponge)):
+                inds = torch.argwhere(i == concept_indices)[0]
+                o_mask = torch.zeros(size=(mh, mw), device=self._device)
+                for j in inds:
+                    o_mask = torch.logical_or(o_mask, masks[j].squeeze())
+
+            elif isinstance(o, Spill):
+                inds = torch.argwhere(i == concept_indices)[0]
+                o_mask = torch.zeros(size=(mh, mw), device=self._device)
+                for j in inds:
+                    print(f"[INFO] Spill found {j}!")
+                    o_mask = torch.logical_or(o_mask, masks[j].squeeze())
+
             agg_obj_masks.append(o_mask)
+            agg_obj_types.append(o.object_type)
         if len(agg_obj_masks) == 0:
             return
         obj_masks = torch.stack(agg_obj_masks, dim=0)
+        obj_types = np.asarray(agg_obj_types)
 
-        # Find object centers and orientation in the camera frame
-        centers = find_obj_centers_mean(
-            obj_masks,
-            depth,
-            intrinsic_k,
-            cube_size=np.asarray(obj_sizes),
-            camera_pos=camera_pose[0:3],
-            camera_quat=camera_pose[3:7],
-            frame=frame,
-        )
+        # Compute the object centers
+        centers, spill_bboxes = self._get_object_centers(obj_masks, obj_types)
 
-        centers = (
-            transform_xyz_to_world(centers, camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7])
-            if frame == "camera"
-            else centers
-        )
-        _, ids = get_sorted_object_poses(self._scene, (Cube, Sponge))
-        obj_idx, det_idx = [], []
-        for i, c in enumerate(torch.unique(concept_indices[concept_indices != 0]).cpu().numpy()):
-            if c not in obj_inds:
-                continue
+        # Assign the pose and bounding boxes to each object
+        ids = []
+        for i, c in enumerate(torch.unique(concept_indices).cpu().numpy()):
             obj = self._scene.get_objects_from_name([self._concepts[c].replace(" ", "_")])[0]
             obj.pose = torch.cat((centers[i], torch.as_tensor([1, 0, 0, 0], device=centers[i].device)), dim=0)
-            obj_idx.append(int(np.argwhere(obj.object_id == ids)[0][0]))
-            det_idx.append(i)
+            ids.append(obj.object_id)
+            if isinstance(obj, Spill):
+                obj.bbox = spill_bboxes[0]  # TODO this only handles one spill
+        ids = np.asarray(ids)
 
         if self._visualize:
             self._bbox_frame = Sam3Reconstructor.show_bounding_boxes(
                 rgb.cpu().numpy(), masks.cpu().numpy(), concept_indices=concept_indices, concepts=self._concepts
             )
-            if obj_idx is not None and det_idx is not None:
-                if not hasattr(self, "_colors"):
-                    self._colors = [
-                        (int(c[0]), int(c[1]), int(c[2]))
-                        for c in np.random.randint(100, 255, size=(len(self._scene.objects), 3))
-                    ]
-                self._mask_frame = Sam3Reconstructor.show_obj_masks(
-                    rgb.cpu().numpy(), obj_masks.cpu().numpy(), self._scene, ids, obj_idx, det_idx, self._colors
-                )
+            if not hasattr(self, "_colors"):
+                self._colors = [
+                    (int(c[0]), int(c[1]), int(c[2]))
+                    for c in np.random.randint(100, 255, size=(len(self._scene.objects), 3))
+                ]
+            self._mask_frame = Sam3Reconstructor.show_obj_masks(
+                rgb.cpu().numpy(), obj_masks.cpu().numpy(), self._scene, ids, self._colors
+            )
+
+    def _get_object_centers(
+        self,
+        obj_masks: torch.Tensor,
+        obj_types: list,
+        depth: torch.Tensor,
+        intrinsic_k: torch.Tensor,
+        camera_pose: torch.Tensor,
+        frame: str = "camera",
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        # Find object centers and orientation in the camera frame
+        cube_inds = np.argwhere(obj_types == "block")
+        target_inds = np.argwhere(obj_types == "target")
+        sponge_inds = np.argwhere(obj_types == "sponge")
+        obj_inds = np.concatenate((cube_inds, target_inds, sponge_inds))
+        obj_sizes = np.zeros(obj_inds.shape[0])
+        obj_sizes[cube_inds] = CUBE_SIZE
+        obj_sizes[target_inds] = TARGET_SIZE
+        obj_sizes[sponge_inds] = SPONGE_SIZE
+
+        centers = torch.zeros(obj_masks.shape[0], 3, device=obj_masks.device)
+
+        # Localize the cubes, targets, and sponge
+        obj_centers = find_obj_centers_mean(
+            obj_masks[obj_inds],
+            depth,
+            intrinsic_k,
+            obj_size=CUBE_SIZE,
+            camera_pos=camera_pose[0:3],
+            camera_quat=camera_pose[3:7],
+            frame=frame,
+        )
+        obj_centers = (
+            transform_xyz_to_world(obj_centers, camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7])
+            if frame == "camera"
+            else obj_centers
+        )
+        centers[obj_inds] = obj_centers
+
+        spill_inds = np.argwhere(obj_types == "spill")
+        spill_centers, spill_bboxes = find_spill_centers_mean_bbox(
+            obj_masks[spill_inds],
+            depth,
+            intrinsic_k,
+            camera_pos=camera_pose[0:3],
+            camera_quat=camera_pose[3:7],
+            frame=frame,
+        )
+        spill_centers = (
+            transform_xyz_to_world(spill_centers, camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7])
+            if frame == "camera"
+            else spill_centers
+        )
+        centers[spill_inds] = spill_centers
+
+        return centers, spill_bboxes
 
     def get_observation(self) -> Scene:
         """Return the scene."""
@@ -260,7 +295,7 @@ class Sam3Reconstructor(ReconstructorBase):
         return overlay
 
     @staticmethod
-    def masks_to_bboxes(masks: np.ndarray) -> list[tuple[int, int, int, int]]:
+    def masks_to_bboxes(masks: torch.Tensor) -> list[tuple[int, int, int, int]]:
         """Convert binary masks of shape (N, H, W) to bounding boxes (x1, y1, x2, y2)."""
         bboxes = []
         for mask in masks:
@@ -275,9 +310,7 @@ class Sam3Reconstructor(ReconstructorBase):
         rgb_image: np.ndarray,
         masks: np.ndarray,
         scene: Scene,
-        ids: np.ndarray,
-        obj_idx: np.ndarray,
-        det_idx: np.ndarray,
+        ids: list,
         colors: list[tuple[int, int, int]],
     ) -> np.ndarray:
         """Show the masks and the corresponding labels.
@@ -287,24 +320,23 @@ class Sam3Reconstructor(ReconstructorBase):
             masks: masks produced by SAM
             scene: the current scene to obtain
             ids: np.ndarray of sorted object ids
-            obj_idx: Sorted indexes of object scene ids according to poses
-            det_idx: The detection index of which pose to assign to which object
+            colors: color array
 
         """
         rgb_image = rgb_image.transpose((1, 2, 0))
         display = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2BGR).copy()
 
         for color_idx, ob in enumerate(scene.objects):
-            if not isinstance(ob, Cube):
+            if not ob.localizable:
                 continue
 
-            idx = np.where(ob.object_id == ids[obj_idx])[0]
+            idx = np.argwhere(ob.object_id == ids)[0]
             if idx.size > 0:
                 idx = idx[0]
             else:
                 continue
 
-            mask = masks[det_idx[idx]]  # shape (H, W), bool or 0/1
+            mask = masks[idx]  # shape (H, W), bool or 0/1
             color = colors[color_idx]
 
             # Overlay colored mask with transparency
@@ -318,7 +350,6 @@ class Sam3Reconstructor(ReconstructorBase):
 
             # Place label at centroid of mask
             padding = 3
-            baseline = 3
             ys, xs = np.where(mask.astype(bool))
             if len(xs) > 0:
                 cx, cy = int(xs.mean()), int(ys.mean())

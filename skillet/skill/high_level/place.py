@@ -48,8 +48,8 @@ class PlaceSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAct
     def __init__(
         self,
         reach_policy: BatchedPolicy[TBSkillObs, TBAction, TBSkillParams],
-        gripper_policy: BatchedPolicy[TBSkillObs, TBAction, TBSkillParams],
         lift_height: float,
+        gripper_close: float,
         length: int,
     ) -> None:
         """Initialize the place skill.
@@ -57,15 +57,15 @@ class PlaceSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAct
         Args:
             reach_policy: The policy for reaching.
             orient_policy: The policy for orienting.
-            gripper_policy: The policy for grasping.
             lift_height: The height to lift the object to.
+            gripper_close: how open the gripper should be on a scale of 0-1
             length: The number of steps to execute the skill for.
 
         """
         self._name = "place_skill"
         self._reach_policy = reach_policy
-        self._gripper_policy = gripper_policy
         self._lift_height = lift_height
+        self._gripper_close = gripper_close
         self._length = length
         self._status = None
         self._place_status = None
@@ -203,7 +203,7 @@ class PlaceSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAct
         reach_actions[:, -1] = torch.where(
             self._place_status >= PlaceStatusCodes.RELEASE,
             torch.zeros_like(reach_actions[:, -1]) + 0.0,  # Open gripper
-            torch.ones_like(reach_actions[:, -1]) * 0.6,  # Close gripper
+            torch.ones_like(reach_actions[:, -1]) * self._gripper_close,  # Close gripper
         )
 
         self._n_steps += 1

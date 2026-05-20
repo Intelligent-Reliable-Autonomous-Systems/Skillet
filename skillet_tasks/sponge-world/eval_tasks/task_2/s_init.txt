@@ -1,6 +1,0 @@
-next-to(light pink block, blue-block); magentically attached
-on(yellow block, table)
-on(light pink block, table)
-on(light blue block, table)
-on(green block, table)
-on(purple block, table)

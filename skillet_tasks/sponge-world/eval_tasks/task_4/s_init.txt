@@ -1,7 +1,0 @@
-on(yellow block, light pink block)
-on(light pink block, dark red block)
-on(dark red block, table) ; immovable
-on(green block, table)
-on(light blue block, green block)
-
-

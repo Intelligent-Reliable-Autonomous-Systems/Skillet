@@ -1,1 +1,0 @@
-"Make a stack of blocks 3 high including the red block"

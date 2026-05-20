@@ -1,4 +1,0 @@
-[{{"goal": {{"predicate": "on", "args": ["dark red block", "table"]}}}},
-{{"goal": {{"predicate": "on", "args": ["yellow block", "dark red block"]}}}},
-{{"goal": {{"predicate": "on", "args": ["green block", "light blue block"]}}}},
-{{"goal": {{"predicate": "on", "args": ["light blue block", "table"]}}}}]

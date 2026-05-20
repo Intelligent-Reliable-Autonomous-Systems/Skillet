@@ -83,7 +83,7 @@ class Cube(SceneObject):
                     For "bottom", 0 means the bottom of the tag is near the front side.
 
         """
-        super().__init__(name=name)
+        super().__init__(name=name, localizable=True)
         self._size = size
         self._pose = init_pose if init_pose is not None else torch.rand(size=(7,), device=DEVICE)
         self._face_apriltags = face_apriltags or []
@@ -261,7 +261,7 @@ class Table(SceneObject):
             init_pose: The initial pose of the Table in the world frame.
 
         """
-        super().__init__(name=name)
+        super().__init__(name=name, localizable=False)
         self._height = height
         self._pose = init_pose
 
@@ -313,7 +313,7 @@ class Target(SceneObject):
             init_pose: The initial pose of the target in the world frame.
 
         """
-        super().__init__(name=name)
+        super().__init__(name=name, localizable=True)
         self._radius = radius
         self._pose = init_pose
 
@@ -365,7 +365,7 @@ class Location(SceneObject):
             init_pose: The initial pose of the target in the world frame.
 
         """
-        super().__init__(name=name)
+        super().__init__(name=name, localizable=False)
         self._size = size
         self._pose = init_pose
 
@@ -425,7 +425,7 @@ class Sponge(SceneObject):
             init_pose: The initial pose of the cube in the world frame.
 
         """
-        super().__init__(name=name)
+        super().__init__(name=name, localizable=True)
         self._size = size
         self._pose = init_pose if init_pose is not None else torch.rand(size=(7,), device=DEVICE)
         self._ema_filter = EMAFilter()
@@ -519,13 +519,15 @@ class Spill(SceneObject):
                     For "bottom", 0 means the bottom of the tag is near the front side.
 
         """
-        super().__init__(name=name)
+        super().__init__(name=name, localizable=True)
         self._size = size
         self._pose = init_pose if init_pose is not None else torch.rand(size=(7,), device=DEVICE)
         self._ema_filter = EMAFilter()
         self._material = material
         self._color = color
         self._moveable = moveable
+
+        self._bbox = None
 
     @property
     def material(self) -> str:
@@ -567,6 +569,16 @@ class Spill(SceneObject):
     def aabb(self) -> torch.Tensor:
         """The axis-aligned bounding box of the spill."""
         return torch.cat([self._pose[:3] - self._size / 2.0, self._pose[:3] + self._size / 2.0], dim=-1)
+
+    @property
+    def bbox(self) -> torch.Tensor:
+        if self._bbox is None:
+            raise AttributeError("The BBox is not known.")
+        return self._bbox
+
+    @bbox.setter
+    def bbox(self, bbox: torch.Tensor) -> None:
+        self._bbox = bbox
 
     @property
     def object_type(self) -> str:

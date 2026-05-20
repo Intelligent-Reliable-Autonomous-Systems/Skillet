@@ -1,5 +1,6 @@
-"""A pick skill for picking an object up at a location and lifting to a desired height."""
+"""A squeeze skill for squeezing a deformable object."""
 
+import time
 from enum import IntEnum
 from typing import Generic
 
@@ -17,45 +18,40 @@ from skillet.core.skill import (
 )
 from skillet.core.spaces import ArrayLike, SkillParamsSpec
 from skillet.envs.specs import IKEE_Obs
-from skillet.skill.specs import XYZ_YAW_Params, XYZ_YAW_Params_Spec
+from skillet.skill.specs import XYZ_Yaw_XYZ_Params, XYZ_Yaw_XYZ_Params_Spec
 
 
-class PickStatusCodes(IntEnum):
+class SqueezeStatusCodes(IntEnum):
     """The codes for the status of a skill."""
 
     IDLE = 0
     """The skill is idle."""
-    ASCEND = 1
-    """The skill is ascending to the lift height."""
-    HOVER = 2
-    """The skill is reaching the hovering position."""
-    LOWER = 3
-    """The skill is lowering to the object."""
-    GRASP = 4
-    """The skill is grasping the object."""
-    LIFT = 5
-    """The skill lifting the object."""
-    DONE = 6
-    """The skill has lifted the ojbect."""
+    SQUEEZE = 1
+    """The skill is squeezing"""
+    RELEASE = 2
+    """The skill is releasing"""
+    DONE = 3
+    """The skill is done"""
 
 
-class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAction]):
-    """A pick skill for picking an object up at a location and lifting to a desired height.
+class SqueezeSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params], Generic[TBAction]):
+    """A squeeze skill for squeezing a deformable object.
 
     Generic Args:
         TBAction: The type of the action for the skill.
 
-    Parameterized by [x,y,z, yaw] the x y z location to perform the pick action and orientation
+    Parameterized by []
     """
 
     def __init__(
         self,
-        reach_policy: BatchedPolicy[IKEE_Obs, TBAction, XYZ_YAW_Params],
+        reach_policy: BatchedPolicy[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params],
         lift_height: float,
         gripper_close: float,
+        timeout: float,
         length: int,
     ) -> None:
-        """Initialize the pick skill.
+        """Initialize the squeeze skill.
 
         Generic Args:
             TBAction: The type of the action for the skill.
@@ -64,30 +60,32 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
             reach_policy: The policy for reaching.
             orient_policy: The policy for orienting.
             lift_height: The height to lift the object to.
+            gripper_close: How closed the gripper should be
             length: The number of steps to execute the skill for.
 
         """
-        self._name = "pick_skill"
+        self._name = "squeeze_skill"
         self._reach_policy = reach_policy
         self._lift_height = lift_height
+        self._gripper_close = gripper_close
+        self._timeout = timeout
         self._length = length
         self._status = None
-        self._pick_status = None
+        self._squeeze_status = None
         self._params = None
-        self._gripper_close = gripper_close
 
         # 180 degree rotation about X axis + -90 degree yaw
         # self._default_quat = torch.as_tensor([[0.0, 0.7071, -0.7071, 0.0]])
-        # self._default_quat = torch.as_tensor([[0.0, 1.0, 0.0, 0.0]])
+        # self._default_quat = torch.as_tensor([[0.7071, 0.0, 0.0, 0.7071]])
         self._default_quat = torch.as_tensor([[0.0, 0.7071, 0.7071, 0.0]])
 
     @property
     def param_dim(self) -> int:
-        return 4
+        return
 
     @property
-    def params_spec(self) -> SkillParamsSpec[XYZ_YAW_Params]:
-        return XYZ_YAW_Params_Spec.replace(device=self.obs_spec.device)
+    def params_spec(self) -> SkillParamsSpec[XYZ_Yaw_XYZ_Params]:
+        return XYZ_Yaw_XYZ_Params_Spec
 
     @property
     def name(self) -> str:  # noqa: D102
@@ -106,19 +104,19 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         return self._status
 
     def initiate(self, obs: TBSkillObs, params: TBSkillParams) -> None:
-        """Initiate the pick skill.
+        """Initiate the squeeze skill.
 
         Args:
             obs: The low-level observation for the skill.
-            params: The pick parameters, (x, y, z, yaw) as shape (b, 4)
+            params: The squeeze parameters, []
 
         """
         self.n_envs = self.obs_spec.n_envs_from(obs)
         spec = self.policy.obs_spec.with_n_envs(self.n_envs)
         self._status = spec.zeros(shape=(self.n_envs,), dtype=int)
-        self._pick_status = spec.zeros(shape=(self.n_envs,), dtype=int)
+        self._squeeze_status = spec.zeros(shape=(self.n_envs,), dtype=int)
         self._status[:] = SkillStatusCodes.RUNNING
-        self._pick_status[:] = PickStatusCodes.ASCEND
+        self._squeeze_status[:] = SqueezeStatusCodes.SQUEEZE
         self._params = params
         self._n_steps = 0
         self._default_quat = self._default_quat.to(self.obs_spec.device)
@@ -131,60 +129,44 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
 
         ee_pose_b = obs["tcp_pose_b"]
 
-        # Define the target poses for each stage of the pick skill, indexed by PickStatusCodes
-        # (n_envs, num_pick_stages, 7)
-        target_poses = spec.zeros(shape=(self.n_envs, 7, 7), dtype=float)
-        # ASCEND[1]: Go up to lift height (gripper open)
-        target_poses[:, PickStatusCodes.ASCEND, :7] = ee_pose_b
-        target_poses[:, PickStatusCodes.ASCEND, 2] = self._lift_height
+        # Define the target poses for each stage of the wipe skill, indexed by SqueezeStatusCodes
+        # (n_envs, num_wipe_stages, 7)
+        target_poses = spec.zeros(shape=(self.n_envs, 4, 7), dtype=float)
 
-        # HOVER[2]: Go over to the target x,y position, oriented downward (gripper open)
-        target_poses[:, PickStatusCodes.HOVER, :2] = params[:, :2]  # (x,y) from params
-        target_poses[:, PickStatusCodes.HOVER, 2] = self._lift_height
-        target_poses[:, PickStatusCodes.HOVER, 3:7] = goal_quat
-        # LOWER[3]: Go down to the target z position (gripper open)
-        target_poses[:, PickStatusCodes.LOWER, :7] = target_poses[:, PickStatusCodes.HOVER, :7]
-        target_poses[:, PickStatusCodes.LOWER, 2] = params[:, 2]
-        # GRASP[4]: Close gripper
-        target_poses[:, PickStatusCodes.GRASP, :7] = target_poses[:, PickStatusCodes.LOWER, :7]
-        # LIFT[5]: Lift up to the target z position (gripper closed)
-        target_poses[:, PickStatusCodes.LIFT, :7] = target_poses[:, PickStatusCodes.HOVER, :7]
+        # HOVER[1]: Go over to the target x,y position, oriented downward (gripper open)
+        target_poses[:, SqueezeStatusCodes.SQUEEZE, :7] = ee_pose_b  # (x,y) from params
+        target_poses[:, SqueezeStatusCodes.RELEASE, :7] = ee_pose_b
         self._target_poses = target_poses
 
         # Start the skill by going to the ASCEND pose
         idx = torch.arange(self.n_envs, device=target_poses.device)
         valid_idx = self._status == SkillStatusCodes.RUNNING
-        self._current_target_poses = target_poses[idx, self._pick_status]
+        self._current_target_poses = target_poses[idx, self._squeeze_status]
         env_ids = torch.nonzero(valid_idx, as_tuple=False).squeeze(-1)
         if env_ids.numel():
             self._reach_policy.reset(obs, self._current_target_poses, env_ids=env_ids)
 
+        self._start_time = time.perf_counter()
+        self._squeezed = torch.zeros(self.n_envs, device=target_poses.device)
+
     def get_action(self, obs: TBSkillObs) -> TBAction:  # noqa: D102
         ee_pose_b = obs["tcp_pose_b"]
 
-        reached_pos = (
-            torch.linalg.vector_norm(ee_pose_b[:, 0:3] - self._current_target_poses[:, 0:3], dim=1)
-            < self._pos_threshold
-        )
-        reached_height = self._pick_status == PickStatusCodes.ASCEND & (
-            ee_pose_b[:, 2] >= self._current_target_poses[:, 2] - self._pos_threshold
-        )
-        reached_quat = (
-            quat_error_magnitude(ee_pose_b[:, 3:7], self._current_target_poses[:, 3:7]) < self._quat_threshold
-        )
-        reached_pose = (reached_pos & reached_quat) | reached_height
-        next_pose = reached_pose
+        elapsed_time = time.perf_counter() - self._start_time
+        reached_pose = elapsed_time > self._timeout
 
-        if next_pose.any():
+        if reached_pose:
+            self._start_time = time.perf_counter()
+            self._squeezed = torch.ones(self.n_envs, ee_pose_b.device)
             idx = torch.arange(self.n_envs, device=reached_pose.device)
             valid_idx = (self._status == SkillStatusCodes.RUNNING) & (reached_pose)
-            self._pick_status[valid_idx] += 1
-            valid_idx = valid_idx & (self._pick_status < PickStatusCodes.DONE)
+            self._squeeze_status[valid_idx] += 1
+            valid_idx = valid_idx & (self._squeeze_status < SqueezeStatusCodes.DONE)
             # print(
-            #     f"[INFO][PICK STATUS UPDATE]: {PickStatusCodes(self._pick_status.cpu().numpy()[0]).name} | reached_pose: {reached_pose.cpu().numpy()}"
+            #     f"[INFO][SQUEEZE STATUS UPDATE]: {SqueezeStatusCodes(self._squeeze_status.cpu().numpy()[0]).name} | reached_pose: {reached_pose.cpu().numpy()}"
             # )
-            # Update the target pose based on the new pick status
-            self._current_target_poses[valid_idx] = self._target_poses[idx[valid_idx], self._pick_status[valid_idx]]
+            # Update the target pose based on the new squeeze status
+            self._current_target_poses[valid_idx] = self._target_poses[idx[valid_idx], self._squeeze_status[valid_idx]]
 
             env_ids = torch.nonzero(valid_idx, as_tuple=False).squeeze(-1)
             if env_ids.numel():
@@ -192,13 +174,13 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
 
         reach_actions = self._reach_policy.get_action(obs)
         reach_actions[:, -1] = torch.where(
-            self._pick_status >= PickStatusCodes.GRASP,
-            torch.ones_like(reach_actions[:, -1]) * self._gripper_close,  # Close gripper
-            torch.zeros_like(reach_actions[:, -1]),  # Open gripper
+            self._place_status >= SqueezeStatusCodes.RELEASE,
+            torch.zeros_like(reach_actions[:, -1]) + self._gripper_close,  # Open gripper
+            torch.ones_like(reach_actions[:, -1]),  # Close gripper
         )
 
         self._n_steps += 1
-        self._status[self._pick_status == PickStatusCodes.DONE] = SkillStatusCodes.SUCCESS
+        self._status[self._squeeze_status == SqueezeStatusCodes.DONE] = SkillStatusCodes.SUCCESS
         if self._n_steps >= self._length:
             self._status[self._status == SkillStatusCodes.RUNNING] = SkillStatusCodes.FAILED
 

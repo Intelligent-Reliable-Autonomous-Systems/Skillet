@@ -9,7 +9,7 @@ import torch
 class SceneObject:
     """A scene object is a 3D object in a scene."""
 
-    def __init__(self, object_id: int | None = None, name: str | None = None) -> None:
+    def __init__(self, object_id: int | None = None, name: str | None = None, localizable: bool = False) -> None:
         """Initialize the scene object.
 
         Args:
@@ -19,6 +19,12 @@ class SceneObject:
         self._object_id = object_id
         self._type_id = -1
         self._name = name
+        self._localizable = localizable
+
+    @property
+    def localizable(self) -> bool:
+        """If the object should be recognized by SAM."""
+        return self._localizable
 
     @property
     @abstractmethod

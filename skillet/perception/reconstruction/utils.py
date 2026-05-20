@@ -227,6 +227,65 @@ def find_obj_centers_mean(
     return torch.stack(centers, dim=0)
 
 
+def find_spill_centers_mean_bbox(
+    masks: torch.Tensor,
+    depth: torch.Tensor,
+    camera_matrix: torch.Tensor,
+    camera_pos: torch.Tensor,
+    camera_quat: torch.Tensor,
+    depth_scale: float = 1.0,
+    frame: Literal["world", "camera"] = "camera",
+) -> torch.Tensor:
+    """Find object centers from segmentation masks and depth map in the camera frame.
+
+    Assumes that each object face is parallel to the camera, meaning we know the plane equation
+
+    Args:
+        masks: Binary masks for each object, shape (N, H, W) or list of (H, W) arrays
+        depth: Depth map, shape (1, H, W) in meters or scaled units
+        camera_matrix: 3x3 camera intrinsics matrix
+        camera_pos: (3,) array of camera position in world frame
+        camera_quat: (4,) array of quaternion in wxyz of camera orientation in world frame
+        depth_scale: Scale factor for depth values (if depth is in mm, use 1/1000)
+        frame: frame in which to compute RANSAC in (world or camera)
+
+    Returns:
+        Centers: List of 3D object centers in camera frame (N, 3)
+
+    """
+    depth = depth.squeeze(0)
+    centers = []
+    bboxes = []
+    for i, mask in enumerate(masks):
+        mask = mask.to(torch.bool)
+
+        if mask.sum() < 10:
+            continue
+
+        # Get 3D points from mask and depth
+        points_3d = percentile_clip(mask_to_3d_points(mask, depth, camera_matrix, depth_scale), lo=10, hi=90)
+
+        # Transform 3d points into world frame
+        if frame == "world":
+            points_3d = transform_xyz_to_world(points_3d, camera_pos=camera_pos, camera_quat=camera_quat)
+
+        proj_u = points_3d[:, 0]
+        proj_v = points_3d[:, 1]
+        proj_w = points_3d[:, 2]
+        centroid_u = torch.sort(proj_u)[0][len(proj_u) // 2]
+        centroid_v = torch.sort(proj_v)[0][len(proj_v) // 2]
+        centroid_w = torch.sort(proj_w)[0][len(proj_w) // 2]
+        centroid = torch.as_tensor([centroid_u, centroid_v, centroid_w], device=masks.device)
+        centers.append(centroid)
+        bboxes.append([points_3d.min(dim=0), points_3d.max(dim=0)])
+
+        # normals = compute_normals(points_3d.cpu().numpy())
+        # dirs = pca_normal_directions(normals, n=3)
+        # quats.append(torch.as_tensor(roll_quaternion_from_directions(dirs), device=masks.device))
+
+    return torch.stack(centers, dim=0), torch.stack(bboxes, dim=0)
+
+
 def compute_normals(points: np.ndarray) -> np.ndarray:
     """Compute the normal vectors of each point using local neighbor clustering."""
     pcd = o3d.geometry.PointCloud()

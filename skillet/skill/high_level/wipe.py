@@ -1,4 +1,4 @@
-"""A drag skill for dragging an object to a desired position."""
+"""A wipe skill for wipeing across the table."""
 
 from enum import IntEnum
 from typing import Generic
@@ -20,41 +20,31 @@ from skillet.envs.specs import IKEE_Obs
 from skillet.skill.specs import XYZ_Yaw_XYZ_Params, XYZ_Yaw_XYZ_Params_Spec
 
 
-class DragStatusCodes(IntEnum):
+class WipeStatusCodes(IntEnum):
     """The codes for the status of a skill."""
 
     IDLE = 0
     """The skill is idle."""
-    ASCEND = 1
-    """The skill is ascending to the lift height."""
-    HOVER = 2
-    """The skill is reaching the hovering position."""
-    LOWER = 3
+    HOVER = 1
+    """The skill is hovering above location"""
+    LOWER = 2
     """The skill is lowering to the object."""
-    GRASP = 4
-    """The skill is grasping the object."""
-    RAISE = 5
-    """The skill is dragging the object."""
-    DRAG = 6
+    WIPE = 3
     """The skill is raising the object."""
-    LOWER2 = 7
-    """The skill is raising the object."""
-    RELEASE = 8
-    """The skill is raising the object."""
-    RAISE2 = 9
+    RAISE = 4
     """The skill is raising"""
-    DONE = 10
+    DONE = 5
     """The skill has lifted the ojbect."""
 
 
-class DragSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params], Generic[TBAction]):
-    """A drag skill for dragging an object to a desired location.
+class WipeSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params], Generic[TBAction]):
+    """A wipe skill for wiping an object across a table.
 
     Generic Args:
         TBAction: The type of the action for the skill.
 
-    Parameterized by [x,y,z, yaw, xyz] the x y z location to perform the drag action, orientation (yaw)
-    of the gripper, and the new xyz position to drag to
+    Parameterized by [x,y,z, yaw, xyz] the x y z location to perform the wipe action, orientation (yaw)
+    of the gripper, and the new xyz position to wipe to
     """
 
     def __init__(
@@ -64,7 +54,7 @@ class DragSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params], Generic[TB
         gripper_close: float,
         length: int,
     ) -> None:
-        """Initialize the drag skill.
+        """Initialize the wipe skill.
 
         Generic Args:
             TBAction: The type of the action for the skill.
@@ -77,13 +67,13 @@ class DragSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params], Generic[TB
             length: The number of steps to execute the skill for.
 
         """
-        self._name = "drag_skill"
+        self._name = "wipe_skill"
         self._reach_policy = reach_policy
         self._lift_height = lift_height
         self._gripper_close = gripper_close
         self._length = length
         self._status = None
-        self._drag_status = None
+        self._wipe_status = None
         self._params = None
 
         # 180 degree rotation about X axis + -90 degree yaw
@@ -116,19 +106,19 @@ class DragSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params], Generic[TB
         return self._status
 
     def initiate(self, obs: TBSkillObs, params: TBSkillParams) -> None:
-        """Initiate the drag skill.
+        """Initiate the wipe skill.
 
         Args:
             obs: The low-level observation for the skill.
-            params: The drag parameters, (x, y, z, yaw, heading, dist) as shape (b, 6)
+            params: The wipe parameters, (x, y, z, yaw, heading, dist) as shape (b, 6)
 
         """
         self.n_envs = self.obs_spec.n_envs_from(obs)
         spec = self.policy.obs_spec.with_n_envs(self.n_envs)
         self._status = spec.zeros(shape=(self.n_envs,), dtype=int)
-        self._drag_status = spec.zeros(shape=(self.n_envs,), dtype=int)
+        self._wipe_status = spec.zeros(shape=(self.n_envs,), dtype=int)
         self._status[:] = SkillStatusCodes.RUNNING
-        self._drag_status[:] = DragStatusCodes.ASCEND
+        self._wipe_status[:] = WipeStatusCodes.HOVER
         self._params = params
         self._n_steps = 0
         self._default_quat = self._default_quat.to(self.obs_spec.device)
@@ -141,42 +131,31 @@ class DragSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params], Generic[TB
 
         ee_pose_b = obs["tcp_pose_b"]
 
-        # Define the target poses for each stage of the drag skill, indexed by DragStatusCodes
-        # (n_envs, num_drag_stages, 7)
-        target_poses = spec.zeros(shape=(self.n_envs, 11, 7), dtype=float)
-        # ASCEND[1]: Go up to lift height (gripper open)
-        target_poses[:, DragStatusCodes.ASCEND, :7] = ee_pose_b
-        target_poses[:, DragStatusCodes.ASCEND, 2] = self._lift_height
+        # Define the target poses for each stage of the wipe skill, indexed by WipeStatusCodes
+        # (n_envs, num_wipe_stages, 7)
+        target_poses = spec.zeros(shape=(self.n_envs, 6, 7), dtype=float)
 
-        # HOVER[2]: Go over to the target x,y position, oriented downward (gripper open)
-        target_poses[:, DragStatusCodes.HOVER, :2] = params[:, :2]  # (x,y) from params
-        target_poses[:, DragStatusCodes.HOVER, 2] = self._lift_height
-        target_poses[:, DragStatusCodes.HOVER, 3:7] = goal_quat
-        # LOWER[3]: Go down to the target z position (gripper open)
-        target_poses[:, DragStatusCodes.LOWER, :7] = target_poses[:, DragStatusCodes.HOVER, :7]
-        target_poses[:, DragStatusCodes.LOWER, 2] = params[:, 2]
-        # GRASP[4]: Close gripper
-        target_poses[:, DragStatusCodes.GRASP, :7] = target_poses[:, DragStatusCodes.LOWER, :7]
-        # RAISE[5]: Close gripper
-        target_poses[:, DragStatusCodes.RAISE, :7] = target_poses[:, DragStatusCodes.GRASP, :7]
-        target_poses[:, DragStatusCodes.RAISE, 2] = target_poses[:, DragStatusCodes.GRASP, 2] + 0.01
-        # DRAG[6]: Drag the object to the target location
-        target_poses[:, DragStatusCodes.DRAG, 3:7] = target_poses[:, DragStatusCodes.RAISE, 3:7]
-        target_poses[:, DragStatusCodes.DRAG, 0:3] = params[:, 4:7]
-        target_poses[:, DragStatusCodes.DRAG, 2] = params[:, 6] + 0.01
-        # LOWER[7]: Go down to the target z position (gripper open)
-        target_poses[:, DragStatusCodes.LOWER2, :7] = target_poses[:, DragStatusCodes.DRAG, :7]
-        target_poses[:, DragStatusCodes.LOWER2, 2] = params[:, 6]
-        # RELEASE[8]
-        target_poses[:, DragStatusCodes.RELEASE, :7] = target_poses[:, DragStatusCodes.LOWER2, :7]
-        # RAISE[9]
-        target_poses[:, DragStatusCodes.RAISE2, :7] = target_poses[:, DragStatusCodes.HOVER, :7]
+        # HOVER[1]: Go over to the target x,y position, oriented downward (gripper open)
+        target_poses[:, WipeStatusCodes.HOVER, :2] = params[:, :2]  # (x,y) from params
+        target_poses[:, WipeStatusCodes.HOVER, 2] = self._lift_height
+        target_poses[:, WipeStatusCodes.HOVER, 3:7] = goal_quat
+        # LOWER[2]: Go down to the target z position (gripper open)
+        target_poses[:, WipeStatusCodes.LOWER, :7] = target_poses[:, WipeStatusCodes.HOVER, :7]
+        target_poses[:, WipeStatusCodes.LOWER, 2] = params[:, 2]
+
+        # WIPE[3]: Wipe the object to the target location
+        target_poses[:, WipeStatusCodes.WIPE, 3:7] = target_poses[:, WipeStatusCodes.LOWER, 3:7]
+        target_poses[:, WipeStatusCodes.WIPE, 0:3] = params[:, 4:7]
+
+        # RAISE[4]: Wipe the object to the target location
+        target_poses[:, WipeStatusCodes.RAISE, :7] = target_poses[:, WipeStatusCodes.WIPE, :7]
+        target_poses[:, WipeStatusCodes.RAISE, 2] = self._lift_height
         self._target_poses = target_poses
 
         # Start the skill by going to the ASCEND pose
         idx = torch.arange(self.n_envs, device=target_poses.device)
         valid_idx = self._status == SkillStatusCodes.RUNNING
-        self._current_target_poses = target_poses[idx, self._drag_status]
+        self._current_target_poses = target_poses[idx, self._wipe_status]
         env_ids = torch.nonzero(valid_idx, as_tuple=False).squeeze(-1)
         if env_ids.numel():
             self._reach_policy.reset(obs, self._current_target_poses, env_ids=env_ids)
@@ -188,39 +167,33 @@ class DragSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params], Generic[TB
             torch.linalg.vector_norm(ee_pose_b[:, 0:3] - self._current_target_poses[:, 0:3], dim=1)
             < self._pos_threshold
         )
-        reached_height = self._drag_status == DragStatusCodes.ASCEND & (
-            ee_pose_b[:, 2] >= self._current_target_poses[:, 2] - self._pos_threshold
-        )
+
         reached_quat = (
             quat_error_magnitude(ee_pose_b[:, 3:7], self._current_target_poses[:, 3:7]) < self._quat_threshold
         )
-        reached_pose = (reached_pos & reached_quat) | reached_height
+        reached_pose = reached_pos & reached_quat
         next_pose = reached_pose
 
         if next_pose.any():
             idx = torch.arange(self.n_envs, device=reached_pose.device)
             valid_idx = (self._status == SkillStatusCodes.RUNNING) & (reached_pose)
-            self._drag_status[valid_idx] += 1
-            valid_idx = valid_idx & (self._drag_status < DragStatusCodes.DONE)
+            self._wipe_status[valid_idx] += 1
+            valid_idx = valid_idx & (self._wipe_status < WipeStatusCodes.DONE)
             # print(
-            #     f"[INFO][DRAG STATUS UPDATE]: {DragStatusCodes(self._drag_status.cpu().numpy()[0]).name} | reached_pose: {reached_pose.cpu().numpy()}"
+            #     f"[INFO][WIPE STATUS UPDATE]: {WipeStatusCodes(self._wipe_status.cpu().numpy()[0]).name} | reached_pose: {reached_pose.cpu().numpy()}"
             # )
-            # Update the target pose based on the new drag status
-            self._current_target_poses[valid_idx] = self._target_poses[idx[valid_idx], self._drag_status[valid_idx]]
+            # Update the target pose based on the new wipe status
+            self._current_target_poses[valid_idx] = self._target_poses[idx[valid_idx], self._wipe_status[valid_idx]]
 
             env_ids = torch.nonzero(valid_idx, as_tuple=False).squeeze(-1)
             if env_ids.numel():
                 self._reach_policy.reset(obs, self._current_target_poses, env_ids=env_ids)
 
         reach_actions = self._reach_policy.get_action(obs)
-        reach_actions[:, -1] = torch.where(
-            (self._drag_status >= DragStatusCodes.GRASP) & (self._drag_status < DragStatusCodes.RELEASE),
-            torch.ones_like(reach_actions[:, -1]) * self._gripper_close,  # Close gripper
-            torch.zeros_like(reach_actions[:, -1]),  # Open gripper
-        )
+        reach_actions[:, -1] = (torch.ones_like(reach_actions[:, -1]) * self._gripper_close,)
 
         self._n_steps += 1
-        self._status[self._drag_status == DragStatusCodes.DONE] = SkillStatusCodes.SUCCESS
+        self._status[self._wipe_status == WipeStatusCodes.DONE] = SkillStatusCodes.SUCCESS
         if self._n_steps >= self._length:
             self._status[self._status == SkillStatusCodes.RUNNING] = SkillStatusCodes.FAILED
 

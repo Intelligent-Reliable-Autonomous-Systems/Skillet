@@ -1,7 +1,0 @@
-on(yellow block, green block)
-on(green block, table)
-on(dark red block, table) ; immovable
-north-of(light pink block, green block)
-north-of(dark red block, light blue block)
-north-of(light blue block, light pink block)
-
