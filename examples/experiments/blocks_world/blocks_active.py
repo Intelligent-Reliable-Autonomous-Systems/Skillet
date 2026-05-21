@@ -4,7 +4,9 @@ import argparse
 import time
 from typing import TYPE_CHECKING
 
+from conditional_repair.orcam.orcam import ORCAMConfig
 from skillet.agents import ActiveLearningAgent
+from skillet.agents.orcam_agent import ORCAMLearningAgent
 from skillet.core import ObservationSpec
 from skillet.core.env import BatchToSingleWrapper
 from skillet.envs import SkilletEnv
@@ -93,8 +95,15 @@ def main() -> None:
     print("[INFO] Warming up Perception...")
     time.sleep(5)
     input("Press Enter to start the active learning experiment...")
+
+    ORCAMConfig.instance().configure(
+        # global configurations here
+    )
+    learning_agent = ORCAMLearningAgent()
+
     tamp_agent = ActiveLearningAgent(
-        scene, abstract_model=abs_model, action_to_skill_map=ACTION_MAP, perception=perception
+        scene, abstract_model=abs_model, action_to_skill_map=ACTION_MAP, perception=perception,
+        learning_agent=learning_agent
     )
 
     logger = SkilletDataLogger(

@@ -68,7 +68,7 @@ class PlanningAgent(Agent):
             up_state = self.abstract_model.reset_up_problem_state()
             self._selected_skill = self.action_to_skill_map[ab_action.action]
             args = self._scene.resolve_names_to_ids(ab_action.parameters)
-            terminated = self._moderator.run_skill(env, self._selected_skill, args)
+            terminated, status = self._moderator.run_skill(env, self._selected_skill, args)
 
             if logger is not None:
                 obs_log = env.get_observation(logger._obs_spec)
@@ -157,7 +157,7 @@ class RandomTampAgent(Agent):
             self._selected_skill = self.action_to_skill_map[ab_action.action]
             args = self._scene.resolve_names_to_ids(ab_action.parameters)
 
-            terminated = self._moderator.run_skill(env, self._selected_skill, args)
+            terminated, status = self._moderator.run_skill(env, self._selected_skill, args)
 
             if logger is not None:
                 obs_log = env.get_observation(logger._obs_spec)
@@ -203,6 +203,7 @@ class ActiveLearningAgent(Agent):
         scene: Scene,
         abstract_model: AbstractModel,
         action_to_skill_map: dict[str, SingleSkill[Any, Any, Unparameterized]],
+        learning_agent: Any,  # noqa: ANN401
     ) -> None:
         """Initialize the planning agent.
 
@@ -235,19 +236,22 @@ class ActiveLearningAgent(Agent):
         """
         # Get the current symbolic state
         self.abstract_model.initialize(self._scene, task)
+        self._learning_agent.initialize(self.abstract_model)
 
         terminated = False
         up_state = self.abstract_model.reset_up_problem_state()
+        up_objects = self.abstract_model._problem.all_objects
 
         while True:
             # TODO Sample an action from the learning agent
             # ab_action: AbstractAction
-            ab_action, up_action = self._learning_agent.sample_action(up_state)
+            ab_action, up_action = self._learning_agent.sample_action(up_state, up_objects)
 
             self._selected_skill = self.action_to_skill_map[ab_action.action]
             args = self._scene.resolve_names_to_ids(ab_action.parameters)
 
-            terminated = self._moderator.run_skill(env, self._selected_skill, args)
+            terminated, status = self._moderator.run_skill(env, self._selected_skill, args)
+            execution = "applicable" if status == SkillStatusCodes.SUCCESS else "inapplicable"
 
             if logger is not None:
                 obs_log = env.get_observation(logger._obs_spec)
@@ -262,15 +266,16 @@ class ActiveLearningAgent(Agent):
                     skill_status=self._selected_skill.status,
                     states=up_state,
                     actions=up_action,
-                    executions="applicable",
+                    executions=execution,
                 )
 
+            time.sleep(4)
+            next_up_state = self.abstract_model.reset_up_problem_state()
+            up_objects = self.abstract_model._problem.all_objects
+            # TODO update the learning agent with the success information of the skill/new model
+            self._learning_agent.update(up_state, up_objects, up_action, next_up_state, execution)
             if terminated:
                 break
-            time.sleep(4)
-            up_state = self.abstract_model.reset_up_problem_state()
-            # TODO update the learning agent with the success information of the skill/new model
-            self._learning_agent.update(up_state)
 
         if logger is not None:
             obs_log = env.get_observation(logger._obs_spec)
@@ -285,5 +290,5 @@ class ActiveLearningAgent(Agent):
                 skill_status=self._selected_skill.status,
                 states=up_state,
                 actions=up_action,
-                executions="applicable",
+                executions=execution,
             )

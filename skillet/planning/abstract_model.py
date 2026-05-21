@@ -53,6 +53,12 @@ class AbstractModel(BasePlanner):
         self._goal: UPListGoal = None
 
     @property
+    def problem(self) -> Problem:
+        if self._problem is None:
+            self.initialize()
+        return self._problem
+
+    @property
     def init_state(self) -> AbstractState:
         return self._init_state
 

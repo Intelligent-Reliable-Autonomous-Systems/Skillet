@@ -4,10 +4,12 @@ import termios
 import threading
 import tty
 from enum import IntEnum
+from typing import Literal
 
 import numpy as np
 import torch
 
+from skillet.core import SingleSkill
 from skillet.core.env import Environment
 from skillet.core.skill import Skill, SkillStatusCodes
 from skillet.core.spaces import ActionSpec
@@ -152,7 +154,8 @@ class SkilletModerator:
             self._intervention = False
         return self._action, self._action_spec
 
-    def run_skill(self, env: Environment, skill: Skill, args: list[str]) -> None:
+    def run_skill(self, env: Environment, skill: SingleSkill, args: list[str]
+    ) -> tuple[bool, Literal[SkillStatusCodes.SUCCESS, SkillStatusCodes.FAILED]]:
         """Run the skill in the environment."""
         obs = env.get_observation(skill.obs_spec)
         skill.initiate(obs, args)
@@ -179,4 +182,4 @@ class SkilletModerator:
             terminated = term | trunc
             # Check if the skill is terminated
             skill_done = skill.is_terminated(env.get_observation(skill.obs_spec))
-        return terminated
+        return terminated, skill.status
