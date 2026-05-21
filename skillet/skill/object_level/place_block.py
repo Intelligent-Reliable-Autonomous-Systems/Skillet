@@ -1,16 +1,16 @@
 from collections.abc import Callable, Sequence
-from typing import Literal, TypeAlias
+from typing import TypeAlias
 
 import gymnasium as gym
-import numpy as np
 import torch
 from typing_extensions import override
 
 from skillet.core import SkillParamsSpec
 from skillet.core.skill import SingleSkill, SkillStatus, SkillStatusCodes
 from skillet.envs.specs import BxM_Action, IKEE_Obs, M_Action
+from skillet.planning.abstract.skill_grounding import _place_skill_4_grounding
 from skillet.planning.abstract.spatial_grounding import _is_on
-from skillet.scene import Cube, Table, Location
+from skillet.scene import Cube, Location, Table
 from skillet.scene.base import Scene, SceneObject
 from skillet.scene.utils import find_valid_table_xy
 from skillet.skill.high_level.place import PlaceSkill
@@ -245,9 +245,8 @@ class PlaceBlock4Skill(PlaceBlockSkill):
         objs = self._scene.get_objects_from_id(self._params)
         self._target = objs[1]
         if isinstance(self._target, Cube):
-            if not self._target.is_pose_known() or self._params[0] == self._params[1]:
+            if not self._target.is_pose_known() or objs[0] == objs[1] or _place_skill_4_grounding(objs, self._scene):
                 self._status = torch.as_tensor(SkillStatusCodes.FAILED, device=self.params_spec.device)
-
                 return
             target_xyz = self._target.pose[:3].to(self.obs_spec.device).clone() + self._offset
         elif isinstance(self._target, Table):

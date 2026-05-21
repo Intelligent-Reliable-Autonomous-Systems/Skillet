@@ -156,6 +156,11 @@ def _is_grasping(
     return bool(within_x and within_y and within_z and scene.gripper_pos > gripper_thresh)
 
 
+def _gripper_closed(scene: Scene, gripper_thresh: float = 0.4) -> bool:
+    """Check if the gripper is closed."""
+    return scene.gripper_pos > gripper_thresh
+
+
 def _is_lifted(scene: Scene, lift_height: float = 0.2) -> bool:
     if scene.tcp_pose is None or scene.gripper_pos is None:
         return False
@@ -191,6 +196,35 @@ def _is_at(a: Cube, l: Location, z_slack_frac: float = 0.07, xy_slack_frac: floa
 
     # To be holding must be within footprint and gripper must be closed
     return bool(within_x and within_y and within_z)
+
+
+def _is_occupied(l: Location, scene: Scene) -> bool:
+    """Test if a location is occupied."""
+    return any(isinstance(other_obj, Cube) and _is_at(other_obj, l) for other_obj in scene.objects)
+
+
+def _is_obstructed_above(loc: Location, scene: Scene) -> bool:
+    """Test if a location is obstructed above."""
+    above_relations = []
+    occupied_relations = set()
+    obstructed_above_relations = []
+    for obj in scene.objects:
+        for other_obj in scene.objects:
+            if isinstance(other_obj, Location):
+                if obj.object_id != other_obj.object_id and _is_above_loc(obj, other_obj):
+                    above_relations.append(("loc-above", obj, other_obj))
+
+            elif isinstance(other_obj, Cube) and _is_at(other_obj, obj):
+                occupied_relations.add(("occupied", obj))
+
+    occupied_relations = list(occupied_relations)
+    above = [a[1] for a in above_relations]
+    for o in occupied_relations:
+        l = o[1]
+        if l in above:
+            obstructed_above_relations.append(above_relations[above.index(l)][2])
+
+    return loc in obstructed_above_relations
 
 
 def ground_cube_relations(scene: Scene) -> tuple[list[tuple[str, SceneObject, SceneObject]], ...]:

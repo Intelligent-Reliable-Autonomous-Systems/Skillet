@@ -1,17 +1,17 @@
 from collections.abc import Callable, Sequence
-from typing import TypeAlias, Literal
+from typing import TypeAlias
 
 import gymnasium as gym
-import numpy as np
 import torch
 from typing_extensions import override
 
 from skillet.core import SkillParamsSpec
 from skillet.core.skill import SingleSkill, SkillStatus, SkillStatusCodes
 from skillet.envs.specs import BxM_Action, IKEE_Obs, M_Action
-from skillet.scene.base import Scene, SceneObject
 from skillet.scene import Location
+from skillet.scene.base import Scene, SceneObject
 from skillet.skill.high_level.drag import DragSkill
+from skillet.planning.abstract.skill_grounding import _drag_skill_5_grounding
 
 Object_Params: TypeAlias = int
 """The parameters for selecting an object in the scene."""
@@ -175,7 +175,11 @@ class DragBlock5Skill(DragBlockSkill):
 
         objs = self._scene.get_objects_from_id(self._params)
         self._target_block: SceneObject = objs[0]
-        if not self._target_block.is_pose_known() or not self._target_block.moveable:
+        if (
+            not self._target_block.is_pose_known()
+            or not self._target_block.moveable
+            or _drag_skill_5_grounding(objs, self._scene)
+        ):
             self._status = torch.as_tensor(SkillStatusCodes.FAILED, device=self.params_spec.device)
             print(f"[INFO][DRAG BLOCK][FAILED]: {self._target_block.name} | {objs[1].name}")
             return

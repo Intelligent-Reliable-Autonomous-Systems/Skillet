@@ -1,8 +1,7 @@
 from collections.abc import Callable, Sequence
-from typing import TypeAlias, Literal
+from typing import TypeAlias
 
 import gymnasium as gym
-import numpy as np
 import torch
 from typing_extensions import override
 
@@ -11,6 +10,7 @@ from skillet.core.skill import SingleSkill, SkillStatus, SkillStatusCodes
 from skillet.envs.specs import BxM_Action, IKEE_Obs, M_Action
 from skillet.scene.base import Scene, SceneObject
 from skillet.skill.high_level.pick import PickSkill
+from skillet.planning.abstract.skill_grounding import _pick_skill_4_grounding
 
 Object_Params: TypeAlias = int
 """The parameters for selecting an object in the scene."""
@@ -120,16 +120,15 @@ class PickBlock2Skill(PickBlockSkill):
         self._status = None
         self._params = self.params_spec.cast(params[:2])
 
-        self._target_block: SceneObject = self._scene.get_objects_from_id(self._params)[0]
+        objs = self._scene.get_objects_from_id(self._params)
+        self._target_block = objs[0]
         if (
             not self._target_block.is_pose_known()
             or self._target_block == self._params[1]
             or not self._target_block.moveable
         ):
             self._status = torch.as_tensor(SkillStatusCodes.FAILED, device=self.params_spec.device)
-            print(
-                f"[INFO][PICK BLOCK][FAILED]: {self._target_block.name} | {self._scene.get_objects_from_id(self._params)[1].name}"
-            )
+            print(f"[INFO][PICK BLOCK][FAILED]: {self._target_block.name} | {objs[1].name}")
             return
         target_xyz = self._target_block.pose[:3].to(self.obs_spec.device).clone() + self._offset
         if self._vis_target_pos is not None:
@@ -138,9 +137,53 @@ class PickBlock2Skill(PickBlockSkill):
         target_pose = torch.tensor([target_xyz[0], target_xyz[1], target_xyz[2], yaw])
         target_pose = self._pick_skill.params_spec.with_n_envs(1).cast(target_pose)
         self._pick_skill.initiate(obs, target_pose)
-        print(
-            f"[INFO][PICK BLOCK]: {self._target_block.name} | {self._scene.get_objects_from_id(self._params)[1].name}"
+        print(f"[INFO][PICK BLOCK]: {self._target_block.name} | {objs[1].name}")
+
+    def __str__(self) -> str:
+        if self._params is not None:
+            names = self._scene.resolve_ids_to_names(self._params)
+            return f"Pick Block: | {names[0]} | {names[1]} |"
+        return "Pick Block: | Unset | Unset |"
+
+
+class PickBlock4Skill(PickBlockSkill):
+    def __init__(
+        self,
+        scene: Scene,
+        pick_skill: PickSkill[BxM_Action],
+        vis_target_pos: Callable[[Sequence[float]], None] | None = None,
+    ) -> None:
+        """Initialize the pick block skill."""
+        super().__init__(scene, pick_skill, vis_target_pos)
+        self._block_params_spec = SkillParamsSpec(
+            space=gym.spaces.MultiDiscrete((self.max_objects,) * 4), name="block_id", is_torch=False, is_batched=False
         )
+        self._params = None
+
+    def initiate(self, obs, params):
+        """Initiate the skill with the given observation and parameters."""
+        self._status = None
+        self._params = self.params_spec.cast(params[:4])
+
+        objs = self._scene.get_objects_from_id(self._params)
+        self._target_block = objs[0]
+        if (
+            not self._target_block.is_pose_known()
+            or self._target_block == self._params[1]
+            or not self._target_block.moveable
+            or not _pick_skill_4_grounding(objs, self._scene)
+        ):
+            self._status = torch.as_tensor(SkillStatusCodes.FAILED, device=self.params_spec.device)
+            print(f"[INFO][PICK BLOCK][FAILED]: {self._target_block.name} | {objs[1].name}")
+            return
+        target_xyz = self._target_block.pose[:3].to(self.obs_spec.device).clone() + self._offset
+        if self._vis_target_pos is not None:
+            self._vis_target_pos(target_xyz)
+        yaw = 0
+        target_pose = torch.tensor([target_xyz[0], target_xyz[1], target_xyz[2], yaw])
+        target_pose = self._pick_skill.params_spec.with_n_envs(1).cast(target_pose)
+        self._pick_skill.initiate(obs, target_pose)
+        print(f"[INFO][PICK BLOCK]: {self._target_block.name} | {objs[1].name}")
 
     def __str__(self) -> str:
         if self._params is not None:

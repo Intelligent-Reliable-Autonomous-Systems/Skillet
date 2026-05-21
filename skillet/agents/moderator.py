@@ -154,7 +154,8 @@ class SkilletModerator:
             self._intervention = False
         return self._action, self._action_spec
 
-    def run_skill(self, env: Environment, skill: SingleSkill, args: list[str]
+    def run_skill(
+        self, env: Environment, skill: SingleSkill, args: list[str]
     ) -> tuple[bool, Literal[SkillStatusCodes.SUCCESS, SkillStatusCodes.FAILED]]:
         """Run the skill in the environment."""
         obs = env.get_observation(skill.obs_spec)

@@ -1,4 +1,3 @@
-
 from typing import Literal
 
 from conditional_repair.orcam.orcam import (
@@ -34,12 +33,19 @@ class ORCAMLearningAgent:
             raise ValueError("ORCAM agent not initialized")
         dict_state = up_state_to_dict(up_state)
         up_action = step_orcam(self._orcam, dict_state, up_objects)
-        abstract_action = AbstractAction(action=up_action.action.name,
-            parameters=[p.object().name for p in up_action.actual_parameters])
+        abstract_action = AbstractAction(
+            action=up_action.action.name, parameters=[p.object().name for p in up_action.actual_parameters]
+        )
         return abstract_action, up_action
 
-    def update(self, up_state: UPState, up_objects: list[UPObject], up_action: ActionInstance,
-        next_up_state: UPState, execution: Literal["applicable", "inapplicable"]) -> None:
+    def update(
+        self,
+        up_state: UPState,
+        up_objects: list[UPObject],
+        up_action: ActionInstance,
+        next_up_state: UPState,
+        execution: Literal["applicable", "inapplicable"],
+    ) -> None:
         """Update the ORCAM agent."""
         if self._orcam is None:
             raise ValueError("ORCAM agent not initialized")
