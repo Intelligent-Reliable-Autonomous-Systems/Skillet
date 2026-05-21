@@ -54,12 +54,17 @@
         (or (not (gripper-full)) (grasping ?target))
     )
     :effect (and
+        ;; gripper
         (gripper-full)
         (grasping ?target)
         (gripper-lifted)
-        (not (obstructed-above ?supportloc)) ; the support location is now free
+        ;; target block
         (not (at-loc ?target ?targetloc))
         (not (occupied ?targetloc))
+
+        ;; support
+        (not (on ?target ?support))
+        (not (obstructed-above ?supportloc)) ; the support location is now free
     )
 )
 
@@ -78,13 +83,17 @@
         (loc-above ?freeloc ?targetloc)
     )
     :effect (and
-        (on ?grasped ?target)
+        ;; gripper
+        (not (grasping ?grasped))
         (not (gripper-full))
-        (at-loc ?grasped ?freeloc)
-        (occupied ?freeloc)
-        (not (obstructed-above ?freeloc))
-        (obstructed-above ?targetloc)
         (gripper-lifted)
+        ;; block at free loc
+        (at-loc ?grasped ?freeloc)
+        (not (obstructed-above ?freeloc))
+        (occupied ?freeloc)
+        ;; target obstructed
+        (on ?grasped ?target)
+        (obstructed-above ?targetloc)
     )
 )
 

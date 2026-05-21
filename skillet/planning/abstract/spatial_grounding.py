@@ -150,7 +150,7 @@ def _is_grasping(
     # tcp pose should be within a's footprint (plus a little slack)
     within_x = (aabb_a[0] - xy_slack) <= scene.tcp_pose[0] <= (aabb_a[3] + xy_slack)
     within_y = (aabb_a[1] - xy_slack) <= scene.tcp_pose[1] <= (aabb_a[4] + xy_slack)
-    within_z = (aabb_a[1] - z_slack) <= scene.tcp_pose[2] <= (aabb_a[5] + z_slack)
+    within_z = (aabb_a[2] - z_slack) <= scene.tcp_pose[2] <= (aabb_a[5] + z_slack * 2)
 
     # To be holding must be within footprint and gripper must be closed
     return bool(within_x and within_y and within_z and scene.gripper_pos > gripper_thresh)

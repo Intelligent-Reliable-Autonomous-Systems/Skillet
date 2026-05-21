@@ -38,7 +38,7 @@ parser.add_argument("--poll_rate_hz", type=int, default=10, help="Tick rate of t
 parser.add_argument("--task", type=str, default="Kortex-Gen3-v0", help="Kortex Environment")
 
 parser.add_argument("--o3d", type=argparse.BooleanOptionalAction, default=False, help="If to visualize with open3d")
-parser.add_argument("--eval_dir", type=str, default="_robot_data/blocks_eval_tasks/task_4", help="Evaluation directory")
+parser.add_argument("--eval_dir", type=str, default="_robot_data/blocks_eval_tasks/task_7", help="Evaluation directory")
 parser.add_argument(
     "--vlm", type=argparse.BooleanOptionalAction, default=False, help="If to use the VLM for scene building"
 )

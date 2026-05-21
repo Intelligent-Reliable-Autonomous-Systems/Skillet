@@ -250,12 +250,12 @@ class AbstractModel(BasePlanner):
             result.plan.actions,
         )
 
-    def _up_states_from_plan(self, plan, delta: bool = True):
+    def _up_states_from_plan(self, plan, delta: bool = True, as_dict: bool = True):
         s = self._simulator.get_initial_state()
-        states = [up_state_to_dict(s)]
+        states = [up_state_to_dict(s) if as_dict else s]
         for action in plan.actions:
             s = self._simulator.apply(s, action)
-            states.append(up_state_to_dict(s))
+            states.append(up_state_to_dict(s) if as_dict else s)
 
         if delta:
             deltas = []
