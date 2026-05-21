@@ -55,7 +55,6 @@ class SkilletDataLogger:
         self._stop_event = threading.Event()
 
         self._num_points = 0
-        self._exp_id = -1
         self._start_time = datetime.now().strftime("%Y%m%d_%H%M%S")
         self._pddl_trace = PDDLTraceIO(self._abs_model._problem) if self._abs_model is not None else None
 
@@ -102,7 +101,6 @@ class SkilletDataLogger:
         """Reset the data collector by dumping everything to the log file and resetting buffers."""
         self._log_dir = log_dir if log_dir is not None else self._log_dir
         self._num_points = 0
-        self._exp_id += 1
         self._rgbd_obs: np.ndarray = None
         self._depth_obs: np.ndarray = None
         self._camera_pose: np.ndarray = None
@@ -166,7 +164,7 @@ class SkilletDataLogger:
 
     def save_log(self) -> None:
         """Save the log to a file."""
-        fpath = Path(f"{self._log_dir}/{self._start_time}/exp_{self._exp_id}")
+        fpath = Path(f"{self._log_dir}/{self._start_time}")
         fpath.mkdir(exist_ok=True, parents=True)
         if self._write_video:
             self._writer.release()
@@ -397,11 +395,11 @@ class SkilletDataLogger:
         fh, fw, _ = frame.shape
         if self._write_video:
             if self._writer is None:
-                fpath = Path(f"{self._log_dir}/{self._start_time}/exp_{self._exp_id}")
+                fpath = Path(f"{self._log_dir}/{self._start_time}")
                 fpath.mkdir(exist_ok=True, parents=True)
                 self._video_start_time = datetime.now().strftime("%H%M%S")
                 self._writer = cv2.VideoWriter(
-                    f"{self._log_dir}/{self._start_time}/exp_{self._exp_id}/output_{self._video_start_time}.mp4",
+                    f"{self._log_dir}/{self._start_time}/output_{self._video_start_time}.mp4",
                     self._fourcc,
                     self._fps,
                     (fw, fh),
@@ -464,7 +462,7 @@ class SkilletDataLogger:
                 else:
                     getattr(self, f"_{k}").append(v)
         if save_log:
-            fpath = Path(f"{self._log_dir}/{self._start_time}/exp_{self._exp_id}")
+            fpath = Path(f"{self._log_dir}/{self._start_time}")
             fpath.mkdir(exist_ok=True, parents=True)
             for k in kwargs:
                 v = getattr(self, f"_{k}")
@@ -488,7 +486,7 @@ class SkilletDataLogger:
                     fh, fw, _ = frame.shape
                 self._writer.release()
                 self._writer = cv2.VideoWriter(
-                    f"{self._log_dir}/{self._start_time}/exp_{self._exp_id}/output_{self._video_start_time}.mp4",
+                    f"{self._log_dir}/{self._start_time}/output_{self._video_start_time}.mp4",
                     self._fourcc,
                     self._fps,
                     (fw, fh),

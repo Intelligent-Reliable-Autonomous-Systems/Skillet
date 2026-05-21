@@ -17,9 +17,7 @@ from unified_planning.model import Type as UPType
 from unified_planning.model.types import domain_item, domain_size
 from unified_planning.plans import ActionInstance
 from unified_planning.shortcuts import Bool as UPBool
-
-if TYPE_CHECKING:
-    from unified_planning.model.fnode import FNode
+from unified_planning.model.fnode import FNode
 
 UPDictFluent = dict["FluentExpLike", bool]
 """A dictionary of assignments to Unified Planning fluents."""

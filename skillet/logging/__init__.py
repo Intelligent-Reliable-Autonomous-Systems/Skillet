@@ -1,7 +1,3 @@
-try:
-    from .data_collector import SkilletDataLogger
-    from .data_replayer import SkilletPlaybackEnv
-except ImportError:
-    pass
-
-from .event_logger import SkillEventLogger
+from .data_collector import SkilletDataLogger as SkilletDataLogger
+from .data_replayer import SkilletPlaybackEnv as SkilletPlaybackEnv
+from .event_logger import SkillEventLogger as SkillEventLogger

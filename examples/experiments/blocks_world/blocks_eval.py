@@ -38,15 +38,13 @@ parser.add_argument("--poll_rate_hz", type=int, default=10, help="Tick rate of t
 parser.add_argument("--task", type=str, default="Kortex-Gen3-v0", help="Kortex Environment")
 
 parser.add_argument("--o3d", type=argparse.BooleanOptionalAction, default=False, help="If to visualize with open3d")
-parser.add_argument(
-    "--eval_dir", type=str, default="_robot_data/blocks_eval_tasks/task_10", help="Evaluation directory"
-)
+parser.add_argument("--eval_dir", type=str, default="_robot_data/blocks_eval_tasks/task_4", help="Evaluation directory")
 parser.add_argument(
     "--vlm", type=argparse.BooleanOptionalAction, default=False, help="If to use the VLM for scene building"
 )
 parser.add_argument(
     "--domain_path",
-    default="skillet_tasks/blocks-world/simple-blocks-a2.domain.pddl",
+    default="skillet_tasks/blocks-world/simple-blocks-a3.domain.pddl",
     type=str,
     help="Path to .domain.pddl file",
 )
@@ -91,9 +89,9 @@ def main() -> None:
     # Low-level policies
     skill_length = 1e9
     arm_policy = TcpCartPolicy(env.batched_env.obs_spec_tcp_cart, env.batched_env.action_spec_tcp_cart)
-    place_skill = PlaceSkill(reach_policy=arm_policy, lift_height=0.25, gripper_close=0.6, length=skill_length)
-    pick_skill = PickSkill(reach_policy=arm_policy, lift_height=0.25, gripper_close=0.6, length=skill_length)
-    drag_skill = DragSkill(reach_policy=arm_policy, lift_height=0.25, gripper_close=0.6, length=skill_length)
+    place_skill = PlaceSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length)
+    pick_skill = PickSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length)
+    drag_skill = DragSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length)
     pick_block_skill = PickBlock4Skill(scene, pick_skill, vis_target_pos=target_pose_func)
     place_block_skill = PlaceBlock4Skill(scene, place_skill, vis_target_pos=target_pose_func)
     drag_block_skill = DragBlock5Skill(scene, drag_skill, vis_target_pos=target_pose_func)

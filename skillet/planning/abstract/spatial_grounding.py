@@ -158,7 +158,7 @@ def _is_grasping(
 
 def _gripper_closed(scene: Scene, gripper_thresh: float = 0.4) -> bool:
     """Check if the gripper is closed."""
-    return scene.gripper_pos > gripper_thresh
+    return bool((scene.gripper_pos > gripper_thresh).item())
 
 
 def _is_lifted(scene: Scene, lift_height: float = 0.2) -> bool:
@@ -167,7 +167,7 @@ def _is_lifted(scene: Scene, lift_height: float = 0.2) -> bool:
     return bool((scene.tcp_pose[2] > lift_height).item())
 
 
-def _is_at(a: Cube, l: Location, z_slack_frac: float = 0.07, xy_slack_frac: float = 0.2) -> bool:
+def _is_at(a: Cube, l: Location, z_slack_frac: float = 0.00, xy_slack_frac: float = 0.1) -> bool:
     """Test if a cube is at a location.
 
     The cube xyz position must be sufficiently close to the tcp pose
@@ -209,6 +209,8 @@ def _is_obstructed_above(loc: Location, scene: Scene) -> bool:
     occupied_relations = set()
     obstructed_above_relations = []
     for obj in scene.objects:
+        if isinstance(obj, Table):
+            continue
         for other_obj in scene.objects:
             if isinstance(other_obj, Location):
                 if obj.object_id != other_obj.object_id and _is_above_loc(obj, other_obj):

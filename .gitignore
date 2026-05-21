@@ -1,5 +1,6 @@
 data/
 third_party/
+orcam/
 robot_data/
 _robot_data/
 # Byte-compiled / optimized / DLL files

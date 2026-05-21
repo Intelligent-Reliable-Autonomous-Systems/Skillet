@@ -244,9 +244,14 @@ class PlaceBlock4Skill(PlaceBlockSkill):
 
         objs = self._scene.get_objects_from_id(self._params)
         self._target = objs[1]
+        if not _place_skill_4_grounding(objs, self._scene):
+            self._status = torch.as_tensor(SkillStatusCodes.FAILED, device=self.params_spec.device)
+            print(f"[INFO][PLACE BLOCK][FAILED]: {objs[0].name} | {objs[1].name}")
+            return
         if isinstance(self._target, Cube):
-            if not self._target.is_pose_known() or objs[0] == objs[1] or _place_skill_4_grounding(objs, self._scene):
+            if not self._target.is_pose_known() or objs[0] == objs[1]:
                 self._status = torch.as_tensor(SkillStatusCodes.FAILED, device=self.params_spec.device)
+                print(f"[INFO][PLACE BLOCK][FAILED]: {objs[0].name} | {objs[1].name}")
                 return
             target_xyz = self._target.pose[:3].to(self.obs_spec.device).clone() + self._offset
         elif isinstance(self._target, Table):

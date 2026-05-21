@@ -219,7 +219,7 @@ class ActiveLearningAgent(Agent):
         self.abstract_model = abstract_model
         self.action_to_skill_map = action_to_skill_map
         self._moderator = SkilletModerator()
-        self._learning_agent = None
+        self._learning_agent = learning_agent
 
     def execute(
         self,
@@ -245,6 +245,7 @@ class ActiveLearningAgent(Agent):
         while True:
             # TODO Sample an action from the learning agent
             # ab_action: AbstractAction
+            print("Agent selecting for state", up_state)
             ab_action, up_action = self._learning_agent.sample_action(up_state, up_objects)
 
             self._selected_skill = self.action_to_skill_map[ab_action.action]
@@ -273,9 +274,11 @@ class ActiveLearningAgent(Agent):
             next_up_state = self.abstract_model.reset_up_problem_state()
             up_objects = self.abstract_model._problem.all_objects
             # TODO update the learning agent with the success information of the skill/new model
+            print("Agent learning after skill", execution)
             self._learning_agent.update(up_state, up_objects, up_action, next_up_state, execution)
             if terminated:
                 break
+            up_state = next_up_state
 
         if logger is not None:
             obs_log = env.get_observation(logger._obs_spec)

@@ -20,6 +20,7 @@ class SceneObject:
         self._type_id = -1
         self._name = name
         self._localizable = localizable
+        self._bbox = None
 
     @property
     def localizable(self) -> bool:
@@ -84,6 +85,18 @@ class SceneObject:
     def is_pose_known(self) -> bool:
         """Whether the pose of the object is known."""
         raise NotImplementedError
+
+    @property
+    def bbox(self) -> torch.Tensor:
+        """Returns the bbox in [xmin, ymin, zmin, xmax, ymax, zmax]."""
+        if self._bbox is None:
+            raise AttributeError("The BBox is not known.")
+        return self._bbox
+
+    @bbox.setter
+    def bbox(self, bbox: torch.Tensor) -> None:
+        """Set the bbox in [xmin, ymin, zmin, xmax, ymax, zmax]."""
+        self._bbox = bbox
 
 
 class Scene:

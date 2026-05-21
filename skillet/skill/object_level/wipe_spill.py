@@ -74,10 +74,10 @@ class WipeTableSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
         if not self._target_spill.is_pose_known():
             self._status = torch.as_tensor(SkillStatusCodes.FAILED, device=self.params_spec.device)
             return
-        start_xyz = self._target_spill.bbox[:, 0]
+        start_xyz = self._target_spill.bbox[:, 0:3]
         start_xyz[2] = 0
         start_xyz = start_xyz + self._offset
-        end_xyz = self._target_spill.bbox[:, 1]
+        end_xyz = self._target_spill.bbox[:, 3:6]
         end_xyz[2] = 0
         end_xyz = end_xyz + self._offset
         if self._vis_target_pos is not None:

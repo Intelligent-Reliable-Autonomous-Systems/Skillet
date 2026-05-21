@@ -571,16 +571,6 @@ class Spill(SceneObject):
         return torch.cat([self._pose[:3] - self._size / 2.0, self._pose[:3] + self._size / 2.0], dim=-1)
 
     @property
-    def bbox(self) -> torch.Tensor:
-        if self._bbox is None:
-            raise AttributeError("The BBox is not known.")
-        return self._bbox
-
-    @bbox.setter
-    def bbox(self, bbox: torch.Tensor) -> None:
-        self._bbox = bbox
-
-    @property
     def object_type(self) -> str:
         """The type of the spill."""
         return "spill"

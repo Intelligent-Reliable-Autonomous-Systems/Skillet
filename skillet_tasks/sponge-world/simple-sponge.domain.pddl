@@ -11,14 +11,13 @@
         (deformable ?m - movable) ; kinematic attribute - movable can be squeezed
 
         ; dynamic predicates
-        (at-loc ?s - surface ?l - location) ; block or target is at location b
-        (damp ?b - plate) ; material attribute - latent property: inert
+        (at-loc ?s - movable ?l - location) ; block or target is at location b
+        (damp ?b - movable) ; material attribute - latent property: inert
 
         (gripper-lifted) ; the gripper is lifted in the air
         (grasping ?b - movable) ; the gripper is closed around movable b
 
         (on ?b - movable ?s - surface) ; movable b is on surface s
-        (clear ?s - surface) ; the surface is clear
 
         ; pseudo-derived predicates
         (gripper-full) ; the gripper is not grasping anything ∀ [?b - block] [not [grasping ?b]]
@@ -30,20 +29,15 @@
 ;;; the physical interpretation of this action is that the gripper will raise up,
 ;;;     move to ?target's location, lower down, close the gripper around it, then lift the movable up
 (:action pick-movable
-    :parameters (?target - movable ?support - surface ?targetloc - location)
+    :parameters (?target - movable ?support - surface)
     :precondition (and
         (on ?target ?support)
-        (at-loc ?target ?targetloc)
-
-        (clear ?support)
         (or (not (gripper-full)) (grasping ?target))
     )
     :effect (and
         (gripper-full)
         (grasping ?target)
         (gripper-lifted)
-        (clear ?support) ; the support location is now free
-        (not (at-loc ?target ?targetloc))
     )
 )
 
@@ -56,13 +50,11 @@
     :precondition (and
         (gripper-full)
         (grasping ?grasped)
-        (at-loc ?target ?targetloc)
-        (clear ?targetloc)
     )
     :effect (and
         (on ?grasped ?target)
         (not (gripper-full))
-        (at-loc ?grasped ?freeloc)
+        (at-loc ?grasped ?targetloc)
         (gripper-lifted)
     )
 )
@@ -73,12 +65,12 @@
 (:action wipe-movable
     :parameters (?grasped - movable ?fromloc - location ?wipeloc - location)
     :precondition (and
-        (at-loc ?grasped ?fromloc)
-        (not (gripper-full))
+        (gripper-full)
+        (grasping ?grasped)
     )
     :effect (and
-        (not (at-loc ?grasped ?fromloc))
-        (at-loc ?grasped ?toloc)
+        (gripper-full)
+        (grasping ?grasped)
     )
 )
 
@@ -90,25 +82,25 @@
     :precondition (and         
         (grasping ?grasped)        
         (gripper-full)     
-        (deformable grasped)     
+        (deformable ?grasped)     
     )     
     :effect (and
-         (not (damp grasped))
+         (not (damp ?grasped))
     ) 
 )
 
 ;;; grasp the grasped movable and dry at a location 
-;;; the physical interpretation of this action is that the block will be grasped 
-;;;     and then the arm will drag it to a new location 
+;;; the physical interpretation of this action is that the object will be grasped 
+;;;     and then the arm will dr
 (:action dry-movable     
     :parameters (?grasped - movable ?dryloc - location)     
     :precondition (and         
         (grasping ?grasped)        
         (gripper-full)     
-        (deformable grasped)     
+        (deformable ?grasped)     
     )     
     :effect (and
-         (not (damp movable))
+         (not (damp ?grasped))
     ) 
 )
 

@@ -14,8 +14,6 @@ import torch
 from skillet.perception.reconstruction.reconstructor_base import ReconstructorBase
 from skillet.perception.reconstruction.utils import (
     find_obj_centers_mean,
-    find_spill_centers_mean_bbox,
-    get_sorted_object_poses,
     transform_xyz_to_world,
 )
 from skillet.perception.segmentation.sam import SAMClient, get_sam_client
@@ -70,21 +68,22 @@ class Sam3Reconstructor(ReconstructorBase):
         return self._segment_indices
 
     def update_state(
-        self, obs: dict[str, Any], update: bool = True, frame: Literal["world", "camera"] = "camera"
+        self,
+        obs: dict[str, Any],
+        update: bool = True,
     ) -> None:
         """Update the state of the scene by finding cube centers.
 
         Args:
             obs: RGB-D obs spec from the environment
             update: If to update the state of the scene or not
-            frame: the frame to perform the scene update from
 
         """
         if not update:
             return
         if self._build_scene_flag:
             print("[INFO][SAM RECONSTRUCTOR] Building scene...")
-            self._build_scene(obs, frame=frame)
+            self._build_scene(obs)
             self._build_scene_flag = False
 
         # Segment with SAM3
@@ -129,16 +128,15 @@ class Sam3Reconstructor(ReconstructorBase):
         obj_types = np.asarray(agg_obj_types)
 
         # Compute the object centers # TODO this will crash with spill scene
-        centers, spill_bboxes = self._get_object_centers(obj_masks, obj_types, depth, intrinsic_k, camera_pose, frame)
+        centers, bboxes = self._get_object_centers(obj_masks, obj_types, depth, intrinsic_k, camera_pose)
 
         # Assign the pose and bounding boxes to each object
         ids = []
         for i, c in enumerate(torch.unique(concept_indices).cpu().numpy()):
             obj = self._scene.get_objects_from_name([self._concepts[c].replace(" ", "_")])[0]
             obj.pose = torch.cat((centers[i], torch.as_tensor([1, 0, 0, 0], device=centers[i].device)), dim=0)
+            obj.bbox = bboxes[i]
             ids.append(obj.object_id)
-            if isinstance(obj, Spill):
-                obj.bbox = spill_bboxes[0]  # TODO this only handles one spill
         ids = np.asarray(ids)
 
         if self._visualize:
@@ -161,54 +159,44 @@ class Sam3Reconstructor(ReconstructorBase):
         depth: torch.Tensor,
         intrinsic_k: torch.Tensor,
         camera_pose: torch.Tensor,
-        frame: str = "camera",
     ) -> tuple[torch.Tensor, torch.Tensor]:
         # Find object centers and orientation in the camera frame
         cube_inds = np.argwhere(obj_types == "block")
         target_inds = np.argwhere(obj_types == "target")
         sponge_inds = np.argwhere(obj_types == "sponge")
-        obj_inds = np.concatenate((cube_inds, target_inds, sponge_inds)).flatten()
+        spill_inds = np.argwhere(obj_types == "spill")
+        obj_inds = np.concatenate((cube_inds, target_inds, sponge_inds, spill_inds)).flatten()
         obj_sizes = np.zeros(obj_inds.shape[0])
         obj_sizes[cube_inds] = CUBE_SIZE
         obj_sizes[target_inds] = TARGET_SIZE
         obj_sizes[sponge_inds] = SPONGE_SIZE
+        obj_sizes[sponge_inds] = SPILL_SIZE
 
         centers = torch.zeros(obj_masks.shape[0], 3, device=obj_masks.device)
+        bboxes = torch.zeros(obj_masks.shape[0], 6, device=obj_masks.device)
 
         # Localize the cubes, targets, and sponge
-        obj_centers = find_obj_centers_mean(
+        obj_centers, obj_bboxes = find_obj_centers_mean(
             obj_masks[obj_inds],
             depth,
             intrinsic_k,
-            obj_size=CUBE_SIZE,
+            obj_size=obj_sizes,
             camera_pos=camera_pose[0:3],
             camera_quat=camera_pose[3:7],
-            frame=frame,
         )
-        obj_centers = (
-            transform_xyz_to_world(obj_centers, camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7])
-            if frame == "camera"
-            else obj_centers
+        obj_centers = transform_xyz_to_world(obj_centers, camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7])
+
+        obj_bboxes[:, 0:3] = transform_xyz_to_world(
+            obj_bboxes[:, 0:3], camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7]
         )
+        obj_bboxes[:, 3:6] = transform_xyz_to_world(
+            obj_bboxes[:, 3:6], camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7]
+        )
+
         centers[obj_inds] = obj_centers
+        bboxes[obj_inds] = obj_bboxes
 
-        """spill_inds = np.argwhere(obj_types == "spill")
-        spill_centers, spill_bboxes = find_spill_centers_mean_bbox(
-            obj_masks[spill_inds],
-            depth,
-            intrinsic_k,
-            camera_pos=camera_pose[0:3],
-            camera_quat=camera_pose[3:7],
-            frame=frame,
-        )
-        spill_centers = (
-            transform_xyz_to_world(spill_centers, camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7])
-            if frame == "camera"
-            else spill_centers
-        )
-        centers[spill_inds] = spill_centers"""
-
-        return centers, None
+        return centers, bboxes
 
     def get_observation(self) -> Scene:
         """Return the scene."""
@@ -218,14 +206,12 @@ class Sam3Reconstructor(ReconstructorBase):
         self,
         obs: dict[str, torch.Tensor],
         call_vlm: bool = True,
-        frame: Literal["world", "camera"] = "camera",
     ) -> None:
         """Build the scene using an API call to a VLM by creating bounding boxes for each object.
 
         Args:
             obs: RGBD obs spec observation
             call_vlm: If to call VLM or load scene from defaults
-            frame: the frame in which to compute centers in
 
         """
         if self._task_instruction is None:

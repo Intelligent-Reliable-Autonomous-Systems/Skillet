@@ -85,21 +85,24 @@ class AbstractModel(BasePlanner):
         assert self._scene is not None
         if self._problem is None:
             self.initialize()
+        object_state = {}
+        user_types = [t.name for t in self._problem.user_types]
         # Create all the objects in the scene (Cubes + Table + Locations + Targets)
-        if "block" in [t.name for t in self._problem.user_types]:
+        if "block" in user_types:
             block_type = self._problem.user_type("block")
-            object_state = {ob_name: Object(ob_name, block_type) for ob_name in self._scene.get_object_names(Cube)}
-        if "table" in [t.name for t in self._problem.user_types]:
+            for ob_name in self._scene.get_object_names(Cube):
+                object_state[ob_name] = Object(ob_name, block_type)
+        if "table" in user_types:
             object_state[self._scene.table.name] = Object(self._scene.table.name, self._problem.user_type("table"))
-        if "location" in [t.name for t in self._problem.user_types]:
+        if "location" in user_types:
             location_type = self._problem.user_type("location")
             for ob_name in self._scene.get_object_names(Location):
                 object_state[ob_name] = Object(ob_name, location_type)
-        if "target" in [t.name for t in self._problem.user_types]:
+        if "target" in user_types:
             target_type = self._problem.user_type("target")
             for ob_name in self._scene.get_object_names(Target):
                 object_state[ob_name] = Object(ob_name, target_type)
-
+        # TODO add spills and sponges
         # Perform predicate grounding
         fluent_state = {}
         on_pred, clear_pred, north_pred, color_pred, material_pred = ground_cube_relations(self._scene)
@@ -246,6 +249,22 @@ class AbstractModel(BasePlanner):
             AbstractPlan(actions=[parse_action(str(action)) for action in result.plan.actions]),
             result.plan.actions,
         )
+
+    def _up_states_from_plan(self, plan, delta: bool = True):
+        s = self._simulator.get_initial_state()
+        states = [up_state_to_dict(s)]
+        for action in plan.actions:
+            s = self._simulator.apply(s, action)
+            states.append(up_state_to_dict(s))
+
+        if delta:
+            deltas = []
+            for s0, s1 in zip(states[:-1], states[1:]):
+                delta = {x: s1[x] for x in s1 if (x not in s0) or (s0[x] != s1[x])}
+                delta.update({x: False for x in s0 if (x not in s1) and s0[x]})
+                deltas.append(delta)
+            return deltas
+        return states
 
     def _create_goal(self, goal: dict[str, Any], object_state: list[Object]) -> list[UPDictFluent]:
         """Parse the output of the VLM goal into the problem.

@@ -7,7 +7,9 @@ from skillet.planning.abstract.spatial_grounding import (
     _is_obstructed_above,
     _is_occupied,
     _is_on,
+    _is_on_table,
 )
+from skillet.scene import Cube, Table
 from skillet.scene.base import Scene, SceneObject
 
 
@@ -28,14 +30,21 @@ def _pick_skill_4_grounding(scene_objs: list[SceneObject], scene: Scene) -> bool
 
     """
     target, support, targetloc, supportloc = scene_objs[:4]
-    at_grd = _is_at(target, targetloc) and _is_at(support, supportloc)
+    at_grd = _is_at(target, targetloc) and (
+        (_is_at(support, supportloc) and isinstance(support, Cube)) or isinstance(support, Table)
+    )
     above_grd = _is_above_loc(targetloc, supportloc)
-    on_grd = _is_on(target, support)
+    if isinstance(support, Cube):
+        on_grd = _is_on(target, support)
+    elif isinstance(support, Table):
+        on_grd = _is_on_table(target, support)
+    else:
+        on_grd = False
     grasp_grd = not _is_grasping(target, scene)
     full_grd = not _gripper_closed(scene)
     obs_above_grd = not _is_obstructed_above(targetloc, scene)
 
-    return bool(at_grd and above_grd and on_grd and grasp_grd and full_grd, obs_above_grd)
+    return bool(at_grd and above_grd and on_grd and grasp_grd and full_grd and obs_above_grd)
 
 
 def _place_skill_4_grounding(scene_objs: list[SceneObject], scene: Scene) -> bool:
@@ -57,9 +66,11 @@ def _place_skill_4_grounding(scene_objs: list[SceneObject], scene: Scene) -> boo
 
     grasp_grd = _is_grasping(grasped, scene)
     full_grd = _gripper_closed(scene)
-    at_grd = (not _is_at(grasped, freeloc)) and _is_at(target, targetloc)
+    at_grd = (not _is_at(grasped, freeloc)) and (
+        (_is_at(target, targetloc) and isinstance(target, Cube)) or isinstance(target, Table)
+    )
     above_grd = _is_above_loc(freeloc, targetloc)
-    occupied_grd = _is_occupied(freeloc, scene)
+    occupied_grd = not _is_occupied(freeloc, scene)
 
     return bool(grasp_grd and full_grd and at_grd and above_grd and occupied_grd)
 
@@ -91,4 +102,4 @@ def _drag_skill_5_grounding(scene_objs: list[SceneObject], scene: Scene) -> bool
     occupied_grd = _is_occupied(belowtoloc, scene) and (not _is_occupied(toloc, scene))
     obs_above_grd = not _is_obstructed_above(fromloc, scene)
 
-    return bool(at_grd, full_grd and grasp_grd and above_grd and north_grd and occupied_grd, obs_above_grd)
+    return bool(at_grd and full_grd and grasp_grd and above_grd and north_grd and occupied_grd and obs_above_grd)
