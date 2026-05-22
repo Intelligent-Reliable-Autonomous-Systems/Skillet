@@ -11,21 +11,23 @@ from skillet.envs import SkilletEnv
 from skillet.logging import SkilletDataLogger
 from skillet.perception.perception import SkilletPerception
 from skillet.planning import AbstractModel
-from skillet.policy import TcpCartPolicy
 from skillet.scene import (
     SPONGE_SCENE,
     Open3DVisualizer,
 )
-from skillet.skill import (
-    PickBlock2Skill,
+from skillet.skill.high_level import (
     PickSkill,
-    PlaceBlock3Skill,
     PlaceSkill,
     SqueezeSkill,
-    SqueezeSpongeSkill,
     WipeSkill,
+)
+from skillet.skill.object_level import (
+    PickBlock2Skill,
+    PlaceBlock3Skill,
+    SqueezeSpongeSkill,
     WipeTableSkill,
 )
+from skillet.skill.policy import TcpCartPolicy
 from skillet_tasks.kortex_tasks.factory import create_kortex_env
 
 if TYPE_CHECKING:

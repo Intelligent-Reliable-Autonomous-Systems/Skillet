@@ -17,9 +17,8 @@ if TYPE_CHECKING:
     from skillet.envs.specs import BxM_Action, IKEE_Obs
 from skillet.agents.policy_over_options import PolicyOverOptionsBatchedAgent
 from skillet.envs import SkilletEnv
-from skillet.policy.dummy import FixedSequencePolicy, RandomPolicy
-from skillet.policy.ik_ee import PoseAbsIkEePolicy
-from skillet.skill import ReachPoseSkill
+from skillet.skill.high_level import ReachPoseSkill
+from skillet.skill.policy import FixedSequencePolicy, PoseAbsIkEePolicy, RandomPolicy
 from skillet.skill.specs import SELECT_OPTIONS_SPEC_BATCHED, XYZ_QUAT_Params
 
 # Add argparse arguments

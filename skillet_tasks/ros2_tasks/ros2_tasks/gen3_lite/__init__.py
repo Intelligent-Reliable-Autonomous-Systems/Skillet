@@ -5,7 +5,7 @@
 
 import gymnasium as gym
 
-from . import agents
+from ....ros2_tasks_o.gen3_lite import agents
 
 ##
 # Register Gym environments.

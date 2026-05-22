@@ -29,7 +29,7 @@ from skillet.envs.ros2.websocket.ros2_interface import (
     wait_until_ready,
 )
 from skillet.envs.util import configclass
-from skillet.policy.specs import JOINTS_SPEC
+from skillet.skill.policy.specs import JOINTS_SPEC
 
 
 @configclass

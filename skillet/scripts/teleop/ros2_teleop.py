@@ -11,7 +11,7 @@ import os
 import gymnasium as gym
 import torch
 
-import skillet_tasks.ros2web_tasks  # noqa: F401
+import skillet_tasks.ros2_tasks.ros2web_tasks  # noqa: F401
 from skillet.controllers.devices import Se3Keyboard, Se3KeyboardCfg, VRHeadset, VRHeadsetCfg, VRJoystick, VRJoystickCfg
 from skillet.envs.ros2.websocket.ros_bridge import setup_ros
 from skillet.envs.skillet_env import SkilletEnv

@@ -3,7 +3,7 @@
 from pathlib import Path
 
 import mujoco
-from mjlab.actuator import XmlPositionActuatorCfg
+from mjlab.actuator import XmlActuatorCfg
 from mjlab.actuator.actuator import TransmissionType
 from mjlab.entity import EntityArticulationInfoCfg, EntityCfg
 
@@ -44,13 +44,13 @@ def get_gen3_robot_cfg() -> EntityCfg:
             pos=(0.0, 0.0, 0.0),
             joint_pos={
                 # Arm joints - ready pose for lifting
-                "joint_1": 0.0,  # 0°
-                "joint_2": 0.3490658504,  # 20°
-                "joint_3": 0.0,  # 0°
-                "joint_4": 1.7453292519,  # 100°
-                "joint_5": 0.0,  # 0°
-                "joint_6": -0.5235987756,  # -30°
-                "joint_7": -1.5707963268,  # -90°
+                "joint_1": 0.0,
+                "joint_2": 0.2274,
+                "joint_3": -0.0692,
+                "joint_4": 1.5998,
+                "joint_5": 0.0160,
+                "joint_6": 1.3141,
+                "joint_7": -1.6493,
                 # Gripper joints - open position
                 "right_driver_joint": 0.0,
                 "left_driver_joint": 0.0,
@@ -61,13 +61,14 @@ def get_gen3_robot_cfg() -> EntityCfg:
         spec_fn=get_gen3_spec,
         articulation=EntityArticulationInfoCfg(
             actuators=(
-                XmlPositionActuatorCfg(
+                XmlActuatorCfg(
                     target_names_expr=(".*",),  # Match all joints (arm + gripper)
                     transmission_type=TransmissionType.JOINT,
                 ),
-                XmlPositionActuatorCfg(
+                XmlActuatorCfg(
                     target_names_expr=("fingers_actuator",),
                     transmission_type=TransmissionType.TENDON,
+                    command_field="position",
                 ),
             ),
             soft_joint_pos_limit_factor=0.9,
@@ -105,7 +106,7 @@ class Gen3ClosedCfg(EntityCfg):
     articulation = (
         EntityArticulationInfoCfg(
             actuators=(
-                XmlPositionActuatorCfg(
+                XmlActuatorCfg(
                     target_names_expr=(".*",),  # Match all joints (arm + gripper)
                 ),
             ),
@@ -149,7 +150,7 @@ class Gen3ClosedPegCfg(EntityCfg):
     articulation = (
         EntityArticulationInfoCfg(
             actuators=(
-                XmlPositionActuatorCfg(
+                XmlActuatorCfg(
                     target_names_expr=(".*",),  # Match all joints (arm + gripper)
                 ),
             ),

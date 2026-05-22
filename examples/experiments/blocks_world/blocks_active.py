@@ -14,19 +14,21 @@ from skillet.envs import SkilletEnv
 from skillet.logging import SkilletDataLogger
 from skillet.perception.perception import SkilletPerception
 from skillet.planning import AbstractModel
-from skillet.policy import TcpCartPolicy
 from skillet.scene import (
     FIVE_CUBE_SCENE,
     Open3DVisualizer,
 )
-from skillet.skill import (
-    DragBlock5Skill,
+from skillet.skill.high_level import (
     DragSkill,
-    PickBlock4Skill,
     PickSkill,
-    PlaceBlock4Skill,
     PlaceSkill,
 )
+from skillet.skill.object_level import (
+    DragBlock5Skill,
+    PickBlock4Skill,
+    PlaceBlock4Skill,
+)
+from skillet.skill.policy import TcpCartPolicy
 from skillet_tasks.kortex_tasks.factory import create_kortex_env
 
 if TYPE_CHECKING:

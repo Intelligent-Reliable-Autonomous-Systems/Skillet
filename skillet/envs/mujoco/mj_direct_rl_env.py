@@ -24,6 +24,7 @@ from prettytable import PrettyTable
 from skillet.core.math import quat_apply, quat_apply_inverse, quat_inv, quat_mul
 from skillet.core.spaces import ActionSpec
 from skillet.envs.compatibility import SkilletGymEnv
+from skillet.envs.mujoco.mj_viewer import NativeMujocoViewer
 from skillet.envs.util import configclass
 from skillet.rl.s2r import ObservationManager
 
@@ -101,7 +102,7 @@ class MjDirectRlEnv(SkilletGymEnv):
 
     is_vector_env = True
     metadata = {
-        "render_modes": [None, "rgb_array"],
+        "render_modes": [None, "rgb_array", "human"],
         "mujoco_version": mujoco.__version__,
         "warp_version": wp.config.version,
     }
@@ -156,6 +157,9 @@ class MjDirectRlEnv(SkilletGymEnv):
             renderer = OffscreenRenderer(model=self.sim.mj_model, cfg=self.cfg.viewer, scene=self.scene)
             renderer.initialize()
             self._offline_renderer = renderer
+        if self.render_mode == "human":
+            self._mj_renderer = NativeMujocoViewer(self)
+            self._mj_renderer.initialize()
         self.metadata["render_fps"] = 1.0 / self.step_dt
 
         # Configure spaces for the environment.
@@ -263,7 +267,7 @@ class MjDirectRlEnv(SkilletGymEnv):
         action = action.to(self.device)
 
         # process actions
-        self._pre_physics_step(action)
+        self._pre_physics_step(action, action_spec=action_spec)
 
         for _ in range(self.cfg.decimation):
             self._sim_step_counter += 1
@@ -302,6 +306,8 @@ class MjDirectRlEnv(SkilletGymEnv):
         self.sim.sense()
         self.obs_buf = self._get_observations()
 
+        self.render()
+
         return (
             self.obs_buf,
             self.reward_buf,
@@ -311,8 +317,10 @@ class MjDirectRlEnv(SkilletGymEnv):
         )
 
     def render(self) -> np.ndarray | None:
-        if self.render_mode == "human" or self.render_mode is None:
+        if self.render_mode is None:
             return None
+        if self.render_mode == "human":
+            return self._mj_renderer.render()
         if self.render_mode == "rgb_array":
             if self._offline_renderer is None:
                 raise ValueError("Offline renderer not initialized")
@@ -377,7 +385,7 @@ class MjDirectRlEnv(SkilletGymEnv):
         raise NotImplementedError(f"Please implement the '_setup_scene' method for {self.__class__.__name__}.")
 
     @abstractmethod
-    def _pre_physics_step(self, actions: torch.Tensor):
+    def _pre_physics_step(self, actions: torch.Tensor, action_spec: ActionSpec = None):
         """Pre-process actions before stepping through the physics.
 
         This function is responsible for pre-processing the actions before stepping through the physics.
@@ -475,7 +483,7 @@ class MjDirectRlEnv(SkilletGymEnv):
 
         tcp_pos_b = ee_pos_b + quat_apply(ee_quat_b, self.tcp_offset[:, 0:3])
         tcp_quat_b = quat_mul(ee_quat_b, self.tcp_offset[:, 3:7])
-        self.robot_tcp_pose_b[:] = torch.concatenate(
+        self.robot_tcp_pose_b = torch.concatenate(
             (tcp_pos_b, tcp_quat_b),
             dim=1,
         )
@@ -505,6 +513,21 @@ class MjDirectRlEnv(SkilletGymEnv):
         return torch.cat([ee_lin_vel_b, ee_ang_vel_b], dim=-1)
 
     @property
+    def _robot_tool_pose_b(self):
+        """Return the tool position."""
+        return None
+
+    @property
+    def _robot_tool_vel_b(self):
+        """Return the tool velocity."""
+        return None
+
+    @property
+    def _robot_tool_wrench_b(self):
+        """Return the tool wrench forces."""
+        return None
+
+    @property
     def _joint_positions(self) -> torch.Tensor:
         """Return current joint positions."""
         return self.robot.data.joint_pos
@@ -517,7 +540,7 @@ class MjDirectRlEnv(SkilletGymEnv):
     @property
     def _joint_efforts(self) -> torch.Tensor:
         """Return current joint efforts (torques)."""
-        raise NotImplementedError
+        return self.robot.data.qfrc_actuator
 
     @property
     def _robot_body_pose_w(self) -> torch.Tensor:

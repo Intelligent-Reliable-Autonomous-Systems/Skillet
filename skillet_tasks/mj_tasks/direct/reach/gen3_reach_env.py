@@ -32,6 +32,8 @@ class Gen3ReachEnvCfg(Gen3BaseCfg):
     yaw = [-3.14, 3.14]
     ee_ranges = [pos_x, pos_y, pos_z, roll, pitch, yaw]
 
+    obs_terms = ["joint_pos", "joint_vel", "prev_actions", "reach_goal"]
+
 
 class Gen3ReachEnv(ReachEnv):
     """Use this environment for computing actions with RL."""

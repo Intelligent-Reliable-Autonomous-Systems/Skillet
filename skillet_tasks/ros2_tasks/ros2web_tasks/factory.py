@@ -2,8 +2,8 @@ from typing import Any
 
 from skillet.envs.ros2 import Ros2Env
 from skillet.envs.ros2.websocket.ros_bridge import setup_ros
-from skillet_tasks.ros2web_tasks.gen3.gen3_ros2 import Gen3Ros2WebEnv, Gen3Ros2WebEnvCfg
-from skillet_tasks.ros2web_tasks.gen3_lite.gen3lite_ros2 import Gen3LiteRos2WebEnv, Gen3LiteRos2WebEnvCfg
+from skillet_tasks.ros2_tasks.ros2web_tasks.gen3.gen3_ros2 import Gen3Ros2WebEnv, Gen3Ros2WebEnvCfg
+from skillet_tasks.ros2_tasks.ros2web_tasks.gen3_lite.gen3lite_ros2 import Gen3LiteRos2WebEnv, Gen3LiteRos2WebEnvCfg
 
 
 def create_ros2web_env(task_name: str, cfg: dict[str, Any]) -> Ros2Env:

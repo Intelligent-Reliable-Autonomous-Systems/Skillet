@@ -1,16 +1,14 @@
 """Run a tabletop S2R task."""
 
 import argparse
-import pathlib
-from typing import TYPE_CHECKING
 
 import torch
 
 from skillet.agents import PolicyOverOptionsAgent
 from skillet.core.env import BatchToSingleWrapper
 from skillet.envs import SkilletEnv
-from skillet.policy import FixedSequencePolicy, RandomPolicy, TwistPidPosePolicy, TcpCartPolicy
-from skillet.skill import ReachPoseSkill
+from skillet.skill.low_level import ReachPoseSkill
+from skillet.skill.policy import FixedSequencePolicy, RandomPolicy, TcpCartPolicy
 from skillet.skill.specs import SELECT_OPTIONS_SPEC_BATCHED
 from skillet_tasks.kortex_tasks.factory import create_kortex_env
 
@@ -37,7 +35,6 @@ args_cli = parser.parse_args()
 
 def main() -> None:
     """Visualize RGB + depth color map from _get_latest_rgbd()."""
-
     env_cfg = {
         "robot_ip": args_cli.robot_ip,
         "device": "cpu",

@@ -2,7 +2,7 @@
 name = "skillet"
 version = "0.0.2"
 description = "A Robot Skills framework for manipulation tasks with integration for ROS2 and IsaacLab"
-requires-python = ">= 3.10"
+requires-python = ">= 3.12"
 authors = [
     {name = "Jeff Jewett", email = "jewettje@oregonstate.edu"},
     {name = "Will Solow", email = "soloww@oregonstate.edu"},
@@ -29,9 +29,7 @@ dependencies = [
     "numpy",
     "gymnasium>=1.1",
     "jaxtyping",
-    "pyrealsense2",
     "typing-extensions",
-    "pynput",
     "tensordict",
     "scipy",
 ]
@@ -45,6 +43,8 @@ vla = [
     "transformers",
     "timm",
     "torchvision",
+    "pin",
+    "pynput",
 ]
 perception = [
     "open3d",
@@ -65,7 +65,7 @@ ros = [
     "roslibpy",
 ]
 kortex = [
-    "pin",
+    "pyrealsense2",
     "protobuf==7.34.1"
 ]
 isaac = [
@@ -73,8 +73,6 @@ isaac = [
     "isaaclab"
 ]
 mujoco = [
-    "mujoco",
-    "mujoco-warp",
     "mjlab",
     "hydra-core"
 ]

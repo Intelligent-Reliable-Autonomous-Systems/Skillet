@@ -179,6 +179,11 @@ class SkilletGymEnv(gym.Env):
         """Get the latest RGBD information from the camera in the environment."""
         raise NotImplementedError
 
+    @abstractmethod
+    def _get_latest_rgbd_wrist() -> torch.Tensor:
+        """Get the latest RGBD information from the wrist camera in the environment."""
+        raise NotImplementedError
+
     @property
     def _prev_actions(self) -> torch.Tensor:
         """Return the previous action taken in the environment."""

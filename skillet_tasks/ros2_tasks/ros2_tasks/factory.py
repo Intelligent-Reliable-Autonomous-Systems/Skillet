@@ -1,9 +1,8 @@
 from typing import Any
 
-
 from skillet.envs.ros2 import Ros2Env
-from skillet_tasks.ros2_tasks.gen3.gen3_ros2 import Gen3Ros2Env, Gen3Ros2EnvCfg
-from skillet_tasks.ros2_tasks.gen3_lite.gen3lite_ros2 import Gen3LiteRos2Env, Gen3LiteRos2EnvCfg
+from skillet_tasks.ros2_tasks.ros2_tasks.gen3.gen3_ros2 import Gen3Ros2Env, Gen3Ros2EnvCfg
+from skillet_tasks.ros2_tasks.ros2_tasks.gen3_lite.gen3lite_ros2 import Gen3LiteRos2Env, Gen3LiteRos2EnvCfg
 
 
 def create_ros2_env(task_name: str, cfg: dict[str, Any]) -> Ros2Env:

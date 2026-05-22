@@ -73,7 +73,7 @@ class ReachXyzEnv(MjDirectRlEnv):
         pass
 
     # pre-physics step calls
-    def _pre_physics_step(self, actions: torch.Tensor):
+    def _pre_physics_step(self, actions: torch.Tensor, action_spec: ActionSpec = None):
         self.actions = actions.clone()
         xyz_rpy = self.actions[:, :6]
         r, p, y = euler_xyz_from_quat(self.robot_tcp_pose_b[:, 3:7])

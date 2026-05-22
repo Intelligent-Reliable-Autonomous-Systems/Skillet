@@ -113,10 +113,7 @@ def load_cfg_from_registry(task_name: str, entry_point_key: str) -> dict | objec
             cfg_cls = cfg_entry_point
         # load the configuration
         print(f"[INFO]: Parsing configuration from: {cfg_entry_point}")
-        if callable(cfg_cls):
-            cfg = cfg_cls()
-        else:
-            cfg = cfg_cls
+        cfg = cfg_cls() if callable(cfg_cls) else cfg_cls
     return cfg
 
 
@@ -232,10 +229,7 @@ def get_checkpoint_path(
         else:
             runs = sorted(runs, key=os.path.getmtime)
         # create last run file path
-        if other_dirs is not None:
-            run_path = os.path.join(runs[-1], *other_dirs)
-        else:
-            run_path = runs[-1]
+        run_path = os.path.join(runs[-1], *other_dirs) if other_dirs is not None else runs[-1]
     except IndexError:
         raise ValueError(f"No runs present in the directory: '{log_path}' match: '{run_dir}'.")
 

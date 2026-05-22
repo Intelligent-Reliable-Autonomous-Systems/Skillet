@@ -96,7 +96,7 @@ class ReachEnv(IsaacDirectRlEnv):
         light_cfg.func("/World/Light", light_cfg)
 
     # pre-physics step calls
-    def _pre_physics_step(self, actions: torch.Tensor):
+    def _pre_physics_step(self, actions: torch.Tensor, action_spec: ActionSpec = None):
         self.actions = actions.clone().clamp(-5.0, 5.0)
         targets = self.default_joint_pos + self.actions * self.cfg.action_scale
         self.robot_dof_targets = torch.clamp(targets, self.robot_dof_lower_limits, self.robot_dof_upper_limits)

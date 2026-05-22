@@ -4,13 +4,11 @@ import platform
 import subprocess
 import time
 
-import cv2
 import numpy as np
 import requests
 import torch
 from PIL import Image
 
-from skillet.envs.realsense import RealsenseEnv
 from skillet.perception.segmentation.vlm.vlm_base import VLMClient
 
 
@@ -168,19 +166,3 @@ class QwenClient(VLMClient):
             )
 
         return result
-
-
-def main() -> None:
-    env = RealsenseEnv()
-    vlm = QwenClient()
-    cv2.namedWindow("VLM Scene", cv2.WINDOW_NORMAL)
-
-    while True:
-        obs = env.get_observation()
-        _ = vlm.query_image(vlm.prompt, obs["rgb"])
-        cv2.imshow("VLM Scene", vlm._bbox_frame)
-        cv2.waitKey(1)
-
-
-if __name__ == "__main__":
-    main()

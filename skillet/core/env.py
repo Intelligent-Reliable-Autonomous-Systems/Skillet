@@ -7,12 +7,11 @@
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Generic, TypeVar, overload
+from typing import Any, Generic, TypeVar, overload, override
 
 import gymnasium as gym
 import torch
 from jaxtyping import Bool, Float
-from typing_extensions import override
 
 from skillet.core.spaces import (
     Action,
@@ -413,4 +412,5 @@ class BatchToSingleWrapper(Environment[TObs, TAction], Generic[TObs, TAction]):
 
     def _unbatch_info(self, batched_info: dict) -> dict:
         """Unbatch the info dictionary."""
-        return {k: v[0] for k, v in batched_info.items()}
+        # return {k: v[0] for k, v in batched_info.items()}
+        return batched_info

@@ -190,7 +190,7 @@ class Gen3KortexEnv(KortexEnv):
               - ``rgb``: (H, W, 3) uint8 RGB image
               - ``depth``: (H, W) uint16 depth image
               - ``intrinsic_k``: (3, 3) float64 camera intrinsic matrix
-              - ``camera_pose``: 7D float64 array (x, y, z, qx, qy, qz, qw) in ROS xyzw
+              - (0.8, 0.1, 0.1, 1.0)
               - ``timestamp``: float timestamp in seconds
 
         """

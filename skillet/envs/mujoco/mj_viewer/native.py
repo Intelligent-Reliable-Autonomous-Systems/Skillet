@@ -42,10 +42,11 @@ in one direction only, so the two sources never overwrite each other.
 from __future__ import annotations
 
 import math
+import time
 from collections import deque
 from dataclasses import dataclass
 from threading import Lock
-from typing import TYPE_CHECKING, Callable, Optional, Protocol
+from typing import TYPE_CHECKING, Protocol
 
 import mujoco
 import mujoco.viewer
@@ -61,6 +62,8 @@ from mjlab.viewer.base import (
 from mjlab.viewer.native.visualizer import MujocoNativeDebugVisualizer
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from mjlab.entity import Entity
 
 
@@ -83,17 +86,17 @@ class PlotCfg:
 
 
 class _SimDataProtocol(Protocol):
-    qpos: "_TensorArrayProtocol"
-    qvel: "_TensorArrayProtocol"
-    mocap_pos: "_TensorArrayProtocol"
-    mocap_quat: "_TensorArrayProtocol"
-    ctrl: "_TensorArrayProtocol"
-    xfrc_applied: "_TensorArrayProtocol"
-    qfrc_applied: "_TensorArrayProtocol"
+    qpos: _TensorArrayProtocol
+    qvel: _TensorArrayProtocol
+    mocap_pos: _TensorArrayProtocol
+    mocap_quat: _TensorArrayProtocol
+    ctrl: _TensorArrayProtocol
+    xfrc_applied: _TensorArrayProtocol
+    qfrc_applied: _TensorArrayProtocol
 
 
 class _CpuArrayProtocol(Protocol):
-    def cpu(self) -> "_CpuArrayProtocol": ...
+    def cpu(self) -> _CpuArrayProtocol: ...
     def numpy(self) -> np.ndarray: ...
 
 
@@ -115,9 +118,9 @@ class NativeMujocoViewer(BaseViewer):
     def __init__(
         self,
         env: EnvProtocol,
-        policy: PolicyProtocol,
+        policy: PolicyProtocol | None = None,
         frame_rate: float = 60.0,
-        key_callback: Optional[Callable[[int], None]] = None,
+        key_callback: Callable[[int], None] | None = None,
         plot_cfg: PlotCfg | None = None,
         enable_perturbations: bool = True,
         verbosity: VerbosityLevel = VerbosityLevel.SILENT,
@@ -126,12 +129,12 @@ class NativeMujocoViewer(BaseViewer):
         self.user_key_callback = key_callback
         self.enable_perturbations = enable_perturbations
 
-        self.mjm: Optional[mujoco.MjModel] = None
-        self.mjd: Optional[mujoco.MjData] = None
-        self.viewer: Optional[mujoco.viewer.Handle] = None
-        self.vd: Optional[mujoco.MjData] = None
-        self.vopt: Optional[mujoco.MjvOption] = None
-        self.pert: Optional[mujoco.MjvPerturb] = None
+        self.mjm: mujoco.MjModel | None = None
+        self.mjd: mujoco.MjData | None = None
+        self.viewer: mujoco.viewer.Handle | None = None
+        self.vd: mujoco.MjData | None = None
+        self.vopt: mujoco.MjvOption | None = None
+        self.pert: mujoco.MjvPerturb | None = None
         self.catmask: int = mujoco.mjtCatBit.mjCAT_DYNAMIC.value
 
         self._term_names: list[str] = []
@@ -191,7 +194,58 @@ class NativeMujocoViewer(BaseViewer):
             self.log("[INFO] Interactive perturbations enabled", VerbosityLevel.INFO)
 
     def is_running(self) -> bool:
+        """If the viewer is running."""
         return bool(self.viewer and self.viewer.is_running())
+
+    def initialize(self, num_steps: int | None = None, catch_sigint: bool = True) -> None:
+        """Initialize the renderer for per-step ticks."""
+        self._interrupted = False
+        self.setup()
+        now = time.perf_counter()
+        self._stats_last_time = now
+        self._last_tick_time = now
+        self._num_steps = num_steps
+
+    def render(self) -> None:
+        """Render the simulation."""
+        if (
+            self.is_running()
+            and (self._num_steps is None or self._step_count < self._num_steps)
+            and not self._interrupted
+        ) and not self.tick_step():
+            time.sleep(0.001)
+            self._update_stats()
+
+    def tick_step(
+        self,
+    ) -> bool:
+        """Advance one tick: drain actions, step physics, maybe render.
+
+        Returns True when a render frame was produced, False otherwise.
+        """
+        now = time.perf_counter()
+        dt = now - self._last_tick_time
+        self._last_tick_time = now
+
+        self._process_actions()
+
+        if self._is_paused:
+            self._forward_paused()
+        # else:
+        # self._step_physics(dt)
+
+        # Render at fixed frame rate.
+        self._time_until_next_render -= dt
+        if self._time_until_next_render > 0:
+            return False
+
+        self._time_until_next_render += self.frame_time
+        if self._time_until_next_render < -self.frame_time:
+            self._time_until_next_render = 0.0
+
+        self.sync_env_to_viewer()
+        self._stats_frames += 1
+        return True
 
     def sync_env_to_viewer(self) -> None:
         """Copy env state to viewer; update reward figures; render other envs."""

@@ -1,7 +1,6 @@
 """Run a tabletop S2R task."""
 
 import argparse
-import pathlib
 from typing import TYPE_CHECKING
 
 import torch
@@ -10,17 +9,14 @@ from skillet.agents import S2RAgent
 from skillet.core.env import BatchToSingleWrapper
 from skillet.envs import SkilletEnv
 from skillet.perception.perception import SkilletPerception
-from skillet.policy import (
+from skillet.scene import EMPTY_SCENE, SIX_CUBE_APRIL_SCENE, Open3DVisualizer
+from skillet.skill.low_level import ReachXYZRPYSkill
+from skillet.skill.policy import (
     FixedSequencePolicy,
-    PidRlCartPolicy,
-    PidRlJointPolicy,
     RandomPolicy,
-    TcpCartPolicy,
     TwistPidPosePolicy,
 )
-from skillet.scene import EMPTY_SCENE, SIX_CUBE_APRIL_SCENE, Open3DVisualizer
-from skillet.skill import ReachXYZRPYSkill
-from skillet.skill.specs import SELECT_OPTIONS_SPEC_BATCHED, XYZ_RPY_Params_Spec
+from skillet.skill.specs import SELECT_OPTIONS_SPEC_BATCHED
 from skillet_tasks.kortex_tasks.factory import create_kortex_env
 
 if TYPE_CHECKING:
@@ -50,7 +46,6 @@ args_cli = parser.parse_args()
 
 def main() -> None:
     """Visualize RGB + depth color map from _get_latest_rgbd()."""
-
     scene = SIX_CUBE_APRIL_SCENE if args_cli.reconstruction == "april" else EMPTY_SCENE
     env_cfg = {
         "robot_ip": args_cli.robot_ip,

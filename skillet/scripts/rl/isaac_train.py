@@ -14,8 +14,9 @@ import gymnasium as gym
 import torch
 from isaaclab.app import AppLauncher
 
-from skillet.envs import SkillEnvWrapper, SkilletEnv
+from skillet.envs import SkilletEnv
 from skillet.envs.compatibility.rsl_rl import RslRlVecEnvWrapper
+from skillet.envs.skillet_skill_wrapper import SkillEnvWrapper
 from skillet.envs.util import get_checkpoint_path
 from skillet.envs.util.dict import print_dict
 from skillet.envs.util.hydra import hydra_task_config

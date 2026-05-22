@@ -4,7 +4,7 @@ import torch
 
 from skillet import DEVICE
 from skillet.scene.base import Scene
-from skillet.scene.scene_objs import Cube, Location, Sponge, Table, Target, Spill
+from skillet.scene.scene_objs import Cube, Location, Spill, Sponge, Table
 
 CUBE_SIZE = 0.044
 SPONGE_SIZE = 0.060
@@ -96,7 +96,7 @@ green_cube = Cube(size=CUBE_SIZE, name="green_block", material="wooden", color="
 pink_cube = Cube(size=CUBE_SIZE, name="pink_block", material="plastic", color="pink")
 yellow_cube = Cube(size=CUBE_SIZE, name="yellow_block", material="wooden", color="yellow")
 purple_cube = Cube(size=CUBE_SIZE, name="dark_purple_block", material="wooden", color="dark_purple")
-red_cube = Cube(size=CUBE_SIZE, name="red_block", material="plastic", color="red", moveable=False)
+red_cube = Cube(size=CUBE_SIZE, name="red_block", material="plastic", color="red", moveable=True)  # TODO change
 
 loc_00 = Location(init_pose=torch.as_tensor([0.225, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_00")
 loc_01 = Location(init_pose=torch.as_tensor([0.275, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_01")
@@ -314,3 +314,45 @@ SPONGE_SCENE = Scene(
 SPONGE_SCENE.goal = [
     {"predicate": "on", "args": ["blue_sponge", "table0"]},
 ]
+
+ONE_CUBE_SCENE = Scene(
+    objects=[
+        table_0,
+        red_cube,
+        loc_00,
+        loc_01,
+        loc_02,
+        loc_03,
+        loc_04,
+        loc_05,
+        loc_06,
+        loc_07,
+        loc_10,
+        loc_11,
+        loc_12,
+        loc_13,
+        loc_14,
+        loc_15,
+        loc_16,
+        loc_17,
+        loc_20,
+        loc_21,
+        loc_22,
+        loc_23,
+        loc_24,
+        loc_25,
+        loc_26,
+        loc_27,
+        loc_30,
+        loc_31,
+        loc_32,
+        loc_33,
+        loc_34,
+        loc_35,
+        loc_36,
+        loc_37,
+    ],
+    closed_set=True,
+    bounds=WORLD_BOUNDS,
+    contains_objects=True,
+)

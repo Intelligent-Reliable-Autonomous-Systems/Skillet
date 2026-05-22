@@ -11,7 +11,7 @@ from typing import Any
 
 from skillet.envs.ros2 import Ros2EnvCfg
 from skillet.envs.util import configclass
-from skillet_tasks.ros2_tasks.gen3.gen3_ros2 import Gen3Ros2Env
+from skillet_tasks.ros2_tasks.ros2_tasks.gen3.gen3_ros2 import Gen3Ros2Env
 
 
 @configclass

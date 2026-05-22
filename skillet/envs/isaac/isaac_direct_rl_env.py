@@ -364,7 +364,7 @@ class IsaacDirectRlEnv(SkilletGymEnv):
             action = self._action_noise_model(action)
 
         # process actions
-        self._pre_physics_step(action)
+        self._pre_physics_step(action, action_spec=action_spec)
 
         # check if we need to do rendering within the physics loop
         # note: checked here once to avoid multiple checks within the loop

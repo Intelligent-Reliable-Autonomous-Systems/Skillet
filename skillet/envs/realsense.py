@@ -8,13 +8,12 @@ RealSense camera in a format compatible with the ROS2 RGB-D pipeline and
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, override
 
 import cv2
 import numpy as np
 import pyrealsense2 as rs
 from pupil_apriltags import Detector as AprilTagDetector
-from typing_extensions import override
 
 from skillet.core.env import _EnvironmentBase
 from skillet.envs.specs import RGBD_SPEC_BATCHED, RGBD_Obs
@@ -130,7 +129,7 @@ class RealsenseEnv(_EnvironmentBase[RGBD_Obs, Any]):
               - ``rgb``: (H, W, 3) uint8 RGB image
               - ``depth``: (H, W) uint16 depth image
               - ``intrinsic_k``: (3, 3) float64 camera intrinsic matrix
-              - ``camera_pose``: 7D float64 array (x, y, z, qx, qy, qz, qw) in ROS xyzw
+              - ``camera_pose``: 7D float64 array (x, y, z, qw, qx, qy, qz) in Isaac wxyz
               - ``timestamp``: float timestamp in seconds
 
         """

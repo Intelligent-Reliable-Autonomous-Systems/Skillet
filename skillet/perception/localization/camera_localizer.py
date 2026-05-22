@@ -179,7 +179,7 @@ class RealsenseCameraLocalizer:
               - ``rgb``: (H, W, 3) uint8 RGB image
               - ``depth``: (H, W) uint16 depth image
               - ``intrinsic_k``: (3, 3) float64 camera intrinsic matrix
-              - ``camera_pose``: 7D float64 array (x, y, z, qx, qy, qz, qw) in ROS xyzw
+              - ``camera_pose``: 7D float64 array (x, y, z, qw, qx, qy, qz) in Isaac wxyz
               - ``timestamp``: float timestamp in seconds
 
         """

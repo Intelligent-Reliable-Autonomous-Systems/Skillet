@@ -7,14 +7,6 @@ from dataclasses import MISSING
 from mjlab.viewer import ViewerConfig
 
 
-class BaseSceneCfg(SceneCfg):
-    """Configuration for Lift Environment."""
-
-    terrain = TerrainEntityCfg(terrain_type="plane")
-    num_envs = 1
-    env_spacing = 2.5
-
-
 class Gen3BaseCfg(SkillsDirectRlEnvCfg):
     # env
     episode_length_s = 6.0  # 500 timesteps
@@ -54,4 +46,4 @@ class Gen3BaseCfg(SkillsDirectRlEnvCfg):
     )
 
     # scene
-    scene: BaseSceneCfg = BaseSceneCfg()
+    scene = SceneCfg(num_envs=1, env_spacing=2, terrain=TerrainEntityCfg(terrain_type="plane"))

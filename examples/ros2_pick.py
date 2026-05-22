@@ -11,15 +11,13 @@ from typing import TYPE_CHECKING
 
 import torch
 
-import skillet_tasks.ros2_tasks  # noqa: F401
+import skillet_tasks.ros2_tasks.ros2_tasks  # noqa: F401
 from skillet.agents.policy_over_options import PolicyOverOptionsBatchedAgent
 from skillet.envs.skillet_env import SkilletEnv
-from skillet.policy.dummy import FixedSequencePolicy, RandomPolicy
-from skillet.policy.ik_ee import PoseAbsIkEePolicy
-from skillet.policy.twist import TwistPidPosePolicy
-from skillet.skill.high_level.pick import PickSkill
+from skillet.skill.high_level import PickSkill
+from skillet.skill.policy import FixedSequencePolicy, PoseAbsIkEePolicy, RandomPolicy, TwistPidPosePolicy
 from skillet.skill.specs import SELECT_OPTIONS_SPEC_BATCHED, XYZ_YAW_Params
-from skillet_tasks.ros2_tasks.factory import create_ros2_env
+from skillet_tasks.ros2_tasks.ros2_tasks.factory import create_ros2_env
 
 if TYPE_CHECKING:
     from skillet.core import BatchedSkill

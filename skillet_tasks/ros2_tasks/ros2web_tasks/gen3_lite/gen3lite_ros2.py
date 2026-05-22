@@ -12,7 +12,7 @@ from roslibpy import Ros
 
 from skillet.envs.ros2.websocket import Ros2WebEnvCfg
 from skillet.envs.util import configclass
-from skillet_tasks.ros2web_tasks.gen3.gen3_ros2 import Gen3Ros2WebEnv
+from skillet_tasks.ros2_tasks.ros2web_tasks.gen3.gen3_ros2 import Gen3Ros2WebEnv
 
 
 @configclass

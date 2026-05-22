@@ -4,7 +4,6 @@ import cv2
 import numpy as np
 import torch
 
-from skillet.envs.realsense import RealsenseEnv
 from skillet.perception.reconstruction.reconstructor_base import ReconstructorBase
 from skillet.perception.segmentation.sam import get_sam_client
 from skillet.perception.segmentation.vlm import GeminiClient, QwenClient
@@ -159,19 +158,3 @@ class VlmReconstructor(ReconstructorBase):
 
     def get_observation(self, obs_spec):
         pass
-
-
-def main():
-    env = RealsenseEnv()
-    vlm = VlmReconstructor()
-    cv2.namedWindow("VLM Scene", cv2.WINDOW_NORMAL)
-
-    while True:
-        obs = env.get_observation()
-        vlm.update_state(obs)
-        cv2.imshow("VLM Scene", vlm._bbox_frame)
-        cv2.waitKey(1)
-
-
-if __name__ == "__main__":
-    main()

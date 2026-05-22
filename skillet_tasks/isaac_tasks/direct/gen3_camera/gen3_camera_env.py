@@ -199,7 +199,7 @@ class Gen3GenCameraEnv(IsaacDirectRlEnv):
     # Step stubs
     # ------------------------------------------------------------------
 
-    def _pre_physics_step(self, actions: torch.Tensor):
+    def _pre_physics_step(self, actions: torch.Tensor, action_spec: ActionSpec = None):
         self.actions = actions.clone()
         targets = self.default_joint_pos + self.actions
         self.robot_dof_targets = torch.clamp(targets, self.robot_dof_lower_limits, self.robot_dof_upper_limits)

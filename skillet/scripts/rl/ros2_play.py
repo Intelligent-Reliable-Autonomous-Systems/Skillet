@@ -10,13 +10,13 @@ import os
 import sys
 
 import gymnasium as gym
-import numpy as np
 import torch
 
-import skillet_tasks.ros2web_tasks  # noqa: F401
-from skillet.envs import SkillEnvWrapper, SkilletEnv
+import skillet_tasks.ros2_tasks.ros2web_tasks  # noqa: F401
+from skillet.envs import SkilletEnv
 from skillet.envs.compatibility.rsl_rl import RslRlVecEnvWrapper
 from skillet.envs.ros2.websocket.ros_bridge import setup_ros
+from skillet.envs.skillet_skill_wrapper import SkillEnvWrapper
 from skillet.envs.util import get_checkpoint_path
 from skillet.envs.util.dict import print_dict
 from skillet.envs.util.hydra import hydra_task_config
@@ -59,7 +59,6 @@ sys.argv = [sys.argv[0]] + hydra_args
 @hydra_task_config(args_cli.task, args_cli.agent)
 def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
     """Play with RSL-RL agent."""
-
     # Override configurations with non-hydra CLI arguments
     agent_cfg: RslRlBaseRunnerCfg = cli_args.update_rsl_rl_cfg(agent_cfg, args_cli)
     env_cfg.num_envs = args_cli.num_envs if args_cli.num_envs is not None else env_cfg.num_envs

@@ -11,6 +11,7 @@ from .scenes import EMPTY_SCENE as EMPTY_SCENE
 from .scenes import FIVE_CUBE_SCENE as FIVE_CUBE_SCENE
 from .scenes import FOUR_CUBE_SCENE as FOUR_CUBE_SCENE
 from .scenes import LOC_CUBE_SCENE as LOC_CUBE_SCENE
+from .scenes import ONE_CUBE_SCENE as ONE_CUBE_SCENE
 from .scenes import SIX_CUBE_APRIL_SCENE as SIX_CUBE_APRIL_SCENE
 from .scenes import SIX_CUBE_SCENE as SIX_CUBE_SCENE
 from .scenes import SPILL_SIZE as SPILL_SIZE

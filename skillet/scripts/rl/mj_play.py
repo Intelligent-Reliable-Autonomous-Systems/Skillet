@@ -10,18 +10,16 @@ import os
 import sys
 
 import gymnasium as gym
-import numpy as np
-from mjlab.viewer import ViserPlayViewer
 
 import skillet_tasks.mj_tasks  # noqa: F401
-from skillet.envs import SkillEnvWrapper, SkilletEnv
+from skillet.envs import SkilletEnv
 from skillet.envs.compatibility.rsl_rl import RslRlVecEnvWrapper
+from skillet.envs.mujoco.mj_viewer import NativeMujocoViewer
 from skillet.envs.util import get_checkpoint_path, parse_mj_env_cfg
 from skillet.envs.util.dict import print_dict
 from skillet.envs.util.hydra import hydra_task_config
 from skillet.rl.cfg import RslRlBaseRunnerCfg
-from skillet.rl.exporter import export_policy_as_jit, export_managers
-from skillet.rl.mj_viewer import NativeMujocoViewer
+from skillet.rl.exporter import export_managers, export_policy_as_jit
 from skillet.rl.rsl_rl import cli_args
 from skillet.rl.rsl_rl.runners import OnPolicyRunner
 
@@ -49,17 +47,16 @@ sys.argv = [sys.argv[0]] + hydra_args
 @hydra_task_config(args_cli.task, args_cli.agent)
 def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
     """Play with RSL-RL agent."""
-
     # Override configurations with non-hydra CLI arguments
     agent_cfg: RslRlBaseRunnerCfg = cli_args.update_rsl_rl_cfg(agent_cfg, args_cli)
     env_cfg = parse_mj_env_cfg(
         args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs
     )  # Override hydra task cfg to avoid serialization
-    env_cfg.scene.num_envs = args_cli.num_envs if args_cli.num_envs is not None else env_cfg.scene.num_envs
+    # env_cfg.scene.num_envs = args_cli.num_envs if args_cli.num_envs is not None else env_cfg.scene.num_envs
 
     # Set the environment seed
     env_cfg.seed = agent_cfg.seed
-    env_cfg.sim.device = args_cli.device if args_cli.device is not None else env_cfg.sim.device
+    # env_cfg.sim.device = args_cli.device if args_cli.device is not None else env_cfg.sim.device
 
     # Specify directory for logging experiments
     log_root_path = os.path.join("_logs", "rsl_rl", agent_cfg.experiment_name)
@@ -88,7 +85,7 @@ def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
         env = gym.wrappers.RecordVideo(env, **video_kwargs)
 
     # Wrap around environment for RSL-RL
-    env = SkillEnvWrapper(env) if args_cli.skill else SkilletEnv(env)
+    env = SkilletEnv(env)
     print(env.unwrapped._joint_positions)
     env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
 
@@ -121,8 +118,6 @@ def main(env_cfg, agent_cfg: RslRlBaseRunnerCfg):
 
     if resolved_viewer == "native":
         NativeMujocoViewer(env, policy).run()
-    elif resolved_viewer == "viser":
-        ViserPlayViewer(env, policy).run()
     else:
         raise RuntimeError(f"Unsupported viewer backend: {resolved_viewer}")
 

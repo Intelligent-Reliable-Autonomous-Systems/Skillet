@@ -13,10 +13,11 @@ from datetime import datetime
 import gymnasium as gym
 import torch
 
-import skillet_tasks.ros2web_tasks  # noqa: F401
-from skillet.envs import SkillEnvWrapper, SkilletEnv
+import skillet_tasks.ros2_tasks.ros2web_tasks  # noqa: F401
+from skillet.envs import SkilletEnv
 from skillet.envs.compatibility.rsl_rl import RslRlVecEnvWrapper
 from skillet.envs.ros2.websocket.ros_bridge import setup_ros
+from skillet.envs.skillet_skill_wrapper import SkillEnvWrapper
 from skillet.envs.util import get_checkpoint_path
 from skillet.envs.util.dict import print_dict
 from skillet.envs.util.hydra import hydra_task_config

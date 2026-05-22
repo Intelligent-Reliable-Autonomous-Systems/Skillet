@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import pathlib
 import time
 from typing import TYPE_CHECKING
 
@@ -12,19 +13,21 @@ from skillet.envs import SkilletEnv
 from skillet.logging import SkilletDataLogger
 from skillet.perception.perception import SkilletPerception
 from skillet.planning import AbstractModel
-from skillet.policy import TcpCartPolicy
 from skillet.scene import (
     FIVE_CUBE_SCENE,
     Open3DVisualizer,
 )
-from skillet.skill import (
-    DragBlock5Skill,
+from skillet.skill.high_level import (
     DragSkill,
-    PickBlock4Skill,
     PickSkill,
-    PlaceBlock4Skill,
     PlaceSkill,
 )
+from skillet.skill.object_level import (
+    DragBlock5Skill,
+    PickBlock4Skill,
+    PlaceBlock4Skill,
+)
+from skillet.skill.policy import TcpCartPolicy
 from skillet_tasks.kortex_tasks.factory import create_kortex_env
 
 if TYPE_CHECKING:
@@ -97,7 +100,7 @@ def main() -> None:
     drag_block_skill = DragBlock5Skill(scene, drag_skill, vis_target_pos=target_pose_func)
     ACTION_MAP = {"place_block": place_block_skill, "pick_block": pick_block_skill, "drag_block": drag_block_skill}
 
-    with open(f"{args_cli.eval_dir}/g_pddl.txt") as f:
+    with pathlib.Path(f"{args_cli.eval_dir}/g_pddl.txt").open() as f:
         pddl_goal = json.load(f)
     print(pddl_goal)
     scene.goal = pddl_goal
@@ -106,13 +109,13 @@ def main() -> None:
 
     if args_cli.vlm:
         input("Press Enter to start the scene building...\n")
-        with open(f"{args_cli.eval_dir}/g_nl.txt") as f:
+        with pathlib.Path(f"{args_cli.eval_dir}/g_nl.txt").open() as f:
             goal_txt = f.read()
 
         perception.task_instruction = goal_txt
         perception.build_scene = True
         time.sleep(4)
-        with open(f"{args_cli.eval_dir}/g_vlm.txt", "w") as f:
+        with pathlib.Path(f"{args_cli.eval_dir}/g_vlm.txt").open("w") as f:
             f.write(str(scene.goal))
         print(f"[INFO][VLM Goal]:\n{scene.goal}")
 

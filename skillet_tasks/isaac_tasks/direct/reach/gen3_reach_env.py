@@ -136,7 +136,7 @@ class Gen3ReachOSCEnv(ReachEnv):
         super().__init__(cfg, render_mode, **kwargs)
 
     # pre-physics step calls
-    def _pre_physics_step(self, actions: torch.Tensor):
+    def _pre_physics_step(self, actions: torch.Tensor, action_spec: ActionSpec = None):
         self.robot_dof_targets = torch.clamp(actions, -self.robot_effort_limits, self.robot_effort_limits)
 
         # Update markers (world frame)

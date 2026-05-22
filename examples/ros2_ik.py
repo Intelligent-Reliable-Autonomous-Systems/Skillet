@@ -17,14 +17,14 @@ if TYPE_CHECKING:
     from skillet.core import BatchedSkill
     from skillet.envs.specs import BxM_Action, IKEE_Obs
 
-import skillet_tasks.ros2web_tasks  # noqa: F401
+import skillet_tasks.ros2_tasks.ros2web_tasks  # noqa: F401
 from skillet.agents.policy_over_options import PolicyOverOptionsBatchedAgent
 from skillet.envs.ros2.websocket.ros_bridge import setup_ros
 from skillet.envs.skillet_env import SkilletEnv
 from skillet.envs.util import parse_ros2_env_cfg
-from skillet.policy.dummy import FixedSequencePolicy, RandomPolicy
-from skillet.policy.ik_ee import PoseAbsIkEePolicy
-from skillet.skill import ReachPoseSkill
+from skillet.skill.low_level import ReachPoseSkill
+from skillet.skill.policy.dummy import FixedSequencePolicy, RandomPolicy
+from skillet.skill.policy.ik_ee import PoseAbsIkEePolicy
 from skillet.skill.specs import SELECT_OPTIONS_SPEC_BATCHED, XYZ_QUAT_Params
 
 # add argparse arguments

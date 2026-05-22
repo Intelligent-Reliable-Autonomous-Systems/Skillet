@@ -19,9 +19,9 @@ import skillet_tasks.mj_tasks  # noqa: F401
 from skillet.agents.policy_over_options import PolicyOverOptionsAgent
 from skillet.envs import SkilletEnv
 from skillet.envs.util import parse_mj_env_cfg
-from skillet.policy.dummy import FixedSequencePolicy, RandomPolicy
-from skillet.policy.ik_ee import PoseAbsIkEePolicy
-from skillet.skill import ReachPoseSkill
+from skillet.skill.low_level import ReachPoseSkill
+from skillet.skill.policy.dummy import FixedSequencePolicy, RandomPolicy
+from skillet.skill.policy.ik_ee import PoseAbsIkEePolicy
 from skillet.skill.specs import SELECT_OPTIONS_SPEC_BATCHED, XYZ_QUAT_Params
 
 # Add argparse arguments
