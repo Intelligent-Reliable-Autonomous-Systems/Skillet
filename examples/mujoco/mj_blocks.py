@@ -66,6 +66,7 @@ def main() -> None:
         poll_rate_hz=args_cli.poll_rate_hz,
         device="cuda",
         vis_perception=True,
+        max_depth_m=5,
     )
     target_pose_func = None
     if args_cli.o3d:

@@ -96,7 +96,7 @@ green_cube = Cube(size=CUBE_SIZE, name="green_block", material="wooden", color="
 pink_cube = Cube(size=CUBE_SIZE, name="pink_block", material="plastic", color="pink")
 yellow_cube = Cube(size=CUBE_SIZE, name="yellow_block", material="wooden", color="yellow")
 purple_cube = Cube(size=CUBE_SIZE, name="dark_purple_block", material="wooden", color="dark_purple")
-red_cube = Cube(size=CUBE_SIZE, name="red_block", material="plastic", color="red", moveable=True)  # TODO change
+red_cube = Cube(size=CUBE_SIZE, name="red_block", material="plastic", color="red", moveable=False)  # TODO change
 
 loc_00 = Location(init_pose=torch.as_tensor([0.225, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_00")
 loc_01 = Location(init_pose=torch.as_tensor([0.275, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_01")
@@ -315,6 +315,7 @@ SPONGE_SCENE.goal = [
     {"predicate": "on", "args": ["blue_sponge", "table0"]},
 ]
 
+red_cube = Cube(size=CUBE_SIZE, name="red_block", material="plastic", color="red")
 ONE_CUBE_SCENE = Scene(
     objects=[
         table_0,

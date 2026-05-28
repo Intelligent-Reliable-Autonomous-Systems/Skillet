@@ -3,8 +3,6 @@
 Reconstruct the scene from SAM3 concepts and bounding boxes.
 """
 
-import pathlib
-import pickle
 from typing import TYPE_CHECKING, Any, Literal
 
 import cv2
@@ -93,7 +91,7 @@ class Sam3Reconstructor(ReconstructorBase):
         camera_pose = obs["camera_pose"]
         masks, _, _, concept_indices = self._sam_model.segment_concepts(rgb, self._concepts)
 
-        self._masks = masks
+        self._masks = masks if masks.numel() != 0 else None
         self._segment_indices = torch.arange(masks.shape[0], device=masks.device)
 
         agg_obj_masks = []
@@ -224,7 +222,7 @@ class Sam3Reconstructor(ReconstructorBase):
 
         self._scene.goal = self._vlm_goal_atoms
 
-        print(f"[INFO] Reconstructed Goal with VLM")
+        print("[INFO] Reconstructed Goal with VLM")
 
     @staticmethod
     def show_vlm_image_and_masks(

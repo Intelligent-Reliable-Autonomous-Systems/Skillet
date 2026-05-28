@@ -11,7 +11,6 @@ from mjlab.sensor import CameraSensorCfg
 from mjlab.sim import MujocoCfg, SimulationCfg
 from mjlab.sim.sim import Simulation
 from mjlab.terrains import TerrainEntityCfg
-from mjlab.utils.spec_config import LightCfg
 
 from skillet.core.spaces import ActionSpec
 from skillet.envs.mujoco import MjDirectRlEnv
@@ -39,17 +38,20 @@ class MjGen3EnvCfg(Gen3BaseCfg):
             terrain_type="plane",
             textures=(),
             materials=(),
-            lights=(LightCfg(name="sun", pos=(0.5, -0.5, 1.5), type="directional", castshadow=False),),
+            # lights=(LightCfg(name="sun", pos=(0.5, -0.5, 1.5), type="directional", castshadow=False),),
         ),
         sensors=(
             CameraSensorCfg(
                 name="tabletop_camera",
                 width=640,
                 height=480,
-                pos=[0.5, -0.5, 0.3],
+                pos=[0.4, -0.5, 0.3],
                 quat=[0.8192, 0.5736, 0.0, 0.0],
-                fovy=72,
+                fovy=90,
                 data_types=("rgb", "depth"),
+                use_shadows=True,
+                use_textures=True,
+                clone_data=True,
             ),
         ),
     )
@@ -106,11 +108,7 @@ class MjGen3Env(MjDirectRlEnv):
             body = spec.worldbody.add_body(name=name)
             body.add_freejoint(name=f"{name}_joint")
             body.add_geom(
-                name=name,
-                type=mujoco.mjtGeom.mjGEOM_BOX,
-                size=(cube_size,) * 3,
-                mass=mass,
-                rgba=rgba,
+                name=name, type=mujoco.mjtGeom.mjGEOM_BOX, size=(cube_size,) * 3, mass=mass, rgba=rgba, group=2
             )
             return spec
 
@@ -140,19 +138,14 @@ class MjGen3Env(MjDirectRlEnv):
         self._tabletop_camera = self.scene.sensors["tabletop_camera"]
 
     def _pre_physics_step(self, actions: torch.Tensor, action_spec: ActionSpec = None):
-        if action_spec.name == "tcp_cart":
+        if action_spec.name == "tcp_cart" or action_spec.name == "twist_tcp":
             arm_targets = self._joint_positions[:, self.cfg.joint_ids[:-1]] + self._diff_ik.compute_joint_vel(
                 actions[:, :6]
             )
-            # arm_vels = self._diff_ik.cartesian_to_joint_vel(actions[:, :-1])
-            # arm_targets = self._joint_positions[:, self.cfg.joint_ids[:-1]] + arm_vels
             targets = torch.cat((arm_targets, actions[:, -1:]), dim=1)
-            # targets = torch.zeros(size=(self.num_envs, len(self.cfg.joint_ids)), device=self.device)
             self.actions = targets.clone()
 
-        self.robot_dof_targets = (
-            targets  # torch.clamp(targets, self.robot_dof_lower_limits, self.robot_dof_upper_limits)
-        )
+        self.robot_dof_targets = targets
 
     def _apply_action(self):
         self.robot.set_joint_position_target(self.robot_dof_targets[:, :-1], joint_ids=self.cfg.joint_ids[:-1])
@@ -185,7 +178,7 @@ class MjGen3Env(MjDirectRlEnv):
 
         # Cubes
         self._red_cube.write_root_link_pose_to_sim(
-            torch.tensor([[0.3, 0, 0.05, 1, 0, 0, 0]], device=self.device).repeat(self.num_envs, 1), env_ids
+            torch.tensor([[0.37, 0, 0.05, 1, 0, 0, 0]], device=self.device).repeat(self.num_envs, 1), env_ids
         )
         self._red_cube.write_root_link_velocity_to_sim(torch.zeros((len(env_ids), 6), device=self.device), env_ids)
 
@@ -230,14 +223,44 @@ class MjGen3Env(MjDirectRlEnv):
         latest = {}
         camera_data = self._tabletop_camera.data
         latest["rgb"] = camera_data.rgb.permute(0, 3, 1, 2)
-        latest["depth"] = camera_data.depth.permute(0, 3, 1, 2)
+        latest["depth"] = (camera_data.depth.permute(0, 3, 1, 2) * 1000).to(torch.uint16)
         latest["timestamp"] = time.perf_counter()
         latest["camera_pose"] = torch.as_tensor(
             self._tabletop_camera.cfg.pos + self._tabletop_camera.cfg.quat, device=self.device
         )
         latest["intrinsic_k"] = intrinsic_k
 
+        def colorize_depth(depth: np.ndarray, min_depth=None, max_depth=None, colormap="plasma") -> Image.Image:
+            """Colorize a depth image and return a PIL Image.
+
+            Args:
+                depth:     HxW float array (meters or raw units)
+                min_depth: clip minimum (defaults to array min) in meters
+                max_depth: clip maximum (defaults to array max) in meters
+                colormap:  any matplotlib colormap name
+
+            """
+            import matplotlib.pyplot as plt
+
+            if depth.dtype == np.uint16:
+                depth = depth.astype(np.float32) / 1000
+
+            min_d = min_depth if min_depth is not None else np.nanmin(depth)
+            max_d = max_depth if max_depth is not None else np.nanmax(depth)
+
+            # Normalize to [0, 1]
+            normalized = (depth - min_d) / (max_d - min_d + 1e-8)
+            normalized = np.clip(normalized, 0, 1)
+
+            # Apply colormap → RGBA float array → uint8
+            cmap = plt.get_cmap(colormap)
+            colored = (cmap(normalized) * 255).astype(np.uint8)
+
+            return Image.fromarray(colored.squeeze(), mode="RGBA").convert("RGB")
+
         Image.fromarray(camera_data.rgb[0].cpu().numpy()).save("out.png")
+        colorize_depth(latest["depth"].cpu().numpy(), max_depth=1).save("depth.png")
+
         return latest
 
     @property

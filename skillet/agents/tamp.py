@@ -3,17 +3,15 @@
 import time
 from typing import Any
 
+from skillet.agents import SkilletModerator
 from skillet.agents.base_agent import Agent
 from skillet.core.env import Environment
 from skillet.core.policy import Unparameterized
 from skillet.core.skill import SingleSkill, SkillStatusCodes
 from skillet.logging import SkilletDataLogger
-from skillet.perception.perception import SkilletPerception
 from skillet.planning import AbstractModel
-from skillet.planning.abstract import AbstractAction
 from skillet.planning.abstract.up_utils import sample_action_from_state
 from skillet.scene.base import Scene
-from skillet.agents import SkilletModerator
 
 
 class PlanningAgent(Agent):
@@ -151,6 +149,7 @@ class RandomTampAgent(Agent):
         terminated = False
 
         for i in range(num_actions):
+            print(self._scene)
             up_state = self.abstract_model.reset_up_problem_state()
             # ab_action, up_action = self.abstract_model.get_random_action(up_state)
             ab_action, up_action = sample_action_from_state(self.abstract_model._problem, up_state)
