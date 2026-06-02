@@ -158,6 +158,8 @@ def _is_grasping(
 
 def _gripper_closed(scene: Scene, gripper_thresh: float = 0.4) -> bool:
     """Check if the gripper is closed."""
+    if scene.gripper_pos is None:
+        return False
     return bool((scene.gripper_pos > gripper_thresh).item())
 
 

@@ -70,9 +70,9 @@ def get_gen3_robot_cfg() -> EntityCfg:
                     transmission_type=TransmissionType.TENDON,
                     command_field="position",
                 ),
-                XmlActuatorCfg(
-                    target_names_expr=("pinch_site",), transmission_type=TransmissionType.SITE, command_field="position"
-                ),
+                # XmlActuatorCfg(
+                #     target_names_expr=("pinch_site",), transmission_type=TransmissionType.SITE, command_field="position"
+                # ),
             ),
             soft_joint_pos_limit_factor=0.9,
         ),

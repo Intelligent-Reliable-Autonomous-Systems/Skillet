@@ -125,7 +125,7 @@ class Sam3Reconstructor(ReconstructorBase):
         obj_masks = torch.stack(agg_obj_masks, dim=0)
         obj_types = np.asarray(agg_obj_types)
 
-        # Compute the object centers # TODO this will crash with spill scene
+        # Compute the object centers
         centers, bboxes = self._get_object_centers(obj_masks, obj_types, depth, intrinsic_k, camera_pose)
 
         # Assign the pose and bounding boxes to each object

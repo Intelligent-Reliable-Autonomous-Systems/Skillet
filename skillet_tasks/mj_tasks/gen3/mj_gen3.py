@@ -223,7 +223,8 @@ class MjGen3Env(MjDirectRlEnv):
         latest = {}
         camera_data = self._tabletop_camera.data
         latest["rgb"] = camera_data.rgb.permute(0, 3, 1, 2)
-        latest["depth"] = (camera_data.depth.permute(0, 3, 1, 2) * 1000).to(torch.uint16)
+        # latest["depth"] = (camera_data.depth.permute(0, 3, 1, 2) * 1000).to(torch.uint16)[:, 0] # TODO changing this here has downstream effects?
+        latest["depth"] = camera_data.depth.permute(0, 3, 1, 2)[:, 0]
         latest["timestamp"] = time.perf_counter()
         latest["camera_pose"] = torch.as_tensor(
             self._tabletop_camera.cfg.pos + self._tabletop_camera.cfg.quat, device=self.device
