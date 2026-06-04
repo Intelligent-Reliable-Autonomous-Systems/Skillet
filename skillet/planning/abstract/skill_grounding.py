@@ -24,7 +24,7 @@ def _pick_skill_4_grounding(scene_objs: list[SceneObject], scene: Scene) -> bool
         (loc-above ?targetloc ?supportloc)
         (on ?target ?support)
 
-        (not (obstructed-above ?targetloc)) - TODO
+        (not (obstructed-above ?targetloc))
         (or (not (gripper-full)) (grasping ?target))
     )
 
@@ -37,7 +37,7 @@ def _pick_skill_4_grounding(scene_objs: list[SceneObject], scene: Scene) -> bool
     if isinstance(support, Cube):
         on_grd = _is_on(target, support)
     elif isinstance(support, Table):
-        on_grd = _is_on_table(target, support)
+        on_grd = bool(_is_on_table(target, support).item())
     else:
         on_grd = False
     grasp_grd = not _is_grasping(target, scene)

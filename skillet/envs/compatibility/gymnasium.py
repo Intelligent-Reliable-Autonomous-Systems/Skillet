@@ -185,6 +185,21 @@ class SkilletGymEnv(gym.Env):
         raise NotImplementedError
 
     @property
+    def _n_objects(self) -> int:
+        """Return the number of objects in the environment for perception."""
+        raise NotImplementedError
+
+    @property
+    def _object_poses(self) -> torch.Tensor:
+        """Return the poses of the objects in the scene."""
+        raise NotImplementedError
+
+    @property
+    def _object_names(self) -> list[str]:
+        """Return the names of the objects in the scene."""
+        raise NotImplementedError
+
+    @property
     def _prev_actions(self) -> torch.Tensor:
         """Return the previous action taken in the environment."""
         raise NotImplementedError

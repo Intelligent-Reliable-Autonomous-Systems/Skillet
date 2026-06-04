@@ -51,6 +51,8 @@ class PlaceSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAct
         lift_height: float,
         gripper_close: float,
         length: int,
+        pos_threshold: float = 0.005,
+        quat_threshold: float = 0.04,
     ) -> None:
         """Initialize the place skill.
 
@@ -75,6 +77,8 @@ class PlaceSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAct
         # self._default_quat = torch.as_tensor([[0.0, 1.0, 0.0, 0.0]])
         self._default_quat = torch.as_tensor([[0.0, 0.7071, 0.7071, 0.0]])
         self._default_pose = torch.as_tensor([[0.35, 0.0, 0.25, 0.0, 0.7071, 0.7071, 0.0]])
+        self._pos_threshold = pos_threshold
+        self._quat_threshold = quat_threshold
 
     @property
     def param_dim(self) -> int:
@@ -120,8 +124,6 @@ class PlaceSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAct
         self._default_quat = self._default_quat.to(self.obs_spec.device)
         goal_quat = quat_mul(quat_from_yaw(params[:, 3]), self._default_quat.repeat(self.n_envs, 1))
         self._fail_action = self._default_pose.repeat(self.n_envs, 1).to(self.obs_spec.device)
-        self._pos_threshold = 0.005
-        self._quat_threshold = 0.04
         self._vel_threshold = 0.001
         self._joint_threshold = 0.001
         self._tcp_effort_threshold = 8
@@ -189,9 +191,9 @@ class PlaceSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAct
             valid_idx = (self._status == SkillStatusCodes.RUNNING) & (next_pose)
             self._place_status[valid_idx] += 1
             valid_idx = valid_idx & (self._place_status < PlaceStatusCodes.DONE)
-            # print(
-            #     f"[INFO][PLACE STATUS UPDATE]: {PlaceStatusCodes(self._place_status.cpu().numpy()[0]).name} | reached_pose: {next_pose.cpu().numpy()}"
-            # )
+            print(
+                f"[INFO][PLACE STATUS UPDATE]: {PlaceStatusCodes(self._place_status.cpu().numpy()[0]).name} | reached_pose: {next_pose.cpu().numpy()}"
+            )
             # Update the target pose based on the new place status
             self._current_target_poses[valid_idx] = self._target_poses[idx[valid_idx], self._place_status[valid_idx]]
 

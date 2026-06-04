@@ -18,13 +18,12 @@ import torch
 from skillet.perception.reconstruction.apriltag_reconstructor import ApriltagStateReconstructor
 from skillet.perception.reconstruction.sam_reconstructor import Sam3Reconstructor
 from skillet.perception.reconstruction.sam_vlm_reconstructor import SamVlmReconstructor
+from skillet.perception.reconstruction.sim_reconstructor import SimReconstructor
 from skillet.perception.reconstruction.vlm_reconstructor import VlmReconstructor
-from skillet.scene.utils import arrange_panels, depth_to_colormap_np, segmented_rgbd_to_point_cloud
 from skillet.planning import AbstractModel
+from skillet.scene.utils import arrange_panels, depth_to_colormap_np, segmented_rgbd_to_point_cloud
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
     from skillet.core import BatchedEnvironment
     from skillet.core.env import Environment
     from skillet.core.spaces import ObservationSpec
@@ -44,7 +43,7 @@ class SkilletPerception:
         scene: Scene,
         obs_spec: ObservationSpec,
         abstract_model: AbstractModel | None = None,
-        reconstructor: Literal["sam3", "april", "vlm", "sam+vlm"] = "april",
+        reconstructor: Literal["sam3", "april", "vlm", "sam+vlm", "sim"] = "sam3",
         poll_rate_hz: float = 10,
         device: str | torch.device | None = None,
         max_depth_m: float | None = None,
@@ -137,21 +136,27 @@ class SkilletPerception:
         depth = obs["depth"]
         intrinsic_k = obs["intrinsic_k"]
         camera_pose = obs["camera_pose"]
-        tcp_pose = None
-        gripper_pos = None
+        tcp_pose_b = None
+        gripper = None
+        obj_poses = None
+        obj_names = None
 
-        if rgb.dim() == 4:
+        if rgb.ndim == 4:
             rgb = rgb[0]
-        if depth.dim() == 4:
+        if depth.ndim == 4:
             depth = depth[0]
-        if intrinsic_k.dim() == 3:
+        if intrinsic_k.ndim == 3:
             intrinsic_k = intrinsic_k[0]
-        if camera_pose.dim() == 2:
+        if camera_pose.ndim == 2:
             camera_pose = camera_pose[0]
-        if "tcp_pose_b" in obs and obs["tcp_pose_b"].dim() == 2:
+        if "tcp_pose_b" in obs and obs["tcp_pose_b"].ndim == 2:
             tcp_pose_b = obs["tcp_pose_b"][0]
-        if "gripper" in obs and obs["gripper"].dim() == 2:
+        if "gripper" in obs and obs["gripper"].ndim == 2:
             gripper = obs["gripper"][0]
+        if "obj_poses" in obs and obs["obj_poses"].ndim == 3:
+            obj_poses = obs["obj_poses"][0]
+        if "obj_names" in obs and obs["obj_names"].ndim == 2:
+            obj_names = obs["obj_names"][0]
 
         return {
             "rgb": rgb,
@@ -160,6 +165,8 @@ class SkilletPerception:
             "camera_pose": camera_pose,
             "tcp_pose_b": tcp_pose_b,
             "gripper": gripper,
+            "obj_poses": obj_poses,
+            "obj_names": obj_names,
         }
 
     def set_visualizer(
@@ -196,6 +203,8 @@ class SkilletPerception:
             "camera_pose": obs_unbatched["camera_pose"],
             "tcp_pose_b": obs_unbatched["tcp_pose_b"],
             "gripper": obs_unbatched["gripper"],
+            "obj_poses": obs_unbatched["obj_poses"],
+            "obj_names": obs_unbatched["obj_names"],
         }
 
     def _observation_to_point_cloud(
@@ -240,6 +249,8 @@ class SkilletPerception:
 
         # Update the state based on reconstruction
         self._reconstructor.update_state(obs_unbatched, update=True)
+        if self._abs_model is not None:
+            self._scene.abstract_scene = str(self._abs_model.get_abstract_state())
         self.scene.tcp_pose = obs_unbatched["tcp_pose_b"]
         self.scene.gripper_pos = obs_unbatched["gripper"]
 
@@ -257,8 +268,7 @@ class SkilletPerception:
             # Update the state based on reconstruction
             self._reconstructor.update_state(obs_unbatched, update=True)
             if self._abs_model is not None:
-                problem = self._abs_model.get_abstract_state()
-                self._scene.abstract_scene = str(problem)
+                self._scene.abstract_scene = str(self._abs_model.get_abstract_state())
 
             self.scene.tcp_pose = obs_unbatched["tcp_pose_b"]
             self.scene.gripper_pos = obs_unbatched["gripper"]
@@ -350,3 +360,5 @@ class SkilletPerception:
                 self._reconstructor = Sam3Reconstructor(self._scene, device=self.device)
             elif self._reconstructor_type == "vlm":
                 self._reconstructor = VlmReconstructor(scene=self._scene)
+            elif self._reconstructor_type == "sim":
+                self._reconstructor = SimReconstructor(scene=self._scene)

@@ -77,9 +77,7 @@ class ApriltagStateReconstructor(ReconstructorBase):
                         pos_world = cam_pos + quat_apply(cam_quat, pos)
 
                         # Transform directions: just rotate, no translation
-                        normal_world = quat_apply(
-                            cam_quat, normal
-                        )  # TODO check what this does for cubes on the far size
+                        normal_world = quat_apply(cam_quat, normal)
                         up_world = quat_apply(cam_quat, up)
 
                         spec = id_to_cube_spec[detection.tag_id]

@@ -1,16 +1,15 @@
 from collections.abc import Callable, Sequence
-from typing import TypeAlias
+from typing import TypeAlias, override
 
 import gymnasium as gym
 import torch
-from typing_extensions import override
 
 from skillet.core import SkillParamsSpec
 from skillet.core.skill import SingleSkill, SkillStatus, SkillStatusCodes
 from skillet.envs.specs import BxM_Action, IKEE_Obs, M_Action
+from skillet.planning.abstract.skill_grounding import _pick_skill_4_grounding
 from skillet.scene.base import Scene, SceneObject
 from skillet.skill.high_level.pick import PickSkill
-from skillet.planning.abstract.skill_grounding import _pick_skill_4_grounding
 
 Object_Params: TypeAlias = int
 """The parameters for selecting an object in the scene."""
@@ -27,6 +26,7 @@ class PickBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
         scene: Scene,
         pick_skill: PickSkill[BxM_Action],
         vis_target_pos: Callable[[Sequence[float]], None] | None = None,
+        xyz_offset: tuple[int] = (0, 0.0, 0.02),
     ) -> None:
         """Initialize the pick block skill."""
         self._scene = scene
@@ -37,7 +37,7 @@ class PickBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
             space=gym.spaces.Discrete(n=self.max_objects), name="block_id", is_torch=False, is_batched=False
         )
         self._status = None
-        self._offset = torch.tensor([0, 0.0, 0.02], device=self.obs_spec.device)
+        self._offset = torch.tensor(xyz_offset, device=self.obs_spec.device)
 
         self._vis_target_pos = vis_target_pos
 
@@ -107,9 +107,10 @@ class PickBlock2Skill(PickBlockSkill):
         scene: Scene,
         pick_skill: PickSkill[BxM_Action],
         vis_target_pos: Callable[[Sequence[float]], None] | None = None,
+        xyz_offset: tuple[int] = (0, 0.0, 0.02),
     ) -> None:
         """Initialize the pick block skill."""
-        super().__init__(scene, pick_skill, vis_target_pos)
+        super().__init__(scene, pick_skill, vis_target_pos, xyz_offset=xyz_offset)
         self._block_params_spec = SkillParamsSpec(
             space=gym.spaces.MultiDiscrete((self.max_objects,) * 2), name="block_id", is_torch=False, is_batched=False
         )
@@ -152,9 +153,10 @@ class PickBlock4Skill(PickBlockSkill):
         scene: Scene,
         pick_skill: PickSkill[BxM_Action],
         vis_target_pos: Callable[[Sequence[float]], None] | None = None,
+        xyz_offset: tuple[int] = (0, 0.0, 0.02),
     ) -> None:
         """Initialize the pick block skill."""
-        super().__init__(scene, pick_skill, vis_target_pos)
+        super().__init__(scene, pick_skill, vis_target_pos, xyz_offset=xyz_offset)
         self._block_params_spec = SkillParamsSpec(
             space=gym.spaces.MultiDiscrete((self.max_objects,) * 4), name="block_id", is_torch=False, is_batched=False
         )
@@ -174,7 +176,9 @@ class PickBlock4Skill(PickBlockSkill):
             or not _pick_skill_4_grounding(objs, self._scene)
         ):
             self._status = torch.as_tensor(SkillStatusCodes.FAILED, device=self.params_spec.device)
-            print(f"[INFO][PICK BLOCK][FAILED]: {self._target_block.name} | {objs[1].name}")
+            print(
+                f"[INFO][PICK BLOCK][FAILED]: {self._target_block.name} | {objs[1].name} | {objs[2].name} | {objs[3].name}"
+            )
             return
         target_xyz = self._target_block.pose[:3].to(self.obs_spec.device).clone() + self._offset
         if self._vis_target_pos is not None:

@@ -29,6 +29,7 @@ from typing import (
     TypeVar,
     cast,
     overload,
+    override,
     runtime_checkable,
 )
 
@@ -36,10 +37,11 @@ import gymnasium as gym
 import numpy as np
 import torch
 from gymnasium.spaces.box import array_short_repr
+from gymnasium.vector.utils.space_utils import batch_space
 from jaxtyping import Bool, Float, Int, Shaped
 from numpy.typing import NDArray
 from tensordict import TensorDict
-from typing_extensions import override
+from tensordict.tensorclass import NonTensorData
 
 # =============================================
 # Space specifications
@@ -332,13 +334,25 @@ size.")
 
         def cast_array(v: Any, expected_shape: tuple[int, ...], dtype: Any, key: str = "") -> Any:  # noqa: ANN401
             if self.is_torch:
-                arr = torch.as_tensor(v, dtype=as_torch_dtype(dtype), device=self.device)
+                if dtype == np.str_:  # special case for when we have strings not handled by torch
+                    if isinstance(v, list):
+                        arr = np.asarray(v, dtype=dtype)
+                    elif isinstance(v, NonTensorData):
+                        arr = np.asarray(v._non_tensordict["data"], dtype=dtype)
+                    else:
+                        raise ValueError(f"Unrecognized type {v}, with dtype {dtype}")
+                else:
+                    arr = torch.as_tensor(v, dtype=as_torch_dtype(dtype), device=self.device)
                 if not check_shape:
                     return arr
                 if arr.shape != expected_shape:
                     if self.is_batched and self.n_envs != -1 and arr.shape == expected_shape[1:]:
-                        arr = arr.unsqueeze(0)
-                        arr = arr.expand((self.n_envs, *expected_shape[1:]))
+                        if isinstance(arr, np.ndarray):
+                            arr = np.expand_dims(arr, 0)
+                            arr = np.broadcast_to(arr, (self.n_envs, *expected_shape[1:]))
+                        else:
+                            arr = arr.unsqueeze(0)
+                            arr = arr.expand((self.n_envs, *expected_shape[1:]))
                     elif self.is_batched and self.n_envs == -1 and arr.shape[1:] == expected_shape:
                         pass  # arr is already batched
                     elif not self.is_batched and arr.shape[0] == 1 and arr.shape[1:] == expected_shape:
@@ -881,3 +895,188 @@ class ParameterizedDiscrete(gym.spaces.Discrete, ParameterizedSpace):
         n = cast("int", n)
         start = cast("int", start) if start is not None else 0
         return gym.spaces.Discrete(n=n, start=start)
+
+
+class TextBox(gym.spaces.Space):
+    """A class for box shaped support of text."""
+
+    def __init__(self, shape: Sequence[int] | None = None, dtype=np.str_, seed: int = 0):
+        super().__init__(shape=shape, dtype=np.str_, seed=seed)
+
+    def __repr__(self) -> str:
+        """The string representation of this space.
+
+        The representation will include shape and dtype.
+
+        Returns:
+            A representation of the space
+
+        """
+        return f"TextBox({self.shape}, {self.dtype})"
+
+
+@batch_space.register(TextBox)
+def _batch_space_textbox(space: TextBox, n: int = 1):
+    return TextBox(shape=(n, *space.shape), dtype=space.dtype)
+
+
+"""Register the batching of a text box to gymnasium"""
+
+
+class ParameterizedTextBox(TextBox, ParameterizedSpace):
+    """A parameterized text space."""
+
+    def __init__(
+        self,
+        shape: Sequence[int | str],
+        max_length: int = 50,
+        seed: int | np.random.Generator | None = None,
+    ) -> None:
+        """Initialize the parameterized text box space with some variables in shape.
+
+        Replace numbers shape with string variables.
+        Variables must be valid Python variables names.
+        A string may contain an equation with multiple variables and constants, with +-*/ characters.
+        Variables can be bound later using the bind() method.
+
+        Args:
+            shape: The shape of the box space.
+            seed: The seed for the random number generator.
+
+        """
+        self._shape_with_params = shape
+        self._seed = seed
+        self._max_length = max_length
+
+        self._variables = self._get_variables(shape)
+        if len(self.variables) == 0:
+            raise ValueError("No parameters found in shape. Use gym.spaces.Text instead.")
+
+    @property
+    def variables(self) -> set[str]:
+        """The variables in the parameterized space."""
+        return self._variables
+
+    @override
+    def bind_partial(self, **params: int) -> ParameterizedBox | gym.spaces.Box:
+        """Bind the parameterized text box space to the given parameters.
+
+        If the parameterized text box space is not fully bound, return a new parameterized text box space with the parameters
+        bound.
+        Otherwise, return a gym.spaces.Text.
+        """
+
+        def _eval(value: str | Any) -> Any:  # noqa: ANN401
+            if not isinstance(value, str):
+                return value
+            tokens = re.split(r"([+-\\*])", value)
+            simplified = []
+            for token in tokens:
+                token = token.strip()
+                if len(token) == 0:
+                    continue
+                if token.isidentifier():
+                    val = params.get(token, token)
+                elif token.isnumeric():
+                    try:
+                        val = int(token)
+                    except ValueError as e:
+                        try:
+                            val = float(token)
+                        except ValueError:
+                            raise ValueError(f"Invalid token {token} in shape {shape}. Must be a valid Python variable \
+name or number.") from e
+                else:
+                    val = token
+                simplified.append(val)
+            for token in simplified:
+                if isinstance(token, str) and token not in ["+", "-", "*", "/"]:
+                    return "".join([str(s) for s in simplified])  # cannot evaluate yet
+            try:
+                return eval("".join([str(s) for s in simplified]))
+            except Exception as e:
+                raise ValueError(f"Error evaluating expression {value}: {e}") from e
+
+        shape = [_eval(self._shape_with_params[i]) for i, v in enumerate(self._shape_with_params)]
+        vars_left = self._get_variables(shape)
+        if len(vars_left) > 0:
+            return ParameterizedTextBox(
+                shape=shape,
+                seed=self._seed,
+            )
+        shape = cast("Sequence[int]", shape)
+        return TextBox(shape)
+
+    @override
+    def batch(self, n_envs: int) -> ParameterizedBox | TextBox:
+        """Batch the parameterized box space.
+
+        Checks for special variables B and n_envs in first shape index
+        If found, bind the variable to the batch size.
+        Otherwise, create a new parameterized box space with the batch size added to the first dimension.
+        """
+        first_var = next(iter(self._variables), None)
+        if first_var is not None and first_var == "B":
+            return self.bind_partial(B=n_envs)
+        if first_var is not None and first_var == "n_envs":
+            return self.bind_partial(n_envs=n_envs)
+        shape = (n_envs, *self._shape_with_params)
+        return ParameterizedTextBox(
+            shape=shape,
+            seed=self._seed,
+        )
+
+    @property
+    def shape(self) -> tuple[int, ...]:  # noqa: D102
+        return self._shape_with_params
+
+    @override
+    def contains(self, x: Any) -> bool:
+        if not isinstance(x, np.ndarray):
+            gym.logger.warn("Casting input x to numpy array.")
+            try:
+                x = np.asarray(x, dtype=self.dtype)
+            except (ValueError, TypeError):
+                return False
+
+        if not np.can_cast(x.dtype, self.dtype):
+            return False
+
+        for x_dim, space_dim in zip(x.shape, self.shape, strict=True):
+            if isinstance(space_dim, str):
+                continue
+            if x_dim != space_dim:
+                return False
+        if np.isscalar(self.low) and not np.all(x == self.low):
+            return False
+
+        if np.isscalar(self.high) and not np.all(x == self.high):
+            return False
+
+        raise ValueError(f"Cannot establish containment for parameterized box with shape {self.shape}.")
+
+    def _get_variables(self, shape) -> set[str]:
+        variables = set[str]()
+        for v in shape:
+            if not isinstance(v, str):
+                continue
+            for token in re.split(r"[+*/-]", v):
+                token = token.strip()
+                if token.isidentifier():
+                    variables.add(token)
+        return variables
+
+    def _create_text_tuple_space(self, shape: tuple) -> gym.spaces.Space:
+        """Create a nested Tuple space of Text spaces matching the given shape."""
+        if len(shape) == 1:
+            return gym.spaces.Tuple(
+                tuple(
+                    TextBox(
+                        self._max_length,
+                    )
+                    for _ in range(shape[0])
+                )
+            )
+        return gym.spaces.Tuple(
+            tuple(self._create_text_tuple_space(shape[1:], self._max_length) for _ in range(shape[0]))
+        )

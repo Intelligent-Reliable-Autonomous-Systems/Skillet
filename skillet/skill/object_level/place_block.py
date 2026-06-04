@@ -1,9 +1,8 @@
 from collections.abc import Callable, Sequence
-from typing import TypeAlias
+from typing import TypeAlias, override
 
 import gymnasium as gym
 import torch
-from typing_extensions import override
 
 from skillet.core import SkillParamsSpec
 from skillet.core.skill import SingleSkill, SkillStatus, SkillStatusCodes
@@ -30,6 +29,7 @@ class PlaceBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
         scene: Scene,
         place_skill: PlaceSkill[BxM_Action],
         vis_target_pos: Callable[[Sequence[float]], None] | None = None,
+        xyz_offset: tuple[int] = (0, 0.0, 0.065),
     ) -> None:
         """Initialize the place block skill."""
         self._scene = scene
@@ -40,7 +40,7 @@ class PlaceBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
         )
 
         self._status = None
-        self._offset = torch.tensor([0, 0.0, 0.065], device=self.obs_spec.device)
+        self._offset = torch.tensor(xyz_offset, device=self.obs_spec.device)
 
         self._vis_target_pos = vis_target_pos
 
@@ -110,9 +110,10 @@ class PlaceBlock2Skill(PlaceBlockSkill):
         scene: Scene,
         place_skill: PlaceSkill[BxM_Action],
         vis_target_pos: Callable[[Sequence[float]], None] | None = None,
+        xyz_offset: tuple[int] = (0, 0.0, 0.065),
     ) -> None:
         """Initialize the place block skill."""
-        super().__init__(scene, place_skill, vis_target_pos)
+        super().__init__(scene, place_skill, vis_target_pos, xyz_offset=xyz_offset)
         self._block_params_spec = SkillParamsSpec(
             space=gym.spaces.MultiDiscrete((self.max_objects,) * 2), name="block_id", is_torch=False, is_batched=False
         )
@@ -229,9 +230,10 @@ class PlaceBlock4Skill(PlaceBlockSkill):
         scene: Scene,
         place_skill: PlaceSkill[BxM_Action],
         vis_target_pos: Callable[[Sequence[float]], None] | None = None,
+        xyz_offset: tuple[int] = (0, 0.0, 0.065),
     ) -> None:
         """Initialize the place block skill."""
-        super().__init__(scene, place_skill, vis_target_pos)
+        super().__init__(scene, place_skill, vis_target_pos, xyz_offset=xyz_offset)
         self._block_params_spec = SkillParamsSpec(
             space=gym.spaces.MultiDiscrete((self.max_objects,) * 4), name="block_id", is_torch=False, is_batched=False
         )
@@ -251,7 +253,7 @@ class PlaceBlock4Skill(PlaceBlockSkill):
         if isinstance(self._target, Cube):
             if not self._target.is_pose_known() or objs[0] == objs[1]:
                 self._status = torch.as_tensor(SkillStatusCodes.FAILED, device=self.params_spec.device)
-                print(f"[INFO][PLACE BLOCK][FAILED]: {objs[0].name} | {objs[1].name}")
+                print(f"[INFO][PLACE BLOCK][FAILED]: {objs[0].name} | {objs[1].name} | {objs[2].name} | {objs[3].name}")
                 return
             target_xyz = self._target.pose[:3].to(self.obs_spec.device).clone() + self._offset
         elif isinstance(self._target, Table):

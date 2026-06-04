@@ -149,7 +149,6 @@ class RandomTampAgent(Agent):
         terminated = False
 
         for i in range(num_actions):
-            print(self._scene)
             up_state = self.abstract_model.reset_up_problem_state()
             # ab_action, up_action = self.abstract_model.get_random_action(up_state)
             ab_action, up_action = sample_action_from_state(self.abstract_model._problem, up_state)
@@ -176,7 +175,7 @@ class RandomTampAgent(Agent):
 
             if terminated:
                 break
-            time.sleep(4)
+            # time.sleep(4)
         if logger is not None:
             obs_log = env.get_observation(logger._obs_spec)
             logger.log(
@@ -242,8 +241,6 @@ class ActiveLearningAgent(Agent):
         up_objects = self.abstract_model._problem.all_objects
 
         while True:
-            # TODO Sample an action from the learning agent
-            # ab_action: AbstractAction
             print("Agent selecting for state", up_state)
             ab_action, up_action = self._learning_agent.sample_action(up_state, up_objects)
 
@@ -269,10 +266,9 @@ class ActiveLearningAgent(Agent):
                     executions=execution,
                 )
 
-            time.sleep(4)
+            # time.sleep(4)
             next_up_state = self.abstract_model.reset_up_problem_state()
             up_objects = self.abstract_model._problem.all_objects
-            # TODO update the learning agent with the success information of the skill/new model
             print("Agent learning after skill", execution)
             self._learning_agent.update(up_state, up_objects, up_action, next_up_state, execution)
             if terminated:

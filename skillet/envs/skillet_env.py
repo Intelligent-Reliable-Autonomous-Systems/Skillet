@@ -6,12 +6,11 @@ Written by Will Solow and Jeff Jewett, 2026
 """
 
 from collections.abc import Mapping
-from typing import Any, overload
+from typing import Any, overload, override
 
 import gymnasium as gym
 import torch
 from jaxtyping import Bool, Float
-from typing_extensions import override
 
 from skillet.core import ObservationSpec
 from skillet.core.env import BatchedEnvironment, TSpecObs
@@ -31,6 +30,7 @@ from skillet.envs.specs import (
     JOINT_VEL_SPEC,
     JOINT_VEL_SPEC_BATCHED,
     OSC_SPEC_BATCHED,
+    RGBD_GRIPPER_SIM_SPEC_BATCHED,
     RGBD_GRIPPER_SPEC_BATCHED,
     RGBD_SPEC_BATCHED,
     TCP_CART_SPEC,
@@ -109,6 +109,9 @@ class SkilletEnv(
         self.obs_spec_rgbd = RGBD_SPEC_BATCHED.bind(height=480, width=640).replace(**self._spec_args)
         self.obs_spec_rgbd_grip = RGBD_GRIPPER_SPEC_BATCHED.bind(
             height=480, width=640, n_gripper_joints=len(self._gripper_joint_names)
+        ).replace(**self._spec_args)
+        self.obs_spec_rgbd_grip_sim = RGBD_GRIPPER_SIM_SPEC_BATCHED.bind(
+            height=480, width=640, n_gripper_joints=len(self._gripper_joint_names), n_objects=self._env._n_objects
         ).replace(**self._spec_args)
         self.obs_spec_gripper = GRIPPER_SPEC_BATCHED.bind(n_gripper_joints=len(self._gripper_joint_names)).replace(
             **self._spec_args
@@ -228,6 +231,7 @@ class SkilletEnv(
             self.obs_spec_osc.name,
             self.obs_spec_gripper.name,
             self.obs_spec_rgbd_grip.name,
+            self.obs_spec_rgbd_grip_sim.name,
             self.obs_spec_joints_vel.name,
             self.obs_spec_tcp_cart.name,
             self.obs_spec_twist_tcp.name,
@@ -269,6 +273,7 @@ class SkilletEnv(
             self.obs_spec_osc,
             self.obs_spec_gripper,
             self.obs_spec_rgbd_grip,
+            self.obs_spec_rgbd_grip_sim,
             self.obs_spec_joints_vel,
         ]:
             if spec.name == obs_spec:
@@ -301,12 +306,14 @@ class SkilletEnv(
 
         if obs_spec.name == "policy":
             return obs_spec.cast(self._last_obs["policy"])
-        if obs_spec.name == "rgb-d" or obs_spec.name == "rgbd-gripper":
+        if obs_spec.name in ["rgb-d", "rgbd-gripper", "rgbd-gripper-sim"]:
             latest = self._env._get_latest_rgbd()
-            if obs_spec.name == "rgbd-gripper":
+            if obs_spec.name == "rgbd-gripper" or obs_spec.name == "rgbd-gripper-sim":
                 latest["tcp_pose_b"] = self._get_tcp_pose_b(ee_link=self._ee_link_name)
                 latest["gripper"] = self._get_gripper_state(gripper_joints=self._gripper_joint_names)
-
+                if obs_spec.name == "rgbd-gripper-sim":
+                    latest["obj_names"] = self._env._object_names
+                    latest["obj_poses"] = self._env._object_poses
             return obs_spec.cast(latest)
         if obs_spec.name == "state":
             return obs_spec.cast(self._last_obs)

@@ -86,7 +86,9 @@ class MjGen3Env(MjDirectRlEnv):
         self.robot_dof_lower_limits[self.robot_dof_lower_limits == -float("inf")] = -torch.pi
         self.robot_dof_upper_limits[self.robot_dof_upper_limits == float("inf")] = torch.pi
 
-        self.robot_dof_targets = torch.zeros((self.num_envs, len(self.cfg.joint_ids)), device=self.device)
+        self.robot_dof_targets = self.robot.data.default_joint_pos[:, self.cfg.joint_ids].clone()
+        self.robot_dof_targets_prev = self.robot.data.default_joint_pos[:, self.cfg.joint_ids].clone()
+        self._curr_gripper_goal = None
 
         self.ee_link_idx = self.robot.find_bodies(self.cfg.ee_link_name)[0][0]
         self.tool_site_idx = self.robot.find_sites(self.cfg.tool_site_name)[0][0]
@@ -98,23 +100,29 @@ class MjGen3Env(MjDirectRlEnv):
     def _setup_scene(self):
 
         def get_cube_spec(
-            name: str = "red_cube",
+            name: str = "red_block",
             rgba: tuple[int] = (0.8, 0.1, 0.1, 1.0),
-            cube_size: float = 0.025,
+            cube_size: float = 0.02,
             mass: float = 0.06,
         ) -> mujoco.MjSpec:
             """Create a cube object specification."""
             spec = mujoco.MjSpec()
             body = spec.worldbody.add_body(name=name)
             body.add_freejoint(name=f"{name}_joint")
-            body.add_geom(
+            geom = body.add_geom(
                 name=name, type=mujoco.mjtGeom.mjGEOM_BOX, size=(cube_size,) * 3, mass=mass, rgba=rgba, group=2
             )
+            geom.solref = (0.005, 1.0)
+            geom.solimp = (0.99, 0.9999, 0.001, 0.5, 2)
             return spec
 
         self.cfg.scene.entities = {
             "robot": get_gen3_robot_cfg(),
-            "red_cube": EntityCfg(spec_fn=get_cube_spec),
+            "red_block": EntityCfg(spec_fn=lambda: get_cube_spec(name="red_block", rgba=(0.8, 0.1, 0.1, 1.0))),
+            "blue_block": EntityCfg(spec_fn=lambda: get_cube_spec(name="blue_block", rgba=(0.1, 0.1, 0.8, 1.0))),
+            "pink_block": EntityCfg(spec_fn=lambda: get_cube_spec(name="pink_block", rgba=(1.0, 0.4, 0.7, 1.0))),
+            "green_block": EntityCfg(spec_fn=lambda: get_cube_spec(name="green_block", rgba=(0.1, 0.8, 0.1, 1.0))),
+            "yellow_block": EntityCfg(spec_fn=lambda: get_cube_spec(name="yellow_block", rgba=(0.9, 0.9, 0.1, 1.0))),
         }
 
         # Initialize scene and simulation.
@@ -133,24 +141,52 @@ class MjGen3Env(MjDirectRlEnv):
         )
 
         # Get the robot from the scene
-        self._red_cube = self.scene.entities["red_cube"]
+        self._cubes = {
+            "red_block": self.scene.entities["red_block"],
+            "blue_block": self.scene.entities["blue_block"],
+            "pink_block": self.scene.entities["pink_block"],
+            "green_block": self.scene.entities["green_block"],
+            "yellow_block": self.scene.entities["yellow_block"],
+        }
         self._robot = self.scene.entities["robot"]
         self._tabletop_camera = self.scene.sensors["tabletop_camera"]
 
     def _pre_physics_step(self, actions: torch.Tensor, action_spec: ActionSpec = None):
         if action_spec.name == "tcp_cart" or action_spec.name == "twist_tcp":
             arm_targets = self._joint_positions[:, self.cfg.joint_ids[:-1]] + self._diff_ik.compute_joint_vel(
-                actions[:, :6]
+                actions[:, :6], smoothing=False
             )
             targets = torch.cat((arm_targets, actions[:, -1:]), dim=1)
             self.actions = targets.clone()
+            self.robot_dof_targets_prev = self.robot_dof_targets
 
         self.robot_dof_targets = targets
 
     def _apply_action(self):
-        self.robot.set_joint_position_target(self.robot_dof_targets[:, :-1], joint_ids=self.cfg.joint_ids[:-1])
-        self.robot.set_tendon_len_target(self.robot_dof_targets[:, -1:], tendon_ids=self.cfg.joint_ids[-1:])
-        self._get_latest_rgbd()
+        gripper_moving = self._start_gripper(self.robot_dof_targets, close_time=0.75)
+        self.robot.set_tendon_len_target(
+            torch.where(self.robot_dof_targets[:, -1:] > 0, 255, self.robot_dof_targets[:, -1:]),
+            tendon_ids=self.cfg.joint_ids[-1:],
+        )
+        if not gripper_moving:
+            self.robot.set_joint_position_target(self.robot_dof_targets[:, :-1], joint_ids=self.cfg.joint_ids[:-1])
+
+    def _start_gripper(self, joint_pos: torch.Tensor, close_time: float = 0.5) -> bool:
+        """Start the gripper timer for if it should close or not.
+
+        NOTE: this does not current have batch support.
+        """
+        gripper_val = joint_pos[:, -1]
+        if gripper_val != self._curr_gripper_goal:
+            self._curr_gripper_goal = gripper_val
+            self._new_gripper_goal = True
+            self._gripper_goal_start = time.perf_counter()
+        elif (time.perf_counter() - self._gripper_goal_start) < close_time:
+            self._new_gripper_goal = True
+        else:
+            self._new_gripper_goal = False
+
+        return self._new_gripper_goal
 
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
         """Terminate if max length is reached."""
@@ -177,10 +213,21 @@ class MjGen3Env(MjDirectRlEnv):
         self.robot.write_joint_state_to_sim(joint_pos, joint_vel, env_ids=env_ids, joint_ids=self.cfg.joint_ids)
 
         # Cubes
-        self._red_cube.write_root_link_pose_to_sim(
-            torch.tensor([[0.37, 0, 0.05, 1, 0, 0, 0]], device=self.device).repeat(self.num_envs, 1), env_ids
-        )
-        self._red_cube.write_root_link_velocity_to_sim(torch.zeros((len(env_ids), 6), device=self.device), env_ids)
+        self._init_cube_poses = {
+            "red_block": [0.25, 0, 0.021],
+            "blue_block": [0.30, 0, 0.021],
+            "pink_block": [0.35, 0, 0.021],
+            "green_block": [0.40, 0, 0.021],
+            "yellow_block": [0.45, 0, 0.021],
+        }
+        for cube in self._cubes:
+            self._cubes[cube].write_root_link_pose_to_sim(
+                torch.tensor([[*self._init_cube_poses[cube], 1, 0, 0, 0]], device=self.device).repeat(self.num_envs, 1),
+                env_ids,
+            )
+            self._cubes[cube].write_root_link_velocity_to_sim(
+                torch.zeros((len(env_ids), 6), device=self.device), env_ids
+            )
 
         # Need to refresh the intermediate values so that _get_observations() can use the latest values
         self._compute_intermediate_values(env_ids)
@@ -275,6 +322,21 @@ class MjGen3Env(MjDirectRlEnv):
         return self.robot.data.site_vel_w[self.tool_site_idx]
 
     @property
-    def _robot_tool_wrench_b(self):
+    def _robot_tool_wrench_b(self) -> torch.Tensor:
         """Return the tool wrench forces appleid to the robot."""
         return self.robot.data.body_external_wrench[:, self.ee_link_idx]
+
+    @property
+    def _n_objects(self) -> int:
+        """Return the number of objects in the scene."""
+        return len(self._cubes)
+
+    @property
+    def _object_names(self) -> list[str]:
+        return list(self._cubes.keys())
+
+    @property
+    def _object_poses(self) -> torch.Tensor:
+        return torch.stack([c.data.root_link_pose_w for c in self._cubes.values()]).reshape(
+            self.sim.num_envs, self._n_objects, -1
+        )

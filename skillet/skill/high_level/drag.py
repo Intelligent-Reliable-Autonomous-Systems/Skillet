@@ -63,6 +63,8 @@ class DragSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params], Generic[TB
         lift_height: float,
         gripper_close: float,
         length: int,
+        pos_threshold: float = 0.005,
+        quat_threshold: float = 0.04,
     ) -> None:
         """Initialize the drag skill.
 
@@ -90,6 +92,8 @@ class DragSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params], Generic[TB
         # self._default_quat = torch.as_tensor([[0.0, 0.7071, -0.7071, 0.0]])
         # self._default_quat = torch.as_tensor([[0.7071, 0.0, 0.0, 0.7071]])
         self._default_quat = torch.as_tensor([[0.0, 0.7071, 0.7071, 0.0]])
+        self._pos_threshold = pos_threshold
+        self._quat_threshold = quat_threshold
 
     @property
     def param_dim(self) -> int:
@@ -134,8 +138,6 @@ class DragSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params], Generic[TB
         self._default_quat = self._default_quat.to(self.obs_spec.device)
         goal_quat = quat_mul(quat_from_yaw(params[:, 3]), self._default_quat.repeat(self.n_envs, 1))
 
-        self._pos_threshold = 0.005
-        self._quat_threshold = 0.05
         self._vel_threshold = 0.001
         self._joint_threshold = 0.001
 
@@ -159,18 +161,19 @@ class DragSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params], Generic[TB
         target_poses[:, DragStatusCodes.GRASP, :7] = target_poses[:, DragStatusCodes.LOWER, :7]
         # RAISE[5]: Close gripper
         target_poses[:, DragStatusCodes.RAISE, :7] = target_poses[:, DragStatusCodes.GRASP, :7]
-        target_poses[:, DragStatusCodes.RAISE, 2] = target_poses[:, DragStatusCodes.GRASP, 2] + 0.01
+        target_poses[:, DragStatusCodes.RAISE, 2] = target_poses[:, DragStatusCodes.GRASP, 2] + 0.02
         # DRAG[6]: Drag the object to the target location
         target_poses[:, DragStatusCodes.DRAG, 3:7] = target_poses[:, DragStatusCodes.RAISE, 3:7]
         target_poses[:, DragStatusCodes.DRAG, 0:3] = params[:, 4:7]
-        target_poses[:, DragStatusCodes.DRAG, 2] = params[:, 6] + 0.01
+        target_poses[:, DragStatusCodes.DRAG, 2] = params[:, 6] + 0.02
         # LOWER[7]: Go down to the target z position (gripper open)
         target_poses[:, DragStatusCodes.LOWER2, :7] = target_poses[:, DragStatusCodes.DRAG, :7]
         target_poses[:, DragStatusCodes.LOWER2, 2] = params[:, 6]
         # RELEASE[8]
         target_poses[:, DragStatusCodes.RELEASE, :7] = target_poses[:, DragStatusCodes.LOWER2, :7]
         # RAISE[9]
-        target_poses[:, DragStatusCodes.RAISE2, :7] = target_poses[:, DragStatusCodes.HOVER, :7]
+        target_poses[:, DragStatusCodes.RAISE2, :7] = target_poses[:, DragStatusCodes.RELEASE, :7]
+        target_poses[:, DragStatusCodes.RAISE2, 2] = target_poses[:, DragStatusCodes.HOVER, 2]
         self._target_poses = target_poses
 
         # Start the skill by going to the ASCEND pose
@@ -202,9 +205,9 @@ class DragSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params], Generic[TB
             valid_idx = (self._status == SkillStatusCodes.RUNNING) & (reached_pose)
             self._drag_status[valid_idx] += 1
             valid_idx = valid_idx & (self._drag_status < DragStatusCodes.DONE)
-            # print(
-            #     f"[INFO][DRAG STATUS UPDATE]: {DragStatusCodes(self._drag_status.cpu().numpy()[0]).name} | reached_pose: {reached_pose.cpu().numpy()}"
-            # )
+            print(
+                f"[INFO][DRAG STATUS UPDATE]: {DragStatusCodes(self._drag_status.cpu().numpy()[0]).name} | reached_pose: {reached_pose.cpu().numpy()}"
+            )
             # Update the target pose based on the new drag status
             self._current_target_poses[valid_idx] = self._target_poses[idx[valid_idx], self._drag_status[valid_idx]]
 

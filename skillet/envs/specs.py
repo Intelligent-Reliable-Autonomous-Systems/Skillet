@@ -6,10 +6,10 @@ from typing import Generic, Protocol, TypeAlias, TypeVar
 import gymnasium as gym
 import numpy as np
 import torch
-from jaxtyping import Float, UInt8
+from jaxtyping import Float, Shaped, UInt8
 
 from skillet.core import ObservationSpec
-from skillet.core.spaces import ActionSpec, ParameterizedBox
+from skillet.core.spaces import ActionSpec, ParameterizedBox, ParameterizedTextBox
 
 N_Obs = Float[torch.Tensor, "n"]
 """Environment observation: torch.Tensor[(n), float]"""
@@ -60,6 +60,29 @@ class RGBD_Gripper_Obs(Protocol, Generic[TNPOrTensor]):  # noqa: N801
     """A 7D tool frame pose. Float[TNPOrTensor, '7']"""
 
 
+class RGBD_Gripper_Sim_Obs(Protocol, Generic[TNPOrTensor]):
+    """An RGB-D + TCP and scene objects observation with intrinsics, camera pose tcp pose and gripper."""
+
+    rgb: UInt8[TNPOrTensor, "... 3 h w"]
+    """An RGB CHW image. UInt8[torch.Tensor | np.ndarray, '... 3 h w']"""
+    depth: Float[TNPOrTensor, "... 1 h w"]
+    """A depth HW image. Float[TNPOrTensor, '... 1 h w']"""
+    intrinsic_k: Float[TNPOrTensor, "3 3"]
+    """A 3x3 camera intrinsic matrix. Float[TNPOrTensor, '3 3']"""
+    camera_pose: Float[TNPOrTensor, "7"]
+    """A 7D camera pose. Float[TNPOrTensor, '7']"""
+    timestamp: Float[TNPOrTensor, ""]
+    """A timestamp. Float[TNPOrTensor, '']"""
+    gripper: Float[TNPOrTensor, " ... n_gripper_joints"]
+    """A N-d array of gripper positions"""
+    tcp_pose: Float[TNPOrTensor, "... 7"]
+    """A 7D tool frame pose. Float[TNPOrTensor, '7']"""
+    obj_names: Shaped[str, "... 1"]
+    """Name of objects in the scene"""
+    obj_poses: Float[TNPOrTensor, "... 7"]
+    """Poses of objects in the scene"""
+
+
 """Type of RGB-D observation."""
 RGBD_SPEC_BATCHED: ObservationSpec[RGBD_Obs] = ObservationSpec[RGBD_Obs[TNPOrTensor]](
     space=gym.spaces.Dict(
@@ -92,6 +115,28 @@ RGBD_GRIPPER_SPEC_BATCHED: ObservationSpec[RGBD_Gripper_Obs] = ObservationSpec[R
         }
     ),
     name="rgbd-gripper",
+    is_torch=True,
+    is_batched=True,
+    n_envs=-1,
+)
+RGBD_GRIPPER_SIM_SPEC_BATCHED: ObservationSpec[RGBD_Gripper_Sim_Obs] = ObservationSpec[
+    RGBD_Gripper_Sim_Obs[TNPOrTensor]
+](
+    space=gym.spaces.Dict(
+        {
+            "rgb": ParameterizedBox(low=0, high=255, shape=(3, "height", "width"), dtype=np.uint8),
+            # Depth is normalized to float32 meters for downstream perception.
+            "depth": ParameterizedBox(low=0.0, high=10.0, shape=(1, "height", "width"), dtype=np.float32),
+            "intrinsic_k": gym.spaces.Box(low=0.0, high=2000.0, shape=(3, 3), dtype=np.float32),
+            "camera_pose": gym.spaces.Box(low=-10.0, high=10.0, shape=(7,), dtype=np.float32),
+            "timestamp": gym.spaces.Box(low=0.0, high=1e10, shape=(), dtype=np.float32),
+            "tcp_pose_b": gym.spaces.Box(low=-1.0, high=1.0, shape=(7,)),
+            "gripper": ParameterizedBox(low=0.0, high=1.0, shape=("n_gripper_joints",)),
+            "obj_names": ParameterizedTextBox(shape=("n_objects",)),
+            "obj_poses": ParameterizedBox(low=-1.0, high=1.0, shape=("n_objects", 7)),
+        }
+    ),
+    name="rgbd-gripper-sim",
     is_torch=True,
     is_batched=True,
     n_envs=-1,

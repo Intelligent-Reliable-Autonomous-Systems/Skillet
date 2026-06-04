@@ -1,7 +1,6 @@
 """Run a tabletop block stacking task."""
 
 import argparse
-import time
 from typing import TYPE_CHECKING
 
 import gymnasium as gym
@@ -16,7 +15,7 @@ from skillet.logging import SkilletDataLogger
 from skillet.perception.perception import SkilletPerception
 from skillet.planning import AbstractModel
 from skillet.scene import (
-    ONE_CUBE_SCENE,
+    FIVE_CUBE_SCENE,
     Open3DVisualizer,
 )
 from skillet.skill.high_level import (
@@ -45,15 +44,17 @@ args_cli = parser.parse_args()
 
 
 def main() -> None:
-    scene = ONE_CUBE_SCENE
+    scene = FIVE_CUBE_SCENE
     block_domain = "skillet_tasks/pddl_tasks/blocks-world/simple-blocks-a3.domain.pddl"
+    # block_domain = "skillet_tasks/pddl_tasks/blocks-world/initial_blocks.domain.pddl"
     env_cfg = parse_mj_env_cfg(args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs)
 
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="human")
     env = SkilletEnv(env)
     env = BatchToSingleWrapper(env)
     env.reset()
-    rgbd_grip_spec: ObservationSpec[RGBD_Gripper_Obs] = env.coerce_obs_spec("rgbd-gripper")
+    # rgbd_grip_spec: ObservationSpec[RGBD_Gripper_Obs] = env.coerce_obs_spec("rgbd-gripper")
+    rgbd_grip_spec: ObservationSpec[RGBD_Gripper_Obs] = env.coerce_obs_spec("rgbd-gripper-sim")
 
     abs_model = AbstractModel(block_domain, None, scene)
 
@@ -62,7 +63,7 @@ def main() -> None:
         scene=scene,
         obs_spec=rgbd_grip_spec,
         abstract_model=abs_model,
-        reconstructor="sam3",
+        reconstructor="sim",
         poll_rate_hz=args_cli.poll_rate_hz,
         device="cuda",
         vis_perception=True,
@@ -79,12 +80,18 @@ def main() -> None:
     # Low-level policies
     skill_length = 1e9
     arm_policy = TcpCartPolicy(env.batched_env.obs_spec_tcp_cart, env.batched_env.action_spec_tcp_cart)
-    place_skill = PlaceSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length)
-    pick_skill = PickSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length)
-    drag_skill = DragSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length)
-    pick_block_skill = PickBlock4Skill(scene, pick_skill, vis_target_pos=target_pose_func)
-    place_block_skill = PlaceBlock4Skill(scene, place_skill, vis_target_pos=target_pose_func)
-    drag_block_skill = DragBlock5Skill(scene, drag_skill, vis_target_pos=target_pose_func)
+    place_skill = PlaceSkill(
+        reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length, pos_threshold=0.015
+    )
+    pick_skill = PickSkill(
+        reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length, pos_threshold=0.015
+    )
+    drag_skill = DragSkill(
+        reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length, pos_threshold=0.015
+    )
+    pick_block_skill = PickBlock4Skill(scene, pick_skill, vis_target_pos=target_pose_func, xyz_offset=(0, 0, 0))
+    place_block_skill = PlaceBlock4Skill(scene, place_skill, vis_target_pos=target_pose_func, xyz_offset=(0, 0, 0.045))
+    drag_block_skill = DragBlock5Skill(scene, drag_skill, vis_target_pos=target_pose_func, xyz_offset=(0, 0, 0))
     ACTION_MAP = {"place_block": place_block_skill, "pick_block": pick_block_skill, "drag_block": drag_block_skill}
 
     tamp_agent = RandomTampAgent(scene, abstract_model=abs_model, action_to_skill_map=ACTION_MAP)
@@ -94,7 +101,7 @@ def main() -> None:
     )
 
     print("[INFO] Warming up Perception...")
-    time.sleep(5)
+    # time.sleep(5)
     logger.write_video = True
     logger.run_thread()
 

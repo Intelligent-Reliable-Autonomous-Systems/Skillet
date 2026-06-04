@@ -491,7 +491,7 @@ class KortexEnv(SkilletGymEnv):
 
     def _update_robot_info(self) -> None:
         """Obtain the required robot information from the Kortex API."""
-        feedback = self.kortex_c.RefreshFeedback()  # TODO This is where it crashes
+        feedback = self.kortex_c.RefreshFeedback()  # TODO catch crash error in debug here
 
         def deg_to_rad_wrapped(deg: np.ndarray) -> np.ndarray:
             """Shift angles > 180 to negative and convert to radians."""

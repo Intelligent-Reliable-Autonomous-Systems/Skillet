@@ -71,8 +71,8 @@
         (not (gripper-lifted))
         (on ?grasped ?target)
         (at-loc ?grasped ?toloc)
-        (clear-above ?grasped ?loc)
-        (not (clear-above ?target ?loc))
+        (clear-above ?grasped ?toloc)
+        (not (clear-above ?target ?toloc))
     )
 )
 
@@ -86,7 +86,7 @@
         (or (loc-north-of ?toloc ?fromloc) (loc-north-of ?fromloc ?toloc))
     )
     :effect (and
-        (grasp ?grasped)
+        (grasping ?grasped)
         (not (at-loc ?grasped ?fromloc))
         (at-loc ?grasped ?toloc)
     )
