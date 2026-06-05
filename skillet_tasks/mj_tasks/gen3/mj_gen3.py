@@ -12,6 +12,7 @@ from mjlab.sim import MujocoCfg, SimulationCfg
 from mjlab.sim.sim import Simulation
 from mjlab.terrains import TerrainEntityCfg
 
+from skillet.controllers.waypoints import WaypointCfg
 from skillet.core.spaces import ActionSpec
 from skillet.envs.mujoco import MjDirectRlEnv
 from skillet.envs.mujoco.controllers import MjDifferentialIk
@@ -96,6 +97,7 @@ class MjGen3Env(MjDirectRlEnv):
         self.tcp_offset = torch.as_tensor(self.cfg.tcp_offset, device=self.device).unsqueeze(0).repeat(self.num_envs, 1)
 
         self._diff_ik = MjDifferentialIk(self)
+        self._waypoints = WaypointCfg().build()
 
     def _setup_scene(self):
 
@@ -152,9 +154,11 @@ class MjGen3Env(MjDirectRlEnv):
         self._tabletop_camera = self.scene.sensors["tabletop_camera"]
 
     def _pre_physics_step(self, actions: torch.Tensor, action_spec: ActionSpec = None):
-        if action_spec.name == "tcp_cart" or action_spec.name == "twist_tcp":
+        if action_spec.name == "tcp_cart":
+            # Obtain waypoints that should be followed by the arm
+            next_action = self._waypoints.get_next_point(self._robot_tool_pose_b, actions[:, :6])
             arm_targets = self._joint_positions[:, self.cfg.joint_ids[:-1]] + self._diff_ik.compute_joint_vel(
-                actions[:, :6], smoothing=False
+                next_action, smoothing=False
             )
             targets = torch.cat((arm_targets, actions[:, -1:]), dim=1)
             self.actions = targets.clone()
