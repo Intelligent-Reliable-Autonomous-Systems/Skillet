@@ -38,7 +38,7 @@ parser.add_argument("--num_envs", type=int, default=1, help="Number of environme
 parser.add_argument("--device", type=str, default="cuda", help="Device to use")
 parser.add_argument("--poll_rate_hz", type=int, default=10, help="Tick rate of the perception")
 parser.add_argument("--task", type=str, default="Mj-Gen3-v0", help="Kortex Environment")
-parser.add_argument("--o3d", type=argparse.BooleanOptionalAction, default=True, help="If to visualize with open3d")
+parser.add_argument("--o3d", action=argparse.BooleanOptionalAction, default=True, help="If to visualize with open3d")
 
 args_cli = parser.parse_args()
 
@@ -81,13 +81,13 @@ def main() -> None:
     skill_length = 1e9
     arm_policy = TcpCartPolicy(env.batched_env.obs_spec_tcp_cart, env.batched_env.action_spec_tcp_cart)
     place_skill = PlaceSkill(
-        reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length, pos_threshold=0.015
+        reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length, pos_threshold=0.015, max_pos_threshold=0.025
     )
     pick_skill = PickSkill(
-        reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length, pos_threshold=0.015
+        reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length, pos_threshold=0.015, max_pos_threshold=0.025
     )
     drag_skill = DragSkill(
-        reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length, pos_threshold=0.015
+        reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length, pos_threshold=0.015, max_pos_threshold=0.025
     )
     pick_block_skill = PickBlock4Skill(scene, pick_skill, vis_target_pos=target_pose_func, xyz_offset=(0, 0, 0))
     place_block_skill = PlaceBlock4Skill(scene, place_skill, vis_target_pos=target_pose_func, xyz_offset=(0, 0, 0.045))

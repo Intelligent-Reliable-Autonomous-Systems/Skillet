@@ -17,6 +17,7 @@ from skillet.core.skill import (
 )
 from skillet.core.spaces import ArrayLike, SkillParamsSpec
 from skillet.envs.specs import IKEE_Obs
+from skillet.skill.high_level.target_manager import TargetReachManager
 from skillet.skill.specs import XYZ_Yaw_XYZ_Params, XYZ_Yaw_XYZ_Params_Spec
 
 
@@ -65,6 +66,9 @@ class DragSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params], Generic[TB
         length: int,
         pos_threshold: float = 0.005,
         quat_threshold: float = 0.04,
+        max_pos_threshold: float | None = None,
+        stop_failure_steps: int = 120,
+        stopped_velocity_threshold: float = 0.001,
     ) -> None:
         """Initialize the drag skill.
 
@@ -94,7 +98,8 @@ class DragSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params], Generic[TB
         self._default_quat = torch.as_tensor([[0.0, 0.7071, 0.7071, 0.0]])
         self._pos_threshold = pos_threshold
         self._quat_threshold = quat_threshold
-
+        self._target_manager = TargetReachManager(min_pose_threshold=pos_threshold, quat_threshold=quat_threshold,
+            max_pose_threshold=max_pos_threshold, stopped_velocity_threshold=stopped_velocity_threshold)
     @property
     def param_dim(self) -> int:
         return 7
@@ -140,7 +145,7 @@ class DragSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params], Generic[TB
 
         self._vel_threshold = 0.001
         self._joint_threshold = 0.001
-
+        self._target_manager.reset(obs["tcp_pose_b"][:, 0:3], obs["tcp_pose_b"][:, 3:7])
         ee_pose_b = obs["tcp_pose_b"]
 
         # Define the target poses for each stage of the drag skill, indexed by DragStatusCodes
@@ -187,16 +192,12 @@ class DragSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params], Generic[TB
     def get_action(self, obs: TBSkillObs) -> TBAction:  # noqa: D102
         ee_pose_b = obs["tcp_pose_b"]
 
-        reached_pos = (
-            torch.linalg.vector_norm(ee_pose_b[:, 0:3] - self._current_target_poses[:, 0:3], dim=1)
-            < self._pos_threshold
-        )
+        self._target_manager.add_pose(ee_pose_b[:, 0:3], ee_pose_b[:, 3:7])
+        reached_pos = self._target_manager.reached_pos(self._current_target_poses[:, 0:3])
         reached_height = self._drag_status == DragStatusCodes.ASCEND & (
             ee_pose_b[:, 2] >= self._current_target_poses[:, 2] - self._pos_threshold
         )
-        reached_quat = (
-            quat_error_magnitude(ee_pose_b[:, 3:7], self._current_target_poses[:, 3:7]) < self._quat_threshold
-        )
+        reached_quat = self._target_manager.reached_quat(self._current_target_poses[:, 3:7])
         reached_pose = (reached_pos & reached_quat) | reached_height
         next_pose = reached_pose
 
@@ -222,6 +223,10 @@ class DragSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params], Generic[TB
             torch.zeros_like(reach_actions[:, -1]),  # Open gripper
         )
 
+        stuck = (self._drag_status != DragStatusCodes.RELEASE) & (self._drag_status != DragStatusCodes.GRASP) \
+            & self._target_manager.is_stuck()
+        if stuck.any():
+            self._status[stuck] = SkillStatusCodes.FAILED
         self._n_steps += 1
         self._status[self._drag_status == DragStatusCodes.DONE] = SkillStatusCodes.SUCCESS
         if self._n_steps >= self._length:
