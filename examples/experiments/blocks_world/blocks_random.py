@@ -44,7 +44,7 @@ args_cli = parser.parse_args()
 
 def main() -> None:
     scene = FIVE_CUBE_SCENE
-    block_domain = "skillet_tasks/blocks-world/simple-blocks-a2.domain.pddl"
+    block_domain = "skillet_tasks/pddl_tasks/blocks-world/simple-blocks-a2.domain.pddl"
     env_cfg = {
         "robot_ip": args_cli.robot_ip,
         "device": "cuda",

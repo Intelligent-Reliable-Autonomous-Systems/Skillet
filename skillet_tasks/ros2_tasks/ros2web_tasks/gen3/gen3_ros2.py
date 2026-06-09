@@ -74,7 +74,7 @@ class Gen3Ros2WebEnvCfg(Ros2WebEnvCfg):
 
     tool_frame_name = "tcp"
 
-    base_apriltag_id = 2
+    base_apriltag_id = 1
 
 
 class Gen3Ros2WebEnv(Ros2WebEnv):

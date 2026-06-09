@@ -63,7 +63,7 @@ class Gen3Ros2EnvCfg(Ros2EnvCfg):
 
     tool_frame_name = "tcp"
 
-    base_apriltag_id = 2
+    base_apriltag_id = 1
 
 
 class Gen3Ros2Env(Ros2Env):

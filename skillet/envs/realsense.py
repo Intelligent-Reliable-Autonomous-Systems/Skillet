@@ -63,8 +63,9 @@ class RealsenseEnv(_EnvironmentBase[RGBD_Obs, Any]):
         # RealSense pipeline + streams.
         self._pipeline = rs.pipeline()
         self._config = rs.config()
-        self._config.enable_stream(rs.stream.color, self.width, self.height, rs.format.bgr8, self.fps)
         self._config.enable_stream(rs.stream.depth, self.width, self.height, rs.format.z16, self.fps)
+
+        self._config.enable_stream(rs.stream.color, self.width, self.height, rs.format.bgr8, self.fps)
 
         self._tag_detector = AprilTagDetector()
         self._T_base_to_tag = _make_T(_quat_xyzw_to_R(*list(apriltag_pose[3:7])), list(apriltag_pose[:3]))
@@ -137,7 +138,7 @@ class RealsenseEnv(_EnvironmentBase[RGBD_Obs, Any]):
             raise RuntimeError("RealsenseEnv is closed. Create a new instance to continue streaming.")
 
         frames = self._pipeline.wait_for_frames()
-        frames = self._align.process(frames)
+        # frames = self._align.process(frames)
 
         color_frame = frames.get_color_frame()
         depth_frame = frames.get_depth_frame()

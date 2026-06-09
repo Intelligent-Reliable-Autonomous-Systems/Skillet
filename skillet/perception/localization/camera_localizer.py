@@ -12,7 +12,7 @@ from scipy.spatial.transform import Rotation
 
 DEFAULT_APRILTAG_POSE = np.array([0.13, -0.01, 0.0, 0.0, 0.0, 0.7071068, 0.7071068])
 DEFAULT_APRILTAG_SIZE_M = 0.100
-DEFAULT_APRILTAG_ID = 2
+DEFAULT_APRILTAG_ID = 1
 
 
 class CameraLocalizer:
@@ -22,7 +22,7 @@ class CameraLocalizer:
         self,
         apriltag_pose: np.ndarray = DEFAULT_APRILTAG_POSE,  # in xywz
         apriltag_size_m: float = 0.100,
-        apriltag_id: int = 2,
+        apriltag_id: int = 1,
         pose_buffer_size: int = 10,
         fix_camera_pose: bool = True,
     ) -> None:
@@ -138,8 +138,8 @@ class RealsenseCameraLocalizer:
         # RealSense pipeline + streams.
         self._pipeline = rs.pipeline()
         self._config = rs.config()
-        self._config.enable_stream(rs.stream.color, self.width, self.height, rs.format.bgr8, self.fps)
         self._config.enable_stream(rs.stream.depth, self.width, self.height, rs.format.z16, self.fps)
+        self._config.enable_stream(rs.stream.color, self.width, self.height, rs.format.bgr8, self.fps)
 
         self._apriltag_size_m = apriltag_size_m
         self._apriltag_id = apriltag_id
@@ -187,7 +187,7 @@ class RealsenseCameraLocalizer:
             raise RuntimeError("RealsenseEnv is closed. Create a new instance to continue streaming.")
 
         frames = self._pipeline.wait_for_frames()
-        frames = self._align.process(frames)
+        # frames = self._align.process(frames) NOTE: this is disabled with D435 as it zero's depth
 
         color_frame = frames.get_color_frame()
         depth_frame = frames.get_depth_frame()
@@ -203,6 +203,7 @@ class RealsenseCameraLocalizer:
 
         # Wall-clock timestamp in seconds.
         timestamp = float(time.time())
+
         return {
             "rgb": rgb,
             "depth": depth,
