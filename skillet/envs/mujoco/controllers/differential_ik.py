@@ -17,7 +17,7 @@ class MjDifferentialIk:
             joint_limit_weight=0.1,
             damping=0.01,
             use_relative_mode=False,
-            max_dq=0.25,
+            max_dq=0.2,
             orientation_weight=100.0,
         )
         self._ik_action = self._ik_action_cfg.build(self._env)

@@ -12,7 +12,7 @@ class WaypointCfg:
 
     max_points: int | None = 20
     """Maximum number of waypoints in a trajectory."""
-    max_dist: float | None = 0.15
+    max_dist: float | None = 0.10
     """Maximum distance between waypoints in a trajectory."""
     max_rad: float | None = 0.75
     """Maximum radian error between waypoitns in a trajectory."""
