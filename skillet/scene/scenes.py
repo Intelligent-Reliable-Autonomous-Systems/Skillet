@@ -295,7 +295,9 @@ FIVE_CUBE_SCENE = Scene(
     contains_objects=True,
 )
 
-
+FIVE_CUBE_SCENE.goal = [
+    {"predicate": "on", "args": ["pink_block", "green_block"]},
+]
 loc_s00 = Location(init_pose=torch.as_tensor([0.25, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_00")
 loc_s01 = Location(init_pose=torch.as_tensor([0.35, -0.25, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_01")
 loc_s02 = Location(init_pose=torch.as_tensor([0.45, 0.25, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_02")

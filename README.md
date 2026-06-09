@@ -6,7 +6,7 @@ Primary Developers: Jeff Jewett (jewettje@oregonstate.edu) and Will Solow (solow
 
 ## Installation
 
-1. Create a conda environment: `conda create -n skillet python=3.11`
+1. Create a conda environment: `conda create -n skillet python=3.12`
 2. Activate conda environment: `conda activate skillet`
 3. Install requirements via pip: `pip install -e .`
 
@@ -17,7 +17,7 @@ Primary Developers: Jeff Jewett (jewettje@oregonstate.edu) and Will Solow (solow
 2. pip install -e ".[mujoco]"
 
 ### Perception installation
-1. Make sure to activate conda environment: `conda activate skills`
+1. Make sure to activate conda environment: `conda activate skillet`
 2. Install `open3d`: `conda install -c conda-forge open3d`
 3. Install perception python packages: `pip install -e ".[perception]"`
 4. You must first request access for the model weights on the [SAM 3 model page on Hugging Face](https://huggingface.co/facebook/sam3) and then, once approved, download the sam3.pt file. Place the downloaded sam3.pt file at `data/models/sam3.pt`.

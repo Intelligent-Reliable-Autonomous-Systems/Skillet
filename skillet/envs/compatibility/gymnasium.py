@@ -187,7 +187,7 @@ class SkilletGymEnv(gym.Env):
     @property
     def _n_objects(self) -> int:
         """Return the number of objects in the environment for perception."""
-        raise NotImplementedError
+        return 1
 
     @property
     def _object_poses(self) -> torch.Tensor:
