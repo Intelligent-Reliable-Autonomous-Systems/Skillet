@@ -9,9 +9,9 @@ from skillet.core.skill import SingleSkill, SkillStatus, SkillStatusCodes
 from skillet.envs.specs import BxM_Action, IKEE_Obs, M_Action
 from skillet.planning.abstract.skill_grounding import _place_skill_4_grounding
 from skillet.planning.abstract.spatial_grounding import _is_on
+from skillet.planning.util import find_valid_table_xy
 from skillet.scene import Cube, Location, Table
 from skillet.scene.base import Scene, SceneObject
-from skillet.scene.utils import find_valid_table_xy
 from skillet.skill.high_level.place import PlaceSkill
 
 Object_Params: TypeAlias = int
