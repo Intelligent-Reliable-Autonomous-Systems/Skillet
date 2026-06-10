@@ -36,7 +36,6 @@ class SAM3Client(SAMClient):
         super().__init__(model_path, device, use_server, load_server)
 
         if (load_server and use_server) or not use_server:
-            print(model_path)
             self.sam_model = self._load_sam_model(checkpoint=model_path)
             print("[INFO][SAM3] Successfully loaded SAM3 Model")
 

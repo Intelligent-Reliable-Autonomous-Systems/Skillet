@@ -211,9 +211,9 @@ class DragSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params], Generic[TB
             valid_idx = (self._status == SkillStatusCodes.RUNNING) & (reached_pose)
             self._drag_status[valid_idx] += 1
             valid_idx = valid_idx & (self._drag_status < DragStatusCodes.DONE)
-            print(
-                f"[INFO][DRAG STATUS UPDATE]: {DragStatusCodes(self._drag_status.cpu().numpy()[0]).name} | reached_pose: {reached_pose.cpu().numpy()}"
-            )
+            # print(
+            #     f"[INFO][DRAG STATUS UPDATE]: {DragStatusCodes(self._drag_status.cpu().numpy()[0]).name} | reached_pose: {reached_pose.cpu().numpy()}"
+            # )
             # Update the target pose based on the new drag status
             self._current_target_poses[valid_idx] = self._target_poses[idx[valid_idx], self._drag_status[valid_idx]]
 

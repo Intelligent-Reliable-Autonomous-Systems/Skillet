@@ -70,3 +70,14 @@ sudo ip route replace 192.168.1.0/24 dev enx<your_usb_adapter>
 sudo ip addr add 192.168.1.100/24 dev enx6c6e072d4846
 sudo ip link set enx6c6e072d4846 up
 sudo ip route add 192.168.1.0/24 dev enx6c6e072d4846
+
+# Create a persistent static connection profile
+sudo nmcli con add \
+  type ethernet \
+  ifname enx6c6e072d4846 \
+  con-name kinova-robot \
+  ipv4.method manual \
+  ipv4.addresses 192.168.1.100/24 \
+  ipv4.never-default yes \
+  connection.autoconnect yes
+  sudo nmcli con up kinova-robot

@@ -106,22 +106,22 @@ class SkilletModerator:
             "===[SkilletExpModerator]===\nO: Quit Experiment\nP: Stop Robot\nK: Return Robot to Home\nL: Resume Robot Experiment\n"
         )
 
-        @self._listener.on_key("q")
+        @self._listener.on_key("o")
         def quit_handler(key):
             self._status = ExpStatusCodes.QUIT
             self._intervention = True
 
-        @self._listener.on_key("x")
+        @self._listener.on_key("p")
         def stop_handler(key):
             self._status = ExpStatusCodes.STOP
             self._intervention = True
 
-        @self._listener.on_key("h")
+        @self._listener.on_key("k")
         def home_handler(key):
             self._status = ExpStatusCodes.HOME
             self._intervention = True
 
-        @self._listener.on_key("r")
+        @self._listener.on_key("l")
         def resume_handler(key):
             if self._status != ExpStatusCodes.RUNNING:
                 self._status = ExpStatusCodes.RESUME
