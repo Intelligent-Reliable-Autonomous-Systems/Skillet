@@ -83,3 +83,8 @@ class KortexEnvCfg:
 
     base_apriltag_id: int = MISSING
     """April tag id used to localize base"""
+
+    use_tabletop_camera: bool = True
+    """If to use the realsense tabletop camera"""
+    gripper_close_time: float = 1.5
+    """Time taken to close gripper, 0 = non blocking"""

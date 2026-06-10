@@ -118,7 +118,10 @@ class Gen3KortexEnv(KortexEnv):
         self._motion_event = None
         self._motion_handle = None
 
-        self._rs_cam_localizer = RealsenseCameraLocalizer(apriltag_size_m=0.1, apriltag_id=self.cfg.base_apriltag_id)
+        if self.cfg.use_tabletop_camera:
+            self._rs_cam_localizer = RealsenseCameraLocalizer(
+                apriltag_size_m=0.1, apriltag_id=self.cfg.base_apriltag_id
+            )
 
     def _pre_process_action(self, actions: torch.Tensor, action_spec: ActionSpec[Any] | None = None) -> np.ndarray:
         """Pre process the robot action.
@@ -149,8 +152,7 @@ class Gen3KortexEnv(KortexEnv):
         """
         # Publish BLOCKING gripper command. To keep the gripper stationary
         # Assumes we can either move joints or close gripper, not both
-        gripper_moving = self._publish_gripper(action, action_spec, close_time=1.5)
-
+        gripper_moving = self._publish_gripper(action, action_spec, close_time=self.cfg.gripper_close_time)
         if not gripper_moving or not self._blocking_gripper_cmd:
             if action_spec is None or action_spec.name == "joints_vel":
                 self._publish_joint_vel_spec(action, duration)

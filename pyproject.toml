@@ -66,7 +66,9 @@ ros = [
 ]
 kortex = [
     "pyrealsense2",
-    "protobuf==7.34.1"
+    "protobuf==7.34.1",
+    "pin",
+    "zmq",
 ]
 isaac = [
     "isaacsim[all,extscache]==5.1.0",

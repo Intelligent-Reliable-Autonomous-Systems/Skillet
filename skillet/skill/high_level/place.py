@@ -83,8 +83,13 @@ class PlaceSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAct
         self._default_pose = torch.as_tensor([[0.35, 0.0, 0.25, 0.0, 0.7071, 0.7071, 0.0]])
         self._pos_threshold = pos_threshold
         self._quat_threshold = quat_threshold
-        self._target_manager = TargetReachManager(min_pose_threshold=pos_threshold, quat_threshold=quat_threshold,
-            max_pose_threshold=max_pos_threshold, stopped_velocity_threshold=stopped_velocity_threshold)
+        self._target_manager = TargetReachManager(
+            min_pose_threshold=pos_threshold,
+            quat_threshold=quat_threshold,
+            max_pose_threshold=max_pos_threshold,
+            stopped_velocity_threshold=stopped_velocity_threshold,
+        )
+
     @property
     def param_dim(self) -> int:
         return 4

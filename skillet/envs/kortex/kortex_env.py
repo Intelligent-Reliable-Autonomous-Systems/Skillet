@@ -313,13 +313,14 @@ class KortexEnv(SkilletGymEnv):
             A tuple containing the observations, rewards, resets (terminated and truncated) and extras.
 
         """
-        # Perform safety check
-        out = self._collision_checker.check_near_collision(
-            self._current_joint_positions,
-            self._current_joint_velocities,
-            self._current_joint_efforts,
-            self.cfg.arm_joint_names + self.cfg.gripper_joint_names,
-        )
+        # Perform safety check - this takes ~300ms, too slow for control
+        # out = self._collision_checker.check_near_collision(
+        #     self._current_joint_positions,
+        #     self._current_joint_velocities,
+        #     self._current_joint_efforts,
+        #     self.cfg.arm_joint_names + self.cfg.gripper_joint_names,
+        # )
+
         # if out.near_collision:
         if False:
             print(
@@ -340,7 +341,7 @@ class KortexEnv(SkilletGymEnv):
         if sleep_time < 0:
             time.sleep(min(-sleep_time, self.step_dt))
         else:
-            # print(f"[WARN] full loop overran by {sleep_time * 1000:.1f}ms")
+            print(f"[WARN] full loop overran by {sleep_time * 1000:.1f}ms")
             pass
         self._next_step_time = time.perf_counter()
 

@@ -1,4 +1,3 @@
-
 import torch
 
 from skillet.core.math import quat_error_magnitude
@@ -6,12 +5,13 @@ from skillet.core.math import quat_error_magnitude
 
 class TargetReachManager:
 
-    def __init__(self,
+    def __init__(
+        self,
         min_pose_threshold: float,
         quat_threshold: float,
         window_size: int = 120,
         max_pose_threshold: float | None = None,
-        stopped_velocity_threshold: float = 0.001
+        stopped_velocity_threshold: float = 0.001,
     ):
         if max_pose_threshold is None:
             max_pose_threshold = min_pose_threshold
@@ -65,10 +65,7 @@ class TargetReachManager:
             target_pos = target_pos.unsqueeze(0)
         frac = (self._stopped_steps.float() / self._window_size).clamp(max=1.0)
         pos_threshold = self._min_pose_threshold * (1 - frac) + self._max_pose_threshold * frac
-        return (
-            torch.linalg.vector_norm(self._pos_window[self._head_idx] - target_pos, dim=-1)
-            < pos_threshold
-        )
+        return torch.linalg.vector_norm(self._pos_window[self._head_idx] - target_pos, dim=-1) < pos_threshold
 
     def reached_quat(self, target_quat: torch.Tensor) -> torch.Tensor:
         if target_quat.ndim == 1:

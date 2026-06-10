@@ -27,12 +27,8 @@ from .keyboard import Se3Keyboard as Se3Keyboard
 from .keyboard import Se3KeyboardCfg as Se3KeyboardCfg
 from .retargeter_base import RetargeterBase as RetargeterBase
 from .retargeter_base import RetargeterCfg as RetargeterCfg
-from .spacemouse import Se2SpaceMouse as Se2SpaceMouse
-from .spacemouse import Se2SpaceMouseCfg as Se2SpaceMouseCfg
-from .spacemouse import Se3SpaceMouse as Se3SpaceMouse
-from .spacemouse import Se3SpaceMouseCfg as Se3SpaceMouseCfg
-from .vr import VRJoystick as VRJoystick
-from .vr import VRJoystickCfg as VRJoystickCfg
+from .teleop_device_factory import create_teleop_device as create_teleop_device
 from .vr import VRHeadset as VRHeadset
 from .vr import VRHeadsetCfg as VRHeadsetCfg
-from .teleop_device_factory import create_teleop_device as create_teleop_device
+from .vr import VRJoystick as VRJoystick
+from .vr import VRJoystickCfg as VRJoystickCfg

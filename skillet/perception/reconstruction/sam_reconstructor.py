@@ -127,7 +127,6 @@ class Sam3Reconstructor(ReconstructorBase):
 
         # Compute the object centers
         centers, bboxes = self._get_object_centers(obj_masks, obj_types, depth, intrinsic_k, camera_pose)
-
         # Assign the pose and bounding boxes to each object
         ids = []
         for i, c in enumerate(torch.unique(concept_indices).cpu().numpy()):

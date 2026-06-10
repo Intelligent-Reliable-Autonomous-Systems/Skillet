@@ -138,7 +138,7 @@ class RealsenseEnv(_EnvironmentBase[RGBD_Obs, Any]):
             raise RuntimeError("RealsenseEnv is closed. Create a new instance to continue streaming.")
 
         frames = self._pipeline.wait_for_frames()
-        # frames = self._align.process(frames)
+        frames = self._align.process(frames)
 
         color_frame = frames.get_color_frame()
         depth_frame = frames.get_depth_frame()

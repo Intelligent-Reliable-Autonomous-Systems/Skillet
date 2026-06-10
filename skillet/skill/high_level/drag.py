@@ -98,8 +98,13 @@ class DragSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params], Generic[TB
         self._default_quat = torch.as_tensor([[0.0, 0.7071, 0.7071, 0.0]])
         self._pos_threshold = pos_threshold
         self._quat_threshold = quat_threshold
-        self._target_manager = TargetReachManager(min_pose_threshold=pos_threshold, quat_threshold=quat_threshold,
-            max_pose_threshold=max_pos_threshold, stopped_velocity_threshold=stopped_velocity_threshold)
+        self._target_manager = TargetReachManager(
+            min_pose_threshold=pos_threshold,
+            quat_threshold=quat_threshold,
+            max_pose_threshold=max_pos_threshold,
+            stopped_velocity_threshold=stopped_velocity_threshold,
+        )
+
     @property
     def param_dim(self) -> int:
         return 7
@@ -223,8 +228,11 @@ class DragSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params], Generic[TB
             torch.zeros_like(reach_actions[:, -1]),  # Open gripper
         )
 
-        stuck = (self._drag_status != DragStatusCodes.RELEASE) & (self._drag_status != DragStatusCodes.GRASP) \
+        stuck = (
+            (self._drag_status != DragStatusCodes.RELEASE)
+            & (self._drag_status != DragStatusCodes.GRASP)
             & self._target_manager.is_stuck()
+        )
         if stuck.any():
             self._status[stuck] = SkillStatusCodes.FAILED
         self._n_steps += 1
