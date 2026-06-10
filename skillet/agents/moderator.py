@@ -9,10 +9,12 @@ from typing import Literal
 import numpy as np
 import torch
 
+from skillet.controllers.devices import DeviceBase
 from skillet.core import SingleSkill
 from skillet.core.env import Environment
 from skillet.core.skill import Skill, SkillStatusCodes
 from skillet.core.spaces import ActionSpec
+from skillet.envs.skillet_env import SkilletEnv
 
 
 class KeyboardListener:
@@ -101,7 +103,7 @@ class SkilletModerator:
         self._action = None
         self._action_spec = None
         print(
-            "===[SkilletExpModerator]===\nQ: Quit Experiment\nX: Stop Robot\nH: Return Robot to Home\nR: Resume Robot Experiment\n"
+            "===[SkilletExpModerator]===\nO: Quit Experiment\nP: Stop Robot\nK: Return Robot to Home\nL: Resume Robot Experiment\n"
         )
 
         @self._listener.on_key("q")
@@ -127,21 +129,25 @@ class SkilletModerator:
 
         self._listener.start()
 
-    def poll(self, env: Environment, skill: Skill) -> tuple[torch.Tensor, ActionSpec]:
+    def poll(self, env: Environment, skill: Skill = None) -> tuple[torch.Tensor, ActionSpec]:
+        """Poll the correct action on a skill."""
         if self._intervention:
             if self._status == ExpStatusCodes.QUIT:
                 print("[INFO][MODERATOR] Quitting.")
-                skill.status = SkillStatusCodes.FAILED
+                if skill is not None:
+                    skill.status = SkillStatusCodes.FAILED
                 self._action_spec = env.coerce_action_spec("twist_tcp")
                 self._action = torch.as_tensor([0, 0, 0, 0, 0, 0, 0]).unsqueeze(0).to(self._action_spec.device)
             elif self._status == ExpStatusCodes.HOME:
                 print("[INFO][MODERATOR] Returning to home position.")
                 self._action_spec = env.coerce_action_spec("tcp_cart")
-                skill.status = SkillStatusCodes.FAILED
+                if skill is not None:
+                    skill.status = SkillStatusCodes.FAILED
                 self._action = self._home_pos.to(self._action_spec.device)
             elif self._status == ExpStatusCodes.STOP:
                 print("[INFO][MODERATOR] Stopping the robot.")
-                skill.status = SkillStatusCodes.FAILED
+                if skill is not None:
+                    skill.status = SkillStatusCodes.FAILED
                 self._action_spec = env.coerce_action_spec("twist_tcp")
                 obs = env.get_observation(obs_spec=env.coerce_obs_spec("gripper"))
                 self._action = (
@@ -155,7 +161,7 @@ class SkilletModerator:
         return self._action, self._action_spec
 
     def run_skill(
-        self, env: Environment, skill: SingleSkill, args: list[str]
+        self, env: SkilletEnv, skill: SingleSkill, args: list[str]
     ) -> tuple[bool, Literal[SkillStatusCodes.SUCCESS, SkillStatusCodes.FAILED]]:
         """Run the skill in the environment."""
         obs = env.get_observation(skill.obs_spec)
@@ -184,3 +190,26 @@ class SkilletModerator:
             # Check if the skill is terminated
             skill_done = skill.is_terminated(env.get_observation(skill.obs_spec))
         return terminated, skill.status
+
+    def run_teleop_loop(self, env: SkilletEnv, teleop_interface: DeviceBase) -> None:
+        """Run the teleop in the environment."""
+        terminated = False
+        while not terminated or not self._exp_paused:
+            curr_tcp_pose = env._get_tcp_pose_b()
+            teleop_actions = teleop_interface.advance(curr_tcp_pose)
+
+            # assuming teleop is a tensor
+            actions = teleop_actions.repeat(env.num_envs, 1)
+            recovery_action, action_spec = self.poll(env)
+            if self._status != ExpStatusCodes.RUNNING:
+                if recovery_action is not None and action_spec is not None:
+                    _, _, _, _, _ = env.step(recovery_action, action_spec=action_spec)
+                if self._status == ExpStatusCodes.RESUME:
+                    self._status = ExpStatusCodes.RUNNING
+                    break
+                if self._status == ExpStatusCodes.QUIT:
+                    terminated = True
+                    self._listener.stop()
+                    break
+                continue
+            env.step(actions, action_spec=env.action_spec_twist_tcp)

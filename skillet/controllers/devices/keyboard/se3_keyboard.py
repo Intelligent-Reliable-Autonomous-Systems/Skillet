@@ -58,6 +58,10 @@ class Se3Keyboard(DeviceBase):
         )
         self._listener.start()
 
+        print(
+            "============================== ================= =================\nDescription                    Key (+ve axis)    Key (-ve axis)\n============================== ================= =================\nToggle gripper (open/close)    K\nMove along x-axis              W                 S\nMove along y-axis              A                 D\nMove along z-axis              Q                 E\nRotate along x-axis            Z                 X\nRotate along y-axis            T                 G\nRotate along z-axis            C                 V\n============================== ================= ================="
+        )
+
     def __del__(self):
         """Stop the keyboard listener."""
         if hasattr(self, "_listener") and self._listener.is_alive():

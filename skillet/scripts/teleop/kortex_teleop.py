@@ -12,6 +12,7 @@ import torch
 import skillet_tasks.kortex_tasks  # noqa: F401
 from skillet.controllers.devices import Se3Keyboard, Se3KeyboardCfg, VRHeadset, VRHeadsetCfg, VRJoystick, VRJoystickCfg
 from skillet.envs.skillet_env import SkilletEnv
+from skillet.agents import SkilletModerator
 from skillet_tasks.kortex_tasks.factory import create_kortex_env
 
 # add argparse arguments
@@ -35,7 +36,7 @@ args_cli = parser.parse_args()
 
 
 def main() -> None:
-    """Run keyboard teleoperation with ROS2.
+    """Run keyboard teleoperation with Kortex API.
 
     Defaults to Kortex-Gen3-v0 environment and passes the twist_tcp Action Specification.
     """
@@ -71,14 +72,8 @@ def main() -> None:
     env.reset()
     teleop_interface.reset()
 
-    while True:
-        with torch.inference_mode():
-            curr_tcp_pose = env._get_tcp_pose_b()
-            teleop = teleop_interface.advance(curr_tcp_pose)
-
-            # assuming teleop is a tensor
-            actions = teleop.repeat(env.num_envs, 1)
-            env.step(actions, action_spec=env.action_spec_twist_tcp)
+    moderator = SkilletModerator()
+    moderator.run_teleop_loop(env, teleop_interface)
 
 
 if __name__ == "__main__":

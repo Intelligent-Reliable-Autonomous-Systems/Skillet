@@ -136,6 +136,7 @@ class VRHeadset(DeviceBase):
         """
         r, p, y = euler_xyz_from_quat(tcp_pose_b[:, 3:7])
         self._read_latest()
+
         if self._tcp_xyz_des_b is None or not self._enable_teleop:
             command = torch.zeros((6,), device=self._device)
             if self.gripper_term:
@@ -191,7 +192,7 @@ class VRHeadset(DeviceBase):
     def _read_latest(self) -> None:
         """Read the latest input from the VR Joystick."""
         s = self._listener.read_latest()
-
+        print(s)
         if s is not None:
             if self._reference_pose_w == None:
                 self._reference_pose_w = torch.as_tensor(s["headset"]["pose"]).squeeze(0)

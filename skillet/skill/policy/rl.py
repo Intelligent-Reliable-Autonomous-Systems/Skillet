@@ -125,7 +125,8 @@ class PidRlJointPolicy(RlPolicy):
             if sleep_time < 0:
                 time.sleep(min(-sleep_time, poll_period_s))
             else:
-                print(f"[WARN][RlPolicy] full loop overran by {sleep_time * 1000:.1f}ms")
+                # print(f"[WARN][RlPolicy] full loop overran by {sleep_time * 1000:.1f}ms")
+                pass
             next_poll_t = time.perf_counter()
 
     def run_thread(self) -> None:
@@ -207,7 +208,8 @@ class PidRlCartPolicy(RlPolicy):
             if sleep_time < 0:
                 time.sleep(min(-sleep_time, poll_period_s))
             else:
-                print(f"[WARN][RlPolicy] full loop overran by {sleep_time * 1000:.1f}ms")
+                # print(f"[WARN][RlPolicy] full loop overran by {sleep_time * 1000:.1f}ms")
+                pass
             next_poll_t = time.perf_counter()
 
     def run_thread(self) -> None:
