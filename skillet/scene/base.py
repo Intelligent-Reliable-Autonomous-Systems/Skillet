@@ -1,6 +1,6 @@
 from abc import abstractmethod
 from collections import defaultdict
-from typing import Any
+from typing import Any, ClassVar
 
 import numpy as np
 import torch
@@ -102,6 +102,9 @@ class SceneObject:
 class Scene:
     """A scene is a collection of objects in a 3D space."""
 
+    _object_id_autoincrement: ClassVar[int] = 0
+    _type_id_autoincrement: ClassVar[defaultdict[str, int]] = defaultdict[str, int](int)
+
     def __init__(
         self,
         objects: list[SceneObject] | None = None,
@@ -117,14 +120,14 @@ class Scene:
             bounds: The bounds of the scene.
 
         """
-        self._object_id_autoincrement = 0
-        self._type_id_autoincrement = defaultdict[str, int](int)
         self._objects = objects or []
         for object in self._objects:
-            object._object_id = self._object_id_autoincrement
-            self._object_id_autoincrement += 1
-            object._type_id = self._type_id_autoincrement[object.type_name]
-            self._type_id_autoincrement[object.type_name] += 1
+            if object._object_id is None or object._object_id == -1:
+                object._object_id = Scene._object_id_autoincrement
+                Scene._object_id_autoincrement += 1
+            if object._type_id is None or object._type_id == -1:
+                object._type_id = Scene._type_id_autoincrement[object.type_name]
+                Scene._type_id_autoincrement[object.type_name] += 1
         self.closed_set = closed_set
         self.bounds = bounds
         self.contains_objects = contains_objects

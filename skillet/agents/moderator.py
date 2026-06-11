@@ -4,18 +4,19 @@ import termios
 import threading
 import tty
 from enum import IntEnum
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import torch
 
-from skillet.controllers.devices import DeviceBase
 from skillet.core import SingleSkill
 from skillet.core.env import Environment
 from skillet.core.skill import Skill, SkillStatusCodes
 from skillet.core.spaces import ActionSpec
 from skillet.envs.skillet_env import SkilletEnv
 
+if TYPE_CHECKING:
+    from skillet.controllers.devices import DeviceBase
 
 class KeyboardListener:
     def __init__(self):
@@ -191,7 +192,7 @@ class SkilletModerator:
             skill_done = skill.is_terminated(env.get_observation(skill.obs_spec))
         return terminated, skill.status
 
-    def run_teleop_loop(self, env: SkilletEnv, teleop_interface: DeviceBase) -> None:
+    def run_teleop_loop(self, env: SkilletEnv, teleop_interface: "DeviceBase") -> None:
         """Run the teleop in the environment."""
         terminated = False
         while not terminated or not self._exp_paused:

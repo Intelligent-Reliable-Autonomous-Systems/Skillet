@@ -247,6 +247,8 @@ def ground_cube_relations(scene: Scene) -> tuple[list[tuple[str, SceneObject, Sc
         cube_list.append(obj)
         if obj.material is not None:
             material_relations.append((obj.material, obj))
+        if not obj.moveable:
+            material_relations.append(("immovable", obj))
         if obj.color is not None:
             color_relations.append((obj.color, obj))
         if table is not None and _is_on_table(obj, table):
