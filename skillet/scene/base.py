@@ -111,6 +111,7 @@ class Scene:
         closed_set: bool = True,
         bounds: tuple[float, float, float, float, float, float] | None = None,
         contains_objects: bool = False,
+        goal: list[dict[str]] | None = None,
     ) -> None:
         """Initialize the scene.
 
@@ -133,7 +134,7 @@ class Scene:
         self.contains_objects = contains_objects
         self._tcp_pose = None
         self._gripper_pos = None
-        self._goal = None
+        self._goal = goal
         self._abstract_scene = None
 
     @property

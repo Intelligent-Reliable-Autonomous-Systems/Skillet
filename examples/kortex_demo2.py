@@ -12,8 +12,8 @@ from skillet.logging import SkilletDataLogger
 from skillet.perception.perception import SkilletPerception
 from skillet.planning import AbstractModel
 from skillet.scene import (
-    FIVE_CUBE_SCENE,
     Open3DVisualizer,
+    five_cube_scene_loader,
 )
 from skillet.skill.high_level import (
     DragSkill,
@@ -52,7 +52,7 @@ args_cli = parser.parse_args()
 
 
 def main() -> None:
-    scene = FIVE_CUBE_SCENE
+    scene = five_cube_scene_loader()
     block_domain = "skillet_tasks/pddl_tasks/blocks-world/initial_blocks-v1.domain.pddl"
     env_cfg = {
         "robot_ip": args_cli.robot_ip,

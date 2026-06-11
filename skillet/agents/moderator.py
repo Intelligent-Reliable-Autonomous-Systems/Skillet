@@ -18,6 +18,7 @@ from skillet.envs.skillet_env import SkilletEnv
 if TYPE_CHECKING:
     from skillet.controllers.devices import DeviceBase
 
+
 class KeyboardListener:
     def __init__(self):
         self._thread = None
