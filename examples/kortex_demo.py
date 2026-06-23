@@ -58,6 +58,10 @@ def main() -> None:
         "robot_ip": args_cli.robot_ip,
         "device": "cuda",
         "num_envs": args_cli.num_envs,
+        "base_apriltag_id": 1,
+        "base_apriltag_pose": [0.13, 0.000, 0.0, 0.0, 0.0, 0.7071068, 0.7071068],
+        "base_apriltag_family": "16h5",
+        "base_apriltag_size": 0.09,
     }
 
     env = create_kortex_env(args_cli.task, env_cfg)

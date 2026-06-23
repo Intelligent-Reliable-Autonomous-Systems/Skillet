@@ -25,7 +25,7 @@ from skillet.skill.object_level import (
     PickBlock4Skill,
     PlaceBlock4Skill,
 )
-from skillet.skill.policy import TcpCartPolicy
+from skillet.skill.policy import TcpCartPolicy, TwistPidPosePolicy
 from skillet_tasks.kortex_tasks.factory import create_kortex_env
 
 if TYPE_CHECKING:
@@ -37,7 +37,7 @@ parser.add_argument("--device", type=str, default="cpu", help="Device to use")
 parser.add_argument("--robot_ip", type=str, default="192.168.1.10", help="Robot IP.")
 parser.add_argument("--poll_rate_hz", type=int, default=10, help="Tick rate of the perception")
 parser.add_argument("--task", type=str, default="Kortex-Gen3-v0", help="Kortex Environment")
-parser.add_argument("--o3d", type=argparse.BooleanOptionalAction, default=False, help="If to visualize with open3d")
+parser.add_argument("--o3d", type=argparse.BooleanOptionalAction, default=True, help="If to visualize with open3d")
 
 args_cli = parser.parse_args()
 
@@ -49,6 +49,10 @@ def main() -> None:
         "robot_ip": args_cli.robot_ip,
         "device": "cuda",
         "num_envs": args_cli.num_envs,
+        "base_apriltag_id": 0,
+        "base_apriltag_pose": [0.13, -0.02, 0.0, 0.0, 0.0, 0.7071068, 0.7071068],
+        "base_apriltag_fam": "tag16h5",
+        "base_apriltag_size": 0.09,
     }
 
     env = create_kortex_env(args_cli.task, env_cfg)
@@ -67,7 +71,7 @@ def main() -> None:
         reconstructor="sam3",
         poll_rate_hz=args_cli.poll_rate_hz,
         device="cuda",
-        vis_perception=False,
+        vis_perception=True,
     )
     target_pose_func = None
     if args_cli.o3d:
@@ -80,6 +84,7 @@ def main() -> None:
     # Low-level policies
     skill_length = 1e9
     arm_policy = TcpCartPolicy(env.batched_env.obs_spec_tcp_cart, env.batched_env.action_spec_tcp_cart)
+    # arm_policy = TwistPidPosePolicy(env.batched_env.obs_spec_twist_tcp, env.batched_env.action_spec_twist_tcp)
     place_skill = PlaceSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length)
     pick_skill = PickSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length)
     drag_skill = DragSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length)

@@ -1,13 +1,10 @@
-import select
-import sys
-import termios
-import threading
-import tty
+from collections.abc import Callable
 from enum import IntEnum
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import torch
+from pynput import keyboard as pynput_keyboard
 
 from skillet.core import SingleSkill
 from skillet.core.env import Environment
@@ -21,58 +18,58 @@ if TYPE_CHECKING:
 
 class KeyboardListener:
     def __init__(self):
-        self._thread = None
-        self._running = False
-        self._key_callbacks = {}
-        self._default_callback = None
-        self._fd = None
-        self._old_termios = None
-
-    def _listen(self) -> None:
-        while self._running:
-            try:
-                key = self._read_key()
-            except Exception:
-                break
-
-            handler = self._key_callbacks.get(key) or self._default_callback
-            if handler:
-                handler(key)
-
-    def on_key(self, key: str) -> None:
-        """Register a callback for a specific key."""
-
-        def decorator(func):
-            self._key_callbacks[key] = func
-            return func
-
-        return decorator
-
-    def _read_key(self) -> str:
-        ch = sys.stdin.read(1)
-        if ch == "\x1b" and select.select([sys.stdin], [], [], 0)[0]:
-            ch += sys.stdin.read(2)
-        return ch
-
-    def start(self):
-        if self._running:
-            return
-        self._fd = sys.stdin.fileno()
-        if sys.stdin.isatty():
-            self._old_termios = termios.tcgetattr(self._fd)
-            tty.setcbreak(self._fd)  # or tty.setraw(self._fd) if you need full raw
-        self._running = True
-        self._thread = threading.Thread(target=self._listen, daemon=True)
-        self._thread.start()
+        self._listener = pynput_keyboard.Listener(
+            on_press=self._on_press,
+            on_release=self._on_release,
+        )
+        self._pressed_keys: set[str] = set()
+        self._additional_callbacks: dict[str, Callable] = {}
 
     def stop(self):
-        self._running = False
-        if self._thread:
-            self._thread.join(timeout=1)
-            self._thread = None
-        if self._old_termios is not None:
-            termios.tcsetattr(self._fd, termios.TCSADRAIN, self._old_termios)
-            self._old_termios = None
+        """Stop the keyboard listener."""
+        if hasattr(self, "_listener") and self._listener.is_alive():
+            self._listener.stop()
+
+    def start(self):
+        self._listener.start()
+
+    def _key_to_char(self, key) -> str | None:
+        """Convert a pynput key object to an uppercase character string, or None."""
+        try:
+            return key.char.upper()
+        except AttributeError:
+            return None
+
+    def _on_press(self, key):
+        char = self._key_to_char(key)
+        if char is None:
+            return
+
+        # Guard against key-repeat events firing duplicate additions
+        if char in self._pressed_keys:
+            return
+        self._pressed_keys.add(char)
+
+        # User-registered callbacks
+        if char in self._additional_callbacks:
+            self._additional_callbacks[char]()
+
+    def _on_release(self, key):
+        char = self._key_to_char(key)
+        if char is None:
+            return
+
+        self._pressed_keys.discard(char)
+
+    def add_callback(self, key: str, func: Callable):
+        """Register a function to call when a key is pressed.
+
+        Args:
+            key: Single character string, e.g. "P".
+            func: Zero-argument callable.
+
+        """
+        self._additional_callbacks[key.upper()] = func
 
 
 HOME_TCP_CART = [0.25, 0.0, 0.3, np.pi, 0.0, np.pi / 2, 0.0]
@@ -108,26 +105,28 @@ class SkilletModerator:
             "===[SkilletExpModerator]===\nO: Quit Experiment\nP: Stop Robot\nK: Return Robot to Home\nL: Resume Robot Experiment\n"
         )
 
-        @self._listener.on_key("o")
-        def quit_handler(key):
+        def quit_handler():
             self._status = ExpStatusCodes.QUIT
             self._intervention = True
 
-        @self._listener.on_key("p")
-        def stop_handler(key):
+        def stop_handler():
             self._status = ExpStatusCodes.STOP
             self._intervention = True
 
-        @self._listener.on_key("k")
-        def home_handler(key):
+        def home_handler():
             self._status = ExpStatusCodes.HOME
             self._intervention = True
 
-        @self._listener.on_key("l")
-        def resume_handler(key):
+        def resume_handler():
             if self._status != ExpStatusCodes.RUNNING:
                 self._status = ExpStatusCodes.RESUME
+                print("[INFO][MODERATOR] Resuming the robot experiment.")
                 self._intervention = True
+
+        self._listener.add_callback("o", quit_handler)
+        self._listener.add_callback("p", stop_handler)
+        self._listener.add_callback("k", home_handler)
+        self._listener.add_callback("l", resume_handler)
 
         self._listener.start()
 

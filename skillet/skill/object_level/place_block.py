@@ -261,9 +261,9 @@ class PlaceBlock4Skill(PlaceBlockSkill):
                 target_xyz = objs[2].pose[:3].clone()
                 target_xyz[0] = target_xyz[0] + 0.025
                 target_xyz[2] = 0.0
-                target_xyz = target_xyz.to(self.obs_spec.device) + (self._offset / 2)
+                target_xyz = target_xyz.to(self.obs_spec.device) + (self._offset * (1 / 2))
             else:
-                target_xyz = find_valid_table_xy(self._scene).to(self.obs_spec.device) + (self._offset / 2)
+                target_xyz = find_valid_table_xy(self._scene).to(self.obs_spec.device) + (self._offset * (1 / 2))
 
         else:
             raise ValueError(f"Unknown place object: {self._target}.")

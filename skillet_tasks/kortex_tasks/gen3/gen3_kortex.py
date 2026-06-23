@@ -47,7 +47,7 @@ class Gen3KortexEnvCfg(KortexEnvCfg):
 
     device = "cuda"
 
-    dt = 1 / 60
+    dt = 3 / 60
 
     decimation = 1.0
 
@@ -68,8 +68,6 @@ class Gen3KortexEnvCfg(KortexEnvCfg):
     gripper_joint_names = ["robotiq_85_left_inner_knuckle_joint"]
 
     arm_joint_names = ["joint_1", "joint_2", "joint_3", "joint_4", "joint_5", "joint_6", "joint_7"]
-
-    base_apriltag_id = 1
 
 
 class Gen3KortexEnv(KortexEnv):
@@ -120,7 +118,10 @@ class Gen3KortexEnv(KortexEnv):
 
         if self.cfg.use_tabletop_camera:
             self._rs_cam_localizer = RealsenseCameraLocalizer(
-                apriltag_size_m=0.1, apriltag_id=self.cfg.base_apriltag_id
+                apriltag_size_m=self.cfg.base_apriltag_size,
+                apriltag_id=self.cfg.base_apriltag_id,
+                apriltag_pose=np.asarray(self.cfg.base_apriltag_pose),
+                apriltag_fam=self.cfg.base_apriltag_fam,
             )
 
     def _pre_process_action(self, actions: torch.Tensor, action_spec: ActionSpec[Any] | None = None) -> np.ndarray:

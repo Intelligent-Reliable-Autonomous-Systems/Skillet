@@ -175,7 +175,7 @@ class RandomTampAgent(Agent):
 
             if terminated:
                 break
-            # time.sleep(4)
+            time.sleep(3)
         if logger is not None:
             obs_log = env.get_observation(logger._obs_spec)
             logger.log(

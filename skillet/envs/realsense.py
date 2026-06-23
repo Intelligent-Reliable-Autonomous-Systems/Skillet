@@ -25,10 +25,6 @@ if TYPE_CHECKING:
     from skillet.core import ActionSpec
     from skillet.core.spaces import ObservationSpec
 
-DEFAULT_APRILTAG_POSE = np.array([0.13, 0.000, 0.0, 0.0, 0.0, 0.7071068, 0.7071068])
-DEFAULT_APRILTAG_SIZE_M = 0.100
-DEFAULT_APRILTAG_ID = 1
-
 
 class RealsenseEnv(_EnvironmentBase[RGBD_Obs, Any]):
     """Environment that streams RGB-D observations from an Intel RealSense camera.
@@ -51,9 +47,9 @@ class RealsenseEnv(_EnvironmentBase[RGBD_Obs, Any]):
         width: int = 640,
         height: int = 480,
         fps: int = 30,
-        apriltag_pose: np.ndarray = DEFAULT_APRILTAG_POSE,
-        apriltag_size_m: float = DEFAULT_APRILTAG_SIZE_M,
-        apriltag_id: int = DEFAULT_APRILTAG_ID,
+        apriltag_pose: np.ndarray | None = None,
+        apriltag_size_m: float | None = None,
+        apriltag_id: int | None = None,
     ) -> None:
         """Initialize the RealSense pipeline and RGB-D observation space."""
         self.width = width

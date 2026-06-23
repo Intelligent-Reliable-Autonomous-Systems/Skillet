@@ -154,9 +154,17 @@ class Open3DVisualizer:
         if isinstance(geom, o3d.geometry.PointCloud):
             return len(geom.points) > 0
         if isinstance(geom, o3d.geometry.TriangleMesh):
-            return len(geom.vertices) > 0
+            if len(geom.vertices) == 0 or len(geom.triangles) == 0:
+                return False
+            aabb = geom.get_axis_aligned_bounding_box()
+            extent = aabb.get_extent()
+            return bool(np.all(extent > 1e-9))
         if isinstance(geom, o3d.geometry.LineSet):
-            return len(geom.points) > 0
+            if len(geom.points) == 0 or len(geom.lines) == 0:
+                return False
+            aabb = geom.get_axis_aligned_bounding_box()
+            extent = aabb.get_extent()
+            return bool(np.any(extent > 1e-9))  # a line can be zero-extent in 2 of 3 axes
         return True  # unknown types pass through
 
     def _on_layout(self, layout_context: Any) -> None:
@@ -259,7 +267,7 @@ class Open3DVisualizer:
                         self._tcp_pose = self._tcp_pose[0]
             if self._get_gripper_pos is not None:
                 pos = self._get_gripper_pos()
-                if isinstance(pose, torch.Tensor):
+                if isinstance(pos, torch.Tensor):
                     pos = pos.detach().cpu().numpy().astype(np.float64)
                 if pos is not None:
                     self._gripper_pos = np.asarray(pos, dtype=np.float64)

@@ -1,5 +1,7 @@
 """File for handling camera localization."""
 
+import contextlib
+import os
 import time
 from collections import deque
 from typing import Any
@@ -10,9 +12,19 @@ import pupil_apriltags as apriltags
 import pyrealsense2 as rs
 from scipy.spatial.transform import Rotation
 
-DEFAULT_APRILTAG_POSE = np.array([0.13, -0.01, 0.0, 0.0, 0.0, 0.7071068, 0.7071068])
-DEFAULT_APRILTAG_SIZE_M = 0.100
-DEFAULT_APRILTAG_ID = 1
+
+@contextlib.contextmanager
+def suppress_c_stderr():
+    stderr_fd = 2
+    saved_stderr_fd = os.dup(stderr_fd)
+    devnull_fd = os.open(os.devnull, os.O_WRONLY)
+    os.dup2(devnull_fd, stderr_fd)
+    try:
+        yield
+    finally:
+        os.dup2(saved_stderr_fd, stderr_fd)
+        os.close(devnull_fd)
+        os.close(saved_stderr_fd)
 
 
 class CameraLocalizer:
@@ -20,9 +32,10 @@ class CameraLocalizer:
 
     def __init__(
         self,
-        apriltag_pose: np.ndarray = DEFAULT_APRILTAG_POSE,  # in xywz
-        apriltag_size_m: float = 0.100,
-        apriltag_id: int = 1,
+        apriltag_pose: np.ndarray | None = None,  # in xywz
+        apriltag_size_m: float | None = None,
+        apriltag_id: int | None = None,
+        apriltag_fam: str | None = None,
         pose_buffer_size: int = 10,
         fix_camera_pose: bool = True,
     ) -> None:
@@ -42,7 +55,7 @@ class CameraLocalizer:
         self._fix_camera_pose = fix_camera_pose
 
         self._detector = apriltags.Detector(
-            families="tag36h11",
+            families=apriltag_fam,
             nthreads=4,
             quad_decimate=1.0,
             quad_sigma=0.0,
@@ -74,9 +87,10 @@ class CameraLocalizer:
         camera_params = (intrinsic_k[0, 0], intrinsic_k[1, 1], intrinsic_k[0, 2], intrinsic_k[1, 2])
         tag_size_m = self._apriltag_size_m
         gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
-        detections: list[apriltags.Detection] = self._detector.detect(
-            gray, estimate_tag_pose=True, camera_params=camera_params, tag_size=tag_size_m
-        )
+        with suppress_c_stderr():
+            detections: list[apriltags.Detection] = self._detector.detect(
+                gray, estimate_tag_pose=True, camera_params=camera_params, tag_size=tag_size_m
+            )
         # Fix camera pose after warmup
         if self._fix_camera_pose and len(self._pose_buffer) >= self._max_pose_buffer_size:
             return self._latest_camera_pose.copy()
@@ -126,9 +140,10 @@ class RealsenseCameraLocalizer:
         width: int = 640,
         height: int = 480,
         fps: int = 30,
-        apriltag_pose: np.ndarray = DEFAULT_APRILTAG_POSE,
-        apriltag_size_m: float = DEFAULT_APRILTAG_SIZE_M,
-        apriltag_id: int = DEFAULT_APRILTAG_ID,
+        apriltag_pose: np.ndarray | None = None,
+        apriltag_size_m: float | None = None,
+        apriltag_id: int | None = None,
+        apriltag_fam: str | None = None,
     ) -> None:
         """Initialize the RealSense pipeline and RGB-D observation space."""
         self.width = width
@@ -145,7 +160,10 @@ class RealsenseCameraLocalizer:
         self._apriltag_id = apriltag_id
 
         self._camera_localizer = CameraLocalizer(
-            apriltag_pose=apriltag_pose, apriltag_size_m=apriltag_size_m, apriltag_id=apriltag_id
+            apriltag_pose=apriltag_pose,
+            apriltag_size_m=apriltag_size_m,
+            apriltag_id=apriltag_id,
+            apriltag_fam=apriltag_fam,
         )
 
         self._profile = self._pipeline.start(self._config)
@@ -187,7 +205,9 @@ class RealsenseCameraLocalizer:
             raise RuntimeError("RealsenseEnv is closed. Create a new instance to continue streaming.")
 
         frames = self._pipeline.wait_for_frames()
-        frames = self._align.process(frames)  # NOTE: this is disabled with D435 as it zero's depth
+        # NOTE: Disable this if using the D435, if the block localization is not working (all zeros) this
+        # is likely the problem
+        frames = self._align.process(frames)
 
         color_frame = frames.get_color_frame()
         depth_frame = frames.get_depth_frame()
@@ -203,7 +223,6 @@ class RealsenseCameraLocalizer:
 
         # Wall-clock timestamp in seconds.
         timestamp = float(time.time())
-
         return {
             "rgb": rgb,
             "depth": depth,

@@ -46,7 +46,7 @@ class TwistPidPosePolicy(BatchedPolicy[TCP_Obs, TCP_CART_Action, XYZ_QUAT_Params
         # PID gains
         self.Kp_pos = 1.0
         self.Ki_pos = 0.0
-        self.Kd_pos = -1.5
+        self.Kd_pos = -0.1
         self.Kp_rot = 1.0
         self.Ki_rot = 0.0
         self.Kd_rot = -0.1

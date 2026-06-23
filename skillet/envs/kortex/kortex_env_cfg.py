@@ -83,6 +83,12 @@ class KortexEnvCfg:
 
     base_apriltag_id: int = MISSING
     """April tag id used to localize base"""
+    base_apriltag_size: int = MISSING
+    """April tag id used to localize base"""
+    base_apriltag_pose: list = MISSING
+    """April tag id used to localize base"""
+    base_apriltag_fam: str = MISSING
+    """April tag id used to localize base"""
 
     use_tabletop_camera: bool = True
     """If to use the realsense tabletop camera"""

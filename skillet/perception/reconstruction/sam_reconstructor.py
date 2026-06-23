@@ -173,6 +173,8 @@ class Sam3Reconstructor(ReconstructorBase):
         bboxes = torch.zeros(obj_masks.shape[0], 6, device=obj_masks.device)
 
         # Localize the cubes, targets, and sponge
+        # Note if receiving weird values for cube centers check that we are
+        # actually receiving non-zero depth data
         obj_centers, obj_bboxes = find_obj_centers_mean(
             obj_masks[obj_inds],
             depth,
@@ -182,7 +184,6 @@ class Sam3Reconstructor(ReconstructorBase):
             camera_quat=camera_pose[3:7],
         )
         obj_centers = transform_xyz_to_world(obj_centers, camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7])
-
         obj_bboxes[:, 0:3] = transform_xyz_to_world(
             obj_bboxes[:, 0:3], camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7]
         )

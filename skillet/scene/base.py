@@ -122,13 +122,13 @@ class Scene:
 
         """
         self._objects = objects or []
-        for object in self._objects:
-            if object._object_id is None or object._object_id == -1:
-                object._object_id = Scene._object_id_autoincrement
+        for obj in self._objects:
+            if obj._object_id is None or obj._object_id == -1:
+                obj._object_id = Scene._object_id_autoincrement
                 Scene._object_id_autoincrement += 1
-            if object._type_id is None or object._type_id == -1:
-                object._type_id = Scene._type_id_autoincrement[object.type_name]
-                Scene._type_id_autoincrement[object.type_name] += 1
+            if obj._type_id is None or obj._type_id == -1:
+                obj._type_id = Scene._type_id_autoincrement[obj.type_name]
+                Scene._type_id_autoincrement[obj.type_name] += 1
         self.closed_set = closed_set
         self.bounds = bounds
         self.contains_objects = contains_objects
