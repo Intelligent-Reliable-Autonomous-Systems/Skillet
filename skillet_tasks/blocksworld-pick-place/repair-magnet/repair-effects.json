@@ -1,0 +1,41 @@
+{
+    "experiment_prefix": "magnetworld-repair",
+    "initial_domain": "../simple-blocksworld-pick-place.domain.pddl",
+    "gt_domain": "../magnet-blocksworld-pick-place.domain.pddl",
+    "eval_problems": [
+        "../eval/problems"
+    ],
+    "eval_traces": "../eval/traces",
+    "train_problems": ["../train-problems/"],
+    "max_steps": 250,
+    "fixed_preconditions": true,
+    "approaches": {
+        "lamp": {
+            "name": "LAMP",
+            "threshold": 0.5
+        },
+        "orcam": {
+            "name": "ORCAM",
+            "online": true,
+            "data_for_offline": true
+        },
+        "olam": {
+            "name": "OLAM",
+            "online": true,
+            "data_for_offline": false
+        },
+        "random": {
+            "online": true,
+            "data_for_offline": true
+        },
+        "predicators": {
+            "name": "Predicators"
+        },
+        "conditional-sam": {
+            "name": "Conditional SAM"
+        },
+        "hitting-sets": {
+            "name": "Hitting Sets"
+        }
+    }
+}
