@@ -3,7 +3,7 @@
     (:types
         surface location movable - object
         table bin spill - surface
-        sponge plate - movable
+        sponge - movable
     )
 
     (:predicates
@@ -11,7 +11,6 @@
         (deformable ?m - movable) ; kinematic attribute - movable can be squeezed
 
         ; dynamic predicates
-        (at-loc ?s - movable ?l - location) ; block or target is at location b
         (damp ?b - movable) ; material attribute - latent property: inert
 
         (gripper-lifted) ; the gripper is lifted in the air
@@ -54,7 +53,6 @@
     :effect (and
         (on ?grasped ?target)
         (not (gripper-full))
-        (at-loc ?grasped ?targetloc)
         (gripper-lifted)
     )
 )

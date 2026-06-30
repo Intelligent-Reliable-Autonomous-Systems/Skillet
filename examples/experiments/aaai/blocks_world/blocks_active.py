@@ -4,7 +4,10 @@ import argparse
 import time
 from typing import TYPE_CHECKING
 
-from skillet.agents import RandomTampAgent
+from conditional_repair.orcam.orcam import ORCAMConfig
+
+from skillet.agents import ActiveLearningAgent
+from skillet.agents.orcam_agent import ORCAMLearningAgent
 from skillet.core import ObservationSpec
 from skillet.core.env import BatchToSingleWrapper
 from skillet.envs import SkilletEnv
@@ -12,20 +15,16 @@ from skillet.logging import SkilletDataLogger
 from skillet.perception.perception import SkilletPerception
 from skillet.planning import AbstractModel
 from skillet.scene import (
-    sponge_scene_loader,
     Open3DVisualizer,
+    five_cube_scene_loader,
 )
 from skillet.skill.high_level import (
     PickSkill,
     PlaceSkill,
-    SqueezeSkill,
-    WipeSkill,
 )
 from skillet.skill.object_level import (
-    PickBlock2Skill,
-    PlaceBlock3Skill,
-    SqueezeSpongeSkill,
-    WipeTableSkill,
+    PickBlock4Skill,
+    PlaceBlock4Skill,
 )
 from skillet.skill.policy import TcpCartPolicy
 from skillet_tasks.kortex_tasks.factory import create_kortex_env
@@ -40,21 +39,21 @@ parser.add_argument("--robot_ip", type=str, default="192.168.1.10", help="Robot 
 parser.add_argument("--poll_rate_hz", type=int, default=10, help="Tick rate of the perception")
 parser.add_argument("--task", type=str, default="Kortex-Gen3-v0", help="Kortex Environment")
 parser.add_argument("--o3d", type=argparse.BooleanOptionalAction, default=False, help="If to visualize with open3d")
-
+parser.add_argument(
+    "--log_dir",
+    default="_robot_data/exp/",
+    type=str,
+)
 args_cli = parser.parse_args()
 
 
 def main() -> None:
-    scene = sponge_scene_loader()
-    block_domain = "skillet_tasks/pddl_tasks/sponge-world/simple-sponge.domain.pddl"
+    scene = five_cube_scene_loader()
+    block_domain = "skillet_tasks/blocksworld-pick-place/simple-blocksworld-pick-place.domain.pddl"
     env_cfg = {
         "robot_ip": args_cli.robot_ip,
         "device": "cuda",
         "num_envs": args_cli.num_envs,
-        "base_apriltag_id": 0,
-        "base_apriltag_pose": [0.13, -0.02, 0.0, 0.0, 0.0, 0.7071068, 0.7071068],
-        "base_apriltag_fam": "tag16h5",
-        "base_apriltag_size": 0.09,
     }
 
     env = create_kortex_env(args_cli.task, env_cfg)
@@ -73,7 +72,7 @@ def main() -> None:
         reconstructor="sam3",
         poll_rate_hz=args_cli.poll_rate_hz,
         device="cuda",
-        vis_perception=True,
+        vis_perception=False,
     )
     target_pose_func = None
     if args_cli.o3d:
@@ -88,34 +87,41 @@ def main() -> None:
     arm_policy = TcpCartPolicy(env.batched_env.obs_spec_tcp_cart, env.batched_env.action_spec_tcp_cart)
     place_skill = PlaceSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length)
     pick_skill = PickSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length)
-    squeeze_skill = SqueezeSkill(
-        reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, timeout=5, length=skill_length
-    )
-    wipe_skill = WipeSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length)
-    pick_obj_skill = PickBlock2Skill(scene, pick_skill, vis_target_pos=target_pose_func)
-    place_obj_skill = PlaceBlock3Skill(scene, place_skill, vis_target_pos=target_pose_func)
-    wipe_table_skill = WipeTableSkill(scene, wipe_skill, vis_target_pos=target_pose_func)
-    squeeze_sponge_skill = SqueezeSpongeSkill(scene, squeeze_skill, vis_target_pos=target_pose_func)
-    ACTION_MAP = {
-        "place_moveable": place_obj_skill,
-        "pick_movable": pick_obj_skill,
-        "squeeze_movable": squeeze_sponge_skill,
-        "wipe_movable": wipe_table_skill,
-    }
-
-    tamp_agent = RandomTampAgent(scene, abstract_model=abs_model, action_to_skill_map=ACTION_MAP)
-
-    logger = SkilletDataLogger(
-        "_robot_data/exp/", env, scene, perception, abs_model, tamp_agent, obs_spec=rgbd_grip_spec, visualize=False
-    )
+    pick_block_skill = PickBlock4Skill(scene, pick_skill, vis_target_pos=target_pose_func)
+    place_block_skill = PlaceBlock4Skill(scene, place_skill, vis_target_pos=target_pose_func)
+    ACTION_MAP = {"place-block": place_block_skill, "pick-block": pick_block_skill}
 
     print("[INFO] Warming up Perception...")
     time.sleep(5)
+    input("Press Enter to start the active learning experiment...")
+
+    ORCAMConfig.instance().configure(
+        # global configurations here
+        fix_init_precondition=True,
+        noise=0.03,
+        exploration_relax_precondition_prob=0.0,
+        condition_buffer_size=128,
+        mc_rollouts=50,
+        mc_horizon=2,
+        mc_k_per_step=1,
+    )
+    learning_agent = ORCAMLearningAgent()
+
+    tamp_agent = ActiveLearningAgent(
+        scene,
+        abstract_model=abs_model,
+        action_to_skill_map=ACTION_MAP,
+        learning_agent=learning_agent,
+    )
+
+    logger = SkilletDataLogger(
+        args_cli.log_dir, env, scene, perception, abs_model, tamp_agent, obs_spec=rgbd_grip_spec, visualize=False
+    )
     logger.write_video = True
     logger.run_thread()
 
     env.reset()
-    tamp_agent.execute(env, logger=logger, num_actions=100)
+    tamp_agent.execute(env, logger=logger)
     logger.save_video()
     print("[INFO][Main] finished experiment, exiting...")
 

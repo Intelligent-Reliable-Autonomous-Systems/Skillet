@@ -102,7 +102,7 @@ class SkilletModerator:
         self._action = None
         self._action_spec = None
         print(
-            "===[SkilletExpModerator]===\nO: Quit Experiment\nP: Stop Robot\nK: Return Robot to Home\nL: Resume Robot Experiment\n"
+            "===[SkilletExpModerator]===\nQ: Quit Experiment\nX: Stop Robot\nH: Return Robot to Home\nR: Resume Robot Experiment\n"
         )
 
         def quit_handler():
@@ -123,10 +123,10 @@ class SkilletModerator:
                 print("[INFO][MODERATOR] Resuming the robot experiment.")
                 self._intervention = True
 
-        self._listener.add_callback("o", quit_handler)
-        self._listener.add_callback("p", stop_handler)
-        self._listener.add_callback("k", home_handler)
-        self._listener.add_callback("l", resume_handler)
+        self._listener.add_callback("q", quit_handler)
+        self._listener.add_callback("x", stop_handler)
+        self._listener.add_callback("h", home_handler)
+        self._listener.add_callback("r", resume_handler)
 
         self._listener.start()
 

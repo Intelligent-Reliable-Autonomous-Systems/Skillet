@@ -28,7 +28,7 @@ from skillet.planning.abstract import (
 from skillet.planning.abstract.up_utils import up_state_to_dict
 from skillet.planning.base_planner import BasePlanner
 from skillet.scene.base import Scene
-from skillet.scene.scene_objs import Cube, Location, Target
+from skillet.scene.scene_objs import Cube, Location, Spill, Sponge, Target
 
 
 class AbstractModel(BasePlanner):
@@ -102,7 +102,14 @@ class AbstractModel(BasePlanner):
             target_type = self._problem.user_type("target")
             for ob_name in self._scene.get_object_names(Target):
                 object_state[ob_name] = Object(ob_name, target_type)
-        # TODO add spills and sponges
+        if "sponge" in user_types:
+            target_type = self._problem.user_type("sponge")
+            for ob_name in self._scene.get_object_names(Sponge):
+                object_state[ob_name] = Object(ob_name, target_type)
+        if "spill" in user_types:
+            target_type = self._problem.user_type("spill")
+            for ob_name in self._scene.get_object_names(Spill):
+                object_state[ob_name] = Object(ob_name, target_type)
         # Perform predicate grounding
         fluent_state = {}
         on_pred, clear_pred, north_pred, color_pred, material_pred = ground_cube_relations(self._scene)

@@ -12,8 +12,8 @@ from typing import TYPE_CHECKING, Any, override
 
 import cv2
 import numpy as np
+import pupil_apriltags as apriltags
 import pyrealsense2 as rs
-from pupil_apriltags import Detector as AprilTagDetector
 
 from skillet.core.env import _EnvironmentBase
 from skillet.envs.specs import RGBD_SPEC_BATCHED, RGBD_Obs
@@ -50,6 +50,7 @@ class RealsenseEnv(_EnvironmentBase[RGBD_Obs, Any]):
         apriltag_pose: np.ndarray | None = None,
         apriltag_size_m: float | None = None,
         apriltag_id: int | None = None,
+        apriltag_fam: str | None = None,
     ) -> None:
         """Initialize the RealSense pipeline and RGB-D observation space."""
         self.width = width
@@ -63,7 +64,6 @@ class RealsenseEnv(_EnvironmentBase[RGBD_Obs, Any]):
 
         self._config.enable_stream(rs.stream.color, self.width, self.height, rs.format.bgr8, self.fps)
 
-        self._tag_detector = AprilTagDetector()
         self._T_base_to_tag = _make_T(_quat_xyzw_to_R(*list(apriltag_pose[3:7])), list(apriltag_pose[:3]))
         self._roll_180 = _make_T(_quat_xyzw_to_R(1.0, 0.0, 0.0, 0.0), [0.0, 0.0, 0.0])
         self._T_base_to_tag = self._T_base_to_tag @ self._roll_180
@@ -72,7 +72,10 @@ class RealsenseEnv(_EnvironmentBase[RGBD_Obs, Any]):
         self._apriltag_id = apriltag_id
 
         self._camera_localizer = CameraLocalizer(
-            apriltag_pose=apriltag_pose, apriltag_size_m=apriltag_size_m, apriltag_id=apriltag_id
+            apriltag_pose=apriltag_pose,
+            apriltag_size_m=apriltag_size_m,
+            apriltag_id=apriltag_id,
+            apriltag_fam=apriltag_fam,
         )
 
         self._profile = self._pipeline.start(self._config)
@@ -218,7 +221,12 @@ class RealsenseEnv(_EnvironmentBase[RGBD_Obs, Any]):
 
 
 if __name__ == "__main__":
-    env = RealsenseEnv()
+    env = RealsenseEnv(
+        apriltag_id=0,
+        apriltag_size_m=90,
+        apriltag_pose=np.asarray([0.13, 0, 0.03, 0, 0, 0.707, 0.707]),
+        apriltag_fam="tag16h5",
+    )
 
     while True:
         obs = env.get_observation()

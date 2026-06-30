@@ -12,7 +12,7 @@ from skillet.logging import SkilletDataLogger
 from skillet.perception.perception import SkilletPerception
 from skillet.planning import AbstractModel
 from skillet.scene import (
-    SPONGE_SCENE,
+    sponge_scene_loader,
     Open3DVisualizer,
 )
 from skillet.skill.high_level import (
@@ -54,7 +54,7 @@ args_cli = parser.parse_args()
 
 
 def main() -> None:
-    scene = SPONGE_SCENE
+    scene = sponge_scene_loader()
     block_domain = "skillet_tasks/sponge-world/simple-sponge.domain.pddl"
     env_cfg = {
         "robot_ip": args_cli.robot_ip,

@@ -203,7 +203,15 @@ def find_obj_centers_mean(
             continue
 
         # Get 3D points from mask and depth
-        points_3d = percentile_clip(mask_to_3d_points(mask, depth, camera_matrix, depth_scale), lo=10, hi=90)
+        pc = mask_to_3d_points(mask, depth, camera_matrix, depth_scale)
+        # Get rid of all zero entries and clip hi/lo
+        pc_mask = pc.count_nonzero(dim=1) == 3
+        if pc_mask.sum() == 0:
+            print("[WARN][PERCEPTION] Bad Center!")
+            centers.append(torch.zeros(3, device=mask.device))
+            bboxes.append(torch.zeros(6, device=mask.device))
+            continue
+        points_3d = percentile_clip(pc[pc_mask], lo=10, hi=90)
 
         # Transform 3d points into world frame
         if frame == "world":
@@ -215,17 +223,18 @@ def find_obj_centers_mean(
         proj_w = points_3d[:, 2]
         centroid_u = torch.sort(proj_u)[0][len(proj_u) // 2]
         centroid_v = torch.sort(proj_v)[0][len(proj_v) // 2]
-        mask_v = torch.abs(centroid_v - proj_v) < 0.008
-        mask_u = torch.abs(centroid_u - proj_u) < 0.008
-        centroid_w = proj_w[mask_u & mask_v].mean() + (o_size * (3 / 4))  # helps with partial occlusion
+        threshold = 0.008
+        mask_v = torch.abs(centroid_v - proj_v) < threshold
+        mask_u = torch.abs(centroid_u - proj_u) < threshold
+        while (mask_u & mask_v).sum() == 0:
+            threshold += 0.005
+            mask_v = torch.abs(centroid_v - proj_v) < threshold
+            mask_u = torch.abs(centroid_u - proj_u) < threshold
+
+        centroid_w = proj_w[mask_u & mask_v].mean() + (o_size * (3 / 4))
         centroid = torch.as_tensor([centroid_u, centroid_v, centroid_w], device=masks.device)
         centers.append(centroid)
         bboxes.append(torch.cat((points_3d.min(dim=0)[0], points_3d.max(dim=0)[0]), dim=0))
-
-        # normals = compute_normals(points_3d.cpu().numpy())
-        # dirs = pca_normal_directions(normals, n=3)
-        # quats.append(torch.as_tensor(roll_quaternion_from_directions(dirs), device=masks.device))
-
     return torch.stack(centers, dim=0), torch.stack(bboxes, dim=0)
 
 
