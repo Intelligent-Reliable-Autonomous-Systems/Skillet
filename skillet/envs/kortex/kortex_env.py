@@ -15,6 +15,7 @@ import numpy as np
 import pinocchio as pin
 import torch
 from kortex_api.autogen.messages import Base_pb2
+from kortex_api.Exceptions.KServerException import KServerException
 
 from skillet.core.math import convert_quat, np_quat_from_euler_xyz
 from skillet.core.spaces import ActionSpec
@@ -563,3 +564,18 @@ class KortexEnv(SkilletGymEnv):
 
         self._current_mass_matrices = pin.crba(self.kortex_model, self.kortex_data, q)
         self._current_gravity_vector = pin.computeGeneralizedGravity(self.kortex_model, self.kortex_data, q)
+
+    def _retake_control(self) -> None:
+        """Retake control from another device."""
+        try:
+            self.kortex_connection.sessionManager.CloseSession()
+            self.kortex_connection.transport.disconnect()
+
+        except Exception:
+            pass
+        try:
+            self.kortex, self.kortex_c = self.kortex_connection.open()
+            return True
+        except KServerException as ex:
+            print(ex)
+            return False

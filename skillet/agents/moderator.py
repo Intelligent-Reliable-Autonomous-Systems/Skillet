@@ -83,11 +83,13 @@ class ExpStatusCodes(IntEnum):
     RUNNING = 1
     """The experiment is running."""
     STOP = 2
-    """The experiment is stopped."""
+    """The robot is stopped."""
     HOME = 3
     """The experiment is resetting to safe position."""
     RESUME = 4
     """The experiment is resuming."""
+    PAUSE = 5
+    """Pause the experiment from selecting a new skill"""
 
 
 class SkilletModerator:
@@ -97,12 +99,11 @@ class SkilletModerator:
         self._home = None
         self._home_pos = torch.as_tensor(HOME_TCP_CART, device=self._device).unsqueeze(0)
         self._status = ExpStatusCodes.RUNNING
-        self._exp_paused = False
         self._intervention = False
         self._action = None
         self._action_spec = None
         print(
-            "===[SkilletExpModerator]===\nQ: Quit Experiment\nX: Stop Robot\nH: Return Robot to Home\nR: Resume Robot Experiment\n"
+            "===[SkilletExpModerator]===\nQ: Quit Experiment\nX: Stop Robot\nH: Return Robot to Home\nR: Resume Robot Experiment\nP: Pause the Experiment."
         )
 
         def quit_handler():
@@ -123,12 +124,22 @@ class SkilletModerator:
                 print("[INFO][MODERATOR] Resuming the robot experiment.")
                 self._intervention = True
 
+        def pause_handler():
+            self._status = ExpStatusCodes.PAUSE
+            self._intervention = True
+            print("[INFO][MODERATOR] Pausing the experiment after execution of skill. Press R to resume.")
+
         self._listener.add_callback("q", quit_handler)
         self._listener.add_callback("x", stop_handler)
         self._listener.add_callback("h", home_handler)
         self._listener.add_callback("r", resume_handler)
+        self._listener.add_callback("p", pause_handler)
 
         self._listener.start()
+
+    @property
+    def is_paused(self) -> bool:
+        return self._status == ExpStatusCodes.PAUSE
 
     def poll(self, env: Environment, skill: Skill = None) -> tuple[torch.Tensor, ActionSpec]:
         """Poll the correct action on a skill."""
@@ -140,13 +151,13 @@ class SkilletModerator:
                 self._action_spec = env.coerce_action_spec("twist_tcp")
                 self._action = torch.as_tensor([0, 0, 0, 0, 0, 0, 0]).unsqueeze(0).to(self._action_spec.device)
             elif self._status == ExpStatusCodes.HOME:
-                print("[INFO][MODERATOR] Returning to home position.")
+                print("[INFO][MODERATOR] Returning to home position and pausing skill. Press R to resume and X to stop")
                 self._action_spec = env.coerce_action_spec("tcp_cart")
                 if skill is not None:
                     skill.status = SkillStatusCodes.FAILED
                 self._action = self._home_pos.to(self._action_spec.device)
             elif self._status == ExpStatusCodes.STOP:
-                print("[INFO][MODERATOR] Stopping the robot.")
+                print("[INFO][MODERATOR] Stopping the robot. Press R to resume.")
                 if skill is not None:
                     skill.status = SkillStatusCodes.FAILED
                 self._action_spec = env.coerce_action_spec("twist_tcp")
@@ -170,9 +181,9 @@ class SkilletModerator:
         skill_done = skill.is_terminated(env.get_observation(skill.obs_spec))
 
         terminated = False
-        while not skill_done or terminated or self._exp_paused:
+        while not terminated:
             recovery_action, action_spec = self.poll(env, skill)
-            if self._status != ExpStatusCodes.RUNNING:
+            if self._status not in [ExpStatusCodes.RUNNING, ExpStatusCodes.PAUSE]:
                 if recovery_action is not None and action_spec is not None:
                     _, _, _, _, _ = env.step(recovery_action, action_spec=action_spec)
                 if self._status == ExpStatusCodes.RESUME:
@@ -183,6 +194,8 @@ class SkilletModerator:
                     self._listener.stop()
                     break
                 continue
+            if skill_done:
+                break
             # Get the next action with the low-level observation
             action = skill.get_action(env.get_observation(skill.obs_spec))
             # Take a step in the environment
@@ -190,12 +203,13 @@ class SkilletModerator:
             terminated = term | trunc
             # Check if the skill is terminated
             skill_done = skill.is_terminated(env.get_observation(skill.obs_spec))
+
         return terminated, skill.status
 
     def run_teleop_loop(self, env: SkilletEnv, teleop_interface: "DeviceBase") -> None:
         """Run the teleop in the environment."""
         terminated = False
-        while not terminated or not self._exp_paused:
+        while not terminated:
             curr_tcp_pose = env._get_tcp_pose_b()
             teleop_actions = teleop_interface.advance(curr_tcp_pose)
 

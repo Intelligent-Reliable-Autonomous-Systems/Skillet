@@ -1,0 +1,22 @@
+{
+    "experiment_prefix": "magnetworld-repair-orcam",
+    "initial_domain": "../simple-blocksworld-pick-place.domain.pddl",
+    "gt_domain": "../magnet-blocksworld-pick-place.domain.pddl",
+    "eval_problems": [
+        "../eval/problems"
+    ],
+    "eval_traces": "../eval/traces",
+    "train_problems": ["../train-problems/"],
+    "max_steps": 250,
+    "fixed_preconditions": true,
+    "approaches": {
+        "orcam": {
+            "name": "ORCAM",
+            "online": true,
+            "data_for_offline": true,
+            "config": {
+                "noise":0.05
+            }
+        }
+    }
+}

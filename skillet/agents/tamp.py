@@ -1,5 +1,6 @@
 """A Task and Motion Planner executor for running an agent in an environment."""
 
+import pickle
 import time
 from typing import Any
 
@@ -10,6 +11,7 @@ from skillet.core.policy import Unparameterized
 from skillet.core.skill import SingleSkill, SkillStatusCodes
 from skillet.logging import SkilletDataLogger
 from skillet.planning import AbstractModel
+from skillet.planning.abstract import AbstractAction
 from skillet.planning.abstract.up_utils import sample_action_from_state
 from skillet.scene.base import Scene
 
@@ -34,7 +36,7 @@ class PlanningAgent(Agent):
         super().__init__()
 
         self._scene = scene
-        self.abstract_model = abstract_model
+        self._abstract_model = abstract_model
         self.action_to_skill_map = action_to_skill_map
         self._moderator = SkilletModerator()
 
@@ -52,18 +54,18 @@ class PlanningAgent(Agent):
 
         """
         # Get the current symbolic state
-        self.abstract_model.initialize(self._scene, task)
+        self._abstract_model.initialize(self._scene, task)
 
-        abstract_state = self.abstract_model.get_abstract_state()
+        abstract_state = self._abstract_model.get_abstract_state()
         print(abstract_state)
-        self._result, self._plan, up_actions = self.abstract_model.plan(abstract_state=abstract_state)
+        self._result, self._plan, up_actions = self._abstract_model.plan(abstract_state=abstract_state)
 
         terminated = False
         if self._plan is None:
             print("[WARNING][TAMP] Failed to find plan.")
             return
         for ab_action, up_action in zip(self._plan.actions, up_actions):
-            up_state = self.abstract_model.reset_up_problem_state()
+            up_state = self._abstract_model.reset_up_problem_state()
             self._selected_skill = self.action_to_skill_map[ab_action.action]
             args = self._scene.resolve_names_to_ids(ab_action.parameters)
             terminated, status = self._moderator.run_skill(env, self._selected_skill, args)
@@ -124,7 +126,7 @@ class RandomTampAgent(Agent):
         super().__init__()
 
         self._scene = scene
-        self.abstract_model = abstract_model
+        self._abstract_model = abstract_model
         self.action_to_skill_map = action_to_skill_map
         self._moderator = SkilletModerator()
 
@@ -144,14 +146,14 @@ class RandomTampAgent(Agent):
 
         """
         # Get the current symbolic state
-        self.abstract_model.initialize(self._scene, task)
+        self._abstract_model.initialize(self._scene, task)
 
         terminated = False
 
         for i in range(num_actions):
-            up_state = self.abstract_model.reset_up_problem_state()
-            # ab_action, up_action = self.abstract_model.get_random_action(up_state)
-            ab_action, up_action = sample_action_from_state(self.abstract_model._problem, up_state)
+            up_state = self._abstract_model.reset_up_problem_state()
+            # ab_action, up_action = self._abstract_model.get_random_action(up_state)
+            ab_action, up_action = sample_action_from_state(self._abstract_model._problem, up_state)
             self._selected_skill = self.action_to_skill_map[ab_action.action]
             args = self._scene.resolve_names_to_ids(ab_action.parameters)
 
@@ -214,7 +216,7 @@ class ActiveLearningAgent(Agent):
         super().__init__()
 
         self._scene = scene
-        self.abstract_model = abstract_model
+        self._abstract_model = abstract_model
         self.action_to_skill_map = action_to_skill_map
         self._moderator = SkilletModerator()
         self._learning_agent = learning_agent
@@ -233,26 +235,35 @@ class ActiveLearningAgent(Agent):
 
         """
         # Get the current symbolic state
-        self.abstract_model.initialize(self._scene, task)
-        self._learning_agent.initialize(self.abstract_model)
+        self._abstract_model.initialize(self._scene, task)
 
         terminated = False
-        up_state = self.abstract_model.reset_up_problem_state()
-        up_objects = self.abstract_model._problem.all_objects
-
+        up_state = self._abstract_model.reset_up_problem_state()
+        up_objects = self._abstract_model._problem.all_objects
+        self._learning_agent.reset_problem(self._abstract_model.problem)
+        skills_sampled = 0
+        skills_failed = 0
         while True:
-            print("Agent selecting for state", up_state)
-            ab_action, up_action = self._learning_agent.sample_action(up_state, up_objects)
+            # print("[INFO][ACTIVE] Agent selecting for state", up_state)
+            if self._moderator.is_paused:
+                time.sleep(0.1)
+                continue
+            up_action = self._learning_agent.get_action(up_state, up_objects)
+            ab_action = AbstractAction(
+                action=up_action.action.name, parameters=[p.object().name for p in up_action.actual_parameters]
+            )
 
             self._selected_skill = self.action_to_skill_map[ab_action.action]
             args = self._scene.resolve_names_to_ids(ab_action.parameters)
 
             terminated, status = self._moderator.run_skill(env, self._selected_skill, args)
             execution = "applicable" if status == SkillStatusCodes.SUCCESS else "inapplicable"
-
+            # Logging and learning
+            time.sleep(1.5)  # To let perception update
             if logger is not None:
                 obs_log = env.get_observation(logger._obs_spec)
                 logger.log(
+                    log_dir=self._learning_agent.dataset.experiment_dir,
                     save_log=True,
                     rgb=obs_log["rgb"],
                     depth=obs_log["depth"],
@@ -265,15 +276,27 @@ class ActiveLearningAgent(Agent):
                     actions=up_action,
                     executions=execution,
                 )
+            self._learning_agent.dataset.add_trace(logger._states, logger._actions, logger._executions)
 
-            # time.sleep(4)
-            next_up_state = self.abstract_model.reset_up_problem_state()
-            up_objects = self.abstract_model._problem.all_objects
-            print("Agent learning after skill", execution)
-            self._learning_agent.update(up_state, up_objects, up_action, next_up_state, execution)
+            next_up_state = self._abstract_model.reset_up_problem_state()
+            self._learning_agent.reset_problem(self._abstract_model.problem)
+
+            up_objects = self._abstract_model._problem.all_objects
+            self._learning_agent.learn_step(up_state, up_objects, up_action, next_up_state, execution)
+            with open(f"{self._learning_agent.dataset.experiment_dir}/_agent.pkl", "wb") as f:
+                pickle.dump(self._learning_agent, f)
+
             if terminated:
                 break
+
             up_state = next_up_state
+            skills_sampled += 1
+            if execution == "inapplicable":
+                skills_failed += 1
+
+            print(
+                f"[INFO] Sampled Skills {skills_sampled} / {self._learning_agent.dataset.max_steps}. Skills Failed: {skills_failed}."
+            )
 
         if logger is not None:
             obs_log = env.get_observation(logger._obs_spec)

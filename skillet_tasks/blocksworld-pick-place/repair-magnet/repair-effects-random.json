@@ -1,0 +1,18 @@
+{
+    "experiment_prefix": "magnetworld-repair-random",
+    "initial_domain": "../simple-blocksworld-pick-place.domain.pddl",
+    "gt_domain": "../magnet-blocksworld-pick-place.domain.pddl",
+    "eval_problems": [
+        "../eval/problems"
+    ],
+    "eval_traces": "../eval/traces",
+    "train_problems": ["../train-problems/"],
+    "max_steps": 250,
+    "fixed_preconditions": true,
+    "approaches": {
+        "random": {
+            "online": true,
+            "data_for_offline": true
+        }
+    }
+}

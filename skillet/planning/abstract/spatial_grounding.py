@@ -99,7 +99,9 @@ def _is_above_loc(a: Location, b: Location) -> bool:
         b: The candidate lower cube.
 
     """
-    return bool(torch.isclose(a.pose[0], b.pose[0]).item() and torch.isclose(a.pose[2], b.pose[2] + b.size).item())
+    return bool(
+        torch.isclose(a.pose[0], b.pose[0]).item() and torch.isclose(a.pose[2], b.pose[2] + 0.05).item()
+    )  # NOTE hardcoded
 
 
 def _is_on_table(a: Cube, table: Table, height_tol_frac: float = 0.5) -> bool:
@@ -150,7 +152,7 @@ def _is_grasping(
     # tcp pose should be within a's footprint (plus a little slack)
     within_x = (aabb_a[0] - xy_slack) <= scene.tcp_pose[0] <= (aabb_a[3] + xy_slack)
     within_y = (aabb_a[1] - xy_slack) <= scene.tcp_pose[1] <= (aabb_a[4] + xy_slack)
-    within_z = (aabb_a[2] - z_slack) <= scene.tcp_pose[2] <= (aabb_a[5] + z_slack * 2)
+    within_z = (aabb_a[2] - z_slack) <= scene.tcp_pose[2] <= (aabb_a[5] + z_slack * 1.5)
 
     # To be holding must be within footprint and gripper must be closed
     return bool(within_x and within_y and within_z and scene.gripper_pos > gripper_thresh)
@@ -193,7 +195,7 @@ def _is_at(a: Cube, l: Location, z_slack_frac: float = 0.00, xy_slack_frac: floa
     # tcp pose should be within a's footprint (plus a little slack)
     within_x = l.pose[0] - xy_slack <= a.pose[0] <= (l.pose[0] + l.size + xy_slack)
     within_y = True
-    within_z = l.pose[2] - z_slack <= a.pose[2] <= (l.pose[2] + l.size) + z_slack
+    within_z = l.pose[2] - z_slack <= a.pose[2] <= (l.pose[2] + a.size) + z_slack
     # (aabb_a[1] - z_slack) <= l.pose[2] + l.size / 2 <= (aabb_a[5] + z_slack)
 
     # To be holding must be within footprint and gripper must be closed
@@ -272,12 +274,23 @@ def ground_cube_relations(scene: Scene) -> tuple[list[tuple[str, SceneObject, Sc
 def ground_gripper_relations(scene: Scene) -> tuple[bool, list[tuple[Literal["holding"], SceneObject]]]:
     """Grounding for if the gripper hand is empty and the object it is holding."""
     grasping_relations = []
+    two_held_relations = False
     for obj in scene.objects:
         if not isinstance(obj, Cube):
             continue
         if _is_grasping(obj, scene):
             grasping_relations.append(("grasping", obj))
-    return len(grasping_relations) == 0, grasping_relations, _is_lifted(scene)
+            for other_obj in scene.objects:
+                if other_obj.object_id == obj.object_id:
+                    continue
+                if isinstance(other_obj, Cube) and (other_obj != obj) and _is_on(obj, other_obj):
+                    two_held_relations = True
+    return (
+        len(grasping_relations) == 0,
+        grasping_relations,
+        _is_lifted(scene),
+        (two_held_relations and len(grasping_relations) != 0),
+    )
 
 
 def ground_location_relations(scene: Scene) -> list[tuple[str, SceneObject, SceneObject]]:

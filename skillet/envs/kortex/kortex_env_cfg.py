@@ -92,5 +92,5 @@ class KortexEnvCfg:
 
     use_tabletop_camera: bool = True
     """If to use the realsense tabletop camera"""
-    gripper_close_time: float = 1.5
+    gripper_close_time: float = 1.0
     """Time taken to close gripper, 0 = non blocking"""

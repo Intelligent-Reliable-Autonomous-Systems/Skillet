@@ -6,6 +6,7 @@ from typing import Any
 
 from unified_planning.engines import PlanGenerationResultStatus as PGResultStatus
 from unified_planning.engines import UPSequentialSimulator
+from unified_planning.environment import Environment
 from unified_planning.io import PDDLReader
 from unified_planning.model import Object, Problem, UPState
 from unified_planning.plans import ActionInstance
@@ -34,7 +35,13 @@ from skillet.scene.scene_objs import Cube, Location, Spill, Sponge, Target
 class AbstractModel(BasePlanner):
     """An abstract model of the scene."""
 
-    def __init__(self, domain_file: str, task_file: str | None = None, scene: Scene | None = None) -> None:
+    def __init__(
+        self,
+        domain_file: str,
+        task_file: str | None = None,
+        scene: Scene | None = None,
+        environment: Environment | None = None,
+    ) -> None:
         """Initialize the abstract model.
 
         Args:
@@ -43,7 +50,8 @@ class AbstractModel(BasePlanner):
             scene: The scene object
 
         """
-        self._pddl_reader = PDDLReader()
+        self._environment = environment
+        self._pddl_reader = PDDLReader(environment=environment)
 
         self._domain_file = domain_file
         self._task_file = task_file
@@ -91,29 +99,31 @@ class AbstractModel(BasePlanner):
         if "block" in user_types:
             block_type = self._problem.user_type("block")
             for ob_name in self._scene.get_object_names(Cube):
-                object_state[ob_name] = Object(ob_name, block_type)
+                object_state[ob_name] = Object(ob_name, block_type, environment=self._environment)
         if "table" in user_types:
-            object_state[self._scene.table.name] = Object(self._scene.table.name, self._problem.user_type("table"))
+            object_state[self._scene.table.name] = Object(
+                self._scene.table.name, self._problem.user_type("table"), environment=self._environment
+            )
         if "location" in user_types:
             location_type = self._problem.user_type("location")
             for ob_name in self._scene.get_object_names(Location):
-                object_state[ob_name] = Object(ob_name, location_type)
+                object_state[ob_name] = Object(ob_name, location_type, environment=self._environment)
         if "target" in user_types:
             target_type = self._problem.user_type("target")
             for ob_name in self._scene.get_object_names(Target):
-                object_state[ob_name] = Object(ob_name, target_type)
+                object_state[ob_name] = Object(ob_name, target_type, environment=self._environment)
         if "sponge" in user_types:
             target_type = self._problem.user_type("sponge")
             for ob_name in self._scene.get_object_names(Sponge):
-                object_state[ob_name] = Object(ob_name, target_type)
+                object_state[ob_name] = Object(ob_name, target_type, environment=self._environment)
         if "spill" in user_types:
             target_type = self._problem.user_type("spill")
             for ob_name in self._scene.get_object_names(Spill):
-                object_state[ob_name] = Object(ob_name, target_type)
+                object_state[ob_name] = Object(ob_name, target_type, environment=self._environment)
         # Perform predicate grounding
         fluent_state = {}
         on_pred, clear_pred, north_pred, color_pred, material_pred = ground_cube_relations(self._scene)
-        empty_pred, grasping_pred, lifted_pred = ground_gripper_relations(self._scene)
+        empty_pred, grasping_pred, lifted_pred, two_held_pred = ground_gripper_relations(self._scene)
         above_loc_pred, north_loc_pred, at_pred, occ_pred, ob_above_pred, ob_north_pred, ob_south_pred = (
             ground_location_relations(self._scene)
         )
@@ -145,6 +155,9 @@ class AbstractModel(BasePlanner):
             for hp in grasping_pred:
                 fluent = self._problem.fluent(hp[0])(*(object_state[hp[1].name],))
                 fluent_state[fluent] = True
+        if "two-held" in prob_fluents:
+            fluent = self._problem.fluent("two-held")
+            fluent_state[fluent] = two_held_pred
         if "loc-above" in prob_fluents:
             for la in above_loc_pred:
                 fluent = self._problem.fluent(la[0])(*(object_state[la[1].name], object_state[la[2].name]))
@@ -209,7 +222,7 @@ class AbstractModel(BasePlanner):
         state = self.get_abstract_state()
 
         self._problem.add_objects(list(state.objects.values()))
-        self._problem.add_goal(And(*list(state.goals)))
+        # self._problem.add_goal(And(*list(state.goals)))
         [self._problem.set_initial_value(fluent, value) for fluent, value in state.fluents.items()]
         self._simulator = UPSequentialSimulator(self._problem)
         self._init_state = AbstractState(

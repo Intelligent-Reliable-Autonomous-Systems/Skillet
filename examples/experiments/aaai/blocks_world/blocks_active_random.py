@@ -4,10 +4,13 @@ import argparse
 import time
 from typing import TYPE_CHECKING
 
+from conditional_repair.baselines.online.random_agent import RandomAgent
+from conditional_repair.dataset import RepairDataset
 from conditional_repair.orcam.orcam import ORCAMConfig
 
 from skillet.agents import ActiveLearningAgent
-from skillet.agents.orcam_agent import ORCAMLearningAgent
+
+# from skillet.agents.orcam_agent import ORCAMLearningAgent
 from skillet.core import ObservationSpec
 from skillet.core.env import BatchToSingleWrapper
 from skillet.envs import SkilletEnv
@@ -16,7 +19,7 @@ from skillet.perception.perception import SkilletPerception
 from skillet.planning import AbstractModel
 from skillet.scene import (
     Open3DVisualizer,
-    five_cube_scene_loader,
+    four_cube_scene_loader,
 )
 from skillet.skill.high_level import (
     PickSkill,
@@ -44,16 +47,26 @@ parser.add_argument(
     default="_robot_data/exp/",
     type=str,
 )
+parser.add_argument(
+    "--exp_config",
+    type=str,
+    default="skillet_tasks/blocksworld-pick-place/repair-magnet/repair-effects-random.json",
+    help="Path to experiment JSON file",
+)
 args_cli = parser.parse_args()
 
 
 def main() -> None:
-    scene = five_cube_scene_loader()
+    scene = four_cube_scene_loader()
     block_domain = "skillet_tasks/blocksworld-pick-place/simple-blocksworld-pick-place.domain.pddl"
     env_cfg = {
         "robot_ip": args_cli.robot_ip,
         "device": "cuda",
         "num_envs": args_cli.num_envs,
+        "base_apriltag_id": 1,
+        "base_apriltag_pose": [0.14, -0.01, 0.0, 0.0, 0.0, 0.7071068, 0.7071068],
+        "base_apriltag_fam": "tag36h11",
+        "base_apriltag_size": 0.1,
     }
 
     env = create_kortex_env(args_cli.task, env_cfg)
@@ -72,7 +85,7 @@ def main() -> None:
         reconstructor="sam3",
         poll_rate_hz=args_cli.poll_rate_hz,
         device="cuda",
-        vis_perception=False,
+        vis_perception=args_cli.o3d,
     )
     target_pose_func = None
     if args_cli.o3d:
@@ -92,20 +105,20 @@ def main() -> None:
     ACTION_MAP = {"place-block": place_block_skill, "pick-block": pick_block_skill}
 
     print("[INFO] Warming up Perception...")
-    time.sleep(5)
-    input("Press Enter to start the active learning experiment...")
+    time.sleep(3)
 
-    ORCAMConfig.instance().configure(
-        # global configurations here
-        fix_init_precondition=True,
-        noise=0.03,
-        exploration_relax_precondition_prob=0.0,
-        condition_buffer_size=128,
-        mc_rollouts=50,
-        mc_horizon=2,
-        mc_k_per_step=1,
-    )
-    learning_agent = ORCAMLearningAgent()
+    # ORCAMConfig.instance().configure(
+    #     # global configurations here
+    #     fix_init_precondition=True,
+    #     noise=0.03,
+    #     exploration_relax_precondition_prob=0.0,
+    #     condition_buffer_size=128,
+    #     mc_rollouts=50,
+    #     mc_horizon=2,
+    #     mc_k_per_step=1,
+    # )
+    # learning_agent = ORCAMLearningAgent()
+    learning_agent = RandomAgent(RepairDataset(args_cli.exp_config))
 
     tamp_agent = ActiveLearningAgent(
         scene,
@@ -117,6 +130,8 @@ def main() -> None:
     logger = SkilletDataLogger(
         args_cli.log_dir, env, scene, perception, abs_model, tamp_agent, obs_spec=rgbd_grip_spec, visualize=False
     )
+    input("Press Enter to start the active learning experiment...")
+
     logger.write_video = True
     logger.run_thread()
 

@@ -16,6 +16,7 @@ import gymnasium as gym
 import numpy as np
 import torch
 from kortex_api.autogen.messages import Base_pb2
+from kortex_api.Exceptions.KServerException import KServerException
 
 from skillet.core.spaces import ActionSpec
 from skillet.envs.kortex import KortexEnv, KortexEnvCfg
@@ -305,11 +306,12 @@ class Gen3KortexEnv(KortexEnv):
 
         self.kortex.SendJointSpeedsCommand(command)
 
-    def _publish_twist_tcp_spec(self, twist: np.ndarray) -> None:
+    def _publish_twist_tcp_spec(self, twist: np.ndarray, max_retries=2) -> None:
         """Publish a twist in the tcp frame to the robot twist controller.
 
         Args:
             twist: Cartesian twist command (velocity) in XYZ (linear) and RPY (angular).
+            max_retries: maximum number of times trying to reconnect to server.
 
         """
         if self.active_controller != Base_pb2.SINGLE_LEVEL_SERVOING:
@@ -332,7 +334,21 @@ class Gen3KortexEnv(KortexEnv):
         twist_cmd.angular_y = twist[4]
         twist_cmd.angular_z = twist[5]
 
-        self.kortex.SendTwistCommand(command)
+        # for attempt in range(max_retries + 1):
+        #     try:
+        #     except KServerException as ex:
+        #         error_code = ex.get_error_code()
+        #         sub_error_code = ex.get_error_sub_code()
+        #         if sub_error_code == 130:
+        #             print(
+        #                 f"[WARN][KORTEX] Lost control of session (attempt {attempt + 1}/{max_retries + 1}), "
+        #                 "attempting to retake control..."
+        #             )
+        #             if not self._retake_control():
+        #                 raise
+        #             continue
+        #         else:
+        #             pass
 
     def _publish_tcp_cart_spec(self, tcp_cart: np.ndarray, duration: float = 5) -> None:
         """Publish a TCP cartesian trajectory to the kortex API.
@@ -364,7 +380,7 @@ class Gen3KortexEnv(KortexEnv):
             cartesian_pose.theta_y = np.rad2deg(tcp_cart[4])
             cartesian_pose.theta_z = np.rad2deg(tcp_cart[5])
             speed = action.reach_pose.constraint.speed
-            speed.translation = 0.08
+            speed.translation = 0.1  # NOTE might be fast
             speed.orientation = 30
 
             self._motion_event = threading.Event()

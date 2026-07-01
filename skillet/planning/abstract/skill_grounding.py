@@ -41,10 +41,14 @@ def _pick_skill_4_grounding(scene_objs: list[SceneObject], scene: Scene) -> bool
     else:
         on_grd = False
     grasp_grd = not _is_grasping(target, scene)
-    full_grd = not _gripper_closed(scene)
+    full_grd = False
+    for obj in scene.objects:
+        if isinstance(obj, Cube):
+            full_grd = full_grd or _is_grasping(obj, scene)
+
     obs_above_grd = not _is_obstructed_above(targetloc, scene)
 
-    return bool(at_grd and above_grd and on_grd and grasp_grd and full_grd and obs_above_grd)
+    return bool(at_grd and above_grd and on_grd and grasp_grd and (not full_grd) and obs_above_grd)
 
 
 def _place_skill_4_grounding(scene_objs: list[SceneObject], scene: Scene) -> bool:
