@@ -1,0 +1,15 @@
+{
+    "nl_goal": "Make two stacks of blocks two high.",
+    "pddl_goal": [{"predicate": "obstructed-above", "args": ["loc_11"]},
+                  {"predicate": "obstructed-above", "args": ["loc_12"]}],
+    "init_state": [ "on(green block, table)",
+                    "on(red block, table)",
+                    "on(blue block, red block)",
+                    "on(yellow block, table)",
+                    "plastic(red block)",
+                    "plastic(blue block)",
+                    "wooden(green block)",
+                    "wooden(yellow block)"],
+    "scene_name": "2magnet_2wooden_5loc",
+    "log_dir": "skillet_tasks/blocksworld-pick-place/eval/tasks/task3"
+}

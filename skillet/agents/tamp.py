@@ -244,19 +244,23 @@ class ActiveLearningAgent(Agent):
         skills_sampled = 0
         skills_failed = 0
         while True:
-            # print("[INFO][ACTIVE] Agent selecting for state", up_state)
             if self._moderator.is_paused:
                 time.sleep(0.1)
                 continue
+
             up_action = self._learning_agent.get_action(up_state, up_objects)
+            if up_action is None:
+                print("[WARN][ACTIVE] Invalid action selected/unable to find valid caction")
+                time.sleep(0.1)
+                continue
             ab_action = AbstractAction(
                 action=up_action.action.name, parameters=[p.object().name for p in up_action.actual_parameters]
             )
 
             self._selected_skill = self.action_to_skill_map[ab_action.action]
             args = self._scene.resolve_names_to_ids(ab_action.parameters)
-
             terminated, status = self._moderator.run_skill(env, self._selected_skill, args)
+
             execution = "applicable" if status == SkillStatusCodes.SUCCESS else "inapplicable"
             # Logging and learning
             time.sleep(1.5)  # To let perception update

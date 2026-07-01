@@ -17,7 +17,7 @@ from skillet.perception.perception import SkilletPerception
 from skillet.planning import AbstractModel
 from skillet.scene import (
     Open3DVisualizer,
-    four_cube_scene_loader,
+    load_scene,
 )
 from skillet.skill.high_level import (
     PickSkill,
@@ -52,11 +52,13 @@ parser.add_argument(
     help="Path to experiment JSON file",
 )
 parser.add_argument("--agent", type=str, default=None, help="Path to learning agent")
+parser.add_argument("--scene_name", type=str, default="3magnet_2wooden_5loc", help="What scene to load")
+
 args_cli = parser.parse_args()
 
 
 def main() -> None:
-    scene = four_cube_scene_loader()
+    scene = load_scene(args_cli.scene_name)
     block_domain = "skillet_tasks/blocksworld-pick-place/simple-blocksworld-pick-place.domain.pddl"
     env_cfg = {
         "robot_ip": args_cli.robot_ip,

@@ -1,16 +1,14 @@
 """Run a tabletop block stacking task."""
 
 import argparse
+import pickle
 import time
 from typing import TYPE_CHECKING
 
-from conditional_repair.baselines.online.random_agent import RandomAgent
+from conditional_repair.baselines.online.olam_agent import OlamAgent
 from conditional_repair.dataset import RepairDataset
-from conditional_repair.orcam.orcam import ORCAMConfig
 
 from skillet.agents import ActiveLearningAgent
-
-# from skillet.agents.orcam_agent import ORCAMLearningAgent
 from skillet.core import ObservationSpec
 from skillet.core.env import BatchToSingleWrapper
 from skillet.envs import SkilletEnv
@@ -19,7 +17,7 @@ from skillet.perception.perception import SkilletPerception
 from skillet.planning import AbstractModel
 from skillet.scene import (
     Open3DVisualizer,
-    load_scene,
+    four_cube_scene_loader,
 )
 from skillet.skill.high_level import (
     PickSkill,
@@ -50,16 +48,15 @@ parser.add_argument(
 parser.add_argument(
     "--exp_config",
     type=str,
-    default="skillet_tasks/blocksworld-pick-place/repair-magnet/repair-effects-random.json",
+    default="skillet_tasks/blocksworld-pick-place/repair-magnet/repair-effects-olam.json",
     help="Path to experiment JSON file",
 )
-parser.add_argument("--scene_name", type=str, default="3magnet_2wooden_5loc", help="What scene to load")
-
+parser.add_argument("--agent", type=str, default=None, help="Path to learning agent")
 args_cli = parser.parse_args()
 
 
 def main() -> None:
-    scene = load_scene(args_cli.scene_name)
+    scene = four_cube_scene_loader()
     block_domain = "skillet_tasks/blocksworld-pick-place/simple-blocksworld-pick-place.domain.pddl"
     env_cfg = {
         "robot_ip": args_cli.robot_ip,
@@ -77,7 +74,14 @@ def main() -> None:
     env.reset()
     rgbd_grip_spec: ObservationSpec[RGBD_Gripper_Obs] = env.coerce_obs_spec("rgbd-gripper")
 
-    abs_model = AbstractModel(block_domain, None, scene)
+    if args_cli.agent is None:
+        learning_agent = OlamAgent(RepairDataset(args_cli.exp_config))
+    else:
+        print("[INFO][PDDL] Loading active learning agent")
+        with open(args_cli.agent, "rb") as f:
+            learning_agent = pickle.load(f)
+
+    abs_model = AbstractModel(block_domain, None, scene, environment=learning_agent.olam.domain.environment)
 
     perception = SkilletPerception(
         env=env,
@@ -108,19 +112,6 @@ def main() -> None:
 
     print("[INFO] Warming up Perception...")
     time.sleep(3)
-
-    # ORCAMConfig.instance().configure(
-    #     # global configurations here
-    #     fix_init_precondition=True,
-    #     noise=0.03,
-    #     exploration_relax_precondition_prob=0.0,
-    #     condition_buffer_size=128,
-    #     mc_rollouts=50,
-    #     mc_horizon=2,
-    #     mc_k_per_step=1,
-    # )
-    # learning_agent = ORCAMLearningAgent()
-    learning_agent = RandomAgent(RepairDataset(args_cli.exp_config))
 
     tamp_agent = ActiveLearningAgent(
         scene,

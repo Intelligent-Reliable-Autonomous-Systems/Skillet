@@ -10,7 +10,7 @@ from unified_planning.environment import Environment
 from unified_planning.io import PDDLReader
 from unified_planning.model import Object, Problem, UPState
 from unified_planning.plans import ActionInstance
-from unified_planning.shortcuts import And, OneshotPlanner
+from unified_planning.shortcuts import And, Not, OneshotPlanner
 
 from skillet.planning.abstract import (
     AbstractAction,
@@ -189,9 +189,11 @@ class AbstractModel(BasePlanner):
         for mp in material_pred:
             if mp[0] in prob_fluents:
                 fluent = self._problem.fluent(mp[0])(*(object_state[mp[1].name],))
+                fluent_state[fluent] = True
         for cp in color_pred:
             if cp[0] in prob_fluents:
                 fluent = self._problem.fluent(cp[0])(*(object_state[cp[1].name],))
+                fluent_state[fluent] = True
 
         # Parse the goal
         if goal is not None:
@@ -286,15 +288,27 @@ class AbstractModel(BasePlanner):
             return deltas
         return states
 
-    def _create_goal(self, goal: dict[str, Any], object_state: list[Object]) -> list[UPDictFluent]:
-        """Parse the output of the VLM goal into the problem.
+    # def _create_goal(self, goal: dict[str, Any], object_state: list[Object]) -> list[UPDictFluent]:
+    #     """Parse the output of the VLM goal into the problem."""
+    #     return [self._problem.fluent(g["predicate"])(*(object_state[arg] for arg in g["args"])) for g in goal]
 
-        Note: currently only supports parsing one `on` goal.
-        """
-        return [
-            self._problem.fluent(g["predicate"])(*(object_state[g["args"][0]], object_state[g["args"][1]]))
-            for g in goal
-        ]
+    def _create_goal(self, goal: dict[str, Any], object_state: list[Object]) -> list[UPDictFluent]:
+        """Parse the output of the VLM goal into the problem."""
+        goals = []
+        for g in goal:
+            predicate = g["predicate"]
+            negated = predicate.startswith("not ")
+            if negated:
+                predicate = predicate[len("not ") :]
+
+            fluent_expr = self._problem.fluent(predicate)(*(object_state[arg] for arg in g["args"]))
+
+            if negated:
+                fluent_expr = Not(fluent_expr)
+
+            goals.append(fluent_expr)
+
+        return goals
 
 
 class PDDLParsingError(Exception):

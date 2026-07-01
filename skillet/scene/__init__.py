@@ -10,16 +10,7 @@ from .scenes import CUBE_SIZE as CUBE_SIZE
 from .scenes import SPILL_SIZE as SPILL_SIZE
 from .scenes import SPONGE_SIZE as SPONGE_SIZE
 from .scenes import TARGET_SIZE as TARGET_SIZE
-from .scenes import empty_scene_loader as empty_scene_loader
-from .scenes import five_cube_scene_loader as five_cube_scene_loader
-from .scenes import four_cube_scene_loader as four_cube_scene_loader
-from .scenes import one_cube_scene_loader as one_cube_scene_loader
-from .scenes import seven_cube_scene_loader as seven_cube_scene_loader
-from .scenes import six_cube_april_scene_loader as six_cube_april_scene_loader
-from .scenes import six_cube_scene_loader as six_cube_scene_loader
-from .scenes import sponge_scene_loader as sponge_scene_loader
-from .scenes import three_cube_april_scene_loader as three_cube_april_scene_loader
-from .scenes import three_cube_scene_loader as three_cube_scene_loader
+from .scenes import load_scene as load_scene
 
 with contextlib.suppress(ImportError):
     from .visualization import Open3DVisualizer as Open3DVisualizer

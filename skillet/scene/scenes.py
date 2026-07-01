@@ -161,7 +161,7 @@ def seven_cube_scene_loader() -> None:
     )
 
 
-def four_cube_scene_loader() -> None:
+def two_magnet_two_wooden_five_loc_scene() -> None:
     return Scene(
         objects=[
             Table(height=0.0, name="table_0", init_pose=torch.as_tensor([0.35, 0.0, 0.0, 1, 0, 0, 0], device=DEVICE)),
@@ -174,33 +174,121 @@ def four_cube_scene_loader() -> None:
             Location(size=0.07, init_pose=torch.as_tensor([0.34, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_02"),
             Location(size=0.07, init_pose=torch.as_tensor([0.41, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_03"),
             Location(size=0.07, init_pose=torch.as_tensor([0.48, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_04"),
-            # Location(init_pose=torch.as_tensor([0.475, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_05"),
-            # Location(init_pose=torch.as_tensor([0.525, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_06"),
-            # Location(init_pose=torch.as_tensor([0.575, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_07"),
             Location(size=0.07, init_pose=torch.as_tensor([0.20, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_10"),
             Location(size=0.07, init_pose=torch.as_tensor([0.27, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_11"),
             Location(size=0.07, init_pose=torch.as_tensor([0.34, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_12"),
             Location(size=0.07, init_pose=torch.as_tensor([0.41, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_13"),
             Location(size=0.07, init_pose=torch.as_tensor([0.48, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_14"),
-            # Location(init_pose=torch.as_tensor([0.475, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_15"),
-            # Location(init_pose=torch.as_tensor([0.525, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_16"),
-            # Location(init_pose=torch.as_tensor([0.575, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_17"),
             Location(size=0.07, init_pose=torch.as_tensor([0.20, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_20"),
             Location(size=0.07, init_pose=torch.as_tensor([0.27, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_21"),
             Location(size=0.07, init_pose=torch.as_tensor([0.34, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_22"),
             Location(size=0.07, init_pose=torch.as_tensor([0.41, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_23"),
             Location(size=0.07, init_pose=torch.as_tensor([0.48, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_24"),
-            # Location(init_pose=torch.as_tensor([0.475, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_25"),
-            # Location(init_pose=torch.as_tensor([0.525, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_26"),
-            # Location(init_pose=torch.as_tensor([0.575, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_27"),
             Location(size=0.07, init_pose=torch.as_tensor([0.20, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_30"),
             Location(size=0.07, init_pose=torch.as_tensor([0.27, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_31"),
             Location(size=0.07, init_pose=torch.as_tensor([0.34, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_32"),
             Location(size=0.07, init_pose=torch.as_tensor([0.41, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_33"),
             Location(size=0.07, init_pose=torch.as_tensor([0.48, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_34"),
-            # Location(init_pose=torch.as_tensor([0.475, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_35"),
-            # Location(init_pose=torch.as_tensor([0.525, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_36"),
-            # Location(init_pose=torch.as_tensor([0.575, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_37"),
+        ],
+        closed_set=True,
+        bounds=WORLD_BOUNDS,
+        contains_objects=True,
+        goal=[
+            {"predicate": "on", "args": ["green_block", "blue_block"]},
+        ],
+    )
+
+
+def three_magnet_two_wooden_five_loc_scene() -> None:
+    return Scene(
+        objects=[
+            Table(height=0.0, name="table_0", init_pose=torch.as_tensor([0.35, 0.0, 0.0, 1, 0, 0, 0], device=DEVICE)),
+            Cube(size=CUBE_SIZE, name="green_block", material="wooden", color="green"),
+            Cube(size=CUBE_SIZE, name="yellow_block", material="wooden", color="yellow"),
+            Cube(size=CUBE_SIZE, name="red_block", material="plastic", color="red"),
+            Cube(size=CUBE_SIZE, name="blue_block", material="plastic", color="blue"),
+            Cube(size=CUBE_SIZE, name="pink_block", material="plastic", color="pink"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.20, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_00"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.27, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_01"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.34, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_02"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.41, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_03"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.48, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_04"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.20, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_10"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.27, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_11"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.34, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_12"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.41, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_13"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.48, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_14"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.20, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_20"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.27, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_21"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.34, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_22"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.41, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_23"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.48, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_24"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.20, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_30"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.27, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_31"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.34, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_32"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.41, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_33"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.48, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_34"),
+        ],
+        closed_set=True,
+        bounds=WORLD_BOUNDS,
+        contains_objects=True,
+        goal=[
+            {"predicate": "on", "args": ["green_block", "blue_block"]},
+        ],
+    )
+
+
+def two_magnet_two_wooden_three_loc_scene() -> None:
+    return Scene(
+        objects=[
+            Table(height=0.0, name="table_0", init_pose=torch.as_tensor([0.35, 0.0, 0.0, 1, 0, 0, 0], device=DEVICE)),
+            Cube(size=CUBE_SIZE, name="green_block", material="wooden", color="green"),
+            Cube(size=CUBE_SIZE, name="yellow_block", material="wooden", color="yellow"),
+            Cube(size=CUBE_SIZE, name="red_block", material="plastic", color="red"),
+            Cube(size=CUBE_SIZE, name="blue_block", material="plastic", color="blue"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.20, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_00"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.27, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_01"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.34, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_02"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.20, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_10"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.27, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_11"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.34, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_12"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.20, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_20"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.27, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_21"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.34, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_22"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.20, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_30"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.27, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_31"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.34, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_32"),
+        ],
+        closed_set=True,
+        bounds=WORLD_BOUNDS,
+        contains_objects=True,
+        goal=[
+            {"predicate": "on", "args": ["green_block", "blue_block"]},
+        ],
+    )
+
+
+def three_magnet_two_wooden_three_loc_scene() -> None:
+    return Scene(
+        objects=[
+            Table(height=0.0, name="table_0", init_pose=torch.as_tensor([0.35, 0.0, 0.0, 1, 0, 0, 0], device=DEVICE)),
+            Cube(size=CUBE_SIZE, name="green_block", material="wooden", color="green"),
+            Cube(size=CUBE_SIZE, name="yellow_block", material="wooden", color="yellow"),
+            Cube(size=CUBE_SIZE, name="red_block", material="plastic", color="red"),
+            Cube(size=CUBE_SIZE, name="blue_block", material="plastic", color="blue"),
+            Cube(size=CUBE_SIZE, name="pink_block", material="plastic", color="pink"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.20, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_00"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.27, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_01"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.34, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_02"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.20, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_10"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.27, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_11"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.34, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_12"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.20, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_20"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.27, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_21"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.34, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_22"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.20, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_30"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.27, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_31"),
+            Location(size=0.07, init_pose=torch.as_tensor([0.34, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_32"),
         ],
         closed_set=True,
         bounds=WORLD_BOUNDS,
@@ -328,23 +416,14 @@ def one_cube_scene_loader() -> None:
     )
 
 
-# Location(size=0.1, init_pose=torch.as_tensor([0.225, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_00"),
-# Location(size=0.1, init_pose=torch.as_tensor([0.325, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_01"),
-# Location(size=0.1, init_pose=torch.as_tensor([0.425, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_02"),
-# Location(size=0.1, init_pose=torch.as_tensor([0.525, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_03"),
-# Location(size=0.1, init_pose=torch.as_tensor([0.625, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_04"),
-# Location(size=0.1, init_pose=torch.as_tensor([0.225, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_10"),
-# Location(size=0.1, init_pose=torch.as_tensor([0.325, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_11"),
-# Location(size=0.1, init_pose=torch.as_tensor([0.425, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_12"),
-# Location(size=0.1, init_pose=torch.as_tensor([0.525, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_13"),
-# Location(size=0.1, init_pose=torch.as_tensor([0.625, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_14"),
-# Location(size=0.1, init_pose=torch.as_tensor([0.225, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_20"),
-# Location(size=0.1, init_pose=torch.as_tensor([0.325, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_21"),
-# Location(size=0.1, init_pose=torch.as_tensor([0.425, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_22"),
-# Location(size=0.1, init_pose=torch.as_tensor([0.525, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_23"),
-# Location(size=0.1, init_pose=torch.as_tensor([0.625, 0.0, 0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_24"),
-# Location(size=0.1, init_pose=torch.as_tensor([0.225, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_30"),
-# Location(size=0.1, init_pose=torch.as_tensor([0.325, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_31"),
-# Location(size=0.1, init_pose=torch.as_tensor([0.425, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_32"),
-# Location(size=0.1, init_pose=torch.as_tensor([0.525, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_33"),
-# Location(size=0.1, init_pose=torch.as_tensor([0.625, 0.0, 0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_34"),
+def load_scene(name: str) -> Scene:
+    """Load scenes by name."""
+    if name == "2magnet_2wooden_5loc":
+        return two_magnet_two_wooden_five_loc_scene()
+    if name == "3magnet_2wooden_5loc":
+        return three_magnet_two_wooden_five_loc_scene()
+    if name == "2magnet_2wooden_3loc":
+        return two_magnet_two_wooden_three_loc_scene()
+    if name == "3magnet_2wooden_3loc":
+        return three_magnet_two_wooden_three_loc_scene()
+    raise ValueError(f"Unknown scene name `{name}`")

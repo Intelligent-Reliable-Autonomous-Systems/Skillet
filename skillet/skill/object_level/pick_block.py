@@ -173,7 +173,7 @@ class PickBlock4Skill(PickBlockSkill):
             not self._target_block.is_pose_known()
             or self._target_block == self._params[1]
             or not self._target_block.moveable
-            or not _pick_skill_4_grounding(objs, self._scene)
+            # or not _pick_skill_4_grounding(objs, self._scene)
         ):
             self._status = torch.as_tensor(SkillStatusCodes.FAILED, device=self.params_spec.device)
             print(

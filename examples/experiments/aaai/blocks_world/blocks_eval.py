@@ -15,7 +15,7 @@ from skillet.perception.perception import SkilletPerception
 from skillet.planning import AbstractModel
 from skillet.scene import (
     Open3DVisualizer,
-    five_cube_scene_loader,
+    load_scene,
 )
 from skillet.skill.high_level import (
     PickSkill,
@@ -38,27 +38,34 @@ parser.add_argument("--robot_ip", type=str, default="192.168.1.10", help="Robot 
 parser.add_argument("--poll_rate_hz", type=int, default=10, help="Tick rate of the perception")
 parser.add_argument("--task", type=str, default="Kortex-Gen3-v0", help="Kortex Environment")
 
-parser.add_argument("--o3d", type=argparse.BooleanOptionalAction, default=False, help="If to visualize with open3d")
-parser.add_argument("--eval_dir", type=str, default="_robot_data/blocks_eval_tasks/task_7", help="Evaluation directory")
+parser.add_argument("--o3d", type=argparse.BooleanOptionalAction, default=True, help="If to visualize with open3d")
+parser.add_argument("--task_file", type=str, required=True, help="Path to evaluation task file description")
 parser.add_argument(
     "--vlm", type=argparse.BooleanOptionalAction, default=False, help="If to use the VLM for scene building"
 )
 parser.add_argument(
     "--domain_path",
-    default="skillet_tasks/blocksworld-pick-place/simple-blocksworld-pick-place.domain.pddl",
     type=str,
     help="Path to .domain.pddl file",
 )
+parser.add_argument("--model_dir", type=str, default="default", help="Name of model used")
 args_cli = parser.parse_args()
 
 
 def main() -> None:
-    scene = five_cube_scene_loader()
+    with pathlib.Path(args_cli.task_file).open("r") as f:
+        task_data = json.load(f)
+
+    scene = load_scene(task_data["scene_name"])
     block_domain = args_cli.domain_path
     env_cfg = {
         "robot_ip": args_cli.robot_ip,
         "device": "cuda",
         "num_envs": args_cli.num_envs,
+        "base_apriltag_id": 1,
+        "base_apriltag_pose": [0.14, -0.01, 0.0, 0.0, 0.0, 0.7071068, 0.7071068],
+        "base_apriltag_fam": "tag36h11",
+        "base_apriltag_size": 0.1,
     }
 
     env = create_kortex_env(args_cli.task, env_cfg)
@@ -77,7 +84,7 @@ def main() -> None:
         reconstructor="sam3",
         poll_rate_hz=args_cli.poll_rate_hz,
         device="cuda",
-        vis_perception=False,
+        vis_perception=args_cli.o3d,
     )
     target_pose_func = None
     if args_cli.o3d:
@@ -96,37 +103,43 @@ def main() -> None:
     place_block_skill = PlaceBlock4Skill(scene, place_skill, vis_target_pos=target_pose_func)
     ACTION_MAP = {"place_block": place_block_skill, "pick_block": pick_block_skill}
 
-    with pathlib.Path(f"{args_cli.eval_dir}/g_pddl.txt").open() as f:
-        pddl_goal = json.load(f)
-    print(pddl_goal)
-    scene.goal = pddl_goal
+    pathlib.Path(f"{task_data['log_dir']} / {args_cli.model_dir}").mkdir(exist_ok=True, parents=True)
+    scene.goal = task_data["pddl_goal"]
+    print(scene.goal)
     print("[INFO] Warming up Perception...")
-    time.sleep(5)
+    time.sleep(3)
 
     if args_cli.vlm:
         input("Press Enter to start the scene building...\n")
-        with pathlib.Path(f"{args_cli.eval_dir}/g_nl.txt").open() as f:
-            goal_txt = f.read()
 
-        perception.task_instruction = goal_txt
+        perception.task_instruction = task_data["nl_goal"]
         perception.build_scene = True
         time.sleep(4)
-        with pathlib.Path(f"{args_cli.eval_dir}/g_vlm.txt").open("w") as f:
+        with pathlib.Path(f"{task_data['log_dir']} / {args_cli.model_dir}/g_vlm.txt").open("w") as f:
             f.write(str(scene.goal))
         print(f"[INFO][VLM Goal]:\n{scene.goal}")
 
-    input("Press Enter to start the plan execution...\n")
     tamp_agent = PlanningAgent(scene, abstract_model=abs_model, action_to_skill_map=ACTION_MAP)
 
-    # simulate environment
     logger = SkilletDataLogger(
-        args_cli.eval_dir, env, scene, perception, abs_model, tamp_agent, obs_spec=rgbd_grip_spec, visualize=False
+        f"{task_data['log_dir']} / {args_cli.model_dir}",
+        env,
+        scene,
+        perception,
+        abs_model,
+        tamp_agent,
+        obs_spec=rgbd_grip_spec,
+        visualize=False,
     )
+    input("Press Enter to start the planning and evaluation experiment...\n")
+
     logger.write_video = True
     logger.run_thread()
+
     env.reset()
     tamp_agent.execute(env, logger=logger)
     logger.save_video()
+    print("[INFO][Main] finished experiment, exiting...")
 
 
 if __name__ == "__main__":
