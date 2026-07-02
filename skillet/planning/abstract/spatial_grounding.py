@@ -366,6 +366,14 @@ def ground_sponge_relations(scene: Scene) -> tuple[list[tuple[str, SceneObject, 
             material_relations.append(("deformable", obj))
         if obj.supportable is not None and obj.supportable:
             material_relations.append(("supportable", obj))
+        if obj.wet is not None and obj.wet:
+            material_relations.append(("wet", obj))
+        if obj.dirty is not None and obj.dirty:
+            material_relations.append(("dirty", obj))
+        if obj.graspable is not None and obj.graspable:
+            material_relations.append(("graspable", obj))
+        if obj.hoverable is not None and obj.hoverable:
+            material_relations.append(("hoverable", obj))
 
         if obj.color is not None:
             color_relations.append((obj.color, obj))

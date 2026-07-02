@@ -4,30 +4,44 @@
         table1 - table
         plate1 - plate
         sponge1 sponge2 - sponge
-        ketchup1 - ketchup
+        loc1 loc2 loc3 - location
+        water_spill - spill
+        orange_bin - bin 
+        coke_can - can
     )
     (:init
         ; static attributes
         (deformable sponge1)
         (deformable sponge2)
-        (supportable table1)
+        (graspable sponge1)
+        (graspable sponge2)
+        (graspable coke_can)
+        (not (graspable water_spill))
+        (not (deformable water_spill))
+
         (supportable plate1)
+        (supportable loc1)
+        (supportable loc2)
+        (supportable loc3)
+
+        (hoverable orange_bin)
+        (hoverable plate1)
+
         (blue sponge1)
         (yellow sponge2)
+
         (wet sponge1)
-        ; plate sits on the table
-        (on plate1 table1)
-        ; two clean, dry sponges resting on the table
-        (on sponge1 table1)
-        (on sponge2 table1)
-        ; ketchup is on the plate, and has made the plate dirty
-        (on ketchup1 plate1)
         (dirty plate1)
-        ; gripper starts empty, not lifted
+
+        (on sponge1 loc1)
+        (on sponge2 loc2)
+        (on coke_can plate1)
+        (obstructed plate1)
+        (obstructed loc1)
+        (obstructed loc2)
+
     )
     (:goal (and
-        (not (wet sponge1))
-        (on sponge2 plate1)
-        (on sponge1 table1)
+        (on sponge1 plate1)
     ))
 )

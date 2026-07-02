@@ -1,10 +1,9 @@
 """Object state representations."""
 
-from typing import Any, ClassVar, Literal
+from typing import Any, ClassVar, Literal, override
 
 import torch
 from jaxtyping import Float
-from typing_extensions import override
 
 from skillet import DEVICE
 from skillet.core.math import normalize, quat_apply, quat_from_matrix, quat_inv, quat_mul
@@ -240,6 +239,7 @@ class Table(SceneObject):
         super().__init__(name=name, localizable=False)
         self._height = height
         self._pose = init_pose
+        self._supportable = False
 
     @property
     def pose(self) -> torch.Tensor:
@@ -345,6 +345,7 @@ class Location(SceneObject):
         self._size = size
         self._pose = init_pose
         self._supportable = True
+        self._hoverable = True
 
     @property
     def pose(self) -> torch.Tensor:
@@ -406,7 +407,8 @@ class Sponge(SceneObject):
         self._ema_filter = EMAFilter()
         self._color = color
         self._deformable = True
-        self._supportable = False
+        self._graspable = True
+        self._wet = self._color == "blue"
 
     @property
     def pose(self) -> torch.Tensor:
@@ -476,6 +478,7 @@ class Spill(SceneObject):
 
         self._bbox = None
         self._deformable = False
+        self._graspable = False
         self._supportable = False
 
     @property
@@ -523,6 +526,7 @@ class Plate(SceneObject):
         init_pose: torch.Tensor | None = None,  # (x, y, z, w, x, y, z)
         name: str | None = None,
         color: str | None = None,
+        dirty: bool | None = None,
     ) -> None:
         """Initialize the plate.
 
@@ -538,6 +542,8 @@ class Plate(SceneObject):
         self._color = color
         self._supportable = True
         self._deformable = False
+        self._hoverable = True
+        self._dirty = dirty
 
     @property
     def pose(self) -> torch.Tensor:
@@ -599,6 +605,7 @@ class Bin(SceneObject):
         self._color = color
         self._supportable = False
         self._deformable = False
+        self._hoverable = True
 
     @property
     def pose(self) -> torch.Tensor:

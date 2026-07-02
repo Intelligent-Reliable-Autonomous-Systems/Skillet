@@ -44,6 +44,26 @@ class SceneObject:
         """If an object can act as a support."""
         return self._supportable if hasattr(self, "_supportable") else None
 
+    @property
+    def graspable(self) -> bool:
+        """If an object can act as a support."""
+        return self._graspable if hasattr(self, "_graspable") else None
+
+    @property
+    def hoverable(self) -> bool:
+        """If an object can act as a support."""
+        return self._hoverable if hasattr(self, "_hoverable") else None
+
+    @property
+    def wet(self) -> bool:
+        """If an object is wet."""
+        return self._wet if hasattr(self, "_wet") else None
+
+    @property
+    def dirty(self) -> bool:
+        """If an object is dirty."""
+        return self._dirty if hasattr(self, "_dirty") else None
+
     @material.setter
     def material(self, m: str) -> None:
         self._material = m

@@ -92,7 +92,6 @@ class AbstractModel(BasePlanner):
 
     def get_abstract_state(self, goal: dict[str, Any] | None = None) -> ParsedUpProblem:
         """Get the current abstract state of the scene."""
-
         assert self._scene is not None
         if self._problem is None:
             self.initialize()
@@ -331,8 +330,10 @@ class AbstractModel(BasePlanner):
 
     def _ground_sponge_domain_objects(self, object_state: dict, user_types: list) -> dict[str, Object]:
         """Ground the objects in the sponge domain."""
-        # Create all the objects in the scene (Cubes + Table + Locations + Targets)
-
+        if "table" in user_types:
+            object_state[self._scene.table.name] = Object(
+                self._scene.table.name, self._problem.user_type("table"), environment=self._environment
+            )
         if "location" in user_types:
             location_type = self._problem.user_type("location")
             for ob_name in self._scene.get_object_names(Location):
