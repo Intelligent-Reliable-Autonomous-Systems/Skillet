@@ -275,21 +275,31 @@ def ground_gripper_relations(scene: Scene) -> tuple[bool, list[tuple[Literal["ho
     """Grounding for if the gripper hand is empty and the object it is holding."""
     grasping_relations = []
     two_held_relations = False
+    three_held_relations = False
     for obj in scene.objects:
         if not isinstance(obj, Cube):
             continue
+        # Check if we are grasping a block
         if _is_grasping(obj, scene):
             grasping_relations.append(("grasping", obj))
             for other_obj in scene.objects:
                 if other_obj.object_id == obj.object_id:
                     continue
+                # If we are grasping a block, check if there is another block below
                 if isinstance(other_obj, Cube) and (other_obj != obj) and _is_on(obj, other_obj):
                     two_held_relations = True
+                    # If there is another block below, check if there is a third block below that
+                    for other_other_obj in scene.objects:
+                        if other_other_obj.object_id in [other_obj.object_id, obj.object_id]:
+                            continue
+                        if isinstance(other_obj, Cube) and (other_obj != obj) and _is_on(other_obj, other_other_obj):
+                            three_held_relations = True
     return (
         len(grasping_relations) == 0,
         grasping_relations,
         _is_lifted(scene),
         (two_held_relations and len(grasping_relations) != 0),
+        (three_held_relations and len(grasping_relations) != 0),
     )
 
 

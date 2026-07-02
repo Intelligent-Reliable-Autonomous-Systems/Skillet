@@ -1,6 +1,5 @@
 """An abstract model of the scene."""
 
-import copy
 import random
 from typing import Any
 
@@ -123,7 +122,7 @@ class AbstractModel(BasePlanner):
         # Perform predicate grounding
         fluent_state = {}
         on_pred, clear_pred, north_pred, color_pred, material_pred = ground_cube_relations(self._scene)
-        empty_pred, grasping_pred, lifted_pred, two_held_pred = ground_gripper_relations(self._scene)
+        empty_pred, grasping_pred, lifted_pred, two_held_pred, three_held_pred = ground_gripper_relations(self._scene)
         above_loc_pred, north_loc_pred, at_pred, occ_pred, ob_above_pred, ob_north_pred, ob_south_pred = (
             ground_location_relations(self._scene)
         )
@@ -158,6 +157,9 @@ class AbstractModel(BasePlanner):
         if "two-held" in prob_fluents:
             fluent = self._problem.fluent("two-held")
             fluent_state[fluent] = two_held_pred
+        if "three-held" in prob_fluents:
+            fluent = self._problem.fluent("three-held")
+            fluent_state[fluent] = three_held_pred
         if "loc-above" in prob_fluents:
             for la in above_loc_pred:
                 fluent = self._problem.fluent(la[0])(*(object_state[la[1].name], object_state[la[2].name]))
