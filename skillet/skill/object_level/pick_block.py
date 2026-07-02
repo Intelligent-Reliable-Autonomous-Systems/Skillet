@@ -7,7 +7,7 @@ import torch
 from skillet.core import SkillParamsSpec
 from skillet.core.skill import SingleSkill, SkillStatus, SkillStatusCodes
 from skillet.envs.specs import BxM_Action, IKEE_Obs, M_Action
-from skillet.planning.abstract.skill_grounding import _pick_skill_4_grounding
+from skillet.scene import Cube, Sponge
 from skillet.scene.base import Scene, SceneObject
 from skillet.skill.high_level.pick import PickSkill
 
@@ -131,7 +131,10 @@ class PickBlock2Skill(PickBlockSkill):
             self._status = torch.as_tensor(SkillStatusCodes.FAILED, device=self.params_spec.device)
             print(f"[INFO][PICK BLOCK][FAILED]: {self._target_block.name} | {objs[1].name}")
             return
-        target_xyz = self._target_block.pose[:3].to(self.obs_spec.device).clone() + self._offset
+        offset = (
+            self._offset.clone() if isinstance(self._target_block, (Cube, Sponge)) else self._offset.clone() * 2
+        )  # TODO SPONGE
+        target_xyz = self._target_block.pose[:3].to(self.obs_spec.device).clone() + offset
         if self._vis_target_pos is not None:
             self._vis_target_pos(target_xyz)
         yaw = 0

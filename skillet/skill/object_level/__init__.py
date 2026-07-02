@@ -2,6 +2,9 @@ from .discard import DiscardSkill as DiscardSkill
 from .drag_block import DragBlock2Skill as DragBlock2Skill
 from .drag_block import DragBlock5Skill as DragBlock5Skill
 from .drag_block import DragBlockSkill as DragBlockSkill
+from .hover_obj import HoverObject2Skill as HoverObject2Skill
+from .hover_obj import HoverObject4Skill as HoverObject4Skill
+from .hover_obj import HoverObjectSkill as HoverObjectSkill
 from .pick_block import PickBlock2Skill as PickBlock2Skill
 from .pick_block import PickBlock4Skill as PickBlock4Skill
 from .pick_block import PickBlockSkill as PickBlockSkill
@@ -11,5 +14,5 @@ from .place_block import PlaceBlock4Skill as PlaceBlock4Skill
 from .place_block import PlaceBlockSkill as PlaceBlockSkill
 from .place_table import PlaceTableSkill as PlaceTableSkill
 from .rotate_block import RotateBlockSkill as RotateBlockSkill
-from .squeeze_sponge import SqueezeSpongeSkill as SqueezeSpongeSkill
-from .wipe_spill import WipeTableSkill as WipeTableSkill
+from .squeeze_obj import SqueezeObjSkill as SqueezeObjSkill
+from .wipe_surface import WipeSurfaceSkill as WipeSurfaceSkill

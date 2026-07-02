@@ -7,10 +7,9 @@ import torch
 from skillet.core import SkillParamsSpec
 from skillet.core.skill import SingleSkill, SkillStatus, SkillStatusCodes
 from skillet.envs.specs import BxM_Action, IKEE_Obs, M_Action
-from skillet.planning.abstract.skill_grounding import _place_skill_4_grounding
 from skillet.planning.abstract.spatial_grounding import _is_on
 from skillet.planning.util import find_valid_table_xy
-from skillet.scene import Cube, Location, Table
+from skillet.scene import Cube, Location, Sponge, Table
 from skillet.scene.base import Scene, SceneObject
 from skillet.skill.high_level.place import PlaceSkill
 
@@ -129,9 +128,13 @@ class PlaceBlock2Skill(PlaceBlockSkill):
         if isinstance(self._target, Cube):
             if not self._target.is_pose_known() or self._params[0] == self._params[1]:
                 self._status = torch.as_tensor(SkillStatusCodes.FAILED, device=self.params_spec.device)
-
                 return
             target_xyz = self._target.pose[:3].to(self.obs_spec.device) + self._offset
+        elif isinstance(self._target, Location):
+            offset = (
+                self._offset.clone() if isinstance(self.objs[0], Sponge) else self._offset.clone() * 2
+            )  # TODO SPONGE
+            target_xyz = self._target.pose[:3].to(self.obs_spec.device) + offset
         elif isinstance(self._target, Table):
             target_xyz = find_valid_table_xy(self._scene).to(self.obs_spec.device) + (self._offset / 2)
         else:

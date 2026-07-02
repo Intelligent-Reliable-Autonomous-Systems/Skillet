@@ -15,15 +15,15 @@
         (blue ?b - sponge)
         (yellow ?b - sponge) ; colors for the sponge
 
+        (wet ?b - item) ; material attribute
+        (dirty ?b - surface) ; material attribute
+
         ; dynamic predicates
         (on ?b - item ?s - surface) ; item b is on surface s
         (grasping ?b - item) ; the gripper is closed around movable b
         (obstructed ?b - surface) ; the surface is obstructed
         (hover ?g - item ?s - surface); the surface being hovered over
 
-        (wet ?b - item) ; material attribute
-        (dirty ?b - surface) ; material attribute
-        
         ; pseudo-derived predicates
         (gripper-full) ; the gripper is occupied <-> exists ?b. (grasping ?b)
     )

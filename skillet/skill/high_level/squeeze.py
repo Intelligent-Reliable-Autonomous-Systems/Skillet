@@ -7,7 +7,7 @@ from typing import Generic
 import torch
 from jaxtyping import Float, Int
 
-from skillet.core.math import quat_error_magnitude, quat_from_yaw, quat_mul
+from skillet.core.math import quat_from_yaw, quat_mul
 from skillet.core.policy import BatchedPolicy
 from skillet.core.skill import (
     BatchedSkill,
@@ -175,7 +175,7 @@ class SqueezeSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params], Generic
         reach_actions = self._reach_policy.get_action(obs)
         reach_actions[:, -1] = torch.where(
             self._place_status >= SqueezeStatusCodes.RELEASE,
-            torch.zeros_like(reach_actions[:, -1]) + self._gripper_close,  # Open gripper
+            torch.ones_like(reach_actions[:, -1]) * self._gripper_close,  # Keep gripper in marginally closed position
             torch.ones_like(reach_actions[:, -1]),  # Close gripper
         )
 

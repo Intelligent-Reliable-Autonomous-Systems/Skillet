@@ -22,6 +22,7 @@ from skillet.planning.abstract import (
     ground_cube_relations,
     ground_gripper_relations,
     ground_location_relations,
+    ground_sponge_gripper_relations,
     ground_sponge_relations,
     parse_action,
     parse_value,
@@ -363,35 +364,37 @@ class AbstractModel(BasePlanner):
 
     def _ground_sponge_domain_preds(self, fluent_state: dict, object_state: dict[str, Object]) -> dict:
         """Perform predicate grounding in the sponge domain."""
-        # Perform predicate grounding
-        # on_pred, clear_pred, north_pred, color_pred, material_pred = ground_cube_relations(self._scene)
-        # empty_pred, grasping_pred, lifted_pred, two_held_pred, three_held_pred = ground_gripper_relations(self._scene)
-        # above_loc_pred, north_loc_pred, at_pred, occ_pred, ob_above_pred, ob_north_pred, ob_south_pred = (
-        #     ground_location_relations(self._scene)
-        # )
+        # ; dynamic predicates
+        # (on ?b - item ?s - surface) ; item b is on surface s
+        # (grasping ?b - item) ; the gripper is closed around movable b
+        # (obstructed ?b - surface) ; the surface is obstructed
+        # (hover ?g - item ?s - surface); the surface being hovered over
 
-        # (deformable ?m - item) ; kinematic attribute - item can be squeezed
-        # (supportable ?m - object) ; if this object can support something
-        # (blue ?b - sponge)
-        # (yellow ?b - sponge) ; colors for the sponge
-        on_pred, material_pred, color_pred = ground_sponge_relations(self._scene)
+        # ; pseudo-derived predicates
+        # (gripper-full) ; the gripper is occupied <-> exists ?b. (grasping ?b)
+        on_pred, obs_pred, material_pred, color_pred = ground_sponge_relations(self._scene)
+        hover_pred, empty_pred, grasping_pred = ground_sponge_gripper_relations(self._scene)
+
         prob_fluents = [f.name for f in self._problem.fluents]
-        block_type = self._problem.user_type("block")
         if "on" in prob_fluents:
             for op in on_pred:
-                o_fluent = self._problem.fluent(op[0])(*(object_state[op[1].name], object_state[op[2].name]))
-                fluent_state[o_fluent] = True
-
-        # if "gripper-full" in prob_fluents:
-        #     fluent = self._problem.fluent("gripper-full")
-        #     fluent_state[fluent] = not empty_pred
-        # if "gripper-lifted" in prob_fluents:
-        #     fluent = self._problem.fluent("gripper-lifted")
-        #     fluent_state[fluent] = lifted_pred
-        # if "grasping" in prob_fluents:
-        #     for hp in grasping_pred:
-        #         fluent = self._problem.fluent(hp[0])(*(object_state[hp[1].name],))
-        #         fluent_state[fluent] = True
+                fluent = self._problem.fluent(op[0])(*(object_state[op[1].name], object_state[op[2].name]))
+                fluent_state[fluent] = True
+        if "obstructed" in prob_fluents:
+            for ob in obs_pred:
+                fluent = self._problem.fluent(ob[0])(*(object_state[ob[1].name]))
+                fluent_state[fluent] = True
+        if "hover" in prob_fluents:
+            for hp in hover_pred:
+                fluent = self._problem.fluent(hp[0])(*(object_state[hp[1].name], object_state[hp[2].name]))
+                fluent_state[fluent] = True
+        if "grasping" in prob_fluents:
+            for gp in grasping_pred:
+                fluent = self._problem.fluent(gp[0])(*(object_state[gp[1].name],))
+                fluent_state[fluent] = True
+        if "gripper-full" in prob_fluents:
+            fluent = self._problem.fluent("gripper-full")
+            fluent_state[fluent] = not empty_pred
         for mp in material_pred:
             if mp[0] in prob_fluents:
                 fluent = self._problem.fluent(mp[0])(*(object_state[mp[1].name],))

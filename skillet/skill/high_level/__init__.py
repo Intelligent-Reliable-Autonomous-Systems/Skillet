@@ -2,6 +2,7 @@
 
 from .drag import DragSkill as DragSkill
 from .grasp_xyz import GraspXYZSkill as GraspXYZSkill
+from .hover import HoverSkill as HoverSkill
 from .inspect import InspectSkill as InspectSkill
 from .pick import PickSkill as PickSkill
 from .place import PlaceSkill as PlaceSkill

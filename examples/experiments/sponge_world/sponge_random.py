@@ -12,8 +12,8 @@ from skillet.logging import SkilletDataLogger
 from skillet.perception.perception import SkilletPerception
 from skillet.planning import AbstractModel
 from skillet.scene import (
-    sponge_scene_loader,
     Open3DVisualizer,
+    sponge_scene_loader,
 )
 from skillet.skill.high_level import (
     PickSkill,
@@ -24,8 +24,8 @@ from skillet.skill.high_level import (
 from skillet.skill.object_level import (
     PickBlock2Skill,
     PlaceBlock3Skill,
-    SqueezeSpongeSkill,
-    WipeTableSkill,
+    SqueezeObjSkill,
+    WipeSurfaceSkill,
 )
 from skillet.skill.policy import TcpCartPolicy
 from skillet_tasks.kortex_tasks.factory import create_kortex_env
@@ -94,8 +94,8 @@ def main() -> None:
     wipe_skill = WipeSkill(reach_policy=arm_policy, lift_height=0.25, gripper_close=0.6, length=skill_length)
     pick_obj_skill = PickBlock2Skill(scene, pick_skill, vis_target_pos=target_pose_func)
     place_obj_skill = PlaceBlock3Skill(scene, place_skill, vis_target_pos=target_pose_func)
-    wipe_table_skill = WipeTableSkill(scene, wipe_skill, vis_target_pos=target_pose_func)
-    squeeze_sponge_skill = SqueezeSpongeSkill(scene, squeeze_skill, vis_target_pos=target_pose_func)
+    wipe_table_skill = WipeSurfaceSkill(scene, wipe_skill, vis_target_pos=target_pose_func)
+    squeeze_sponge_skill = SqueezeObjSkill(scene, squeeze_skill, vis_target_pos=target_pose_func)
     ACTION_MAP = {
         "place_moveable": place_obj_skill,
         "pick_movable": pick_obj_skill,

@@ -8,7 +8,6 @@ from conditional_repair.baselines.online.random_agent import RandomAgent
 from conditional_repair.dataset import RepairDataset
 
 from skillet.agents import ActiveLearningAgent
-
 from skillet.core import ObservationSpec
 from skillet.core.env import BatchToSingleWrapper
 from skillet.envs import SkilletEnv
@@ -19,17 +18,13 @@ from skillet.scene import (
     Open3DVisualizer,
     load_scene,
 )
-from skillet.skill.high_level import (
-    PickSkill,
-    PlaceSkill,
-    SqueezeSkill,
-    WipeSkill,
-)
+from skillet.skill.high_level import HoverSkill, PickSkill, PlaceSkill, SqueezeSkill, WipeSkill
 from skillet.skill.object_level import (
+    HoverObject2Skill,
     PickBlock2Skill,
-    PlaceBlock3Skill,
-    SqueezeSpongeSkill,
-    WipeTableSkill,
+    PlaceBlock2Skill,
+    SqueezeObjSkill,
+    WipeSurfaceSkill,
 )
 from skillet.skill.policy import TcpCartPolicy
 from skillet_tasks.kortex_tasks.factory import create_kortex_env
@@ -104,19 +99,22 @@ def main() -> None:
     arm_policy = TcpCartPolicy(env.batched_env.obs_spec_tcp_cart, env.batched_env.action_spec_tcp_cart)
     place_skill = PlaceSkill(reach_policy=arm_policy, lift_height=0.25, gripper_close=0.6, length=skill_length)
     pick_skill = PickSkill(reach_policy=arm_policy, lift_height=0.25, gripper_close=0.6, length=skill_length)
+    hover_skill = HoverSkill(reach_policy=arm_policy, lift_height=0.25, gripper_close=0.6, length=skill_length)
     squeeze_skill = SqueezeSkill(
         reach_policy=arm_policy, lift_height=0.25, gripper_close=0.6, timeout=5, length=skill_length
     )
     wipe_skill = WipeSkill(reach_policy=arm_policy, lift_height=0.25, gripper_close=0.6, length=skill_length)
     pick_obj_skill = PickBlock2Skill(scene, pick_skill, vis_target_pos=target_pose_func)
-    place_obj_skill = PlaceBlock3Skill(scene, place_skill, vis_target_pos=target_pose_func)
-    wipe_table_skill = WipeTableSkill(scene, wipe_skill, vis_target_pos=target_pose_func)
-    squeeze_sponge_skill = SqueezeSpongeSkill(scene, squeeze_skill, vis_target_pos=target_pose_func)
+    place_obj_skill = PlaceBlock2Skill(scene, place_skill, vis_target_pos=target_pose_func)
+    wipe_obj_skill = WipeSurfaceSkill(scene, wipe_skill, vis_target_pos=target_pose_func)
+    squeeze_obj_skill = SqueezeObjSkill(scene, squeeze_skill, vis_target_pos=target_pose_func)
+    hover_obj_skill = HoverObject2Skill(scene, hover_skill, vis_target_pos=target_pose_func)
     ACTION_MAP = {
-        "place_moveable": place_obj_skill,
-        "pick_movable": pick_obj_skill,
-        "squeeze_movable": squeeze_sponge_skill,
-        "wipe_movable": wipe_table_skill,
+        "place": place_obj_skill,
+        "pick": pick_obj_skill,
+        "squeeze": squeeze_obj_skill,
+        "wipe": wipe_obj_skill,
+        "hover": hover_obj_skill,
     }
     print("[INFO] Warming up Perception...")
     time.sleep(3)
