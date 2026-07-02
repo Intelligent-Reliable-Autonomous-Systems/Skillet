@@ -4,7 +4,11 @@ import argparse
 import time
 from typing import TYPE_CHECKING
 
-from skillet.agents import RandomTampAgent
+from conditional_repair.baselines.online.random_agent import RandomAgent
+from conditional_repair.dataset import RepairDataset
+
+from skillet.agents import ActiveLearningAgent
+
 from skillet.core import ObservationSpec
 from skillet.core.env import BatchToSingleWrapper
 from skillet.envs import SkilletEnv
@@ -12,8 +16,8 @@ from skillet.logging import SkilletDataLogger
 from skillet.perception.perception import SkilletPerception
 from skillet.planning import AbstractModel
 from skillet.scene import (
-    sponge_scene_loader,
     Open3DVisualizer,
+    load_scene,
 )
 from skillet.skill.high_level import (
     PickSkill,
@@ -39,27 +43,34 @@ parser.add_argument("--device", type=str, default="cpu", help="Device to use")
 parser.add_argument("--robot_ip", type=str, default="192.168.1.10", help="Robot IP.")
 parser.add_argument("--poll_rate_hz", type=int, default=10, help="Tick rate of the perception")
 parser.add_argument("--task", type=str, default="Kortex-Gen3-v0", help="Kortex Environment")
-parser.add_argument("--build_scene", type=argparse.BooleanOptionalAction, default=False, help="If to build the scene")
-parser.add_argument(
-    "--perception", type=argparse.BooleanOptionalAction, default=True, help="If to run the perception pipeline"
-)
 parser.add_argument("--o3d", type=argparse.BooleanOptionalAction, default=True, help="If to visualize with open3d")
 parser.add_argument(
-    "--goal",
+    "--log_dir",
+    default="_robot_data/exp/",
     type=str,
-    default="Place the pink block between the yellow block and green block",
-    help="Natural language goal for the block scene.",
 )
+parser.add_argument(
+    "--exp_config",
+    type=str,
+    default="skillet_tasks/blocksworld-pick-place/repair-magnet/repair-effects-random.json",
+    help="Path to experiment JSON file",
+)
+parser.add_argument("--scene_name", type=str, default="2sponge_1plate", help="What scene to load")
+
 args_cli = parser.parse_args()
 
 
 def main() -> None:
-    scene = sponge_scene_loader()
-    block_domain = "skillet_tasks/sponge-world/simple-sponge.domain.pddl"
+    scene = load_scene(args_cli.scene_name)
+    block_domain = "skillet_tasks/pddl_tasks/clean-world/simple-sponge.domain.pddl"
     env_cfg = {
         "robot_ip": args_cli.robot_ip,
         "device": "cuda",
         "num_envs": args_cli.num_envs,
+        "base_apriltag_id": 1,
+        "base_apriltag_pose": [0.14, -0.01, 0.0, 0.0, 0.0, 0.7071068, 0.7071068],
+        "base_apriltag_fam": "tag36h11",
+        "base_apriltag_size": 0.1,
     }
 
     env = create_kortex_env(args_cli.task, env_cfg)
@@ -78,7 +89,7 @@ def main() -> None:
         reconstructor="sam3",
         poll_rate_hz=args_cli.poll_rate_hz,
         device="cuda",
-        vis_perception=True,
+        vis_perception=args_cli.o3d,
     )
     target_pose_func = None
     if args_cli.o3d:
@@ -86,8 +97,7 @@ def main() -> None:
         perception.set_visualizer(visualizer, segment_point_cloud=True)
         visualizer.run_thread()
         target_pose_func = visualizer.set_target_pos
-    if args_cli.perception:
-        perception.run_thread()
+    perception.run_thread()
 
     # Low-level policies
     skill_length = 1e9
@@ -108,24 +118,28 @@ def main() -> None:
         "squeeze_movable": squeeze_sponge_skill,
         "wipe_movable": wipe_table_skill,
     }
+    print("[INFO] Warming up Perception...")
+    time.sleep(3)
 
-    tamp_agent = RandomTampAgent(scene, abstract_model=abs_model, action_to_skill_map=ACTION_MAP)
+    learning_agent = RandomAgent(RepairDataset(args_cli.exp_config))
+
+    tamp_agent = ActiveLearningAgent(
+        scene,
+        abstract_model=abs_model,
+        action_to_skill_map=ACTION_MAP,
+        learning_agent=learning_agent,
+    )
 
     logger = SkilletDataLogger(
-        "_robot_data/exp/", env, scene, perception, abs_model, tamp_agent, obs_spec=rgbd_grip_spec, visualize=False
+        args_cli.log_dir, env, scene, perception, abs_model, tamp_agent, obs_spec=rgbd_grip_spec, visualize=False
     )
-    if args_cli.build_scene:
-        input("Press Enter to start the scene building...\n")
-        perception.task_instruction = args_cli.goal
-        perception.build_scene = args_cli.build_scene
+    input("Press Enter to start the active learning experiment...")
 
-    print("[INFO] Warming up Perception...")
-    time.sleep(5)
     logger.write_video = True
     logger.run_thread()
 
     env.reset()
-    tamp_agent.execute(env, logger=logger, num_actions=100)
+    tamp_agent.execute(env, logger=logger)
     logger.save_video()
     print("[INFO][Main] finished experiment, exiting...")
 

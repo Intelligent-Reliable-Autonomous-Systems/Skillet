@@ -1,7 +1,10 @@
 import contextlib
 
+from .scene_objs import Bin as Bin
+from .scene_objs import Can as Can
 from .scene_objs import Cube as Cube
 from .scene_objs import Location as Location
+from .scene_objs import Plate as Plate
 from .scene_objs import Spill as Spill
 from .scene_objs import Sponge as Sponge
 from .scene_objs import Table as Table

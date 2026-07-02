@@ -82,7 +82,7 @@ def main() -> None:
     arm_policy = TcpCartPolicy(env.batched_env.obs_spec_tcp_cart, env.batched_env.action_spec_tcp_cart)
     place_skill = PlaceSkill(
         reach_policy=arm_policy,
-        lift_height=0.21,
+        lift_height=0.25,
         gripper_close=0.6,
         length=skill_length,
         pos_threshold=0.015,
@@ -90,7 +90,7 @@ def main() -> None:
     )
     pick_skill = PickSkill(
         reach_policy=arm_policy,
-        lift_height=0.21,
+        lift_height=0.25,
         gripper_close=0.6,
         length=skill_length,
         pos_threshold=0.015,
@@ -98,7 +98,7 @@ def main() -> None:
     )
     drag_skill = DragSkill(
         reach_policy=arm_policy,
-        lift_height=0.21,
+        lift_height=0.25,
         gripper_close=0.6,
         length=skill_length,
         pos_threshold=0.015,

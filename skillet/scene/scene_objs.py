@@ -1,4 +1,4 @@
-"""Cube state representation."""
+"""Object state representations."""
 
 from typing import Any, ClassVar, Literal
 
@@ -12,7 +12,7 @@ from skillet.scene.base import SceneObject
 
 
 class EMAFilter:
-    """EMA filter for cube positions."""
+    """EMA filter for object positions."""
 
     def __init__(self, alpha: float = 0.7, init: torch.Tensor | None = None):
         self.alpha = alpha
@@ -91,30 +91,6 @@ class Cube(SceneObject):
         self._material = material
         self._color = color
         self._moveable = moveable
-
-    @property
-    def material(self) -> str:
-        return self._material
-
-    @property
-    def color(self) -> str:
-        return self._color
-
-    @property
-    def moveable(self) -> bool:
-        return self._moveable
-
-    @material.setter
-    def material(self, m: str) -> None:
-        self._material = m
-
-    @color.setter
-    def color(self, c: str) -> None:
-        self._color = c
-
-    @moveable.setter
-    def moveable(self, b: bool) -> None:
-        self._moveable = b
 
     @property
     def pose(self) -> torch.Tensor:
@@ -368,6 +344,7 @@ class Location(SceneObject):
         super().__init__(name=name, localizable=False)
         self._size = size
         self._pose = init_pose
+        self._supportable = True
 
     @property
     def pose(self) -> torch.Tensor:
@@ -398,7 +375,7 @@ class Location(SceneObject):
 
     @property
     def aabb(self) -> torch.Tensor:
-        """The axis-aligned bounding box of the cube."""
+        """The axis-aligned bounding box of the location."""
         return torch.cat([self._pose[:3] - self._size / 2.0, self._pose[:3] + self._size / 2.0], dim=-1)
 
     def __str__(self) -> str:
@@ -414,59 +391,33 @@ class Sponge(SceneObject):
         size: float,
         init_pose: torch.Tensor | None = None,  # (x, y, z, w, x, y, z)
         name: str | None = None,
-        material: str = "plastic",
         color: str = "blue",
-        moveable: bool = True,
     ) -> None:
-        """Initialize the cube.
+        """Initialize the sponge.
 
         Args:
-            size: The side length of the cube in meters.
-            init_pose: The initial pose of the cube in the world frame.
+            size: The side length of the sponge in meters.
+            init_pose: The initial pose of the sponge in the world frame.
 
         """
         super().__init__(name=name, localizable=True)
         self._size = size
         self._pose = init_pose if init_pose is not None else torch.rand(size=(7,), device=DEVICE)
         self._ema_filter = EMAFilter()
-        self._material = material
         self._color = color
-        self._moveable = moveable
-
-    @property
-    def material(self) -> str:
-        return self._material
-
-    @property
-    def color(self) -> str:
-        return self._color
-
-    @property
-    def moveable(self) -> bool:
-        return self._moveable
-
-    @material.setter
-    def material(self, m: str) -> None:
-        self._material = m
-
-    @color.setter
-    def color(self, c: str) -> None:
-        self._color = c
-
-    @moveable.setter
-    def moveable(self, b: bool) -> None:
-        self._moveable = b
+        self._deformable = True
+        self._supportable = False
 
     @property
     def pose(self) -> torch.Tensor:
-        """The pose of the cube in the world frame."""
+        """The pose of the sponge in the world frame."""
         if self._pose is None:
             raise AttributeError("The pose is not known.")
         return self._pose
 
     @pose.setter
     def pose(self, pose: torch.Tensor) -> None:
-        """Set the pose of the cube in the world frame."""
+        """Set the pose of the sponge in the world frame."""
         self._pose = self._ema_filter.update(pose)
 
     @property
@@ -490,7 +441,7 @@ class Sponge(SceneObject):
 
     def __str__(self) -> str:
         """Return a printable string."""
-        return f"Cube | ID: {self.object_id} | Name: {self.name} | Center: {self.pose.cpu().numpy()[:3]}"
+        return f"Sponge | ID: {self.object_id} | Name: {self.name} | Center: {self.pose.cpu().numpy()[:3]}"
 
 
 class Spill(SceneObject):
@@ -501,16 +452,14 @@ class Spill(SceneObject):
         size: float,
         init_pose: torch.Tensor | None = None,  # (x, y, z, w, x, y, z)
         name: str | None = None,
-        material: str = "plastic",
-        color: str = "blue",
-        moveable: bool = True,
+        color: str | None = None,
     ) -> None:
-        """Initialize the cube.
+        """Initialize the spill.
 
         Args:
-            size: The side length of the cube in meters.
-            init_pose: The initial pose of the cube in the world frame.
-            face_to_apriltag: The mapping from the cube's faces to the AprilTag IDs.
+            size: The side length of the spill in meters.
+            init_pose: The initial pose of the spill in the world frame.
+            face_to_apriltag: The mapping from the spill's faces to the AprilTag IDs.
                 - id: The ID of the AprilTag.
                 - size: The size of the AprilTag in meters.
                 - orientation: The rotation of the AprilTag around the normal vector.
@@ -523,35 +472,11 @@ class Spill(SceneObject):
         self._size = size
         self._pose = init_pose if init_pose is not None else torch.rand(size=(7,), device=DEVICE)
         self._ema_filter = EMAFilter()
-        self._material = material
         self._color = color
-        self._moveable = moveable
 
         self._bbox = None
-
-    @property
-    def material(self) -> str:
-        return self._material
-
-    @property
-    def color(self) -> str:
-        return self._color
-
-    @property
-    def moveable(self) -> bool:
-        return self._moveable
-
-    @material.setter
-    def material(self, m: str) -> None:
-        self._material = m
-
-    @color.setter
-    def color(self, c: str) -> None:
-        self._color = c
-
-    @moveable.setter
-    def moveable(self, b: bool) -> None:
-        self._moveable = b
+        self._deformable = False
+        self._supportable = False
 
     @property
     def pose(self) -> torch.Tensor:
@@ -584,39 +509,189 @@ class Spill(SceneObject):
     def is_pose_known(self) -> bool:
         return self._pose is not None
 
-    def get_corners(self) -> torch.Tensor:
-        """Get the corners of the spill in the world frame.
-
-        Returns:
-            The corners of the spill in the world frame. Shape is (8, 3).
-
-        """
-        # 8 corners in local frame, at ±size/2 along each axis
-        half = self._size / 2
-        offsets = (
-            torch.tensor(
-                [
-                    [-1, -1, -1],  # 0: front-right-bottom
-                    [+1, -1, -1],  # 1: back-right-bottom
-                    [-1, +1, -1],  # 2: front-left-bottom
-                    [+1, +1, -1],  # 3: back-left-bottom
-                    [-1, -1, +1],  # 4: front-right-top
-                    [+1, -1, +1],  # 5: back-right-top
-                    [-1, +1, +1],  # 6: front-left-top
-                    [+1, +1, +1],  # 7: back-left-top
-                ],
-                dtype=self._pose.dtype,
-                device=self._pose.device,
-            )
-            * half
-        )  # (8, 3)
-
-        pos = self._pose[:3]  # (3,)
-        quat = self._pose[3:]  # (4,) (w, x, y, z)
-
-        # Rotate each corner offset into world frame, then translate
-        return pos + quat_apply(quat.unsqueeze(0).expand(8, -1), offsets)  # (8, 3)
-
     def __str__(self) -> str:
         """Return a printable string."""
         return f"Spill | ID: {self.object_id} | Name: {self.name} | Center: {self.pose.cpu().numpy()[:3]}"
+
+
+class Plate(SceneObject):
+    """A plate in a scene."""
+
+    def __init__(
+        self,
+        size: float,
+        init_pose: torch.Tensor | None = None,  # (x, y, z, w, x, y, z)
+        name: str | None = None,
+        color: str | None = None,
+    ) -> None:
+        """Initialize the plate.
+
+        Args:
+            size: The side length of the plate in meters.
+            init_pose: The initial pose of the plate in the world frame.
+
+        """
+        super().__init__(name=name, localizable=True)
+        self._size = size
+        self._pose = init_pose if init_pose is not None else torch.rand(size=(7,), device=DEVICE)
+        self._ema_filter = EMAFilter()
+        self._color = color
+        self._supportable = True
+        self._deformable = False
+
+    @property
+    def pose(self) -> torch.Tensor:
+        """The pose of the plate in the world frame."""
+        if self._pose is None:
+            raise AttributeError("The pose is not known.")
+        return self._pose
+
+    @pose.setter
+    def pose(self, pose: torch.Tensor) -> None:
+        """Set the pose of the plate in the world frame."""
+        self._pose = self._ema_filter.update(pose)
+
+    @property
+    def aabb(self) -> torch.Tensor:
+        """The axis-aligned bounding box of the plate."""
+        return torch.cat([self._pose[:3] - self._size / 2.0, self._pose[:3] + self._size / 2.0], dim=-1)
+
+    @property
+    def object_type(self) -> str:
+        """The type of the plate."""
+        return "plate"
+
+    @property
+    def size(self) -> float:
+        """The size of the plate."""
+        return self._size
+
+    @override
+    def is_pose_known(self) -> bool:
+        return self._pose is not None
+
+    def __str__(self) -> str:
+        """Return a printable string."""
+        return f"Plate | ID: {self.object_id} | Name: {self.name} | Center: {self.pose.cpu().numpy()[:3]}"
+
+
+class Bin(SceneObject):
+    """A bin in a scene."""
+
+    def __init__(
+        self,
+        size: float,
+        init_pose: torch.Tensor | None = None,  # (x, y, z, w, x, y, z)
+        name: str | None = None,
+        color: str | None = None,
+    ) -> None:
+        """Initialize the bin.
+
+        Args:
+            size: The side length of the bin in meters.
+            init_pose: The initial pose of the bin in the world frame.
+
+        """
+        super().__init__(name=name, localizable=True)
+        self._size = size
+        self._pose = init_pose if init_pose is not None else torch.rand(size=(7,), device=DEVICE)
+        self._ema_filter = EMAFilter()
+        self._color = color
+        self._supportable = False
+        self._deformable = False
+
+    @property
+    def pose(self) -> torch.Tensor:
+        """The pose of the bin in the world frame."""
+        if self._pose is None:
+            raise AttributeError("The pose is not known.")
+        return self._pose
+
+    @pose.setter
+    def pose(self, pose: torch.Tensor) -> None:
+        """Set the pose of the bin in the world frame."""
+        self._pose = self._ema_filter.update(pose)
+
+    @property
+    def aabb(self) -> torch.Tensor:
+        """The axis-aligned bounding box of the bin."""
+        return torch.cat([self._pose[:3] - self._size / 2.0, self._pose[:3] + self._size / 2.0], dim=-1)
+
+    @property
+    def object_type(self) -> str:
+        """The type of the bin."""
+        return "bin"
+
+    @property
+    def size(self) -> float:
+        """The size of the bin."""
+        return self._size
+
+    @override
+    def is_pose_known(self) -> bool:
+        return self._pose is not None
+
+    def __str__(self) -> str:
+        """Return a printable string."""
+        return f"Bin | ID: {self.object_id} | Name: {self.name} | Center: {self.pose.cpu().numpy()[:3]}"
+
+
+class Can(SceneObject):
+    """A can in a scene."""
+
+    def __init__(
+        self,
+        size: float,
+        init_pose: torch.Tensor | None = None,  # (x, y, z, w, x, y, z)
+        name: str | None = None,
+        color: str | None = None,
+    ) -> None:
+        """Initialize the can.
+
+        Args:
+            size: The side length of the can in meters.
+            init_pose: The initial pose of the can in the world frame.
+
+        """
+        super().__init__(name=name, localizable=True)
+        self._size = size
+        self._pose = init_pose if init_pose is not None else torch.rand(size=(7,), device=DEVICE)
+        self._ema_filter = EMAFilter()
+        self._color = color
+        self._deformable = False
+        self._supportable = False
+
+    @property
+    def pose(self) -> torch.Tensor:
+        """The pose of the can in the world frame."""
+        if self._pose is None:
+            raise AttributeError("The pose is not known.")
+        return self._pose
+
+    @pose.setter
+    def pose(self, pose: torch.Tensor) -> None:
+        """Set the pose of the can in the world frame."""
+        self._pose = self._ema_filter.update(pose)
+
+    @property
+    def aabb(self) -> torch.Tensor:
+        """The axis-aligned bounding box of the can."""
+        return torch.cat([self._pose[:3] - self._size / 2.0, self._pose[:3] + self._size / 2.0], dim=-1)
+
+    @property
+    def object_type(self) -> str:
+        """The type of the can."""
+        return "bin"
+
+    @property
+    def size(self) -> float:
+        """The size of the can."""
+        return self._size
+
+    @override
+    def is_pose_known(self) -> bool:
+        return self._pose is not None
+
+    def __str__(self) -> str:
+        """Return a printable string."""
+        return f"Can | ID: {self.object_id} | Name: {self.name} | Center: {self.pose.cpu().numpy()[:3]}"

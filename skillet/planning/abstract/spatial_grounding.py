@@ -353,3 +353,27 @@ def ground_location_relations(scene: Scene) -> list[tuple[str, SceneObject, Scen
         obstructed_north_relations,
         obstructed_south_relations,
     )
+
+
+def ground_sponge_relations(scene: Scene) -> tuple[list[tuple[str, SceneObject, SceneObject]], ...]:
+    """Ground the sponge relations in the scene."""
+    on_relations = []
+    color_relations = []
+    material_relations = []
+
+    for obj in scene.objects:
+        if obj.deformable is not None and obj.deformable:
+            material_relations.append(("deformable", obj))
+        if obj.supportable is not None and obj.supportable:
+            material_relations.append(("supportable", obj))
+
+        if obj.color is not None:
+            color_relations.append((obj.color, obj))
+
+        for other_obj in scene.objects:
+            if not obj.supportable:
+                continue
+            if obj.object_id != other_obj.object_id and _is_on(obj, other_obj):
+                on_relations.append(("on", obj, other_obj))
+
+    return on_relations, material_relations, color_relations

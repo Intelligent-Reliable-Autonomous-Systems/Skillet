@@ -1,6 +1,7 @@
 from .spatial_grounding import ground_cube_relations as ground_cube_relations
 from .spatial_grounding import ground_gripper_relations as ground_gripper_relations
 from .spatial_grounding import ground_location_relations as ground_location_relations
+from .spatial_grounding import ground_sponge_relations as ground_sponge_relations
 from .up_utils import AbstractAction as AbstractAction
 from .up_utils import AbstractGoal as AbstractGoal
 from .up_utils import AbstractPlan as AbstractPlan

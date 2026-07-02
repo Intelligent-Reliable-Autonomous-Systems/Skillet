@@ -23,6 +23,40 @@ class SceneObject:
         self._bbox = None
 
     @property
+    def material(self) -> str:
+        return self._material if hasattr(self, "_material") else None
+
+    @property
+    def color(self) -> str:
+        return self._color if hasattr(self, "_color") else None
+
+    @property
+    def moveable(self) -> bool:
+        return self._moveable if hasattr(self, "_moveable") else None
+
+    @property
+    def deformable(self) -> bool:
+        """If an object can be squeezed."""
+        return self._deformable if hasattr(self, "_deformable") else None
+
+    @property
+    def supportable(self) -> bool:
+        """If an object can act as a support."""
+        return self._supportable if hasattr(self, "_supportable") else None
+
+    @material.setter
+    def material(self, m: str) -> None:
+        self._material = m
+
+    @color.setter
+    def color(self, c: str) -> None:
+        self._color = c
+
+    @moveable.setter
+    def moveable(self, b: bool) -> None:
+        self._moveable = b
+
+    @property
     def localizable(self) -> bool:
         """If the object should be recognized by SAM."""
         return self._localizable

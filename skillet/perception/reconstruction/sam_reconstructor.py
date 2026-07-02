@@ -16,7 +16,7 @@ from skillet.perception.reconstruction.utils import (
 )
 from skillet.perception.segmentation.sam import SAMClient, get_sam_client
 from skillet.perception.segmentation.vlm import GeminiClient, QwenClient
-from skillet.scene import CUBE_SIZE, SPILL_SIZE, SPONGE_SIZE, TARGET_SIZE, Cube, Spill, Sponge, Target
+from skillet.scene import CUBE_SIZE, SPILL_SIZE, SPONGE_SIZE, TARGET_SIZE, Bin, Can, Cube, Plate, Spill, Sponge, Target
 from skillet.scene.base import Scene
 
 if TYPE_CHECKING:
@@ -105,7 +105,7 @@ class Sam3Reconstructor(ReconstructorBase):
             if i not in concept_indices:
                 continue
             o = self._scene.get_objects_from_name([n.replace(" ", "_")])[0]
-            if isinstance(o, (Cube, Target, Sponge)):
+            if isinstance(o, (Cube, Target, Sponge, Plate, Bin, Can)):
                 inds = torch.argwhere(i == concept_indices)[0]
                 o_mask = torch.zeros(size=(mh, mw), device=self._device)
                 for j in inds:
@@ -126,13 +126,13 @@ class Sam3Reconstructor(ReconstructorBase):
         obj_types = np.asarray(agg_obj_types)
 
         # Compute the object centers
-        centers, bboxes = self._get_object_centers(obj_masks, obj_types, depth, intrinsic_k, camera_pose)
+        # centers, bboxes = self._get_object_centers(obj_masks, obj_types, depth, intrinsic_k, camera_pose)
         # Assign the pose and bounding boxes to each object
         ids = []
         for i, c in enumerate(torch.unique(concept_indices).cpu().numpy()):
             obj = self._scene.get_objects_from_name([self._concepts[c].replace(" ", "_")])[0]
-            obj.pose = torch.cat((centers[i], torch.as_tensor([1, 0, 0, 0], device=centers[i].device)), dim=0)
-            obj.bbox = bboxes[i]
+            # obj.pose = torch.cat((centers[i], torch.as_tensor([1, 0, 0, 0], device=centers[i].device)), dim=0)
+            # obj.bbox = bboxes[i]
             ids.append(obj.object_id)
         ids = np.asarray(ids)
 

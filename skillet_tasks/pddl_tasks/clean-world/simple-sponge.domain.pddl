@@ -1,31 +1,41 @@
 (define (domain sponge-alpha2)
     (:requirements :typing :conditional-effects :negative-preconditions)
     (:types
-        surface movable - object
-        table - surface
-        spill ketchup sponge plate - movable
+        surface item - object
+        plate location bin - surface
+        sponge can - item
+        
     )
     (:predicates
+
+
         ; static predicates
-        (deformable ?m - movable) ; kinematic attribute - movable can be squeezed
-        ; dynamic predicates
+        (deformable ?m - item) ; kinematic attribute - item can be squeezed
         (supportable ?m - object) ; if this object can support something
-        (wet ?b - object) ; material attribute
-        (dirty ?b - object) ; material attribute
-        (gripper-lifted) ; the gripper is lifted in the air
         (blue ?b - sponge)
         (yellow ?b - sponge) ; colors for the sponge
-        (grasping ?b - movable) ; the gripper is closed around movable b
-        (on ?b - movable ?s - object) ; movable b is on surface s
+
+        ; dynamic predicates
+        (on ?b - item ?s - surface) ; item b is on surface s
+        (grasping ?b - item) ; the gripper is closed around movable b
+
+
+        (wet ?b - object) ; material attribute
+        (dirty ?b - object) ; material attribute
+        
+
         ; pseudo-derived predicates
+        (gripper-lifted) ; the gripper is lifted in the air
         (gripper-full) ; the gripper is occupied <-> exists ?b. (grasping ?b)
     )
-(:action pick-sponge
-    :parameters (?target - sponge ?support - object)
+
+
+    
+(:action pick
+    :parameters (?target - item ?support - surface)
     :precondition (and
-        (on ?target ?support)
         (not (gripper-full))
-        (supportable ?support)
+        (on ?target ?support)
     )
     :effect (and
         (gripper-full)
@@ -34,8 +44,9 @@
         (not (on ?target ?support))
     )
 )
-(:action place-sponge
-    :parameters (?grasped - sponge ?target - object)
+
+(:action place
+    :parameters (?grasped - item ?target - surface)
     :precondition (and
         (gripper-full)
         (grasping ?grasped)
@@ -48,21 +59,12 @@
         (gripper-lifted)
     )
 )
-(:action clean-plate
-    :parameters (?grasped - sponge ?target - plate)
-    :precondition (and
-        (gripper-full)
-        (grasping ?grasped)
-        (dirty ?target)
-    )
-    :effect (and
-        (gripper-full)
-        (grasping ?grasped)
-        (not (dirty ?target))
-    )
-)
-(:action squeeze-sponge
-    :parameters (?grasped - sponge)
+
+
+
+
+(:action squeeze
+    :parameters (?grasped - item)
     :precondition (and
         (grasping ?grasped)
         (gripper-full)

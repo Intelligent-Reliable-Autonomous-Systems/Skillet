@@ -6,11 +6,9 @@ from typing import TYPE_CHECKING
 
 from conditional_repair.baselines.online.random_agent import RandomAgent
 from conditional_repair.dataset import RepairDataset
-from conditional_repair.orcam.orcam import ORCAMConfig
 
 from skillet.agents import ActiveLearningAgent
 
-# from skillet.agents.orcam_agent import ORCAMLearningAgent
 from skillet.core import ObservationSpec
 from skillet.core.env import BatchToSingleWrapper
 from skillet.envs import SkilletEnv
@@ -100,8 +98,8 @@ def main() -> None:
     # Low-level policies
     skill_length = 1e9
     arm_policy = TcpCartPolicy(env.batched_env.obs_spec_tcp_cart, env.batched_env.action_spec_tcp_cart)
-    place_skill = PlaceSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length)
-    pick_skill = PickSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length)
+    place_skill = PlaceSkill(reach_policy=arm_policy, lift_height=0.25, gripper_close=0.6, length=skill_length)
+    pick_skill = PickSkill(reach_policy=arm_policy, lift_height=0.25, gripper_close=0.6, length=skill_length)
     pick_block_skill = PickBlock4Skill(scene, pick_skill, vis_target_pos=target_pose_func)
     place_block_skill = PlaceBlock4Skill(scene, place_skill, vis_target_pos=target_pose_func)
     ACTION_MAP = {"place-block": place_block_skill, "pick-block": pick_block_skill}
@@ -109,17 +107,6 @@ def main() -> None:
     print("[INFO] Warming up Perception...")
     time.sleep(3)
 
-    # ORCAMConfig.instance().configure(
-    #     # global configurations here
-    #     fix_init_precondition=True,
-    #     noise=0.03,
-    #     exploration_relax_precondition_prob=0.0,
-    #     condition_buffer_size=128,
-    #     mc_rollouts=50,
-    #     mc_horizon=2,
-    #     mc_k_per_step=1,
-    # )
-    # learning_agent = ORCAMLearningAgent()
     learning_agent = RandomAgent(RepairDataset(args_cli.exp_config))
 
     tamp_agent = ActiveLearningAgent(

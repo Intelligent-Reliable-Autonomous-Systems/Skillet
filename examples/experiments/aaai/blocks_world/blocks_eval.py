@@ -97,13 +97,13 @@ def main() -> None:
     # Low-level policies
     skill_length = 1e9
     arm_policy = TcpCartPolicy(env.batched_env.obs_spec_tcp_cart, env.batched_env.action_spec_tcp_cart)
-    place_skill = PlaceSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length)
-    pick_skill = PickSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length)
+    place_skill = PlaceSkill(reach_policy=arm_policy, lift_height=0.25, gripper_close=0.6, length=skill_length)
+    pick_skill = PickSkill(reach_policy=arm_policy, lift_height=0.25, gripper_close=0.6, length=skill_length)
     pick_block_skill = PickBlock4Skill(scene, pick_skill, vis_target_pos=target_pose_func)
     place_block_skill = PlaceBlock4Skill(scene, place_skill, vis_target_pos=target_pose_func)
     ACTION_MAP = {"place_block": place_block_skill, "pick_block": pick_block_skill}
 
-    pathlib.Path(f"{task_data['log_dir']} / {args_cli.model_dir}").mkdir(exist_ok=True, parents=True)
+    pathlib.Path(f"{task_data['log_dir']}/{args_cli.model_dir}").mkdir(exist_ok=True, parents=True)
     scene.goal = task_data["pddl_goal"]
     print(scene.goal)
     print("[INFO] Warming up Perception...")
@@ -115,14 +115,14 @@ def main() -> None:
         perception.task_instruction = task_data["nl_goal"]
         perception.build_scene = True
         time.sleep(4)
-        with pathlib.Path(f"{task_data['log_dir']} / {args_cli.model_dir}/g_vlm.txt").open("w") as f:
+        with pathlib.Path(f"{task_data['log_dir']}/{args_cli.model_dir}/g_vlm.txt").open("w") as f:
             f.write(str(scene.goal))
         print(f"[INFO][VLM Goal]:\n{scene.goal}")
 
     tamp_agent = PlanningAgent(scene, abstract_model=abs_model, action_to_skill_map=ACTION_MAP)
 
     logger = SkilletDataLogger(
-        f"{task_data['log_dir']} / {args_cli.model_dir}",
+        f"{task_data['log_dir']}/{args_cli.model_dir}",
         env,
         scene,
         perception,

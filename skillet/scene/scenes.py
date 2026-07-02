@@ -4,7 +4,7 @@ import torch
 
 from skillet import DEVICE
 from skillet.scene.base import Scene
-from skillet.scene.scene_objs import Cube, Location, Spill, Sponge, Table
+from skillet.scene.scene_objs import Bin, Can, Cube, Location, Plate, Spill, Sponge, Table
 
 CUBE_SIZE = 0.044
 SPONGE_SIZE = 0.060
@@ -351,17 +351,19 @@ def five_cube_scene_loader() -> None:
     )
 
 
-def sponge_scene_loader() -> None:
+def two_sponge_one_plate_scene() -> None:
     return Scene(
         objects=[
-            Table(height=0.0, name="table_0", init_pose=torch.as_tensor([0.35, 0.0, 0.0, 1, 0, 0, 0], device=DEVICE)),
-            Sponge(size=0.085, name="yellow_sponge"),
-            Sponge(size=0.085, name="blue_sponge"),
-            Spill(size=0.085, name="blue_water_spill"),
-            # Location(init_pose=torch.as_tensor([0.25, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_00"),
-            # Location(init_pose=torch.as_tensor([0.35, -0.25, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_01"),
-            # Location(init_pose=torch.as_tensor([0.45, 0.25, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_02"),
-            # Location(init_pose=torch.as_tensor([0.30, 0.4, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_03"),
+            # Table(height=0.0, name="table_0", init_pose=torch.as_tensor([0.35, 0.0, 0.0, 1, 0, 0, 0], device=DEVICE)),
+            Sponge(size=0.085, name="yellow_sponge", color="yellow"),
+            Sponge(size=0.085, name="blue_sponge", color="blue"),
+            Plate(size=0.17, name="plate", color="white"),
+            Bin(size=0.25, name="orange_box"),
+            Spill(size=0.1, name="blue_water_spill"),
+            Can(size=0.1, name="coke_can"),
+            Location(size=0.12, init_pose=torch.as_tensor([0.20, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_00"),
+            Location(size=0.12, init_pose=torch.as_tensor([0.32, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_01"),
+            Location(size=0.12, init_pose=torch.as_tensor([0.44, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_02"),
         ],
         closed_set=True,
         bounds=WORLD_BOUNDS,
@@ -426,4 +428,6 @@ def load_scene(name: str) -> Scene:
         return two_magnet_two_wooden_three_loc_scene()
     if name == "3magnet_2wooden_3loc":
         return three_magnet_two_wooden_three_loc_scene()
+    if name == "2sponge_1plate":
+        return two_sponge_one_plate_scene()
     raise ValueError(f"Unknown scene name `{name}`")
