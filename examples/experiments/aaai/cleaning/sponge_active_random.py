@@ -57,7 +57,7 @@ args_cli = parser.parse_args()
 
 def main() -> None:
     scene = load_scene(args_cli.scene_name)
-    block_domain = "skillet_tasks/pddl_tasks/clean-world/simple-sponge.domain.pddl"
+    domain = "skillet_tasks/pddl_tasks/clean-world/simple-sponge.domain.pddl"
     env_cfg = {
         "robot_ip": args_cli.robot_ip,
         "device": "cuda",
@@ -74,7 +74,7 @@ def main() -> None:
     env.reset()
     rgbd_grip_spec: ObservationSpec[RGBD_Gripper_Obs] = env.coerce_obs_spec("rgbd-gripper")
 
-    abs_model = AbstractModel(block_domain, None, scene)
+    abs_model = AbstractModel(domain, None, scene, domain="sponge")
 
     perception = SkilletPerception(
         env=env,
@@ -85,6 +85,7 @@ def main() -> None:
         poll_rate_hz=args_cli.poll_rate_hz,
         device="cuda",
         vis_perception=args_cli.o3d,
+        domain="sponge",
     )
     target_pose_func = None
     if args_cli.o3d:

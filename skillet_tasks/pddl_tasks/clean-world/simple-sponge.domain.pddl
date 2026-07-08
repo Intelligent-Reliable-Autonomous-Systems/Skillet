@@ -19,7 +19,7 @@
         (dirty ?b - surface) ; material attribute
 
         ; dynamic predicates
-        (on ?b - item ?s - surface) ; item b is on surface s
+        (on ?b - object ?s - surface) ; item b is on surface s
         (grasping ?b - item) ; the gripper is closed around movable b
         (obstructed ?b - surface) ; the surface is obstructed
         (hover ?g - item ?s - surface); the surface being hovered over

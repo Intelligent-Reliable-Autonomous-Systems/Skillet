@@ -412,7 +412,10 @@ def ground_sponge_relations(scene: Scene) -> tuple[list[tuple[str, SceneObject, 
         for other_obj in scene.objects:
             if not obj.supportable:
                 continue
-            if obj.object_id != other_obj.object_id and _is_on(obj, other_obj):
+            if isinstance(other_obj, Table) and _is_on_table(obj, other_obj):
+                on_relations.append(("on", obj, other_obj))
+
+            elif not isinstance(other_obj, Table) and obj.object_id != other_obj.object_id and _is_on(obj, other_obj):
                 on_relations.append(("on", obj, other_obj))
                 obs_relations.append(("obstructed", other_obj))
 

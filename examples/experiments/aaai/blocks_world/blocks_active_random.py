@@ -38,7 +38,7 @@ parser.add_argument("--device", type=str, default="cpu", help="Device to use")
 parser.add_argument("--robot_ip", type=str, default="192.168.1.10", help="Robot IP.")
 parser.add_argument("--poll_rate_hz", type=int, default=10, help="Tick rate of the perception")
 parser.add_argument("--task", type=str, default="Kortex-Gen3-v0", help="Kortex Environment")
-parser.add_argument("--o3d", type=argparse.BooleanOptionalAction, default=False, help="If to visualize with open3d")
+parser.add_argument("--o3d", type=argparse.BooleanOptionalAction, default=True, help="If to visualize with open3d")
 parser.add_argument(
     "--log_dir",
     default="_robot_data/exp/",

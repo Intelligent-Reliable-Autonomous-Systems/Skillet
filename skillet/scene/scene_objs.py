@@ -291,7 +291,7 @@ class Target(SceneObject):
         """
         super().__init__(name=name, localizable=True)
         self._radius = radius
-        self._pose = init_pose
+        self._pose = init_pose if init_pose is not None else torch.rand(size=(7,), device=DEVICE)
 
     @property
     def pose(self) -> torch.Tensor:
@@ -308,17 +308,26 @@ class Target(SceneObject):
         """The type of the table."""
         return "target"
 
+    @override
     def is_pose_known(self) -> bool:
-        """If the pose of the target is known.
-
-        Return false to avoid plotting.
-        """
-        return False
+        return self._pose is not None
 
     @property
     def radius(self) -> float:
         """The radius of the target."""
         return self._radius
+
+    @property
+    def size(self) -> float:
+        """The size of the target."""
+        return 2 * self._radius
+
+    @property
+    def aabb(self) -> torch.Tensor:
+        """The axis-aligned bounding box of the cube."""
+        return torch.cat(
+            [self._pose[:2] - self._radius, self._pose[3:4], self._pose[:2] + self._radius, self._pose[3:4]], dim=-1
+        )
 
     def __str__(self) -> str:
         """Return a printable string."""

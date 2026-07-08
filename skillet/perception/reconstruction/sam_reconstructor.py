@@ -37,6 +37,7 @@ class Sam3Reconstructor(ReconstructorBase):
         device: str = "cuda",
         visualize: bool = True,
         vlm: Literal["qwen", "gemini"] = "gemini",
+        domain: Literal["blocks", "sponge"] = "blocks",
     ) -> None:
         """Initialize the SAM reconstructor."""
         super().__init__(scene, device=device)
@@ -47,6 +48,7 @@ class Sam3Reconstructor(ReconstructorBase):
             else QwenClient(prompt_name="detect_goal_qwen")
         )
         self._visualize = visualize
+        self._domain = domain
 
         self._masks = None
         self._segment_indices = None
@@ -86,56 +88,17 @@ class Sam3Reconstructor(ReconstructorBase):
 
         # Segment with SAM3
         rgb = obs["rgb"]
-        depth = obs["depth"]
-        intrinsic_k = obs["intrinsic_k"]
-        camera_pose = obs["camera_pose"]
         masks, _, _, concept_indices = self._sam_model.segment_concepts(rgb, self._concepts)
 
         self._masks = masks if masks.numel() != 0 else None
         self._segment_indices = torch.arange(masks.shape[0], device=masks.device)
 
-        agg_obj_masks = []
-        agg_obj_types = []
-        if masks.shape[0] == 0:
-            return
-        _, mh, mw = masks.shape
-
-        # Group masks together on a per-concept basis
-        for i, n in enumerate(self._concepts):
-            if i not in concept_indices:
-                continue
-            o = self._scene.get_objects_from_name([n.replace(" ", "_")])[0]
-            if isinstance(o, (Cube, Target, Sponge, Plate, Bin, Can)):
-                inds = torch.argwhere(i == concept_indices)[0]
-                o_mask = torch.zeros(size=(mh, mw), device=self._device)
-                for j in inds:
-                    o_mask = torch.logical_or(o_mask, masks[j].squeeze())
-
-            elif isinstance(o, Spill):
-                inds = torch.argwhere(i == concept_indices)[0]
-                o_mask = torch.zeros(size=(mh, mw), device=self._device)
-                for j in inds:
-                    print(f"[INFO] Spill found {j}!")
-                    o_mask = torch.logical_or(o_mask, masks[j].squeeze())
-
-            agg_obj_masks.append(o_mask)
-            agg_obj_types.append(o.object_type)
-        if len(agg_obj_masks) == 0:
-            return
-        obj_masks = torch.stack(agg_obj_masks, dim=0)
-        obj_types = np.asarray(agg_obj_types)
-
-        # Compute the object centers
-        centers, bboxes = self._get_object_centers(obj_masks, obj_types, depth, intrinsic_k, camera_pose)
-        # Assign the pose and bounding boxes to each object
-        ids = []
-        for i, c in enumerate(torch.unique(concept_indices).cpu().numpy()):
-            obj = self._scene.get_objects_from_name([self._concepts[c].replace(" ", "_")])[0]
-            centers[i, 1] = 0  # TODO bad fix
-            obj.pose = torch.cat((centers[i], torch.as_tensor([1, 0, 0, 0], device=centers[i].device)), dim=0)
-            obj.bbox = bboxes[i]
-            ids.append(obj.object_id)
-        ids = np.asarray(ids)
+        if self._domain == "blocks":
+            obj_masks, ids = self._update_blocksworld(obs, masks, concept_indices)
+        elif self._domain == "sponge":
+            obj_masks, ids = self._update_spongeworld(obs, masks, concept_indices)
+        else:
+            raise ValueError(f"Unknown domain `{self._domain}`")
 
         if self._visualize:
             self._bbox_frame = Sam3Reconstructor.show_bounding_boxes(
@@ -146,29 +109,108 @@ class Sam3Reconstructor(ReconstructorBase):
                     (int(c[0]), int(c[1]), int(c[2]))
                     for c in np.random.randint(100, 255, size=(len(self._scene.objects), 3))
                 ]
-            self._mask_frame = Sam3Reconstructor.show_obj_masks(
-                rgb.cpu().numpy(), obj_masks.cpu().numpy(), self._scene, ids, self._colors
-            )
+            if obj_masks is not None and ids is not None:
+                self._mask_frame = Sam3Reconstructor.show_obj_masks(
+                    rgb.cpu().numpy(), obj_masks.cpu().numpy(), self._scene, ids, self._colors
+                )
 
-    def _get_object_centers(
+    def _update_blocksworld(
+        self, obs: dict[str, torch.Tensor], masks: torch.Tensor, concept_indices: list
+    ) -> tuple[torch.Tensor, np.ndarray]:
+        """Update the poses of all the objects in the blocksworld domain."""
+        depth = obs["depth"]
+        intrinsic_k = obs["intrinsic_k"]
+        camera_pose = obs["camera_pose"]
+
+        agg_obj_masks = []
+        if masks.shape[0] == 0:
+            return None, None
+        _, mh, mw = masks.shape
+        # Group masks together on a per-concept basis
+        for i, n in enumerate(self._concepts):
+            if i not in concept_indices:
+                continue
+            o = self._scene.get_objects_from_name([n.replace(" ", "_")])[0]
+            if isinstance(o, Cube):
+                inds = torch.argwhere(i == concept_indices)[0]
+                o_mask = torch.zeros(size=(mh, mw), device=self._device)
+                for j in inds:
+                    o_mask = torch.logical_or(o_mask, masks[j].squeeze())
+
+            agg_obj_masks.append(o_mask)
+        if len(agg_obj_masks) == 0:
+            return None, None
+        obj_masks = torch.stack(agg_obj_masks, dim=0)
+
+        # Compute the object centers
+        centers, bboxes = self._get_blocksworld_centers(obj_masks, depth, intrinsic_k, camera_pose)
+
+        # Assign the pose and bounding boxes to each object
+        ids = []
+        for i, c in enumerate(torch.unique(concept_indices).cpu().numpy()):
+            obj = self._scene.get_objects_from_name([self._concepts[c].replace(" ", "_")])[0]
+            centers[i, 1] = 0  # TODO bad fix
+            obj.pose = torch.cat((centers[i], torch.as_tensor([1, 0, 0, 0], device=centers[i].device)), dim=0)
+            obj.bbox = bboxes[i]
+            ids.append(obj.object_id)
+        ids = np.asarray(ids)
+
+        return obj_masks, ids
+
+    def _update_spongeworld(
+        self, obs: dict[str, torch.Tensor], masks: torch.Tensor, concept_indices: list
+    ) -> tuple[torch.Tensor, np.ndarray]:
+        """Update the poses of the objects in the cleanworld."""
+        depth = obs["depth"]
+        intrinsic_k = obs["intrinsic_k"]
+        camera_pose = obs["camera_pose"]
+
+        agg_obj_masks = []
+        agg_obj_types = []
+        if masks.shape[0] == 0:
+            return None, None
+        _, mh, mw = masks.shape
+        # Group masks together on a per-concept basis
+        for i, n in enumerate(self._concepts):
+            if i not in concept_indices:
+                continue
+            o = self._scene.get_objects_from_name([n.replace(" ", "_")])[0]
+            if isinstance(o, (Target, Sponge, Spill, Plate, Can)):
+                inds = torch.argwhere(i == concept_indices)[0]
+                o_mask = torch.zeros(size=(mh, mw), device=self._device)
+                for j in inds:
+                    o_mask = torch.logical_or(o_mask, masks[j].squeeze())
+
+            agg_obj_masks.append(o_mask)
+            agg_obj_types.append(o.object_type)
+        if len(agg_obj_masks) == 0:
+            return None, None
+        obj_masks = torch.stack(agg_obj_masks, dim=0)
+        obj_types = np.stack(agg_obj_types, axis=0)
+
+        # Compute the object centers
+        centers, bboxes = self._get_spongeworld_centers(obj_masks, depth, intrinsic_k, camera_pose)
+
+        # Assign the pose and bounding boxes to each object
+        ids = []
+        for i, c in enumerate(torch.unique(concept_indices).cpu().numpy()):
+            obj = self._scene.get_objects_from_name([self._concepts[c].replace(" ", "_")])[0]
+            centers[i, 1] = 0  # TODO bad fix
+            obj.pose = torch.cat((centers[i], torch.as_tensor([1, 0, 0, 0], device=centers[i].device)), dim=0)
+            obj.bbox = bboxes[i]
+            ids.append(obj.object_id)
+        ids = np.asarray(ids)
+
+        return obj_masks, ids
+
+    def _get_blocksworld_centers(
         self,
         obj_masks: torch.Tensor,
-        obj_types: list,
         depth: torch.Tensor,
         intrinsic_k: torch.Tensor,
         camera_pose: torch.Tensor,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         # Find object centers and orientation in the camera frame
-        cube_inds = np.argwhere(obj_types == "block")
-        target_inds = np.argwhere(obj_types == "target")
-        sponge_inds = np.argwhere(obj_types == "sponge")
-        spill_inds = np.argwhere(obj_types == "spill")
-        obj_inds = np.concatenate((cube_inds, target_inds, sponge_inds, spill_inds)).flatten()
-        obj_sizes = np.zeros(obj_inds.shape[0])
-        obj_sizes[cube_inds] = CUBE_SIZE
-        obj_sizes[target_inds] = TARGET_SIZE
-        obj_sizes[sponge_inds] = SPONGE_SIZE
-        obj_sizes[sponge_inds] = SPILL_SIZE
 
         centers = torch.zeros(obj_masks.shape[0], 3, device=obj_masks.device)
         bboxes = torch.zeros(obj_masks.shape[0], 6, device=obj_masks.device)
@@ -176,24 +218,54 @@ class Sam3Reconstructor(ReconstructorBase):
         # Localize the cubes, targets, and sponge
         # Note if receiving weird values for cube centers check that we are
         # actually receiving non-zero depth data
-        obj_centers, obj_bboxes = find_obj_centers_mean(
-            obj_masks[obj_inds],
+        centers, bboxes = find_obj_centers_mean(
+            obj_masks,
             depth,
             intrinsic_k,
-            obj_size=obj_sizes,
+            obj_size=CUBE_SIZE,
             camera_pos=camera_pose[0:3],
             camera_quat=camera_pose[3:7],
         )
-        obj_centers = transform_xyz_to_world(obj_centers, camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7])
-        obj_bboxes[:, 0:3] = transform_xyz_to_world(
-            obj_bboxes[:, 0:3], camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7]
+        centers = transform_xyz_to_world(centers, camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7])
+        bboxes[:, 0:3] = transform_xyz_to_world(
+            bboxes[:, 0:3], camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7]
         )
-        obj_bboxes[:, 3:6] = transform_xyz_to_world(
-            obj_bboxes[:, 3:6], camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7]
+        bboxes[:, 3:6] = transform_xyz_to_world(
+            bboxes[:, 3:6], camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7]
         )
 
-        centers[obj_inds] = obj_centers
-        bboxes[obj_inds] = obj_bboxes
+        return centers, bboxes
+
+    def _get_spongeworld_centers(
+        self,
+        obj_masks: torch.Tensor,
+        depth: torch.Tensor,
+        intrinsic_k: torch.Tensor,
+        camera_pose: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        # Find object centers and orientation in the camera frame
+
+        centers = torch.zeros(obj_masks.shape[0], 3, device=obj_masks.device)
+        bboxes = torch.zeros(obj_masks.shape[0], 6, device=obj_masks.device)
+
+        # Localize the cubes, targets, and sponge
+        # Note if receiving weird values for cube centers check that we are
+        # actually receiving non-zero depth data
+        centers, bboxes = find_obj_centers_mean(
+            obj_masks,
+            depth,
+            intrinsic_k,
+            obj_size=CUBE_SIZE,
+            camera_pos=camera_pose[0:3],
+            camera_quat=camera_pose[3:7],
+        )
+        centers = transform_xyz_to_world(centers, camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7])
+        bboxes[:, 0:3] = transform_xyz_to_world(
+            bboxes[:, 0:3], camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7]
+        )
+        bboxes[:, 3:6] = transform_xyz_to_world(
+            bboxes[:, 3:6], camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7]
+        )
 
         return centers, bboxes
 

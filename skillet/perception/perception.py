@@ -49,6 +49,7 @@ class SkilletPerception:
         max_depth_m: float | None = None,
         build_scene: bool = False,
         vis_perception: bool = False,
+        domain: Literal["blocks", "sponge"] = "blocks",
     ) -> None:
         """Initialize the perception pipeline."""
         self.env = env
@@ -75,6 +76,7 @@ class SkilletPerception:
         self._perception_frame: np.ndarray = None
         self._build_scene = build_scene
         self._task_instruction = None
+        self._domain = domain
 
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
@@ -349,16 +351,16 @@ class SkilletPerception:
         if self._reconstructor is None:
             if self._reconstructor_type == "sam+vlm":
                 print("[INFO][PERCEPTION] Loading SAM reconstructor")
-                self._reconstructor = SamVlmReconstructor(scene=self._scene, device=self.device)
+                self._reconstructor = SamVlmReconstructor(scene=self._scene, device=self.device, domain=self._domain)
             elif self._reconstructor_type == "april":
                 print("[INFO][PERCEPTION] Loading AprilTag reconstructor")
-                assert (
-                    self._scene is not None
-                ), "[ERROR] Perception Scene cannot be None when using AprilTagStateReconstructor."
-                self._reconstructor = ApriltagStateReconstructor(self._scene)
+                assert self._scene is not None, (
+                    "[ERROR] Perception Scene cannot be None when using AprilTagStateReconstructor."
+                )
+                self._reconstructor = ApriltagStateReconstructor(self._scene, domain=self._domain)
             elif self._reconstructor_type == "sam3":
-                self._reconstructor = Sam3Reconstructor(self._scene, device=self.device)
+                self._reconstructor = Sam3Reconstructor(self._scene, device=self.device, domain=self._domain)
             elif self._reconstructor_type == "vlm":
-                self._reconstructor = VlmReconstructor(scene=self._scene)
+                self._reconstructor = VlmReconstructor(scene=self._scene, domain=self._domain)
             elif self._reconstructor_type == "sim":
-                self._reconstructor = SimReconstructor(scene=self._scene)
+                self._reconstructor = SimReconstructor(scene=self._scene, domain=self._domain)
