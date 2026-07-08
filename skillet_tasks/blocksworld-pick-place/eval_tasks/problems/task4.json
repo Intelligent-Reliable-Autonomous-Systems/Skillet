@@ -4,7 +4,7 @@
                   {"predicate": "not obstructed-above", "args": ["loc_23"]},
                   {"predicate": "at-loc", "args": ["green_block", "loc_13"]}],
     "init_state": [ "on(green block, table)",
-                    "on(yellow block, table)",
+                    "on(yellow block, green block)",
                     "on(red block, table)",
                     "on(blue block, red block)",
                     "plastic(red block)",

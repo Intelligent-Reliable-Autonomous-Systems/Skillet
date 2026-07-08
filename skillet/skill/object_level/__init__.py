@@ -3,7 +3,6 @@ from .drag_block import DragBlock2Skill as DragBlock2Skill
 from .drag_block import DragBlock5Skill as DragBlock5Skill
 from .drag_block import DragBlockSkill as DragBlockSkill
 from .hover_obj import HoverObject2Skill as HoverObject2Skill
-from .hover_obj import HoverObject4Skill as HoverObject4Skill
 from .hover_obj import HoverObjectSkill as HoverObjectSkill
 from .pick_block import PickBlock2Skill as PickBlock2Skill
 from .pick_block import PickBlock4Skill as PickBlock4Skill

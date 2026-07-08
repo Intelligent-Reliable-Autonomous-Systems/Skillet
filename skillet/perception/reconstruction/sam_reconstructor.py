@@ -126,13 +126,14 @@ class Sam3Reconstructor(ReconstructorBase):
         obj_types = np.asarray(agg_obj_types)
 
         # Compute the object centers
-        # centers, bboxes = self._get_object_centers(obj_masks, obj_types, depth, intrinsic_k, camera_pose)
+        centers, bboxes = self._get_object_centers(obj_masks, obj_types, depth, intrinsic_k, camera_pose)
         # Assign the pose and bounding boxes to each object
         ids = []
         for i, c in enumerate(torch.unique(concept_indices).cpu().numpy()):
             obj = self._scene.get_objects_from_name([self._concepts[c].replace(" ", "_")])[0]
-            # obj.pose = torch.cat((centers[i], torch.as_tensor([1, 0, 0, 0], device=centers[i].device)), dim=0)
-            # obj.bbox = bboxes[i]
+            centers[i, 1] = 0  # TODO bad fix
+            obj.pose = torch.cat((centers[i], torch.as_tensor([1, 0, 0, 0], device=centers[i].device)), dim=0)
+            obj.bbox = bboxes[i]
             ids.append(obj.object_id)
         ids = np.asarray(ids)
 

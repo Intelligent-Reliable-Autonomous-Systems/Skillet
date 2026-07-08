@@ -318,7 +318,9 @@ def ground_gripper_relations(scene: Scene) -> tuple[bool, list[tuple[Literal["ho
                     two_held_relations = True
                     # If there is another block below, check if there is a third block below that
                     for other_other_obj in scene.objects:
-                        if other_other_obj.object_id in [other_obj.object_id, obj.object_id]:
+                        if other_other_obj.object_id in [other_obj.object_id, obj.object_id] or isinstance(
+                            other_other_obj, Table
+                        ):
                             continue
                         if isinstance(other_obj, Cube) and (other_obj != obj) and _is_on(other_obj, other_other_obj):
                             three_held_relations = True

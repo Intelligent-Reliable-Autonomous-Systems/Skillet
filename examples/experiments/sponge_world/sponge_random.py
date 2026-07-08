@@ -86,12 +86,12 @@ def main() -> None:
     # Low-level policies
     skill_length = 1e9
     arm_policy = TcpCartPolicy(env.batched_env.obs_spec_tcp_cart, env.batched_env.action_spec_tcp_cart)
-    place_skill = PlaceSkill(reach_policy=arm_policy, lift_height=0.25, gripper_close=0.6, length=skill_length)
-    pick_skill = PickSkill(reach_policy=arm_policy, lift_height=0.25, gripper_close=0.6, length=skill_length)
+    place_skill = PlaceSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length)
+    pick_skill = PickSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length)
     squeeze_skill = SqueezeSkill(
-        reach_policy=arm_policy, lift_height=0.25, gripper_close=0.6, timeout=5, length=skill_length
+        reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, timeout=5, length=skill_length
     )
-    wipe_skill = WipeSkill(reach_policy=arm_policy, lift_height=0.25, gripper_close=0.6, length=skill_length)
+    wipe_skill = WipeSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length)
     pick_obj_skill = PickBlock2Skill(scene, pick_skill, vis_target_pos=target_pose_func)
     place_obj_skill = PlaceBlock3Skill(scene, place_skill, vis_target_pos=target_pose_func)
     wipe_table_skill = WipeSurfaceSkill(scene, wipe_skill, vis_target_pos=target_pose_func)

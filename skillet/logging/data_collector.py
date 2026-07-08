@@ -62,6 +62,7 @@ class SkilletDataLogger:
         self._write_video = False
         self._fps = 15
         self.figsize = (20, 11)
+        self._frame_writer = None
         self._writer = None
         self._data_window_name = "Skillet Visualization"
         self._window_active = False
@@ -73,8 +74,8 @@ class SkilletDataLogger:
         self.fig = plt.figure(figsize=self.figsize, facecolor="#aaaaaa")
         self._build_layout()
 
-        self._fourcc = cv2.VideoWriter_fourcc(*"mp4v")  # .mp4 output
-        self._writer = None
+        self._fourcc_frame = cv2.VideoWriter_fourcc(*"mp4v")
+        self._fourcc = cv2.VideoWriter_fourcc(*"mp4v")
 
         self.reset_logging()
         Path(self._log_dir).mkdir(exist_ok=True, parents=True)
@@ -89,9 +90,10 @@ class SkilletDataLogger:
 
     def save_video(self):
         if self._write_video:
+            self._frame_writer.release()
             self._writer.release()
             self._write_video = False
-            self._writer = None
+            self._frame_writer = None
 
     def setup_logging(self) -> None:
         """Set up logging."""
@@ -167,6 +169,7 @@ class SkilletDataLogger:
         fpath = Path(f"{self._log_dir}/{self._start_time}")
         fpath.mkdir(exist_ok=True, parents=True)
         if self._write_video:
+            self._frame_writer.release()
             self._writer.release()
         with h5py.File(f"{fpath}/data.h5", "w") as f:
             ep = f.create_group("episode")
@@ -340,7 +343,8 @@ class SkilletDataLogger:
         return frame_bgr
 
     def close(self):
-        if self._writer:
+        if self._frame_writer:
+            self._frame_writer.release()
             self._writer.release()
         plt.close(self.fig)
 
@@ -393,20 +397,26 @@ class SkilletDataLogger:
         )
 
         fh, fw, _ = frame.shape
+        rh, rw, _ = rgb.shape
         if self._write_video:
-            if self._writer is None:
+            if self._frame_writer is None:
                 fpath = Path(f"{self._log_dir}/{self._start_time}")
                 fpath.mkdir(exist_ok=True, parents=True)
                 self._video_start_time = datetime.now().strftime("%H%M%S")
-                self._writer = cv2.VideoWriter(
-                    f"{self._log_dir}/{self._start_time}/output_{self._video_start_time}.mp4",
-                    self._fourcc,
+                self._frame_writer = cv2.VideoWriter(
+                    f"{self._log_dir}/{self._start_time}/output_frame_{self._video_start_time}.mp4",
+                    self._fourcc_frame,
                     self._fps,
                     (fw, fh),
                 )
-                self._frame_buffer = []
-            # self._frame_buffer.append(frame)
-            self._writer.write(frame)
+                self._writer = cv2.VideoWriter(
+                    f"{self._log_dir}/{self._start_time}/output_rgb_{self._video_start_time}.mp4",
+                    self._fourcc,
+                    self._fps,
+                    (rw, rh),
+                )
+            self._frame_writer.write(frame)
+            self._writer.write(cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR))
             if self._visualize:
                 self._ensure_window()
                 cv2.imshow(self._data_window_name, frame)
@@ -479,15 +489,4 @@ class SkilletDataLogger:
             ):
                 self._pddl_trace.write_trace_file(
                     f"{fpath}/_pddl_trace.pddl", self._states, self._actions, self._executions
-                )
-            if False:
-                for frame in self._frame_buffer:
-                    self._writer.write(frame)
-                    fh, fw, _ = frame.shape
-                self._writer.release()
-                self._writer = cv2.VideoWriter(
-                    f"{self._log_dir}/{self._start_time}/output_{self._video_start_time}.mp4",
-                    self._fourcc,
-                    self._fps,
-                    (fw, fh),
                 )

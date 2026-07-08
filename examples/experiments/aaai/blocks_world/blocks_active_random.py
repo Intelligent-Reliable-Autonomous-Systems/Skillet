@@ -8,7 +8,6 @@ from conditional_repair.baselines.online.random_agent import RandomAgent
 from conditional_repair.dataset import RepairDataset
 
 from skillet.agents import ActiveLearningAgent
-
 from skillet.core import ObservationSpec
 from skillet.core.env import BatchToSingleWrapper
 from skillet.envs import SkilletEnv
@@ -75,6 +74,7 @@ def main() -> None:
     env.reset()
     rgbd_grip_spec: ObservationSpec[RGBD_Gripper_Obs] = env.coerce_obs_spec("rgbd-gripper")
 
+    learning_agent = RandomAgent(RepairDataset(args_cli.exp_config))
     abs_model = AbstractModel(block_domain, None, scene)
 
     perception = SkilletPerception(
@@ -98,16 +98,14 @@ def main() -> None:
     # Low-level policies
     skill_length = 1e9
     arm_policy = TcpCartPolicy(env.batched_env.obs_spec_tcp_cart, env.batched_env.action_spec_tcp_cart)
-    place_skill = PlaceSkill(reach_policy=arm_policy, lift_height=0.25, gripper_close=0.6, length=skill_length)
-    pick_skill = PickSkill(reach_policy=arm_policy, lift_height=0.25, gripper_close=0.6, length=skill_length)
+    place_skill = PlaceSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length)
+    pick_skill = PickSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length)
     pick_block_skill = PickBlock4Skill(scene, pick_skill, vis_target_pos=target_pose_func)
     place_block_skill = PlaceBlock4Skill(scene, place_skill, vis_target_pos=target_pose_func)
     ACTION_MAP = {"place-block": place_block_skill, "pick-block": pick_block_skill}
 
     print("[INFO] Warming up Perception...")
     time.sleep(3)
-
-    learning_agent = RandomAgent(RepairDataset(args_cli.exp_config))
 
     tamp_agent = ActiveLearningAgent(
         scene,

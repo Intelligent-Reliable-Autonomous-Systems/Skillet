@@ -7,7 +7,7 @@
     ],
     "eval_traces": "../eval/traces",
     "train_problems": ["../train-problems/"],
-    "max_steps": 250,
+    "max_steps": 200,
     "fixed_preconditions": true,
     "approaches": {
         "orcam": {

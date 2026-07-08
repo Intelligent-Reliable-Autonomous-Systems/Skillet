@@ -108,7 +108,7 @@ class WipeSurface2Skill(WipeSurfaceSkill):
     def __init__(
         self,
         scene: Scene,
-        wipe_skill: WipeSurfaceSkill[BxM_Action],
+        wipe_skill: WipeSurfaceSkill,
         vis_target_pos: Callable[[Sequence[float]], None] | None = None,
         xyz_offset: tuple[int] = (0, 0.0, 0.02),
     ) -> None:

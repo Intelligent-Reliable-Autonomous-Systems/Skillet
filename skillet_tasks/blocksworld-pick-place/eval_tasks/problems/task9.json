@@ -7,7 +7,7 @@
     "init_state": [ "at-loc(yellow block, loc 10)",
                     "at-loc(red block, loc 12)",
                     "on(green block, table)",
-                    "on(yellow block, table)",
+                    "on(yellow block, green block)",
                     "on(red block, table)",
                     "on(blue block, red block)",
                     "on(pink block, blue block)",

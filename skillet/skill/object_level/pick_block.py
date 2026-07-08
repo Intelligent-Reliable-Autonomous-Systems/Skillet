@@ -7,6 +7,7 @@ import torch
 from skillet.core import SkillParamsSpec
 from skillet.core.skill import SingleSkill, SkillStatus, SkillStatusCodes
 from skillet.envs.specs import BxM_Action, IKEE_Obs, M_Action
+from skillet.planning.abstract.skill_grounding import _pick_skill_4_grounding
 from skillet.scene import Cube, Sponge
 from skillet.scene.base import Scene, SceneObject
 from skillet.skill.high_level.pick import PickSkill
@@ -176,7 +177,7 @@ class PickBlock4Skill(PickBlockSkill):
             not self._target_block.is_pose_known()
             or self._target_block == self._params[1]
             or not self._target_block.moveable
-            # or not _pick_skill_4_grounding(objs, self._scene)
+            or not _pick_skill_4_grounding(objs, self._scene)
         ):
             self._status = torch.as_tensor(SkillStatusCodes.FAILED, device=self.params_spec.device)
             print(

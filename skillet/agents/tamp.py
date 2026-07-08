@@ -247,7 +247,6 @@ class ActiveLearningAgent(Agent):
             if self._moderator.is_paused:
                 time.sleep(0.1)
                 continue
-
             up_action = self._learning_agent.get_action(up_state, up_objects)
             if up_action is None:
                 print("[WARN][ACTIVE] Invalid action selected/unable to find valid caction")
