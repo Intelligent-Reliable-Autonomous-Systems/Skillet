@@ -3,8 +3,8 @@ from unified_planning.io import PDDLReader
 from unified_planning.model import Problem
 from unified_planning.shortcuts import OneshotPlanner
 
-domain = "skillet_tasks/pddl_tasks/clean-world/simple-sponge.domain.pddl"
-task = "skillet_tasks/pddl_tasks/clean-world/simple-sponge.problem.pddl"
+domain = "skillet_tasks/spongeworld-clean/simple-sponge.domain.pddl"
+task = "skillet_tasks/spongeworld-clean/simple-sponge.problem.pddl"
 
 reader = PDDLReader()
 problem: Problem = reader.parse_problem(domain, task)

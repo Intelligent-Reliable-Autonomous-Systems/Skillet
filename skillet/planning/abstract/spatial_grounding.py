@@ -1,11 +1,12 @@
 """Geometric grounding of spatial predicates from scene object poses."""
 
+import copy
 from typing import Literal
 
 import torch
 
 from skillet.scene.base import Scene, SceneObject
-from skillet.scene.scene_objs import Can, Cube, Location, Sponge, Table
+from skillet.scene.scene_objs import Can, Cube, Location, Plate, Spill, Sponge, Table
 
 
 def _is_on(a: Cube | Location, b: Cube | Location, height_tol_frac: float = 0.3, xy_slack_frac: float = 0.5) -> bool:
@@ -175,7 +176,7 @@ def _is_grasping(
 
     aabb_a = a.aabb  # [xmin, ymin, zmin, xmax, ymax, zmax]
     xy_slack = a.size * xy_slack_frac
-    z_slack = a.size * z_slack_frac
+    z_slack = a.size * z_slack_frac * 1.1 if isinstance(a, Can) else a.size * z_slack_frac
 
     # tcp pose should be within a's footprint (plus a little slack)
     within_x = (aabb_a[0] - xy_slack) <= scene.tcp_pose[0] <= (aabb_a[3] + xy_slack)
@@ -395,12 +396,10 @@ def ground_sponge_relations(scene: Scene) -> tuple[list[tuple[str, SceneObject, 
     for obj in scene.objects:
         if obj.deformable is not None and obj.deformable:
             material_relations.append(("deformable", obj))
+        if obj.wipeable is not None and obj.wipeable:
+            material_relations.append(("wipeable", obj))
         if obj.supportable is not None and obj.supportable:
             material_relations.append(("supportable", obj))
-        if obj.wet is not None and obj.wet:
-            material_relations.append(("wet", obj))
-        if obj.dirty is not None and obj.dirty:
-            material_relations.append(("dirty", obj))
         if obj.graspable is not None and obj.graspable:
             material_relations.append(("graspable", obj))
         if obj.hoverable is not None and obj.hoverable:
@@ -409,17 +408,34 @@ def ground_sponge_relations(scene: Scene) -> tuple[list[tuple[str, SceneObject, 
         if obj.color is not None:
             color_relations.append((obj.color, obj))
 
+        # Blue sponges are wet
+        if isinstance(obj, Sponge) and obj.color == "blue":
+            material_relations.append(("wet", obj))
+
+        if isinstance(obj, Table):
+            continue
         for other_obj in scene.objects:
-            if not obj.supportable:
+            if other_obj.object_id == obj.object_id:
                 continue
+            if other_obj.supportable and _is_on(obj, other_obj):
+                on_relations.append(("on", obj, other_obj))
+                if not isinstance(obj, Spill):
+                    obs_relations.append(("obstructed", other_obj))
+
+                if isinstance(other_obj, Plate) and obj.name == "marker_scribble":
+                    material_relations.append(("dirty", other_obj))
+
             if isinstance(other_obj, Table) and _is_on_table(obj, other_obj):
                 on_relations.append(("on", obj, other_obj))
 
-            elif not isinstance(other_obj, Table) and obj.object_id != other_obj.object_id and _is_on(obj, other_obj):
-                on_relations.append(("on", obj, other_obj))
-                obs_relations.append(("obstructed", other_obj))
+    # Logic to exclude on relations like (on sponge, target) and (on sponge table) at the same time
+    new_on_relations = [
+        (rel, obj1, obj2)
+        for i, (rel, obj1, obj2) in enumerate(on_relations)
+        if not (isinstance(obj2, Table) and any(obj1 in (o1,) for j, (r, o1, o2) in enumerate(on_relations) if j != i))
+    ]
 
-    return on_relations, obs_relations, material_relations, color_relations
+    return new_on_relations, obs_relations, material_relations, color_relations
 
 
 def ground_sponge_gripper_relations(scene: Scene) -> list[tuple[str, SceneObject, SceneObject]]:
@@ -427,14 +443,15 @@ def ground_sponge_gripper_relations(scene: Scene) -> list[tuple[str, SceneObject
     grasping_relations = []
     hover_relations = []
     for obj in scene.objects:
-        if not isinstance(obj, Can) or not isinstance(obj, Sponge):
+        if not isinstance(obj, (Can, Sponge)):
             continue
 
-        if _is_grasping(obj, scene):
+        thresh = 0.3 if isinstance(obj, Can) else 0.4
+        if _is_grasping(obj, scene, gripper_thresh=thresh):
             grasping_relations.append(("grasping", obj))
-            for other_obj in scene.objects:
-                if obj.object_id != other_obj.object_id and _is_hovering(obj, other_obj):
-                    hover_relations.append(("hover", obj, other_obj))
+            # for other_obj in scene.objects:
+            #    if obj.object_id != other_obj.object_id and _is_hovering(obj, other_obj):
+            #        hover_relations.append(("hover", obj, other_obj))
     return (
         hover_relations,
         len(grasping_relations) == 0,

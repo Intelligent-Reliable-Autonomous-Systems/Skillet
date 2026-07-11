@@ -16,7 +16,7 @@ from skillet.perception.reconstruction.reconstructor_base import ReconstructorBa
 from skillet.perception.reconstruction.utils import (
     assign_objects_to_id_hungarian,
     assign_poses_to_objects,
-    find_obj_centers_mean,
+    find_block_centers_mean,
     get_sorted_object_poses,
     transform_xyz_to_world,
 )
@@ -112,7 +112,7 @@ class SamVlmReconstructor(ReconstructorBase):
         masks = masks.cpu().numpy()
 
         # Find cube centers in the camera frame
-        centers = find_obj_centers_mean(
+        centers = find_block_centers_mean(
             cube_masks,
             depth,
             intrinsic_k,
@@ -203,7 +203,7 @@ class SamVlmReconstructor(ReconstructorBase):
             rgb.transpose(1, 2, 0), masks.cpu().numpy(), labels
         )
 
-        centers = find_obj_centers_mean(
+        centers = find_block_centers_mean(
             masks.cpu().numpy(),
             depth,
             intrinsic_k,

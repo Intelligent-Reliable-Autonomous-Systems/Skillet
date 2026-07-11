@@ -23,8 +23,9 @@ class WipeSurfaceSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
     def __init__(
         self,
         scene: Scene,
-        wipe_skill: WipeSkill[BxM_Action],
+        wipe_skill: WipeSkill,
         vis_target_pos: Callable[[Sequence[float]], None] | None = None,
+        xyz_offset: tuple[int] = (0, 0.0, 0.02),
     ) -> None:
         """Initialize the pick block skill."""
         self._scene = scene
@@ -38,6 +39,7 @@ class WipeSurfaceSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
         self._offset = torch.tensor([0, 0.0, 0.02], device=self.obs_spec.device)
 
         self._vis_target_pos = vis_target_pos
+        self._offset = torch.tensor(xyz_offset, device=self.obs_spec.device)
 
     @property
     def name(self) -> str:
@@ -108,13 +110,13 @@ class WipeSurface2Skill(WipeSurfaceSkill):
     def __init__(
         self,
         scene: Scene,
-        wipe_skill: WipeSurfaceSkill,
+        wipe_skill: WipeSkill,
         vis_target_pos: Callable[[Sequence[float]], None] | None = None,
         xyz_offset: tuple[int] = (0, 0.0, 0.02),
     ) -> None:
         """Initialize the wipe object skill."""
         super().__init__(scene, wipe_skill, vis_target_pos, xyz_offset=xyz_offset)
-        self._object_params_spec = SkillParamsSpec(
+        self._spill_params_spec = SkillParamsSpec(
             space=gym.spaces.MultiDiscrete((self.max_objects,) * 2), name="object_id", is_torch=False, is_batched=False
         )
         self._params = None
@@ -131,11 +133,57 @@ class WipeSurface2Skill(WipeSurfaceSkill):
         if self._vis_target_pos is not None:
             self._vis_target_pos(target_xyz)
 
-        target_xyz_xyz = torch.cat(
-            (target_xyz, torch.zeros(target_xyz.shape[0], device=target_xyz.device), target_xyz), dim=1
+        target_xyz_xyz = torch.cat((target_xyz, torch.as_tensor([0], device=target_xyz.device), target_xyz), dim=0)
+        target_xyz_xyz[0] = target_xyz_xyz[0] - 0.05  # TODO Sponge
+        target_xyz_xyz[3] = target_xyz_xyz[3] + 0.05  # Wipe along the x axis 10 cm offset from the center
+        target_xyz_xyz[2] = target_xyz_xyz[2] + 0.05  # add vertical offset
+        target_xyz_xyz[6] = target_xyz_xyz[6] + 0.05  # add vertical offset
+        target_pose = self._wipe_skill.params_spec.with_n_envs(1).cast(target_xyz_xyz)
+
+        self._wipe_skill.initiate(obs, target_pose)
+        print(f"[INFO][WIPE OBJECT]: {self._target_object.name} | {objs[1].name}")
+
+    def __str__(self) -> str:
+        if self._params is not None:
+            names = self._scene.resolve_ids_to_names(self._params)
+            return f"Wipe Object: | {names[0]} | {names[1]} |"
+        return "Wipe Object: | Unset | Unset |"
+
+
+class WipeSurface3Skill(WipeSurfaceSkill):
+    def __init__(
+        self,
+        scene: Scene,
+        wipe_skill: WipeSkill,
+        vis_target_pos: Callable[[Sequence[float]], None] | None = None,
+        xyz_offset: tuple[int] = (0, 0.0, 0.0),
+    ) -> None:
+        """Initialize the wipe object skill."""
+        super().__init__(scene, wipe_skill, vis_target_pos, xyz_offset=xyz_offset)
+        self._spill_params_spec = SkillParamsSpec(
+            space=gym.spaces.MultiDiscrete((self.max_objects,) * 3), name="object_id", is_torch=False, is_batched=False
         )
-        target_xyz_xyz[:, 0] = target_xyz_xyz[:, 0] - 0.05  # TODO Sponge
-        target_xyz_xyz[:, 3] = target_xyz_xyz[:, 3] + 0.05  # Wipe along the x axis 10 cm offset from the center
+        self._params = None
+
+    def initiate(self, obs, params):
+        """Initiate the skill with the given observation and parameters."""
+        self._status = None
+        self._params = self.params_spec.cast(params[:3])
+
+        objs = self._scene.get_objects_from_id(self._params)
+        self._target_object = objs[1]
+
+        target_xyz = self._target_object.aabb[:3]
+        if self._vis_target_pos is not None:
+            self._vis_target_pos(target_xyz)
+
+        target_xyz_xyz = torch.cat(
+            (target_xyz, torch.as_tensor([0], device=target_xyz.device), self._target_object.aabb[3:6]), dim=0
+        )
+        # target_xyz_xyz[0] = target_xyz_xyz[0] - 0.05  # TODO Sponge
+        # target_xyz_xyz[4] = target_xyz_xyz[4] + 0.05  # Wipe along the x axis 10 cm offset from the center
+        target_xyz_xyz[2] = target_xyz_xyz[2] + 0.05  # add vertical offset
+        target_xyz_xyz[6] = target_xyz_xyz[6] + 0.05  # add vertical offset
         target_pose = self._wipe_skill.params_spec.with_n_envs(1).cast(target_xyz_xyz)
 
         self._wipe_skill.initiate(obs, target_pose)

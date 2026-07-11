@@ -359,6 +359,10 @@ class AbstractModel(BasePlanner):
             target_type = self._problem.user_type("plate")
             for ob_name in self._scene.get_object_names(Plate):
                 object_state[ob_name] = Object(ob_name, target_type, environment=self._environment)
+        if "target" in user_types:
+            target_type = self._problem.user_type("target")
+            for ob_name in self._scene.get_object_names(Target):
+                object_state[ob_name] = Object(ob_name, target_type, environment=self._environment)
 
         return object_state
 
@@ -382,7 +386,7 @@ class AbstractModel(BasePlanner):
                 fluent_state[fluent] = True
         if "obstructed" in prob_fluents:
             for ob in obs_pred:
-                fluent = self._problem.fluent(ob[0])(*(object_state[ob[1].name]))
+                fluent = self._problem.fluent(ob[0])(*(object_state[ob[1].name],))
                 fluent_state[fluent] = True
         if "hover" in prob_fluents:
             for hp in hover_pred:

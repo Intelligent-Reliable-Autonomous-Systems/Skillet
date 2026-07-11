@@ -21,6 +21,17 @@ class SceneObject:
         self._name = name
         self._localizable = localizable
         self._bbox = None
+        self._pose_updated = False
+
+    @property
+    def pose_updated(self) -> bool:
+        """If the pose has been updated."""
+        return self._pose_updated
+
+    @pose_updated.setter
+    def pose_updated(self, v: bool) -> None:
+        """Update if the pose has been updated."""
+        self._pose_updated = v
 
     @property
     def material(self) -> str:
@@ -40,6 +51,11 @@ class SceneObject:
         return self._deformable if hasattr(self, "_deformable") else None
 
     @property
+    def wipeable(self) -> bool:
+        """If an object can be squeezed."""
+        return self._wipeable if hasattr(self, "_wipeable") else None
+
+    @property
     def supportable(self) -> bool:
         """If an object can act as a support."""
         return self._supportable if hasattr(self, "_supportable") else None
@@ -53,16 +69,6 @@ class SceneObject:
     def hoverable(self) -> bool:
         """If an object can act as a support."""
         return self._hoverable if hasattr(self, "_hoverable") else None
-
-    @property
-    def wet(self) -> bool:
-        """If an object is wet."""
-        return self._wet if hasattr(self, "_wet") else None
-
-    @property
-    def dirty(self) -> bool:
-        """If an object is dirty."""
-        return self._dirty if hasattr(self, "_dirty") else None
 
     @material.setter
     def material(self, m: str) -> None:

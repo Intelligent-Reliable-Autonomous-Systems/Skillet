@@ -57,13 +57,13 @@ class PlanningAgent(Agent):
         self._abstract_model.initialize(self._scene, task)
 
         abstract_state = self._abstract_model.get_abstract_state()
-        print(abstract_state)
         self._result, self._plan, up_actions = self._abstract_model.plan(abstract_state=abstract_state)
 
         terminated = False
         if self._plan is None:
             print("[WARNING][TAMP] Failed to find plan.")
             return
+        print(self._plan)
         for ab_action, up_action in zip(self._plan.actions, up_actions):
             up_state = self._abstract_model.reset_up_problem_state()
             self._selected_skill = self.action_to_skill_map[ab_action.action]

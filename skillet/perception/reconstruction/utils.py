@@ -165,7 +165,7 @@ def percentile_clip(pts: torch.Tensor | np.ndarray, lo: float, hi: float) -> tor
     return pts[mask]
 
 
-def find_obj_centers_mean(
+def find_block_centers_mean(
     masks: torch.Tensor,
     depth: torch.Tensor,
     camera_matrix: torch.Tensor,
@@ -235,6 +235,82 @@ def find_obj_centers_mean(
         centroid = torch.as_tensor([centroid_u, centroid_v, centroid_w], device=masks.device)
         centers.append(centroid)
         bboxes.append(torch.cat((points_3d.min(dim=0)[0], points_3d.max(dim=0)[0]), dim=0))
+    return torch.stack(centers, dim=0), torch.stack(bboxes, dim=0)
+
+
+def find_spongeworld_centers_mean(
+    masks: torch.Tensor,
+    depth: torch.Tensor,
+    camera_matrix: torch.Tensor,
+    camera_pos: torch.Tensor,
+    camera_quat: torch.Tensor,
+    depth_scale: float = 1.0,
+    obj_size: np.ndarray | None = None,
+    obj_types: list | None = None,
+    frame: Literal["world", "camera"] = "camera",
+) -> torch.Tensor:
+    """Find object centers from segmentation masks and depth map in the camera frame.
+
+    Assumes that each object face is parallel to the camera, meaning we know the plane equation
+
+    Args:
+        masks: Binary masks for each object, shape (N, H, W) or list of (H, W) arrays
+        depth: Depth map, shape (1, H, W) in meters or scaled units
+        camera_matrix: 3x3 camera intrinsics matrix
+        camera_pos: (3,) array of camera position in world frame
+        camera_quat: (4,) array of quaternion in wxyz of camera orientation in world frame
+        depth_scale: Scale factor for depth values (if depth is in mm, use 1/1000)
+        obj_size: Expected object size in meters (used for validation)
+        obj_types: Expected object type in meters
+        frame: frame in which to compute RANSAC in (world or camera)
+
+    Returns:
+        Centers: List of 3D object centers in camera frame (N, 3)
+
+    """
+    depth = depth.squeeze(0)
+    centers = []
+    bboxes = []
+    for i, mask in enumerate(masks):
+        mask = mask.to(torch.bool)
+
+        if mask.sum() < 10:
+            continue
+
+        # Get 3D points from mask and depth
+        pc = mask_to_3d_points(mask, depth, camera_matrix, depth_scale)
+        # Get rid of all zero entries and clip hi/lo
+        pc_mask = pc.count_nonzero(dim=1) == 3
+        if pc_mask.sum() == 0:
+            print("[WARN][PERCEPTION] Bad Center!")
+            centers.append(torch.zeros(3, device=mask.device))
+            bboxes.append(torch.zeros(6, device=mask.device))
+            continue
+        points_3d = percentile_clip(pc[pc_mask], lo=10, hi=90)
+
+        # Transform 3d points into world frame
+        if frame == "world":
+            points_3d = transform_xyz_to_world(points_3d, camera_pos=camera_pos, camera_quat=camera_quat)
+
+        o_size = obj_size if isinstance(obj_size, float) else obj_size[i]
+        proj_u = points_3d[:, 0]
+        proj_v = points_3d[:, 1]
+        proj_w = points_3d[:, 2]
+        centroid_u = torch.sort(proj_u)[0][len(proj_u) // 2]
+        centroid_v = torch.sort(proj_v)[0][len(proj_v) // 2]
+        threshold = 0.008
+        mask_v = torch.abs(centroid_v - proj_v) < threshold
+        mask_u = torch.abs(centroid_u - proj_u) < threshold
+        while (mask_u & mask_v).sum() == 0:
+            threshold += 0.005
+            mask_v = torch.abs(centroid_v - proj_v) < threshold
+            mask_u = torch.abs(centroid_u - proj_u) < threshold
+
+        centroid_w = proj_w[mask_u & mask_v].mean() + (o_size * (1 / 2))
+        centroid = torch.as_tensor([centroid_u, centroid_v, centroid_w], device=masks.device)
+        centers.append(centroid)
+        bboxes.append(torch.cat((points_3d.min(dim=0)[0], points_3d.max(dim=0)[0]), dim=0))
+
     return torch.stack(centers, dim=0), torch.stack(bboxes, dim=0)
 
 

@@ -22,7 +22,7 @@ from skillet.skill.high_level import (
 )
 from skillet.skill.object_level import (
     DragBlock5Skill,
-    PickBlock2Skill,
+    PickObj2Skill,
     PlaceBlock4Skill,
 )
 from skillet.skill.policy import TcpCartPolicy
@@ -93,7 +93,7 @@ def main() -> None:
     place_skill = PlaceSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length)
     pick_skill = PickSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length)
     drag_skill = DragSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length)
-    pick_block_skill = PickBlock2Skill(scene, pick_skill, vis_target_pos=target_pose_func)
+    pick_block_skill = PickObj2Skill(scene, pick_skill, vis_target_pos=target_pose_func)
     place_block_skill = PlaceBlock4Skill(scene, place_skill, vis_target_pos=target_pose_func)
     drag_block_skill = DragBlock5Skill(scene, drag_skill, vis_target_pos=target_pose_func)
     ACTION_MAP = {"place_block": place_block_skill, "pick_block": pick_block_skill, "drag_block": drag_block_skill}

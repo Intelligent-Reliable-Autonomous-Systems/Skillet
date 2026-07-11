@@ -60,6 +60,7 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         max_pos_threshold: float | None = None,
         stop_failure_steps: int = 120,
         stopped_velocity_threshold: float = 0.001,
+        default_quat: list | None = [[0.0, 0.7071, 0.7071, 0.0]],
     ) -> None:
         """Initialize the pick skill.
 
@@ -83,9 +84,7 @@ class PickSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBActi
         self._gripper_close = gripper_close
 
         # 180 degree rotation about X axis + -90 degree yaw
-        # self._default_quat = torch.as_tensor([[0.0, 0.7071, -0.7071, 0.0]])
-        # self._default_quat = torch.as_tensor([[0.0, 1.0, 0.0, 0.0]])
-        self._default_quat = torch.as_tensor([[0.0, 0.7071, 0.7071, 0.0]])
+        self._default_quat = torch.as_tensor(default_quat)
         self._pos_threshold = pos_threshold
         self._quat_threshold = quat_threshold
         self._target_manager = TargetReachManager(

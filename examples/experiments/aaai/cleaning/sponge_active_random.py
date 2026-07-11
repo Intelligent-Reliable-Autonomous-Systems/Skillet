@@ -21,8 +21,8 @@ from skillet.scene import (
 from skillet.skill.high_level import HoverSkill, PickSkill, PlaceSkill, SqueezeSkill, WipeSkill
 from skillet.skill.object_level import (
     HoverObject2Skill,
-    PickBlock2Skill,
-    PlaceBlock2Skill,
+    PickObj2Skill,
+    PlaceObj2Skill,
     SqueezeObjSkill,
     WipeSurfaceSkill,
 )
@@ -57,7 +57,7 @@ args_cli = parser.parse_args()
 
 def main() -> None:
     scene = load_scene(args_cli.scene_name)
-    domain = "skillet_tasks/pddl_tasks/clean-world/simple-sponge.domain.pddl"
+    domain = "skillet_tasks/spongeworld-clean/simple-sponge.domain.pddl"
     env_cfg = {
         "robot_ip": args_cli.robot_ip,
         "device": "cuda",
@@ -105,8 +105,8 @@ def main() -> None:
         reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, timeout=5, length=skill_length
     )
     wipe_skill = WipeSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length)
-    pick_obj_skill = PickBlock2Skill(scene, pick_skill, vis_target_pos=target_pose_func)
-    place_obj_skill = PlaceBlock2Skill(scene, place_skill, vis_target_pos=target_pose_func)
+    pick_obj_skill = PickObj2Skill(scene, pick_skill, vis_target_pos=target_pose_func)
+    place_obj_skill = PlaceObj2Skill(scene, place_skill, vis_target_pos=target_pose_func)
     wipe_obj_skill = WipeSurfaceSkill(scene, wipe_skill, vis_target_pos=target_pose_func)
     squeeze_obj_skill = SqueezeObjSkill(scene, squeeze_skill, vis_target_pos=target_pose_func)
     hover_obj_skill = HoverObject2Skill(scene, hover_skill, vis_target_pos=target_pose_func)

@@ -10,7 +10,7 @@ from skillet.envs.specs import BxM_Action, IKEE_Obs, M_Action
 from skillet.planning.abstract.skill_grounding import _place_skill_4_grounding
 from skillet.planning.abstract.spatial_grounding import _is_on
 from skillet.planning.util import find_valid_table_xy
-from skillet.scene import Cube, Location, Sponge, Table
+from skillet.scene import Can, Cube, Location, Plate, Sponge, Table, Target
 from skillet.scene.base import Scene, SceneObject
 from skillet.skill.high_level.place import PlaceSkill
 
@@ -104,7 +104,7 @@ class PlaceBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
         self._status = torch.as_tensor(st, device=self.params_spec.device)
 
 
-class PlaceBlock2Skill(PlaceBlockSkill):
+class PlaceObj2Skill(PlaceBlockSkill):
     def __init__(
         self,
         scene: Scene,
@@ -131,13 +131,18 @@ class PlaceBlock2Skill(PlaceBlockSkill):
                 self._status = torch.as_tensor(SkillStatusCodes.FAILED, device=self.params_spec.device)
                 return
             target_xyz = self._target.pose[:3].to(self.obs_spec.device) + self._offset
-        elif isinstance(self._target, Location):
-            offset = (
-                self._offset.clone() if isinstance(self.objs[0], Sponge) else self._offset.clone() * 2
-            )  # TODO SPONGE
+        elif isinstance(self._target, (Location, Target, Plate)):
+            offset = self._offset.clone() if isinstance(objs[0], (Sponge, Cube)) else self._offset.clone() * 2
             target_xyz = self._target.pose[:3].to(self.obs_spec.device) + offset
         elif isinstance(self._target, Table):
             target_xyz = find_valid_table_xy(self._scene).to(self.obs_spec.device) + (self._offset / 2)
+        elif isinstance(objs[0], Can):
+            if not self._target.is_pose_known() or self._params[0] == self._params[1]:
+                self._status = torch.as_tensor(SkillStatusCodes.FAILED, device=self.params_spec.device)
+                return
+            target_xyz = self._target.pose[:3].to(self.obs_spec.device) + self._offset
+            target_xyz[2] = target_xyz[2] + 0.05  # add height for can
+
         else:
             raise ValueError(f"Unknown place object: {self._target}.")
 

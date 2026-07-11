@@ -57,6 +57,7 @@ class PlaceSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAct
         max_pos_threshold: float | None = None,
         stop_failure_steps: int = 120,
         stopped_velocity_threshold: float = 0.001,
+        default_quat: list | None = [[0.0, 0.7071, 0.7071, 0.0]],
     ) -> None:
         """Initialize the place skill.
 
@@ -77,9 +78,7 @@ class PlaceSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_YAW_Params], Generic[TBAct
         self._place_status = None
         self._params = None
         # 180 degree rotation about X axis + -90 yaw
-        # self._default_quat = torch.as_tensor([[0.0, 0.7071, -0.7071, 0.0]])
-        # self._default_quat = torch.as_tensor([[0.0, 1.0, 0.0, 0.0]])
-        self._default_quat = torch.as_tensor([[0.0, 0.7071, 0.7071, 0.0]])
+        self._default_quat = torch.as_tensor(default_quat)
         self._default_pose = torch.as_tensor([[0.35, 0.0, 0.25, 0.0, 0.7071, 0.7071, 0.0]])
         self._pos_threshold = pos_threshold
         self._quat_threshold = quat_threshold

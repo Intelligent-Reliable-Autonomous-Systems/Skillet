@@ -22,7 +22,7 @@ from skillet.skill.high_level import (
     WipeSkill,
 )
 from skillet.skill.object_level import (
-    PickBlock2Skill,
+    PickObj2Skill,
     PlaceBlock3Skill,
     SqueezeObjSkill,
     WipeSurfaceSkill,
@@ -98,7 +98,7 @@ def main() -> None:
         reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, timeout=5, length=skill_length
     )
     wipe_skill = WipeSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length)
-    pick_obj_skill = PickBlock2Skill(scene, pick_skill, vis_target_pos=target_pose_func)
+    pick_obj_skill = PickObj2Skill(scene, pick_skill, vis_target_pos=target_pose_func)
     place_obj_skill = PlaceBlock3Skill(scene, place_skill, vis_target_pos=target_pose_func)
     wipe_table_skill = WipeSurfaceSkill(scene, wipe_skill, vis_target_pos=target_pose_func)
     squeeze_sponge_skill = SqueezeObjSkill(scene, squeeze_skill, vis_target_pos=target_pose_func)

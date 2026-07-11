@@ -354,9 +354,9 @@ class SkilletPerception:
                 self._reconstructor = SamVlmReconstructor(scene=self._scene, device=self.device, domain=self._domain)
             elif self._reconstructor_type == "april":
                 print("[INFO][PERCEPTION] Loading AprilTag reconstructor")
-                assert self._scene is not None, (
-                    "[ERROR] Perception Scene cannot be None when using AprilTagStateReconstructor."
-                )
+                assert (
+                    self._scene is not None
+                ), "[ERROR] Perception Scene cannot be None when using AprilTagStateReconstructor."
                 self._reconstructor = ApriltagStateReconstructor(self._scene, domain=self._domain)
             elif self._reconstructor_type == "sam3":
                 self._reconstructor = Sam3Reconstructor(self._scene, device=self.device, domain=self._domain)

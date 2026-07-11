@@ -11,7 +11,7 @@ import torch
 
 from skillet.perception.reconstruction.reconstructor_base import ReconstructorBase
 from skillet.perception.reconstruction.utils import (
-    find_obj_centers_mean,
+    find_block_centers_mean,
     transform_xyz_to_world,
 )
 from skillet.scene import CUBE_SIZE, SPILL_SIZE, SPONGE_SIZE, TARGET_SIZE
@@ -95,7 +95,7 @@ class SimReconstructor(ReconstructorBase):
         bboxes = torch.zeros(obj_masks.shape[0], 6, device=obj_masks.device)
 
         # Localize the cubes, targets, and sponge
-        obj_centers, obj_bboxes = find_obj_centers_mean(
+        obj_centers, obj_bboxes = find_block_centers_mean(
             obj_masks[obj_inds],
             depth,
             intrinsic_k,

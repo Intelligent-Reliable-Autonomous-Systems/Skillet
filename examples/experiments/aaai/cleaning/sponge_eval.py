@@ -1,13 +1,12 @@
 """Run a tabletop block stacking task."""
 
 import argparse
+import json
+import pathlib
 import time
 from typing import TYPE_CHECKING
 
-from conditional_repair.baselines.online.random_agent import RandomAgent
-from conditional_repair.dataset import RepairDataset
-
-from skillet.agents import ActiveLearningAgent
+from skillet.agents import PlanningAgent
 from skillet.core import ObservationSpec
 from skillet.core.env import BatchToSingleWrapper
 from skillet.envs import SkilletEnv
@@ -18,13 +17,11 @@ from skillet.scene import (
     Open3DVisualizer,
     load_scene,
 )
-from skillet.skill.high_level import HoverSkill, PickSkill, PlaceSkill, SqueezeSkill, WipeSkill
+from skillet.skill.high_level import PickSkill, PlaceSkill, WipeSkill
 from skillet.skill.object_level import (
-    HoverObject2Skill,
     PickObj2Skill,
     PlaceObj2Skill,
-    SqueezeObjSkill,
-    WipeSurfaceSkill,
+    WipeSurface3Skill,
 )
 from skillet.skill.policy import TcpCartPolicy
 from skillet_tasks.kortex_tasks.factory import create_kortex_env
@@ -38,26 +35,27 @@ parser.add_argument("--device", type=str, default="cpu", help="Device to use")
 parser.add_argument("--robot_ip", type=str, default="192.168.1.10", help="Robot IP.")
 parser.add_argument("--poll_rate_hz", type=int, default=10, help="Tick rate of the perception")
 parser.add_argument("--task", type=str, default="Kortex-Gen3-v0", help="Kortex Environment")
-parser.add_argument("--o3d", type=argparse.BooleanOptionalAction, default=True, help="If to visualize with open3d")
-parser.add_argument(
-    "--log_dir",
-    default="_robot_data/exp/",
-    type=str,
-)
-parser.add_argument(
-    "--exp_config",
-    type=str,
-    default="skillet_tasks/blocksworld-pick-place/repair-magnet/repair-effects-random.json",
-    help="Path to experiment JSON file",
-)
-parser.add_argument("--scene_name", type=str, default="2sponge_1plate", help="What scene to load")
 
+parser.add_argument("--o3d", type=argparse.BooleanOptionalAction, default=True, help="If to visualize with open3d")
+parser.add_argument("--task_file", type=str, required=True, help="Path to evaluation task file description")
+parser.add_argument(
+    "--vlm", type=argparse.BooleanOptionalAction, default=False, help="If to use the VLM for scene building"
+)
+parser.add_argument(
+    "--domain_path",
+    type=str,
+    help="Path to .domain.pddl file",
+)
+parser.add_argument("--model_dir", type=str, default="default", help="Name of model used")
 args_cli = parser.parse_args()
 
 
 def main() -> None:
-    scene = load_scene(args_cli.scene_name)
-    block_domain = "skillet_tasks/pddl_tasks/clean-world/simple-sponge.domain.pddl"
+    with pathlib.Path(args_cli.task_file).open("r") as f:
+        task_data = json.load(f)
+
+    scene = load_scene(task_data["scene_name"])
+    sponge_domain = args_cli.domain_path
     env_cfg = {
         "robot_ip": args_cli.robot_ip,
         "device": "cuda",
@@ -74,7 +72,7 @@ def main() -> None:
     env.reset()
     rgbd_grip_spec: ObservationSpec[RGBD_Gripper_Obs] = env.coerce_obs_spec("rgbd-gripper")
 
-    abs_model = AbstractModel(block_domain, None, scene)
+    abs_model = AbstractModel(sponge_domain, None, scene, domain="sponge")
 
     perception = SkilletPerception(
         env=env,
@@ -85,6 +83,7 @@ def main() -> None:
         poll_rate_hz=args_cli.poll_rate_hz,
         device="cuda",
         vis_perception=args_cli.o3d,
+        domain="sponge",
     )
     target_pose_func = None
     if args_cli.o3d:
@@ -97,41 +96,50 @@ def main() -> None:
     # Low-level policies
     skill_length = 1e9
     arm_policy = TcpCartPolicy(env.batched_env.obs_spec_tcp_cart, env.batched_env.action_spec_tcp_cart)
-    place_skill = PlaceSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length)
-    pick_skill = PickSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length)
-    hover_skill = HoverSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length)
-    squeeze_skill = SqueezeSkill(
-        reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, timeout=5, length=skill_length
+    place_skill = PlaceSkill(
+        reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length, default_quat=[[0, 1, 0, 0]]
     )
-    wipe_skill = WipeSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length)
-    pick_obj_skill = PickObj2Skill(scene, pick_skill, vis_target_pos=target_pose_func)
+    pick_skill = PickSkill(
+        reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length, default_quat=[[0, 1, 0, 0]]
+    )
+    wipe_skill = WipeSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.9, length=skill_length)
+    pick_obj_skill = PickObj2Skill(scene, pick_skill, vis_target_pos=target_pose_func, xyz_offset=(0, 0, 0.04))
     place_obj_skill = PlaceObj2Skill(scene, place_skill, vis_target_pos=target_pose_func)
-    wipe_obj_skill = WipeSurfaceSkill(scene, wipe_skill, vis_target_pos=target_pose_func)
-    squeeze_obj_skill = SqueezeObjSkill(scene, squeeze_skill, vis_target_pos=target_pose_func)
-    hover_obj_skill = HoverObject2Skill(scene, hover_skill, vis_target_pos=target_pose_func)
+    wipe_obj_skill = WipeSurface3Skill(scene, wipe_skill, vis_target_pos=target_pose_func)
     ACTION_MAP = {
         "place": place_obj_skill,
         "pick": pick_obj_skill,
-        "squeeze": squeeze_obj_skill,
         "wipe": wipe_obj_skill,
-        "hover": hover_obj_skill,
     }
+    pathlib.Path(f"{task_data['log_dir']}/{args_cli.model_dir}").mkdir(exist_ok=True, parents=True)
+    scene.goal = task_data["pddl_goal"]
+    print(scene.goal)
     print("[INFO] Warming up Perception...")
     time.sleep(3)
 
-    learning_agent = RandomAgent(RepairDataset(args_cli.exp_config))
+    if args_cli.vlm:
+        input("Press Enter to start the scene building...\n")
 
-    tamp_agent = ActiveLearningAgent(
-        scene,
-        abstract_model=abs_model,
-        action_to_skill_map=ACTION_MAP,
-        learning_agent=learning_agent,
-    )
+        perception.task_instruction = task_data["nl_goal"]
+        perception.build_scene = True
+        time.sleep(4)
+        with pathlib.Path(f"{task_data['log_dir']}/{args_cli.model_dir}/g_vlm.txt").open("w") as f:
+            f.write(str(scene.goal))
+        print(f"[INFO][VLM Goal]:\n{scene.goal}")
+
+    tamp_agent = PlanningAgent(scene, abstract_model=abs_model, action_to_skill_map=ACTION_MAP)
 
     logger = SkilletDataLogger(
-        args_cli.log_dir, env, scene, perception, abs_model, tamp_agent, obs_spec=rgbd_grip_spec, visualize=False
+        f"{task_data['log_dir']}/{args_cli.model_dir}",
+        env,
+        scene,
+        perception,
+        abs_model,
+        tamp_agent,
+        obs_spec=rgbd_grip_spec,
+        visualize=False,
     )
-    input("Press Enter to start the active learning experiment...")
+    input("Press Enter to start the planning and evaluation experiment...\n")
 
     logger.write_video = True
     logger.run_thread()

@@ -8,7 +8,7 @@ from skillet.core import SkillParamsSpec
 from skillet.core.skill import SingleSkill, SkillStatus, SkillStatusCodes
 from skillet.envs.specs import BxM_Action, IKEE_Obs, M_Action
 from skillet.planning.abstract.skill_grounding import _pick_skill_4_grounding
-from skillet.scene import Cube, Sponge
+from skillet.scene import Can, Cube, Sponge
 from skillet.scene.base import Scene, SceneObject
 from skillet.skill.high_level.pick import PickSkill
 
@@ -102,7 +102,7 @@ class PickBlockSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
         self._status = torch.as_tensor(st, device=self.params_spec.device)
 
 
-class PickBlock2Skill(PickBlockSkill):
+class PickObj2Skill(PickBlockSkill):
     def __init__(
         self,
         scene: Scene,
@@ -124,17 +124,18 @@ class PickBlock2Skill(PickBlockSkill):
 
         objs = self._scene.get_objects_from_id(self._params)
         self._target_block = objs[0]
-        if (
-            not self._target_block.is_pose_known()
-            or self._target_block == self._params[1]
-            or not self._target_block.moveable
-        ):
+        if not self._target_block.is_pose_known() or self._target_block == self._params[1]:
             self._status = torch.as_tensor(SkillStatusCodes.FAILED, device=self.params_spec.device)
-            print(f"[INFO][PICK BLOCK][FAILED]: {self._target_block.name} | {objs[1].name}")
+            print(f"[INFO][PICK OBJ][FAILED]: {self._target_block.name} | {objs[1].name}")
             return
-        offset = (
-            self._offset.clone() if isinstance(self._target_block, (Cube, Sponge)) else self._offset.clone() * 2
-        )  # TODO SPONGE
+        if isinstance(self._target_block, (Cube, Sponge)):
+            offset = self._offset.clone()
+        elif isinstance(self._target_block, Can):
+            offset = self._offset.clone()
+            offset[2] = offset[2] - 0.02
+        else:
+            offset = self._offset.clone() * 2
+
         target_xyz = self._target_block.pose[:3].to(self.obs_spec.device).clone() + offset
         if self._vis_target_pos is not None:
             self._vis_target_pos(target_xyz)

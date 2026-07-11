@@ -11,12 +11,27 @@ import torch
 
 from skillet.perception.reconstruction.reconstructor_base import ReconstructorBase
 from skillet.perception.reconstruction.utils import (
-    find_obj_centers_mean,
+    find_block_centers_mean,
+    find_spongeworld_centers_mean,
     transform_xyz_to_world,
 )
 from skillet.perception.segmentation.sam import SAMClient, get_sam_client
 from skillet.perception.segmentation.vlm import GeminiClient, QwenClient
-from skillet.scene import CUBE_SIZE, SPILL_SIZE, SPONGE_SIZE, TARGET_SIZE, Bin, Can, Cube, Plate, Spill, Sponge, Target
+from skillet.scene import (
+    CAN_SIZE,
+    CUBE_SIZE,
+    PLATE_SIZE,
+    SPILL_SIZE,
+    SPONGE_SIZE,
+    TARGET_SIZE,
+    Bin,
+    Can,
+    Cube,
+    Plate,
+    Spill,
+    Sponge,
+    Target,
+)
 from skillet.scene.base import Scene
 
 if TYPE_CHECKING:
@@ -189,16 +204,22 @@ class Sam3Reconstructor(ReconstructorBase):
         obj_types = np.stack(agg_obj_types, axis=0)
 
         # Compute the object centers
-        centers, bboxes = self._get_spongeworld_centers(obj_masks, depth, intrinsic_k, camera_pose)
+        centers, bboxes = self._get_spongeworld_centers(obj_masks, obj_types, depth, intrinsic_k, camera_pose)
 
         # Assign the pose and bounding boxes to each object
         ids = []
+        for obj in self._scene.objects:
+            obj.updated = False
         for i, c in enumerate(torch.unique(concept_indices).cpu().numpy()):
             obj = self._scene.get_objects_from_name([self._concepts[c].replace(" ", "_")])[0]
-            centers[i, 1] = 0  # TODO bad fix
+            np.set_printoptions(precision=3, suppress=True)
             obj.pose = torch.cat((centers[i], torch.as_tensor([1, 0, 0, 0], device=centers[i].device)), dim=0)
             obj.bbox = bboxes[i]
             ids.append(obj.object_id)
+            obj.updated = True
+        for obj in self._scene.objects:
+            if not obj.updated and isinstance(obj, Spill):
+                obj.pose = torch.as_tensor([0, 0, 1, 1, 0, 0, 0], device=self._device)
         ids = np.asarray(ids)
 
         return obj_masks, ids
@@ -218,7 +239,7 @@ class Sam3Reconstructor(ReconstructorBase):
         # Localize the cubes, targets, and sponge
         # Note if receiving weird values for cube centers check that we are
         # actually receiving non-zero depth data
-        centers, bboxes = find_obj_centers_mean(
+        centers, bboxes = find_block_centers_mean(
             obj_masks,
             depth,
             intrinsic_k,
@@ -239,6 +260,7 @@ class Sam3Reconstructor(ReconstructorBase):
     def _get_spongeworld_centers(
         self,
         obj_masks: torch.Tensor,
+        obj_types: np.ndarray,
         depth: torch.Tensor,
         intrinsic_k: torch.Tensor,
         camera_pose: torch.Tensor,
@@ -248,14 +270,28 @@ class Sam3Reconstructor(ReconstructorBase):
         centers = torch.zeros(obj_masks.shape[0], 3, device=obj_masks.device)
         bboxes = torch.zeros(obj_masks.shape[0], 6, device=obj_masks.device)
 
+        target_inds = np.argwhere(obj_types == "target")
+        can_inds = np.argwhere(obj_types == "can")
+        plate_inds = np.argwhere(obj_types == "plate")
+        sponge_inds = np.argwhere(obj_types == "sponge")
+        spill_inds = np.argwhere(obj_types == "spill")
+        obj_inds = np.concatenate((target_inds, can_inds, plate_inds, sponge_inds, spill_inds)).flatten()
+        obj_sizes = np.zeros(obj_inds.shape[0])
+        obj_sizes[target_inds] = TARGET_SIZE
+        obj_sizes[sponge_inds] = SPONGE_SIZE
+        obj_sizes[sponge_inds] = SPILL_SIZE
+        obj_sizes[can_inds] = CAN_SIZE
+        obj_sizes[plate_inds] = PLATE_SIZE
+
         # Localize the cubes, targets, and sponge
         # Note if receiving weird values for cube centers check that we are
         # actually receiving non-zero depth data
-        centers, bboxes = find_obj_centers_mean(
+        centers, bboxes = find_spongeworld_centers_mean(
             obj_masks,
             depth,
             intrinsic_k,
-            obj_size=CUBE_SIZE,
+            obj_size=obj_sizes,
+            obj_types=obj_types,
             camera_pos=camera_pose[0:3],
             camera_quat=camera_pose[3:7],
         )
@@ -265,6 +301,14 @@ class Sam3Reconstructor(ReconstructorBase):
         )
         bboxes[:, 3:6] = transform_xyz_to_world(
             bboxes[:, 3:6], camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7]
+        )
+
+        # Update appropriate grasp position/localization
+        centers[:, 2] = torch.where(torch.as_tensor(obj_types == "spill", device=centers.device), 0, centers[:, 2])
+        centers[:, 2] = torch.where(torch.as_tensor(obj_types == "target", device=centers.device), 0, centers[:, 2])
+        centers[:, 2] = torch.where(torch.as_tensor(obj_types == "plate", device=centers.device), 0, centers[:, 2])
+        centers[:, 2] = torch.where(
+            torch.as_tensor(obj_types == "can", device=centers.device), centers[:, 2] + 0.03, centers[:, 2]
         )
 
         return centers, bboxes

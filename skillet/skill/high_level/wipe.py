@@ -77,9 +77,7 @@ class WipeSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params], Generic[TB
         self._params = None
 
         # 180 degree rotation about X axis + -90 degree yaw
-        # self._default_quat = torch.as_tensor([[0.0, 0.7071, -0.7071, 0.0]])
-        # self._default_quat = torch.as_tensor([[0.7071, 0.0, 0.0, 0.7071]])
-        self._default_quat = torch.as_tensor([[0.0, 0.7071, 0.7071, 0.0]])
+        self._default_quat = torch.as_tensor([[0.0, 1, 0, 0.0]])
 
     @property
     def param_dim(self) -> int:
@@ -190,7 +188,7 @@ class WipeSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params], Generic[TB
                 self._reach_policy.reset(obs, self._current_target_poses, env_ids=env_ids)
 
         reach_actions = self._reach_policy.get_action(obs)
-        reach_actions[:, -1] = (torch.ones_like(reach_actions[:, -1]) * self._gripper_close,)
+        reach_actions[:, -1] = torch.ones_like(reach_actions[:, -1]) * self._gripper_close
 
         self._n_steps += 1
         self._status[self._wipe_status == WipeStatusCodes.DONE] = SkillStatusCodes.SUCCESS

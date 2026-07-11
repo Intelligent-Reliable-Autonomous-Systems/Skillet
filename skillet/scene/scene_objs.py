@@ -292,6 +292,7 @@ class Target(SceneObject):
         super().__init__(name=name, localizable=True)
         self._radius = radius
         self._pose = init_pose if init_pose is not None else torch.rand(size=(7,), device=DEVICE)
+        self._supportable = True
 
     @property
     def pose(self) -> torch.Tensor:
@@ -326,7 +327,7 @@ class Target(SceneObject):
     def aabb(self) -> torch.Tensor:
         """The axis-aligned bounding box of the cube."""
         return torch.cat(
-            [self._pose[:2] - self._radius, self._pose[3:4], self._pose[:2] + self._radius, self._pose[3:4]], dim=-1
+            [self._pose[:2] - self._radius, self._pose[2:3], self._pose[:2] + self._radius, self._pose[2:3]], dim=-1
         )
 
     def __str__(self) -> str:
@@ -417,7 +418,6 @@ class Sponge(SceneObject):
         self._color = color
         self._deformable = True
         self._graspable = True
-        self._wet = self._color == "blue"
 
     @property
     def pose(self) -> torch.Tensor:
@@ -460,7 +460,7 @@ class Spill(SceneObject):
 
     def __init__(
         self,
-        size: float,
+        radius: float = 0.02,
         init_pose: torch.Tensor | None = None,  # (x, y, z, w, x, y, z)
         name: str | None = None,
         color: str | None = None,
@@ -480,15 +480,20 @@ class Spill(SceneObject):
 
         """
         super().__init__(name=name, localizable=True)
-        self._size = size
+        self._radius = radius
         self._pose = init_pose if init_pose is not None else torch.rand(size=(7,), device=DEVICE)
-        self._ema_filter = EMAFilter()
         self._color = color
 
         self._bbox = None
+        self._wipeable = True
         self._deformable = False
         self._graspable = False
         self._supportable = False
+
+    @property
+    def size(self) -> float:
+        """The size of the target."""
+        return 2 * self._radius
 
     @property
     def pose(self) -> torch.Tensor:
@@ -500,22 +505,19 @@ class Spill(SceneObject):
     @pose.setter
     def pose(self, pose: torch.Tensor) -> None:
         """Set the pose of the spill in the world frame."""
-        self._pose = self._ema_filter.update(pose)
+        self._pose = pose
 
     @property
     def aabb(self) -> torch.Tensor:
         """The axis-aligned bounding box of the spill."""
-        return torch.cat([self._pose[:3] - self._size / 2.0, self._pose[:3] + self._size / 2.0], dim=-1)
+        return torch.cat(
+            [self._pose[:2] - self._radius, self._pose[2:3], self._pose[:2] + self._radius, self._pose[2:3]], dim=-1
+        )
 
     @property
     def object_type(self) -> str:
         """The type of the spill."""
         return "spill"
-
-    @property
-    def size(self) -> float:
-        """The size of the spill."""
-        return self._size
 
     @override
     def is_pose_known(self) -> bool:
@@ -531,11 +533,10 @@ class Plate(SceneObject):
 
     def __init__(
         self,
-        size: float,
+        radius: float = 0.05,
         init_pose: torch.Tensor | None = None,  # (x, y, z, w, x, y, z)
         name: str | None = None,
         color: str | None = None,
-        dirty: bool | None = None,
     ) -> None:
         """Initialize the plate.
 
@@ -545,14 +546,18 @@ class Plate(SceneObject):
 
         """
         super().__init__(name=name, localizable=True)
-        self._size = size
+        self._radius = radius
         self._pose = init_pose if init_pose is not None else torch.rand(size=(7,), device=DEVICE)
         self._ema_filter = EMAFilter()
         self._color = color
         self._supportable = True
         self._deformable = False
         self._hoverable = True
-        self._dirty = dirty
+
+    @property
+    def size(self) -> float:
+        """The size of the target."""
+        return 2 * self._radius
 
     @property
     def pose(self) -> torch.Tensor:
@@ -569,17 +574,14 @@ class Plate(SceneObject):
     @property
     def aabb(self) -> torch.Tensor:
         """The axis-aligned bounding box of the plate."""
-        return torch.cat([self._pose[:3] - self._size / 2.0, self._pose[:3] + self._size / 2.0], dim=-1)
+        return torch.cat(
+            [self._pose[:2] - self._radius, self._pose[2:3], self._pose[:2] + self._radius, self._pose[2:3]], dim=-1
+        )
 
     @property
     def object_type(self) -> str:
         """The type of the plate."""
         return "plate"
-
-    @property
-    def size(self) -> float:
-        """The size of the plate."""
-        return self._size
 
     @override
     def is_pose_known(self) -> bool:
@@ -676,6 +678,7 @@ class Can(SceneObject):
         self._color = color
         self._deformable = False
         self._supportable = False
+        self._graspable = True
 
     @property
     def pose(self) -> torch.Tensor:
@@ -692,12 +695,20 @@ class Can(SceneObject):
     @property
     def aabb(self) -> torch.Tensor:
         """The axis-aligned bounding box of the can."""
-        return torch.cat([self._pose[:3] - self._size / 2.0, self._pose[:3] + self._size / 2.0], dim=-1)
+        return torch.cat(
+            [
+                self._pose[:2] - self._size / 2.0,
+                self._pose[2:3] - self._size - 0.03,
+                self._pose[:2] + self._size / 2.0,
+                self._pose[2:3] + self._size - 0.03,
+            ],
+            dim=-1,
+        )
 
     @property
     def object_type(self) -> str:
         """The type of the can."""
-        return "bin"
+        return "can"
 
     @property
     def size(self) -> float:
