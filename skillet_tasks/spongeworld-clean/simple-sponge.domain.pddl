@@ -15,7 +15,7 @@
         (blue ?b - sponge)
         (yellow ?b - sponge) ; colors for the sponge
 
-        (wet ?b - item) ; material attribute
+        (wet ?b - surface) ; material attribute
         (dirty ?b - surface) ; material attribute
 
         ; dynamic predicates
