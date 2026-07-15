@@ -1,0 +1,16 @@
+{
+    "nl_goal": "Make a stack with the red block on top",
+    "pddl_goal": [{"predicate": "obstructed-above", "args": ["loc_21"]},
+                  {"predicate": "at-loc", "args": ["red_block", "loc_31"]}],
+    "init_state": [ "on(red block, blue block)",
+                    "on(blue block, table)",
+                    "on(green block, table)",
+                    "on(yellow block, green block)",
+                    "plastic(red block)",
+                    "plastic(blue block)",
+                    "wooden(green block)",
+                    "wooden(yellow block)"],
+    "scene_name": "2magnet_2wooden_3loc",
+    "log_dir": "skillet_tasks/blocksworld-pick-place/eval/tasks/task9"
+
+}

@@ -297,9 +297,6 @@ class ActiveLearningAgent(Agent):
                 )
                 was_paused = False
             self._learning_agent.dataset._plan_parser.append_trace_step(trace_file, up_action, next_up_state, execution)
-            # self._learning_agent.dataset.add_trace(
-            #    logger._states[ts:], logger._actions[ts:], logger._executions[ts:], str(self._moderator._exp_count)
-            # )
 
             self._learning_agent.reset_problem(self._abstract_model.problem)
 
