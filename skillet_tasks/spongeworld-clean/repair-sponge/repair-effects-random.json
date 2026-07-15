@@ -1,0 +1,18 @@
+{
+    "experiment_prefix": "spongeworld-repair-random",
+    "initial_domain": "../simple-sponge.domain.pddl",
+    "gt_domain": "../conditional-sponge.domain.pddl",
+    "eval_problems": [
+        "../eval/problems"
+    ],
+    "eval_traces": "../eval/traces",
+    "train_problems": ["../train-problems/"],
+    "max_steps": 200,
+    "fixed_preconditions": true,
+    "approaches": {
+        "random": {
+            "online": true,
+            "data_for_offline": true
+        }
+    }
+}

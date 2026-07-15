@@ -485,10 +485,11 @@ class Spill(SceneObject):
         self._color = color
 
         self._bbox = None
-        self._wipeable = True
+        self._wipeable = "marker" in name  # water spills are not wipeable
         self._deformable = False
         self._graspable = False
         self._supportable = False
+        self.wiped = "water" in name  # water spills are always wiped, if we don't find it then it isnt in the scene
 
     @property
     def size(self) -> float:
@@ -614,9 +615,7 @@ class Bin(SceneObject):
         self._pose = init_pose if init_pose is not None else torch.rand(size=(7,), device=DEVICE)
         self._ema_filter = EMAFilter()
         self._color = color
-        self._supportable = False
-        self._deformable = False
-        self._hoverable = True
+        self._supportable = True
 
     @property
     def pose(self) -> torch.Tensor:

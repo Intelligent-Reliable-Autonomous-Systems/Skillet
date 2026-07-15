@@ -6,8 +6,9 @@ import torch
 
 from skillet.core import SkillParamsSpec
 from skillet.core.skill import SingleSkill, SkillStatus, SkillStatusCodes
-from skillet.envs.specs import BxM_Action, IKEE_Obs, M_Action
+from skillet.envs.specs import IKEE_Obs, M_Action
 from skillet.scene.base import Scene, SceneObject
+from skillet.scene import Spill
 from skillet.skill.high_level import WipeSkill
 
 Object_Params: TypeAlias = int
@@ -78,9 +79,11 @@ class WipeSurfaceSkill(SingleSkill[IKEE_Obs, M_Action, Object_Params]):
         start_xyz = self._target_spill.bbox[:, 0:3]
         start_xyz[2] = 0
         start_xyz = start_xyz + self._offset
+        start_xyz[:2] = start_xyz[:2] - 0.08
         end_xyz = self._target_spill.bbox[:, 3:6]
         end_xyz[2] = 0
         end_xyz = end_xyz + self._offset
+        end_xyz[:2] = end_xyz[:2] + 0.08
         if self._vis_target_pos is not None:
             self._vis_target_pos(start_xyz)
         yaw = 0
@@ -172,6 +175,8 @@ class WipeSurface3Skill(WipeSurfaceSkill):
 
         objs = self._scene.get_objects_from_id(self._params)
         self._target_object = objs[1]
+        if isinstance(self._target_object, Spill):
+            self._target_object.wiped = True
 
         target_xyz = self._target_object.aabb[:3]
         if self._vis_target_pos is not None:
@@ -180,14 +185,14 @@ class WipeSurface3Skill(WipeSurfaceSkill):
         target_xyz_xyz = torch.cat(
             (target_xyz, torch.as_tensor([0], device=target_xyz.device), self._target_object.aabb[3:6]), dim=0
         )
-        # target_xyz_xyz[0] = target_xyz_xyz[0] - 0.05  # TODO Sponge
-        # target_xyz_xyz[4] = target_xyz_xyz[4] + 0.05  # Wipe along the x axis 10 cm offset from the center
+        target_xyz_xyz[:2] = target_xyz_xyz[:2] - 0.04  # TODO Sponge
+        target_xyz_xyz[3:5] = target_xyz_xyz[3:5] + 0.04  # Wipe along the x axis 10 cm offset from the center
         target_xyz_xyz[2] = target_xyz_xyz[2] + 0.05  # add vertical offset
         target_xyz_xyz[6] = target_xyz_xyz[6] + 0.05  # add vertical offset
         target_pose = self._wipe_skill.params_spec.with_n_envs(1).cast(target_xyz_xyz)
 
         self._wipe_skill.initiate(obs, target_pose)
-        print(f"[INFO][WIPE OBJECT]: {self._target_object.name} | {objs[1].name}")
+        print(f"[INFO][WIPE OBJECT]: {self._target_object.name} | {objs[2].name}")
 
     def __str__(self) -> str:
         if self._params is not None:

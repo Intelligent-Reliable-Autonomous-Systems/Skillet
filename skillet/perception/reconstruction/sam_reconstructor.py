@@ -18,6 +18,7 @@ from skillet.perception.reconstruction.utils import (
 from skillet.perception.segmentation.sam import SAMClient, get_sam_client
 from skillet.perception.segmentation.vlm import GeminiClient, QwenClient
 from skillet.scene import (
+    BIN_SIZE,
     CAN_SIZE,
     CUBE_SIZE,
     PLATE_SIZE,
@@ -190,7 +191,7 @@ class Sam3Reconstructor(ReconstructorBase):
             if i not in concept_indices:
                 continue
             o = self._scene.get_objects_from_name([n.replace(" ", "_")])[0]
-            if isinstance(o, (Target, Sponge, Spill, Plate, Can)):
+            if isinstance(o, (Target, Sponge, Spill, Plate, Can, Bin)):
                 inds = torch.argwhere(i == concept_indices)[0]
                 o_mask = torch.zeros(size=(mh, mw), device=self._device)
                 for j in inds:
@@ -218,7 +219,7 @@ class Sam3Reconstructor(ReconstructorBase):
             ids.append(obj.object_id)
             obj.updated = True
         for obj in self._scene.objects:
-            if not obj.updated and isinstance(obj, Spill):
+            if not obj.updated and isinstance(obj, Spill) and obj.wiped:
                 obj.pose = torch.as_tensor([0, 0, 1, 1, 0, 0, 0], device=self._device)
         ids = np.asarray(ids)
 
@@ -275,13 +276,15 @@ class Sam3Reconstructor(ReconstructorBase):
         plate_inds = np.argwhere(obj_types == "plate")
         sponge_inds = np.argwhere(obj_types == "sponge")
         spill_inds = np.argwhere(obj_types == "spill")
-        obj_inds = np.concatenate((target_inds, can_inds, plate_inds, sponge_inds, spill_inds)).flatten()
+        bin_inds = np.argwhere(obj_types == "bin")
+        obj_inds = np.concatenate((target_inds, can_inds, plate_inds, sponge_inds, spill_inds, bin_inds)).flatten()
         obj_sizes = np.zeros(obj_inds.shape[0])
         obj_sizes[target_inds] = TARGET_SIZE
         obj_sizes[sponge_inds] = SPONGE_SIZE
         obj_sizes[sponge_inds] = SPILL_SIZE
         obj_sizes[can_inds] = CAN_SIZE
         obj_sizes[plate_inds] = PLATE_SIZE
+        obj_sizes[bin_inds] = BIN_SIZE
 
         # Localize the cubes, targets, and sponge
         # Note if receiving weird values for cube centers check that we are

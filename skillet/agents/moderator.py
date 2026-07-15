@@ -72,7 +72,8 @@ class KeyboardListener:
         self._additional_callbacks[key.upper()] = func
 
 
-HOME_TCP_CART = [0.25, 0.0, 0.3, np.pi, 0.0, np.pi / 2, 0.0]
+# HOME_TCP_CART = [0.25, 0.0, 0.3, np.pi, 0.0, np.pi / 2, 0.0]
+HOME_TCP_CART = [0.25, 0.0, 0.3, np.pi, 0.0, 0, 0.0]
 
 
 class ExpStatusCodes(IntEnum):

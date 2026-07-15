@@ -141,7 +141,7 @@ class PlaceObj2Skill(PlaceBlockSkill):
                 self._status = torch.as_tensor(SkillStatusCodes.FAILED, device=self.params_spec.device)
                 return
             target_xyz = self._target.pose[:3].to(self.obs_spec.device) + self._offset
-            target_xyz[2] = target_xyz[2] + 0.05  # add height for can
+            target_xyz[2] = target_xyz[2] + 0.03  # add height for can
 
         else:
             raise ValueError(f"Unknown place object: {self._target}.")

@@ -14,6 +14,7 @@ from skillet.planning import AbstractModel
 from skillet.planning.abstract import AbstractAction
 from skillet.planning.abstract.up_utils import sample_action_from_state
 from skillet.scene.base import Scene
+from skillet.scene import Spill
 
 
 class PlanningAgent(Agent):
@@ -250,6 +251,10 @@ class ActiveLearningAgent(Agent):
                 up_state = self._abstract_model.reset_up_problem_state()
                 up_objects = self._abstract_model._problem.all_objects
                 was_paused = True
+                for obj in self._scene.objects:
+                    if isinstance(obj, Spill) and "marker" in obj.name:
+                        obj.wiped = False
+
                 time.sleep(0.1)
                 continue
             up_action = self._learning_agent.get_action(up_state, up_objects)

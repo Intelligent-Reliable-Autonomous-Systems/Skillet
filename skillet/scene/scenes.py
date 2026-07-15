@@ -12,6 +12,7 @@ SPILL_SIZE = 0.060
 TARGET_SIZE = 0.090
 CAN_SIZE = 0.055
 PLATE_SIZE = 0.18
+BIN_SIZE = 0.18
 SM_APRIL_SZ = 0.036
 TABLE_X0 = 0.17
 TABLE_Y0 = -0.48
@@ -363,7 +364,9 @@ def two_sponge_one_plate_scene() -> None:
             Sponge(size=0.05, name="yellow_sponge", color="yellow"),
             Sponge(size=0.05, name="blue_sponge", color="blue"),
             # Bin(size=0.25, name="red_box"),
-            Can(size=0.05, name="coke_can"),
+            Can(size=0.05, name="blue_can"),
+            # Bin(size=0.05, name="orange_bin"),
+            # Bin(size=0.05, name="blue_bin"),
             # Location(size=0.12, init_pose=torch.as_tensor([0.20, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_00"),
             # Location(size=0.12, init_pose=torch.as_tensor([0.32, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_01"),
             # Location(size=0.12, init_pose=torch.as_tensor([0.44, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_02"),
