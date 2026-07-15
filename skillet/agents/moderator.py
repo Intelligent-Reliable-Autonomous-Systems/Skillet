@@ -102,6 +102,9 @@ class SkilletModerator:
         self._intervention = False
         self._action = None
         self._action_spec = None
+        self._exp_count = 0
+        self._trace_count = 0
+        self._trace_step = 0
         print(
             "===[SkilletExpModerator]===\nQ: Quit Experiment\nX: Stop Robot\nH: Return Robot to Home\nR: Resume Robot Experiment\nP: Pause the Experiment."
         )
@@ -121,12 +124,13 @@ class SkilletModerator:
         def resume_handler():
             if self._status != ExpStatusCodes.RUNNING:
                 self._status = ExpStatusCodes.RESUME
-                print("[INFO][MODERATOR] Resuming the robot experiment.")
                 self._intervention = True
 
         def pause_handler():
             self._status = ExpStatusCodes.PAUSE
             self._intervention = True
+            self._exp_count += 1
+            self._trace_step = max(self._trace_count - 1, 0)
             print("[INFO][MODERATOR] Pausing the experiment after execution of skill. Press R to resume.")
 
         self._listener.add_callback("q", quit_handler)
@@ -169,6 +173,7 @@ class SkilletModerator:
                 )
             elif self._status == ExpStatusCodes.RESUME:
                 print("[INFO][MODERATOR] Resuming the robot experiment.")
+                self._status = SkillStatusCodes.RUNNING
             self._intervention = False
         return self._action, self._action_spec
 
@@ -179,7 +184,7 @@ class SkilletModerator:
         obs = env.get_observation(skill.obs_spec)
         skill.initiate(obs, args)
         skill_done = skill.is_terminated(env.get_observation(skill.obs_spec))
-
+        self._trace_count += 1
         terminated = False
         while not terminated:
             recovery_action, action_spec = self.poll(env, skill)

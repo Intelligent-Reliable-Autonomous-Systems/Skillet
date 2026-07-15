@@ -243,11 +243,18 @@ class ActiveLearningAgent(Agent):
         self._learning_agent.reset_problem(self._abstract_model.problem)
         skills_sampled = 0
         skills_failed = 0
+        was_paused = True
+        trace_file = None
         while True:
             if self._moderator.is_paused:
+                up_state = self._abstract_model.reset_up_problem_state()
+                up_objects = self._abstract_model._problem.all_objects
+                was_paused = True
                 time.sleep(0.1)
                 continue
             up_action = self._learning_agent.get_action(up_state, up_objects)
+            up_objects = self._abstract_model._problem.all_objects
+
             if up_action is None:
                 print("[WARN][ACTIVE] Invalid action selected/unable to find valid caction")
                 time.sleep(0.1)
@@ -279,12 +286,23 @@ class ActiveLearningAgent(Agent):
                     actions=up_action,
                     executions=execution,
                 )
-            self._learning_agent.dataset.add_trace(logger._states, logger._actions, logger._executions)
-
             next_up_state = self._abstract_model.reset_up_problem_state()
+
+            if was_paused:
+                trace_file = self._learning_agent.dataset._traces_dir / f"{self._moderator._exp_count}.trace"
+                self._learning_agent.dataset._plan_parser.initialize_trace_file(
+                    trace_file,
+                    up_state,
+                    up_objects,
+                )
+                was_paused = False
+            self._learning_agent.dataset._plan_parser.append_trace_step(trace_file, up_action, next_up_state, execution)
+            # self._learning_agent.dataset.add_trace(
+            #    logger._states[ts:], logger._actions[ts:], logger._executions[ts:], str(self._moderator._exp_count)
+            # )
+
             self._learning_agent.reset_problem(self._abstract_model.problem)
 
-            up_objects = self._abstract_model._problem.all_objects
             self._learning_agent.learn_step(up_state, up_objects, up_action, next_up_state, execution)
             with open(f"{self._learning_agent.dataset.experiment_dir}/_agent.pkl", "wb") as f:
                 pickle.dump(self._learning_agent, f)
