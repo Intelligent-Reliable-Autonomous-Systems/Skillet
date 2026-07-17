@@ -7,7 +7,7 @@ from unified_planning.engines import PlanGenerationResultStatus as PGResultStatu
 from unified_planning.engines import UPSequentialSimulator
 from unified_planning.environment import Environment
 from unified_planning.io import PDDLReader
-from unified_planning.model import Object, Problem, UPState
+from unified_planning.model import MinimizeSequentialPlanLength, Object, Problem, UPState
 from unified_planning.plans import ActionInstance
 from unified_planning.shortcuts import And, AnytimePlanner, Not, OneshotPlanner
 
@@ -175,6 +175,8 @@ class AbstractModel(BasePlanner):
         )
         self._goal = AbstractGoal(goals=[parse_value(str(g)) for g in abstract_state.goals])
 
+
+        self._problem.add_quality_metric(MinimizeSequentialPlanLength())
         with AnytimePlanner(
             problem_kind=self._problem.kind, anytime_guarantee="INCREASING_QUALITY"
         ) as planner:
