@@ -9,7 +9,7 @@ from unified_planning.environment import Environment
 from unified_planning.io import PDDLReader
 from unified_planning.model import Object, Problem, UPState
 from unified_planning.plans import ActionInstance
-from unified_planning.shortcuts import And, Not, OneshotPlanner
+from unified_planning.shortcuts import And, AnytimePlanner, Not, OneshotPlanner
 
 from skillet.planning.abstract import (
     AbstractAction,
@@ -175,13 +175,19 @@ class AbstractModel(BasePlanner):
         )
         self._goal = AbstractGoal(goals=[parse_value(str(g)) for g in abstract_state.goals])
 
-        with OneshotPlanner(name="fast-downward") as planner:
-            result = planner.solve(self._problem, timeout=timeout)
+        with AnytimePlanner(
+            problem_kind=self._problem.kind, anytime_guarantee="INCREASING_QUALITY"
+        ) as planner:
+            result = None
+            for i, p in enumerate(planner.get_solutions(self._problem, timeout=timeout)):
+                result = p
+        # with OneshotPlanner(name="fast-downward") as planner:
+        #     result = planner.solve(self._problem, timeout=timeout)
 
-            status = result.status
+        status = result.status
 
-            if status not in (PGResultStatus.SOLVED_SATISFICING, PGResultStatus.SOLVED_OPTIMALLY):
-                return (False, None, None)
+        if status not in (PGResultStatus.SOLVED_SATISFICING, PGResultStatus.SOLVED_OPTIMALLY):
+            return (False, None, None)
 
         return (
             True,
