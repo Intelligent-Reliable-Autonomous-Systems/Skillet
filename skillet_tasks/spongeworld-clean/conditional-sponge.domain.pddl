@@ -13,7 +13,7 @@
         (supportable ?m - surface) ; if this surface can support something
         (wipeable ?m - item) ; if this object can be wiped
 
-        (wet ?b - sponge) ; material attribute
+        (wet ?b - item) ; material attribute
         (dirty ?b - surface) ; material attribute
         (upright ?b - can) ; material attribute of cans
 
@@ -73,6 +73,28 @@
     :effect (and
         (not (dirty ?target))
         (not (on ?mess ?target))
+
+        ; wipe with wet sponge -> water on plate
+        (forall (?water_spill - spill)
+            (when
+                (and (wet ?grasped) (not (on ?water_spill ?target))) ; replace marker_spill with water_spill
+                (on ?water_spill ?target)
+            )
+        )
+        ; knock off cans onto table
+        (forall (?soda_can - can)
+            (when
+                (on ?soda_can ?target)
+                (not (on ?soda_can ?target))
+            )
+        )
+        (forall (?soda_can - can ?tab - table)
+            (when
+                (on ?soda_can ?target)
+                (on ?soda_can ?tab)
+            )
+        )
+
     )
 )
 )

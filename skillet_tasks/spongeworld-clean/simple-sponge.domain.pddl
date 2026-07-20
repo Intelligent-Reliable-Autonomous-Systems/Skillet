@@ -4,7 +4,7 @@
         surface item - object
         table plate target bin - surface
         sponge can spill - item
-        
+
     )
     (:predicates
         ; static predicates
@@ -13,7 +13,7 @@
         (supportable ?m - surface) ; if this surface can support something
         (wipeable ?m - item) ; if this object can be wiped
 
-        (wet ?b - sponge) ; material attribute
+        (wet ?b - item) ; material attribute
         (dirty ?b - surface) ; material attribute
         (upright ?b - can) ; material attribute of cans
 
