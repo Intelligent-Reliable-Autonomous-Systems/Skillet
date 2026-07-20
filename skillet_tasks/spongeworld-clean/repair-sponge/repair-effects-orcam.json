@@ -15,7 +15,8 @@
             "online": true,
             "data_for_offline": true,
             "config": {
-                "noise":0.05
+                "noise":0.05,
+                "enforce_inequality": true
             }
         }
     }
