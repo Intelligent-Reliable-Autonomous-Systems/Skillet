@@ -1,16 +1,19 @@
 {
-    "nl_goal": "Make two stacks of blocks two high",
-    "pddl_goal": [{"predicate": "obstructed-above", "args": ["loc_11"]},
-                  {"predicate": "obstructed-above", "args": ["loc_12"]}],
-    "init_state": [ "on(blue block, yellow block)",
-                    "on(red block, blue block)",
-                    "on(green block, table)",
+    "nl_goal": "Make a stack on the left with pink on blue on green.",
+    "pddl_goal": [
+        {"predicate": "at-loc", "args": ["green_block", "loc_10"]},
+        {"predicate": "on", "args": ["blue_block", "green_block"]},
+        {"predicate": "on", "args": ["pink_block", "blue_block"]}
+    ],
+    "init_state": [ "on(pink block, yellow block)",
                     "on(yellow block, table)",
-                    "plastic(red block)",
+                    "on(green block, table)",
+                    "on(blue block, green block)",
+                    "plastic(pink block)",
                     "plastic(blue block)",
                     "wooden(green block)",
                     "wooden(yellow block)"],
-    "scene_name": "2magnet_2wooden_5loc",
-    "log_dir": "skillet_tasks/blocksworld-pick-place/eval/tasks/task0"
+    "scene_name": "2magnet_2wooden_3loc",
+    "log_dir": "skillet_tasks/blocksworld-pick-place/eval/tasks/task9"
 
 }

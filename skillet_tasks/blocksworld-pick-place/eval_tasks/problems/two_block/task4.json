@@ -1,8 +1,8 @@
 {
-    "nl_goal": "Make a stack of blocks 2 high with the green on the bottom",
+    "nl_goal": "Make a stack of blocks 2 high where green is without moving yellow.",
     "pddl_goal": [{"predicate": "obstructed-above", "args": ["loc_13"]},
                   {"predicate": "not obstructed-above", "args": ["loc_23"]},
-                  {"predicate": "at-loc", "args": ["green_block", "loc_13"]}],
+                  {"predicate": "at-loc", "args": ["yellow_block", "loc_11"]}],
     "init_state": [ "on(green block, table)",
                     "on(yellow block, green block)",
                     "on(red block, table)",

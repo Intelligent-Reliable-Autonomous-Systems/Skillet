@@ -307,7 +307,15 @@ def find_spongeworld_centers_mean(
             mask_v = torch.abs(centroid_v - proj_v) < threshold
             mask_u = torch.abs(centroid_u - proj_u) < threshold
 
-        offset = (o_size * (1 / 2)) if o_type in ["can", "sponge"] else 0
+        if o_type in ["can"]:
+            offset = o_size * (1 / 2)
+        elif o_type in ["sponge"]:
+            offset = o_size * (3 / 4)
+        elif o_type in ["plate", "target"]:
+            offset = o_size * (1 / 4)
+        else:
+            offset = 0
+
         centroid_w = proj_w[mask_u & mask_v].mean() + offset
         centroid = torch.as_tensor([centroid_u, centroid_v, centroid_w], device=masks.device)
         centers.append(centroid)

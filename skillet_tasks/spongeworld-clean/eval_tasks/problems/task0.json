@@ -1,6 +1,6 @@
 {
     "nl_goal": "Make the plate clean",
-    "pddl_goal": [{"predicate": "not dirty", "args": ["white_plate"]}],
+    "pddl_goal": [{"predicate": "not dirty", "args": ["orange_whiteboard"]}],
     "init_state": [ "on(coke_can, plate1)"],
     "scene_name": "2sponge_1plate", 
     "log_dir": "skillet_tasks/spongeworld-clean/eval/tasks/task0"

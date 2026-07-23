@@ -15,7 +15,6 @@
 
         (wet ?b - item) ; material attribute
         (dirty ?b - surface) ; material attribute
-        (upright ?b - can) ; material attribute of cans
 
         ; dynamic predicates
         (on ?b - object ?s - surface) ; item b is on surface s

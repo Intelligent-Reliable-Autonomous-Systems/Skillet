@@ -270,7 +270,7 @@ class WipeSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params], Generic[TB
         reach_actions[:, -1] = torch.where(
             (self._wipe_status >= WipeStatusCodes.LOWER),
             torch.ones_like(reach_actions[:, -1]) * self._gripper_close,  # Close gripper
-            torch.ones_like(reach_actions[:, -1]) * 0.6,  # Open gripper
+            torch.ones_like(reach_actions[:, -1]) * 0.67,  # Open gripper
         )
         # reach_actions[:, -1] = torch.ones_like(reach_actions[:, -1]) * self._gripper_close
 

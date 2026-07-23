@@ -97,10 +97,10 @@ def main() -> None:
     skill_length = 1e9
     arm_policy = TcpCartPolicy(env.batched_env.obs_spec_tcp_cart, env.batched_env.action_spec_tcp_cart)
     place_skill = PlaceSkill(
-        reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length, default_quat=[[0, 1, 0, 0]]
+        reach_policy=arm_policy, lift_height=0.21, gripper_close=0.65, length=skill_length, default_quat=[[0, 1, 0, 0]]
     )
     pick_skill = PickSkill(
-        reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length, default_quat=[[0, 1, 0, 0]]
+        reach_policy=arm_policy, lift_height=0.21, gripper_close=0.65, length=skill_length, default_quat=[[0, 1, 0, 0]]
     )
     wipe_skill = WipeSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.9, length=skill_length)
     pick_obj_skill = PickObj2Skill(scene, pick_skill, vis_target_pos=target_pose_func, xyz_offset=(0, 0, 0.04))

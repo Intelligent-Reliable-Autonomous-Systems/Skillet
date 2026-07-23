@@ -175,11 +175,8 @@ class AbstractModel(BasePlanner):
         )
         self._goal = AbstractGoal(goals=[parse_value(str(g)) for g in abstract_state.goals])
 
-
         self._problem.add_quality_metric(MinimizeSequentialPlanLength())
-        with AnytimePlanner(
-            problem_kind=self._problem.kind, anytime_guarantee="INCREASING_QUALITY"
-        ) as planner:
+        with AnytimePlanner(problem_kind=self._problem.kind, anytime_guarantee="INCREASING_QUALITY") as planner:
             result = None
             for i, p in enumerate(planner.get_solutions(self._problem, timeout=timeout)):
                 result = p

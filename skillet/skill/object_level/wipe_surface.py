@@ -185,8 +185,10 @@ class WipeSurface3Skill(WipeSurfaceSkill):
         target_xyz_xyz = torch.cat(
             (target_xyz, torch.as_tensor([0], device=target_xyz.device), self._target_object.aabb[3:6]), dim=0
         )
-        target_xyz_xyz[:2] = target_xyz_xyz[:2] - 0.04  # TODO Sponge
-        target_xyz_xyz[3:5] = target_xyz_xyz[3:5] + 0.04  # Wipe along the x axis 10 cm offset from the center
+        target_xyz_xyz[0] = target_xyz_xyz[0] - 0.00  # TODO Sponge
+        target_xyz_xyz[3] = target_xyz_xyz[3] + 0.06  # Wipe along the x axis 10 cm offset from the center
+        target_xyz_xyz[1] = target_xyz_xyz[1] - 0.00  # Wipe along the x axis 10 cm offset from the center
+        target_xyz_xyz[5] = target_xyz_xyz[5] + 0.08  # Wipe along the x axis 10 cm offset from the center
         target_xyz_xyz[2] = target_xyz_xyz[2] + 0.05  # add vertical offset
         target_xyz_xyz[6] = target_xyz_xyz[6] + 0.05  # add vertical offset
         target_pose = self._wipe_skill.params_spec.with_n_envs(1).cast(target_xyz_xyz)

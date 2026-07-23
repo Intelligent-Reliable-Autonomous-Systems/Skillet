@@ -69,12 +69,19 @@ def _place_skill_4_grounding(scene_objs: list[SceneObject], scene: Scene) -> boo
     grasped, target, freeloc, targetloc = scene_objs[:4]
 
     grasp_grd = _is_grasping(grasped, scene)
+    print("is grasping", grasp_grd)
     full_grd = _gripper_closed(scene)
+    print("gripper grasping", full_grd)
     at_grd = (not _is_at(grasped, freeloc)) and (
         (_is_at(target, targetloc) and isinstance(target, Cube)) or isinstance(target, Table)
     )
+    print("not at grasped freeloc", not _is_at(grasped, freeloc))
+    print("is at target targetloc", _is_at(target, targetloc) and isinstance(target, Cube))
+    print("at_grd", at_grd)
     above_grd = _is_above_loc(freeloc, targetloc)
+    print("above_grd", above_grd)
     occupied_grd = not _is_occupied(freeloc, scene)
+    print("occipied_grd", occupied_grd)
 
     return bool(grasp_grd and full_grd and at_grd and above_grd and occupied_grd)
 

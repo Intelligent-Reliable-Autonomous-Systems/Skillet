@@ -59,7 +59,7 @@ class PlanningAgent(Agent):
 
         abstract_state = self._abstract_model.get_abstract_state()
         self._result, self._plan, up_actions = self._abstract_model.plan(abstract_state=abstract_state)
-
+        up_state = self._abstract_model.reset_up_problem_state()
         terminated = False
         if self._plan is None:
             print("[WARNING][TAMP] Failed to find plan.")
@@ -306,8 +306,8 @@ class ActiveLearningAgent(Agent):
             self._learning_agent.reset_problem(self._abstract_model.problem)
 
             self._learning_agent.learn_step(up_state, up_objects, up_action, next_up_state, execution)
-            with open(f"{self._learning_agent.dataset.experiment_dir}/_agent.pkl", "wb") as f:
-                pickle.dump(self._learning_agent, f)
+            # with open(f"{self._learning_agent.dataset.experiment_dir}/_agent.pkl", "wb") as f:
+            #    pickle.dump(self._learning_agent, f)
 
             if terminated:
                 break

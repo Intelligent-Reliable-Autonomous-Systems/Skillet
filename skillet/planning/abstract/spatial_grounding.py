@@ -452,13 +452,17 @@ def ground_sponge_relations(scene: Scene) -> tuple[list[tuple[str, SceneObject, 
         # Blue sponges are wet
         if isinstance(obj, Sponge) and obj.color == "blue":
             material_relations.append(("wet", obj))
+        if isinstance(obj, Spill) and "spill" in obj.name:
+            material_relations.append(("wet", obj))  # Needs to be here for bug in OHCAM
 
         if isinstance(obj, Table):
             continue
         for other_obj in scene.objects:
             if other_obj.object_id == obj.object_id:
                 continue
-            if other_obj.supportable and (_is_on(obj, other_obj) or _is_in(obj, other_obj)):
+            if other_obj.supportable and (
+                _is_on(obj, other_obj, height_tol_frac=0.5 if isinstance(obj, Can) else 0.3) or _is_in(obj, other_obj)
+            ):
                 on_relations.append(("on", obj, other_obj))
                 if not isinstance(obj, Spill):
                     obs_relations.append(("obstructed", other_obj))

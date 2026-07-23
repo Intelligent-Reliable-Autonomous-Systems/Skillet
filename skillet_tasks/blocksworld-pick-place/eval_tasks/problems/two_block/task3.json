@@ -1,5 +1,5 @@
 {
-    "nl_goal": "Make two stacks of blocks two high.",
+    "nl_goal": "Make two stacks of blocks two high in the middle.",
     "pddl_goal": [{"predicate": "obstructed-above", "args": ["loc_11"]},
                   {"predicate": "obstructed-above", "args": ["loc_12"]}],
     "init_state": [ "on(green block, table)",
