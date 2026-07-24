@@ -4,7 +4,8 @@
                   {"predicate": "not on", "args": ["blue_water_spill", "white_plate"]},
                   {"predicate": "not on", "args": ["blue_can", "table_0"]}],
     "init_state": [ "on(blue_can, white_plate)",
-                    "on(yellow_sponge, purple_circle)"],
-    "scene_name": "1sponge_1plate_1can", 
-    "log_dir": "skillet_tasks/spongeworld-clean/eval/tasks/task2"
+                    "on(yellow_sponge, purple_circle)",
+                    "on(blue_sponge, green_circle)"],
+    "scene_name": "2sponge_1plate_1can", 
+    "log_dir": "skillet_tasks/spongeworld-clean/eval/tasks/task3"
 }
