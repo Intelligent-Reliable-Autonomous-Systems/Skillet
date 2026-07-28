@@ -1,0 +1,17 @@
+{
+    "nl_goal": "Reverse the order of the stack",
+    "pddl_goal": [{"predicate": "on", "args": ["yellow_block", "table_0"]},
+                  {"predicate": "on", "args": ["pink_block", "yellow_block"]},
+                  {"predicate": "on", "args": ["green_block", "pink_block"]}
+                ],
+    "init_state": [ "on(green block, table)",
+                    "on(pink block, green block)",
+                    "on(yellow block, pink block)",
+                    "on(blue block, table)",
+                    "plastic(pink block)",
+                    "plastic(blue block)",
+                    "wooden(green block)",
+                    "wooden(yellow block)"],
+    "scene_name": "2magnet_2wooden_3loc", 
+    "log_dir": "skillet_tasks/blocksworld-pick-place/eval/tasks/task6"
+}

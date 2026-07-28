@@ -134,6 +134,9 @@ class PlaceObj2Skill(PlaceBlockSkill):
         elif isinstance(self._target, (Location, Target, Plate)):
             offset = self._offset.clone() if isinstance(objs[0], (Sponge, Cube)) else self._offset.clone() * 2
             target_xyz = self._target.pose[:3].to(self.obs_spec.device) + offset
+            if isinstance(objs[0], Can):
+                target_xyz[2] = target_xyz[2] - 0.02  # remove height for can
+
         elif isinstance(self._target, Table):
             target_xyz = find_valid_table_xy(self._scene).to(self.obs_spec.device) + (self._offset / 2)
         elif isinstance(objs[0], Can):
@@ -141,7 +144,7 @@ class PlaceObj2Skill(PlaceBlockSkill):
                 self._status = torch.as_tensor(SkillStatusCodes.FAILED, device=self.params_spec.device)
                 return
             target_xyz = self._target.pose[:3].to(self.obs_spec.device) + self._offset
-            target_xyz[2] = target_xyz[2] + 0.05  # add height for can
+            target_xyz[2] = target_xyz[2] - 0.02  # add height for can
 
         else:
             raise ValueError(f"Unknown place object: {self._target}.")

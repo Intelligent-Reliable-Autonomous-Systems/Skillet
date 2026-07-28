@@ -1,0 +1,29 @@
+{
+    "initial_domain": "../../simple-sponge.domain.pddl",
+    "gt_domain": "../../conditional-sponge.domain.pddl",
+    "eval_problems": [
+        "../../eval/problems"
+    ],
+    "eval_traces": [
+        "../../eval/traces"
+    ],
+    "train_problems": [
+        "../../train-problems"
+    ],
+    "max_steps": 200,
+    "fixed_preconditions": true,
+    "approaches": {
+        "orcam": {
+            "name": "ORCAM",
+            "online": true,
+            "data_for_offline": true,
+            "config": {
+                "noise": 0.05,
+                "enforce_inequality": true
+            }
+        }
+    },
+    "is_experiment": true,
+    "experiment_id": "spongeworld-repair-orcam-26-07-23-130952",
+    "parent_config": "../repair-effects-orcam.json"
+}

@@ -2,7 +2,7 @@
     (:requirements :typing :conditional-effects :negative-preconditions :universal-preconditions)
     (:types
         surface item - object
-        table plate target - surface
+        table plate target bin - surface
         sponge can spill - item
 
     )
@@ -12,17 +12,14 @@
         (deformable ?m - item) ; if the item can be deformed
         (supportable ?m - surface) ; if this surface can support something
         (wipeable ?m - item) ; if this object can be wiped
-        (blue ?b - sponge)
-        (yellow ?b - sponge) ; colors for the sponge
 
-        (wet ?b - surface) ; material attribute
+        (wet ?b - item) ; material attribute
         (dirty ?b - surface) ; material attribute
 
         ; dynamic predicates
         (on ?b - object ?s - surface) ; item b is on surface s
         (grasping ?b - item) ; the gripper is closed around movable b
         (obstructed ?b - surface) ; the surface is obstructed
-        (contains ?b - item ?s - spill) ; the item contains liquid
 
         ; pseudo-derived predicates
         (gripper-full) ; the gripper is occupied <-> exists ?b. (grasping ?b)
@@ -52,18 +49,12 @@
         (grasping ?grasped)
         (supportable ?target)
         (not (obstructed ?target))
-        (hover ?grasped ?target)
     )
     :effect (and
         (on ?grasped ?target)
         (not (gripper-full))
         (not (grasping ?grasped))
         (obstructed ?target)
-        (not (hover ?grasped ?target))
-        (when
-            (wet ?grasped)
-            (wet ?target) ; placing a wet item on a surface makes the surface wet
-        )
     )
 )
 
@@ -81,18 +72,28 @@
     :effect (and
         (not (dirty ?target))
         (not (on ?mess ?target))
-        (forall (?can - can ?can-spill - spill)
+
+        ; wipe with wet sponge -> water on plate
+        (forall (?water_spill - spill)
             (when
-                (and (on ?can ?target) (contains ?can ?can-spill))
-                (on ?can-spill ?target) ; cans that are supported by the target surface spill their water onto the surface
+                (and (wet ?grasped) (not (on ?water_spill ?target))) ; replace marker_spill with water_spill
+                (on ?water_spill ?target)
             )
         )
-        (forall (?can - can ?can-spill - spill)
+        ; knock off cans onto table
+        (forall (?soda_can - can)
             (when
-                (and (on ?can ?target) (contains ?can ?can-spill))
-                (not (contains ?can ?can-spill)) ; cans that are supported by the target surface spill their water onto the surface
+                (on ?soda_can ?target)
+                (not (on ?soda_can ?target))
             )
         )
+        (forall (?soda_can - can ?tab - table)
+            (when
+                (on ?soda_can ?target)
+                (on ?soda_can ?tab)
+            )
+        )
+
     )
 )
 )

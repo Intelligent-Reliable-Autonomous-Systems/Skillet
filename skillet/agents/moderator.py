@@ -72,7 +72,8 @@ class KeyboardListener:
         self._additional_callbacks[key.upper()] = func
 
 
-HOME_TCP_CART = [0.25, 0.0, 0.3, np.pi, 0.0, np.pi / 2, 0.0]
+# HOME_TCP_CART = [0.25, 0.0, 0.3, np.pi, 0.0, np.pi / 2, 0.0]
+HOME_TCP_CART = [0.25, 0.0, 0.3, np.pi, 0.0, 0, 0.0]
 
 
 class ExpStatusCodes(IntEnum):
@@ -102,6 +103,7 @@ class SkilletModerator:
         self._intervention = False
         self._action = None
         self._action_spec = None
+        self._exp_count = 0
         print(
             "===[SkilletExpModerator]===\nQ: Quit Experiment\nX: Stop Robot\nH: Return Robot to Home\nR: Resume Robot Experiment\nP: Pause the Experiment."
         )
@@ -121,12 +123,12 @@ class SkilletModerator:
         def resume_handler():
             if self._status != ExpStatusCodes.RUNNING:
                 self._status = ExpStatusCodes.RESUME
-                print("[INFO][MODERATOR] Resuming the robot experiment.")
                 self._intervention = True
 
         def pause_handler():
             self._status = ExpStatusCodes.PAUSE
             self._intervention = True
+            self._exp_count += 1
             print("[INFO][MODERATOR] Pausing the experiment after execution of skill. Press R to resume.")
 
         self._listener.add_callback("q", quit_handler)
@@ -169,6 +171,7 @@ class SkilletModerator:
                 )
             elif self._status == ExpStatusCodes.RESUME:
                 print("[INFO][MODERATOR] Resuming the robot experiment.")
+                self._status = SkillStatusCodes.RUNNING
             self._intervention = False
         return self._action, self._action_spec
 
@@ -179,7 +182,6 @@ class SkilletModerator:
         obs = env.get_observation(skill.obs_spec)
         skill.initiate(obs, args)
         skill_done = skill.is_terminated(env.get_observation(skill.obs_spec))
-
         terminated = False
         while not terminated:
             recovery_action, action_spec = self.poll(env, skill)

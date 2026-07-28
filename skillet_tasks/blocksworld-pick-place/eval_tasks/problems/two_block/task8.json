@@ -1,0 +1,17 @@
+{
+    "nl_goal": "Stack 3 blocks in the middle without moving yellow.",
+    "pddl_goal": [{"predicate": "obstructed-above", "args": ["loc_21"]},
+                  {"predicate": "at-loc", "args": ["yellow_block", "loc_10"]}],
+    "init_state": [ "at-loc(yellow block, loc 10)",
+                    "at-loc(green block, loc 12)",
+                    "on(green block, table)",
+                    "on(pink block, green block)",
+                    "on(blue block, pink block)",
+                    "on(yellow block, table)",
+                    "plastic(pink block)",
+                    "plastic(blue block)",
+                    "wooden(green block)",
+                    "wooden(yellow block)"],
+    "scene_name": "2magnet_2wooden_3loc", 
+    "log_dir": "skillet_tasks/blocksworld-pick-place/eval/tasks/task8"
+}

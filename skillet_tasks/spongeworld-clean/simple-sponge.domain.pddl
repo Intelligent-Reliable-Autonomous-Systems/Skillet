@@ -2,9 +2,9 @@
     (:requirements :typing :conditional-effects :negative-preconditions :universal-preconditions)
     (:types
         surface item - object
-        table plate target - surface
+        table plate target bin - surface
         sponge can spill - item
-        
+
     )
     (:predicates
         ; static predicates
@@ -12,10 +12,8 @@
         (deformable ?m - item) ; if the item can be deformed
         (supportable ?m - surface) ; if this surface can support something
         (wipeable ?m - item) ; if this object can be wiped
-        (blue ?b - sponge)
-        (yellow ?b - sponge) ; colors for the sponge
 
-        (wet ?b - surface) ; material attribute
+        (wet ?b - item) ; material attribute
         (dirty ?b - surface) ; material attribute
 
         ; dynamic predicates

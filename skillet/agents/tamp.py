@@ -14,6 +14,7 @@ from skillet.planning import AbstractModel
 from skillet.planning.abstract import AbstractAction
 from skillet.planning.abstract.up_utils import sample_action_from_state
 from skillet.scene.base import Scene
+from skillet.scene import Spill
 
 
 class PlanningAgent(Agent):
@@ -58,7 +59,7 @@ class PlanningAgent(Agent):
 
         abstract_state = self._abstract_model.get_abstract_state()
         self._result, self._plan, up_actions = self._abstract_model.plan(abstract_state=abstract_state)
-
+        up_state = self._abstract_model.reset_up_problem_state()
         terminated = False
         if self._plan is None:
             print("[WARNING][TAMP] Failed to find plan.")
@@ -243,11 +244,22 @@ class ActiveLearningAgent(Agent):
         self._learning_agent.reset_problem(self._abstract_model.problem)
         skills_sampled = 0
         skills_failed = 0
+        was_paused = True
+        trace_file = None
         while True:
             if self._moderator.is_paused:
+                up_state = self._abstract_model.reset_up_problem_state()
+                up_objects = self._abstract_model._problem.all_objects
+                was_paused = True
+                for obj in self._scene.objects:
+                    if isinstance(obj, Spill) and "marker" in obj.name:
+                        obj.wiped = False
+
                 time.sleep(0.1)
                 continue
             up_action = self._learning_agent.get_action(up_state, up_objects)
+            up_objects = self._abstract_model._problem.all_objects
+
             if up_action is None:
                 print("[WARN][ACTIVE] Invalid action selected/unable to find valid caction")
                 time.sleep(0.1)
@@ -279,15 +291,23 @@ class ActiveLearningAgent(Agent):
                     actions=up_action,
                     executions=execution,
                 )
-            self._learning_agent.dataset.add_trace(logger._states, logger._actions, logger._executions)
-
             next_up_state = self._abstract_model.reset_up_problem_state()
+
+            if was_paused:
+                trace_file = self._learning_agent.dataset._traces_dir / f"{self._moderator._exp_count}.trace"
+                self._learning_agent.dataset._plan_parser.initialize_trace_file(
+                    trace_file,
+                    up_state,
+                    up_objects,
+                )
+                was_paused = False
+            self._learning_agent.dataset._plan_parser.append_trace_step(trace_file, up_action, next_up_state, execution)
+
             self._learning_agent.reset_problem(self._abstract_model.problem)
 
-            up_objects = self._abstract_model._problem.all_objects
             self._learning_agent.learn_step(up_state, up_objects, up_action, next_up_state, execution)
-            with open(f"{self._learning_agent.dataset.experiment_dir}/_agent.pkl", "wb") as f:
-                pickle.dump(self._learning_agent, f)
+            # with open(f"{self._learning_agent.dataset.experiment_dir}/_agent.pkl", "wb") as f:
+            #    pickle.dump(self._learning_agent, f)
 
             if terminated:
                 break

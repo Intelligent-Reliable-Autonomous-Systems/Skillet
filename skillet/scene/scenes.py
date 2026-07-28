@@ -12,6 +12,7 @@ SPILL_SIZE = 0.060
 TARGET_SIZE = 0.090
 CAN_SIZE = 0.055
 PLATE_SIZE = 0.18
+BIN_SIZE = 0.18
 SM_APRIL_SZ = 0.036
 TABLE_X0 = 0.17
 TABLE_Y0 = -0.48
@@ -169,7 +170,7 @@ def two_magnet_two_wooden_five_loc_scene() -> None:
             Table(height=0.0, name="table_0", init_pose=torch.as_tensor([0.35, 0.0, 0.0, 1, 0, 0, 0], device=DEVICE)),
             Cube(size=CUBE_SIZE, name="green_block", material="wooden", color="green"),
             Cube(size=CUBE_SIZE, name="yellow_block", material="wooden", color="yellow"),
-            Cube(size=CUBE_SIZE, name="red_block", material="plastic", color="red"),
+            Cube(size=CUBE_SIZE, name="pink_block", material="plastic", color="pink"),
             Cube(size=CUBE_SIZE, name="blue_block", material="plastic", color="blue"),
             Location(size=0.07, init_pose=torch.as_tensor([0.20, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_00"),
             Location(size=0.07, init_pose=torch.as_tensor([0.27, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_01"),
@@ -243,7 +244,7 @@ def two_magnet_two_wooden_three_loc_scene() -> None:
             Table(height=0.0, name="table_0", init_pose=torch.as_tensor([0.35, 0.0, 0.0, 1, 0, 0, 0], device=DEVICE)),
             Cube(size=CUBE_SIZE, name="green_block", material="wooden", color="green"),
             Cube(size=CUBE_SIZE, name="yellow_block", material="wooden", color="yellow"),
-            Cube(size=CUBE_SIZE, name="red_block", material="plastic", color="red"),
+            Cube(size=CUBE_SIZE, name="pink_block", material="plastic", color="pink"),
             Cube(size=CUBE_SIZE, name="blue_block", material="plastic", color="blue"),
             Location(size=0.07, init_pose=torch.as_tensor([0.20, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_00"),
             Location(size=0.07, init_pose=torch.as_tensor([0.27, 0.0, -0.075, 1.0, 0.0, 0.0, 0.0]), name="loc_01"),
@@ -350,23 +351,93 @@ def five_cube_scene_loader() -> None:
     )
 
 
-def two_sponge_one_plate_scene() -> None:
+def two_sponge_one_plate_one_can_scene() -> None:
     return Scene(
         objects=[
             Table(height=0.0, name="table_0", init_pose=torch.as_tensor([0.35, 0.0, 0.0, 1, 0, 0, 0], device=DEVICE)),
-            Target(radius=0.04, name="red_circle"),
+            Target(radius=0.04, name="blue_circle"),
             Target(radius=0.04, name="green_circle"),
             Target(radius=0.04, name="purple_circle"),
-            Plate(radius=0.05, name="white_plate", color="white"),
+            Plate(radius=0.04, name="orange_whiteboard", color="orange"),
             Spill(radius=0.02, name="marker_scribble"),
             Spill(radius=0.05, name="blue_water_spill"),
             Sponge(size=0.05, name="yellow_sponge", color="yellow"),
             Sponge(size=0.05, name="blue_sponge", color="blue"),
-            # Bin(size=0.25, name="red_box"),
-            Can(size=0.05, name="coke_can"),
-            # Location(size=0.12, init_pose=torch.as_tensor([0.20, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_00"),
-            # Location(size=0.12, init_pose=torch.as_tensor([0.32, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_01"),
-            # Location(size=0.12, init_pose=torch.as_tensor([0.44, 0.0, -0.025, 1.0, 0.0, 0.0, 0.0]), name="loc_02"),
+            Can(size=0.06, name="blue_can")
+        ],
+        closed_set=True,
+        bounds=WORLD_BOUNDS,
+        contains_objects=True,
+    )
+
+def two_sponge_one_plate_two_can_scene() -> None:
+    return Scene(
+        objects=[
+            Table(height=0.0, name="table_0", init_pose=torch.as_tensor([0.35, 0.0, 0.0, 1, 0, 0, 0], device=DEVICE)),
+            Target(radius=0.04, name="blue_circle"),
+            Target(radius=0.04, name="green_circle"),
+            Target(radius=0.04, name="purple_circle"),
+            Target(radius=0.04, name="red_circle"),
+            Plate(radius=0.04, name="orange_whiteboard", color="orange"),
+            Spill(radius=0.02, name="marker_scribble"),
+            Spill(radius=0.05, name="blue_water_spill"),
+            Sponge(size=0.05, name="yellow_sponge", color="yellow"),
+            Sponge(size=0.05, name="blue_sponge", color="blue"),
+            Can(size=0.06, name="blue_can"),
+            Can(size=0.06, name="coke_can")
+        ],
+        closed_set=True,
+        bounds=WORLD_BOUNDS,
+        contains_objects=True,
+    )
+
+def two_sponge_one_plate_no_can_scene() -> None:
+    return Scene(
+        objects=[
+            Table(height=0.0, name="table_0", init_pose=torch.as_tensor([0.35, 0.0, 0.0, 1, 0, 0, 0], device=DEVICE)),
+            Target(radius=0.04, name="blue_circle"),
+            Target(radius=0.04, name="green_circle"),
+            Target(radius=0.04, name="purple_circle"),
+            Plate(radius=0.04, name="orange_whiteboard", color="orange"),
+            Spill(radius=0.02, name="marker_scribble"),
+            Spill(radius=0.05, name="blue_water_spill"),
+            Sponge(size=0.05, name="yellow_sponge", color="yellow"),
+            Sponge(size=0.05, name="blue_sponge", color="blue"),
+        ],
+        closed_set=True,
+        bounds=WORLD_BOUNDS,
+        contains_objects=True,
+    )
+
+
+def one_sponge_one_plate_no_can_scene() -> None:
+    return Scene(
+        objects=[
+            Table(height=0.0, name="table_0", init_pose=torch.as_tensor([0.35, 0.0, 0.0, 1, 0, 0, 0], device=DEVICE)),
+            Target(radius=0.04, name="green_circle"),
+            Target(radius=0.04, name="purple_circle"),
+            Plate(radius=0.04, name="orange_whiteboard", color="orange"),
+            Spill(radius=0.02, name="marker_scribble"),
+            Spill(radius=0.05, name="blue_water_spill"),
+            Sponge(size=0.05, name="yellow_sponge", color="yellow"),
+        ],
+        closed_set=True,
+        bounds=WORLD_BOUNDS,
+        contains_objects=True,
+    )
+
+def one_sponge_one_plate_one_can_scene() -> None:
+    return Scene(
+        objects=[
+            Table(height=0.0, name="table_0", init_pose=torch.as_tensor([0.35, 0.0, 0.0, 1, 0, 0, 0], device=DEVICE)),
+            Target(radius=0.04, name="green_circle"),
+            Target(radius=0.04, name="purple_circle"),
+            Plate(radius=0.04, name="orange_whiteboard", color="orange"),
+            Spill(radius=0.02, name="marker_scribble"),
+            Spill(radius=0.05, name="blue_water_spill"),
+            Sponge(size=0.05, name="yellow_sponge", color="yellow"),
+            Can(size=0.06, name="blue_can")
+
         ],
         closed_set=True,
         bounds=WORLD_BOUNDS,
@@ -428,6 +499,12 @@ def load_scene(name: str) -> Scene:
         return two_magnet_two_wooden_three_loc_scene()
     if name == "3magnet_2wooden_3loc":
         return three_magnet_two_wooden_three_loc_scene()
-    if name == "2sponge_1plate":
-        return two_sponge_one_plate_scene()
+    if name == "2sponge_1plate_0can":
+        return two_sponge_one_plate_no_can_scene()
+    if name == "1sponge_1plate_0can":
+        return one_sponge_one_plate_no_can_scene()
+    if name == "1sponge_1plate_1can":
+        return one_sponge_one_plate_one_can_scene()
+    if name == "1sponge_1plate_1can":
+        return two_sponge_one_plate_two_can_scene()
     raise ValueError(f"Unknown scene name `{name}`")
