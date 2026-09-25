@@ -387,6 +387,8 @@ class AbstractModel(BasePlanner):
         prob_fluents = [f.name for f in self._problem.fluents]
         if "on" in prob_fluents:
             for op in on_pred:
+                # if op[1].name == "blue_sponge":
+                #    continue
                 fluent = self._problem.fluent(op[0])(*(object_state[op[1].name], object_state[op[2].name]))
                 fluent_state[fluent] = True
         if "obstructed" in prob_fluents:

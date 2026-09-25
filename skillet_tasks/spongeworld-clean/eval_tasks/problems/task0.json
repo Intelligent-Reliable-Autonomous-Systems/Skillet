@@ -1,7 +1,7 @@
 {
     "nl_goal": "Clean the plate",
-    "pddl_goal": [{"predicate": "not dirty", "args": ["white_plate"]},
-                  {"predicate": "not on", "args": ["blue_water_spill", "white_plate"]}],
+    "pddl_goal": [{"predicate": "not dirty", "args": ["large_white_circle"]},
+                  {"predicate": "not on", "args": ["blue_water_spill", "large_white_circle"]}],
     "init_state": [ "on(marker_scribble, plate1)", 
                     "on(yellow_sponge, green_circle)"],
     "scene_name": "1sponge_1plate_0can", 

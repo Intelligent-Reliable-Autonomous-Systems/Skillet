@@ -358,17 +358,18 @@ def two_sponge_one_plate_one_can_scene() -> None:
             Target(radius=0.04, name="blue_circle"),
             Target(radius=0.04, name="green_circle"),
             Target(radius=0.04, name="purple_circle"),
-            Plate(radius=0.04, name="orange_whiteboard", color="orange"),
+            Plate(radius=0.04, name="large_white_circle", color="orange"),
             Spill(radius=0.02, name="marker_scribble"),
             Spill(radius=0.05, name="blue_water_spill"),
             Sponge(size=0.05, name="yellow_sponge", color="yellow"),
             Sponge(size=0.05, name="blue_sponge", color="blue"),
-            Can(size=0.06, name="blue_can")
+            Can(size=0.06, name="blue_can"),
         ],
         closed_set=True,
         bounds=WORLD_BOUNDS,
         contains_objects=True,
     )
+
 
 def two_sponge_one_plate_two_can_scene() -> None:
     return Scene(
@@ -378,18 +379,19 @@ def two_sponge_one_plate_two_can_scene() -> None:
             Target(radius=0.04, name="green_circle"),
             Target(radius=0.04, name="purple_circle"),
             Target(radius=0.04, name="red_circle"),
-            Plate(radius=0.04, name="orange_whiteboard", color="orange"),
+            Plate(radius=0.04, name="large_white_circle", color="orange"),
             Spill(radius=0.02, name="marker_scribble"),
             Spill(radius=0.05, name="blue_water_spill"),
             Sponge(size=0.05, name="yellow_sponge", color="yellow"),
             Sponge(size=0.05, name="blue_sponge", color="blue"),
             Can(size=0.06, name="blue_can"),
-            Can(size=0.06, name="coke_can")
+            Can(size=0.06, name="red_can"),
         ],
         closed_set=True,
         bounds=WORLD_BOUNDS,
         contains_objects=True,
     )
+
 
 def two_sponge_one_plate_no_can_scene() -> None:
     return Scene(
@@ -398,7 +400,7 @@ def two_sponge_one_plate_no_can_scene() -> None:
             Target(radius=0.04, name="blue_circle"),
             Target(radius=0.04, name="green_circle"),
             Target(radius=0.04, name="purple_circle"),
-            Plate(radius=0.04, name="orange_whiteboard", color="orange"),
+            Plate(radius=0.04, name="large_white_circle", color="orange"),
             Spill(radius=0.02, name="marker_scribble"),
             Spill(radius=0.05, name="blue_water_spill"),
             Sponge(size=0.05, name="yellow_sponge", color="yellow"),
@@ -416,7 +418,7 @@ def one_sponge_one_plate_no_can_scene() -> None:
             Table(height=0.0, name="table_0", init_pose=torch.as_tensor([0.35, 0.0, 0.0, 1, 0, 0, 0], device=DEVICE)),
             Target(radius=0.04, name="green_circle"),
             Target(radius=0.04, name="purple_circle"),
-            Plate(radius=0.04, name="orange_whiteboard", color="orange"),
+            Plate(radius=0.04, name="large_white_circle", color="orange"),
             Spill(radius=0.02, name="marker_scribble"),
             Spill(radius=0.05, name="blue_water_spill"),
             Sponge(size=0.05, name="yellow_sponge", color="yellow"),
@@ -426,18 +428,18 @@ def one_sponge_one_plate_no_can_scene() -> None:
         contains_objects=True,
     )
 
+
 def one_sponge_one_plate_one_can_scene() -> None:
     return Scene(
         objects=[
             Table(height=0.0, name="table_0", init_pose=torch.as_tensor([0.35, 0.0, 0.0, 1, 0, 0, 0], device=DEVICE)),
             Target(radius=0.04, name="green_circle"),
             Target(radius=0.04, name="purple_circle"),
-            Plate(radius=0.04, name="orange_whiteboard", color="orange"),
+            Plate(radius=0.04, name="large_white_circle", color="orange"),
             Spill(radius=0.02, name="marker_scribble"),
             Spill(radius=0.05, name="blue_water_spill"),
             Sponge(size=0.05, name="yellow_sponge", color="yellow"),
-            Can(size=0.06, name="blue_can")
-
+            Can(size=0.06, name="blue_can"),
         ],
         closed_set=True,
         bounds=WORLD_BOUNDS,
@@ -506,5 +508,9 @@ def load_scene(name: str) -> Scene:
     if name == "1sponge_1plate_1can":
         return one_sponge_one_plate_one_can_scene()
     if name == "1sponge_1plate_1can":
+        return two_sponge_one_plate_two_can_scene()
+    if name == "2sponge_1plate_1can":
+        return two_sponge_one_plate_one_can_scene()
+    if name == "2sponge_1plate_2can":
         return two_sponge_one_plate_two_can_scene()
     raise ValueError(f"Unknown scene name `{name}`")

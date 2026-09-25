@@ -36,7 +36,7 @@ parser.add_argument("--robot_ip", type=str, default="192.168.1.10", help="Robot 
 parser.add_argument("--poll_rate_hz", type=int, default=10, help="Tick rate of the perception")
 parser.add_argument("--task", type=str, default="Kortex-Gen3-v0", help="Kortex Environment")
 
-parser.add_argument("--o3d", type=argparse.BooleanOptionalAction, default=True, help="If to visualize with open3d")
+parser.add_argument("--o3d", type=argparse.BooleanOptionalAction, default=False, help="If to visualize with open3d")
 parser.add_argument("--task_file", type=str, required=True, help="Path to evaluation task file description")
 parser.add_argument(
     "--vlm", type=argparse.BooleanOptionalAction, default=False, help="If to use the VLM for scene building"
@@ -82,7 +82,7 @@ def main() -> None:
         reconstructor="sam3",
         poll_rate_hz=args_cli.poll_rate_hz,
         device="cuda",
-        vis_perception=args_cli.o3d,
+        vis_perception=True,
         domain="sponge",
     )
     target_pose_func = None
@@ -97,12 +97,12 @@ def main() -> None:
     skill_length = 1e9
     arm_policy = TcpCartPolicy(env.batched_env.obs_spec_tcp_cart, env.batched_env.action_spec_tcp_cart)
     place_skill = PlaceSkill(
-        reach_policy=arm_policy, lift_height=0.21, gripper_close=0.65, length=skill_length, default_quat=[[0, 1, 0, 0]]
+        reach_policy=arm_policy, lift_height=0.23, gripper_close=0.65, length=skill_length, default_quat=[[0, 1, 0, 0]]
     )
     pick_skill = PickSkill(
-        reach_policy=arm_policy, lift_height=0.21, gripper_close=0.65, length=skill_length, default_quat=[[0, 1, 0, 0]]
+        reach_policy=arm_policy, lift_height=0.23, gripper_close=0.65, length=skill_length, default_quat=[[0, 1, 0, 0]]
     )
-    wipe_skill = WipeSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.9, length=skill_length)
+    wipe_skill = WipeSkill(reach_policy=arm_policy, lift_height=0.23, gripper_close=0.9, length=skill_length)
     pick_obj_skill = PickObj2Skill(scene, pick_skill, vis_target_pos=target_pose_func, xyz_offset=(0, 0, 0.04))
     place_obj_skill = PlaceObj2Skill(scene, place_skill, vis_target_pos=target_pose_func)
     wipe_obj_skill = WipeSurface3Skill(scene, wipe_skill, vis_target_pos=target_pose_func)

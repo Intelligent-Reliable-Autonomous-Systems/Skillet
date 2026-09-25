@@ -14,6 +14,6 @@
                     "wooden(green block)",
                     "wooden(yellow block)"],
     "scene_name": "2magnet_2wooden_3loc",
-    "log_dir": "skillet_tasks/blocksworld-pick-place/eval/tasks/task9"
+    "log_dir": "skillet_tasks/blocksworld-pick-place/eval/tasks/task0"
 
 }

@@ -67,6 +67,8 @@ class PlanningAgent(Agent):
         print(self._plan)
         for ab_action, up_action in zip(self._plan.actions, up_actions):
             up_state = self._abstract_model.reset_up_problem_state()
+            if "__" in ab_action.action:  # handle weird skill names in C&I
+                ab_action.action = ab_action.action.split("__")[0]
             self._selected_skill = self.action_to_skill_map[ab_action.action]
             args = self._scene.resolve_names_to_ids(ab_action.parameters)
             terminated, status = self._moderator.run_skill(env, self._selected_skill, args)

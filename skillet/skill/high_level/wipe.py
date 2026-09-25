@@ -66,7 +66,7 @@ class WipeSkill(BatchedSkill[IKEE_Obs, TBAction, XYZ_Yaw_XYZ_Params], Generic[TB
         lift_height: float,
         gripper_close: float,
         length: int,
-        num_wipes: int = 4,
+        num_wipes: int = 6,
         sweep_axis: int = 0,
     ) -> None:
         """Initialize the wipe skill.

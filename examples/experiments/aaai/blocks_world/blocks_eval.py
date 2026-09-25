@@ -38,7 +38,7 @@ parser.add_argument("--robot_ip", type=str, default="192.168.1.10", help="Robot 
 parser.add_argument("--poll_rate_hz", type=int, default=10, help="Tick rate of the perception")
 parser.add_argument("--task", type=str, default="Kortex-Gen3-v0", help="Kortex Environment")
 
-parser.add_argument("--o3d", type=argparse.BooleanOptionalAction, default=True, help="If to visualize with open3d")
+parser.add_argument("--o3d", type=argparse.BooleanOptionalAction, default=False, help="If to visualize with open3d")
 parser.add_argument("--task_file", type=str, required=True, help="Path to evaluation task file description")
 parser.add_argument(
     "--vlm", type=argparse.BooleanOptionalAction, default=False, help="If to use the VLM for scene building"
