@@ -314,9 +314,12 @@ class KortexEnv(SkilletGymEnv):
             A tuple containing the observations, rewards, resets (terminated and truncated) and extras.
 
         """
-        action = self._pre_process_action(action, action_spec=action_spec)
-        # Send the robot action to hardware
-        self._publish_action_to_kortex(action, duration=self.step_dt, action_spec=action_spec)
+        if action_spec is not None and action_spec.name == "null":
+            action = None
+        else:
+            action = self._pre_process_action(action, action_spec=action_spec)
+            # Send the robot action to hardware
+            self._publish_action_to_kortex(action, duration=self.step_dt, action_spec=action_spec)
         sleep_time = (time.perf_counter() - self._next_step_time) - self.step_dt
         if sleep_time < 0:
             time.sleep(min(-sleep_time, self.step_dt))

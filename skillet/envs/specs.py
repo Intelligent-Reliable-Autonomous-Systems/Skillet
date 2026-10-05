@@ -272,6 +272,15 @@ JOINT_VEL_SPEC_BATCHED = ObservationSpec[JOINT_Obs](
 
 # ========= Action specifications =========
 
+NULL_ACTION = Float[torch.Tensor, "b 0"]
+NULL_ACTION_SPEC = ActionSpec[NULL_ACTION](
+    space=gym.spaces.Box(low=-float("inf"), high=float("inf"), shape=(0,)),
+    name="null",
+    is_torch=True,
+    is_batched=True,
+    n_envs=-1,
+)
+
 JOINT_Action = Float[torch.Tensor, "b n_joints"]
 """Action type for Joint Commands"""
 JOINT_VEL_SPEC = ActionSpec[JOINT_Action](

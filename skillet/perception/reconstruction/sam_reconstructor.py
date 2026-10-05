@@ -147,11 +147,10 @@ class Sam3Reconstructor(ReconstructorBase):
             if i not in concept_indices:
                 continue
             o = self._scene.get_objects_from_name([n.replace(" ", "_")])[0]
-            if isinstance(o, Cube):
-                inds = torch.argwhere(i == concept_indices)[0]
-                o_mask = torch.zeros(size=(mh, mw), device=self._device)
-                for j in inds:
-                    o_mask = torch.logical_or(o_mask, masks[j].squeeze())
+            inds = torch.argwhere(i == concept_indices)[0]
+            o_mask = torch.zeros(size=(mh, mw), device=self._device)
+            for j in inds:
+                o_mask = torch.logical_or(o_mask, masks[j].squeeze())
 
             agg_obj_masks.append(o_mask)
         if len(agg_obj_masks) == 0:
@@ -165,7 +164,7 @@ class Sam3Reconstructor(ReconstructorBase):
         ids = []
         for i, c in enumerate(torch.unique(concept_indices).cpu().numpy()):
             obj = self._scene.get_objects_from_name([self._concepts[c].replace(" ", "_")])[0]
-            centers[i, 1] = 0  # TODO bad fix
+            # centers[i, 1] = 0  # TODO bad fix
             obj.pose = torch.cat((centers[i], torch.as_tensor([1, 0, 0, 0], device=centers[i].device)), dim=0)
             obj.bbox = bboxes[i]
             ids.append(obj.object_id)

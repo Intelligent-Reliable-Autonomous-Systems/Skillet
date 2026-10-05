@@ -364,6 +364,8 @@ class BatchToSingleWrapper(Environment[TObs, TAction], Generic[TObs, TAction]):
 
     @override
     def supports_observation_spec(self, obs_spec: ObservationSpec[Any]) -> bool:
+        if isinstance(obs_spec, str):
+            return self.batched_env.supports_observation_spec(obs_spec)
         return self.batched_env.supports_observation_spec(obs_spec.unbatched())
 
     @override

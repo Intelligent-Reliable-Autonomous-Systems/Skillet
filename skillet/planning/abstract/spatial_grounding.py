@@ -398,7 +398,7 @@ def ground_location_relations(scene: Scene) -> list[tuple[str, SceneObject, Scen
                 if obj.object_id != other_obj.object_id and _is_north_of_loc(obj, other_obj):
                     north_relations.append(("loc-north-of", obj, other_obj))
             elif isinstance(other_obj, Cube):
-                if _is_at(other_obj, obj):
+                if _is_at(other_obj, obj, z_slack_frac=0.02):
                     at_relations.append(("at-loc", other_obj, obj))
                     occupied_relations.add(("occupied", obj))
 

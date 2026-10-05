@@ -29,6 +29,7 @@ from skillet.envs.specs import (
     IK_EE_SPEC_BATCHED,
     JOINT_VEL_SPEC,
     JOINT_VEL_SPEC_BATCHED,
+    NULL_ACTION_SPEC,
     OSC_SPEC_BATCHED,
     RGBD_GRIPPER_SIM_SPEC_BATCHED,
     RGBD_GRIPPER_SPEC_BATCHED,
@@ -223,7 +224,8 @@ class SkilletEnv(
 
     @override
     def supports_observation_spec(self, obs_spec: ObservationSpec) -> bool:
-        return obs_spec.name in [
+        spec_name = obs_spec if isinstance(obs_spec, str) else obs_spec.name
+        return spec_name in [
             self.obs_spec_policy.name,
             self.obs_spec_state.name,
             self.obs_spec_rgbd.name,
@@ -245,6 +247,7 @@ class SkilletEnv(
             self.action_spec_tcp_cart.name,
             self.action_spec_tcp_quat.name,
             self.action_spec_state.name,
+            NULL_ACTION_SPEC.name,
         ]
 
     @override
@@ -256,6 +259,7 @@ class SkilletEnv(
             self.action_spec_tcp_cart,
             self.action_spec_tcp_quat,
             self.action_spec_state,
+            NULL_ACTION_SPEC,
         ]:
             if spec.name == action_spec:
                 return spec

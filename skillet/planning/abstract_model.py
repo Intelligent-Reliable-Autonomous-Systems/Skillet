@@ -40,6 +40,7 @@ class AbstractModel(BasePlanner):
         self,
         domain_file: str,
         task_file: str | None = None,
+        task_nl: str | None = None,
         scene: Scene | None = None,
         environment: Environment | None = None,
         domain: Literal["blocks", "sponge"] = "blocks",
@@ -49,6 +50,7 @@ class AbstractModel(BasePlanner):
         Args:
             domain_file: The path to the PDDL domain file.
             task_file: The path to the PDDL task file
+            task_nl: A natural language description of the task goal
             scene: The scene object
 
         """
@@ -57,6 +59,7 @@ class AbstractModel(BasePlanner):
 
         self._domain_file = domain_file
         self._task_file = task_file
+        self._task_nl = task_nl
         self._scene = scene
         self._problem: Problem = None
         self._init_state: AbstractState = None
@@ -77,12 +80,14 @@ class AbstractModel(BasePlanner):
     def goal(self) -> UPListGoal:
         return self._goal
 
-    def initialize(self, scene: Scene | None = None, task_file: str | None = None) -> None:
+    def initialize(self, scene: Scene | None = None, task_file: str | None = None, task_nl: str | None = None) -> None:
         """Initialize the abstract model with the given scene and task."""
         if scene is not None:
             self._scene = scene
         if task_file is not None:
             self._task_file = task_file
+        if task_nl is not None:
+            self._task_nl = task_nl
         try:
             # If task file is none, will return an incomplete problem which can be filled in get_abstract_state
             self._problem: Problem = self._pddl_reader.parse_problem(self._domain_file, self._task_file)
@@ -91,7 +96,7 @@ class AbstractModel(BasePlanner):
         except Exception as e:
             raise PDDLParsingError(f"Error parsing PDDL file: {e}") from e
 
-    def get_abstract_state(self, goal: dict[str, Any] | None = None) -> ParsedUpProblem:
+    def get_abstract_state(self) -> ParsedUpProblem:
         """Get the current abstract state of the scene."""
         assert self._scene is not None
         if self._problem is None:
@@ -113,8 +118,8 @@ class AbstractModel(BasePlanner):
             raise ValueError(f"Unknown domain `{self._domain}`")
 
         # Parse the goal
-        if goal is not None:
-            self._scene.goal = goal
+        # if goal is not None:
+        #     self._scene.goal = goal
 
         goals = (
             self._create_goal(self._scene.goal, object_state) if self._scene.goal is not None else self._problem.goals

@@ -1,0 +1,9 @@
+The environment is defined with the Planning Domain Definition Language (PDDL) as below, while the preconditions and postconditions of actions are unknown.
+
+{{domain}}
+
+An example planning problem is
+
+
+We have a new planning problem:
+

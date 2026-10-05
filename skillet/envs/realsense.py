@@ -113,8 +113,10 @@ class RealsenseEnv(_EnvironmentBase[RGBD_Obs, Any]):
         """Return the default (unbatched) RGB-D observation specification."""
         return self.obs_spec_rgbd
 
-    def supports_observation_spec(self, obs_spec: ObservationSpec[RGBD_Obs]) -> bool:
+    def supports_observation_spec(self, obs_spec: ObservationSpec[RGBD_Obs] | str) -> bool:
         """Return True if the given observation spec is supported."""
+        if isinstance(obs_spec, str):
+            return obs_spec == "rgb-d"
         return obs_spec.name == "rgb-d"
 
     @override

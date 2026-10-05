@@ -109,3 +109,50 @@ class GeminiClient(VLMClient):
     def gemini_client(self) -> genai.Client:
         """Return the gemini client class."""
         return genai.Client(api_key="AIzaSyB0_pZAS3obaSyjnri2TtRqvsUDzH7pt5g")
+
+    def query_text(self, message: str) -> str:
+        """Query Gemini with a text message."""
+        response = self.client.models.generate_content(
+            model=self.model_id,
+            contents=[message],
+            config=self._generate_config(),
+        )
+        return response.text
+
+    async def query_text_async(self, message: str) -> str:
+        """Query Gemini with a text message asynchronously."""
+        response = await self.client.aio.models.generate_content(
+            model=self.model_id,
+            contents=[message],
+            config=self._generate_config(),
+        )
+        return response.text
+
+    def query_image(self, message: str, image: Image.Image | np.ndarray | torch.Tensor) -> str:
+        """Query Gemini with a text message and an image."""
+        response = self.client.models.generate_content(
+            model=self.model_id,
+            contents=[self._prepare_image(image), message],
+            config=self._generate_config(),
+        )
+        return response.text
+
+    async def query_image_async(self, message: str, image: Image.Image | np.ndarray | torch.Tensor) -> str:
+        """Query Gemini with a text message and an image asynchronously."""
+        response = await self.client.aio.models.generate_content(
+            model=self.model_id,
+            contents=[self._prepare_image(image), message],
+            config=self._generate_config(),
+        )
+        return response.text
+
+    def _generate_config(self) -> types.GenerateContentConfig:
+        return types.GenerateContentConfig(temperature=None, thinking_config=types.ThinkingConfig(thinking_budget=0))
+
+    def _prepare_image(self, image: Image.Image | np.ndarray | torch.Tensor) -> Image.Image:
+        """Convert CHW arrays or tensors to a resized RGB PIL image."""
+        if isinstance(image, torch.Tensor):
+            image = image.detach().cpu().numpy()
+        if isinstance(image, np.ndarray):
+            image = Image.fromarray(image.transpose(1, 2, 0))
+        return image.resize((800, int(800 * image.size[1] / image.size[0])), Image.Resampling.LANCZOS)

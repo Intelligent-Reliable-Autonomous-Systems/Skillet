@@ -1,7 +1,13 @@
 import json
-from abc import ABC
+from abc import ABC, abstractmethod
 from functools import cache
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import numpy as np
+    from PIL import Image
+    import torch
 
 _PROMPTS_DIR = Path(__file__).parent / "prompts"
 
@@ -39,3 +45,23 @@ class VLMClient(ABC):
             print(f"[ERROR][VLM]Invalid JSON: {cleaned_text}")
             raise
         return results
+
+    @abstractmethod
+    def query_text(self, message: str) -> str:
+        raise NotImplementedError()
+
+    @abstractmethod
+    async def query_text_async(self, message: str) -> str:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def query_image(self, message: str, image: "Image.Image | np.ndarray | torch.Tensor") -> str:
+        raise NotImplementedError()
+
+    @abstractmethod
+    async def query_image_async(self, message: str, image: "Image.Image | np.ndarray | torch.Tensor") -> str:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def detect_goal(self, task_instruction: str | None = None, scene: str | None = None) -> str:
+        raise NotImplementedError()

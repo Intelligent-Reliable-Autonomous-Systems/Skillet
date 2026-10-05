@@ -56,7 +56,7 @@ class Open3DVisualizer:
         get_tcp_pos: Callable[[], Sequence[float]] | None = None,
     ) -> None:
         self.scene = scene
-        self.env = env
+        self.env: Environment | BatchedEnvironment = env
         self._window_name = window_name
         self._width = width
         self._height = height
@@ -257,7 +257,7 @@ class Open3DVisualizer:
                 self._remove_geometry("target_pos")
 
             # TCP position sphere
-            if self._get_tcp_pose is not None:
+            if self._get_tcp_pose is not None and self.env.supports_observation_spec("ik_ee"):
                 pose = self._get_tcp_pose()
                 if isinstance(pose, torch.Tensor):
                     pose = pose.detach().cpu().numpy().astype(np.float64)
@@ -265,7 +265,7 @@ class Open3DVisualizer:
                     self._tcp_pose = np.asarray(pose, dtype=np.float64)
                     if self._tcp_pose.ndim > 1:
                         self._tcp_pose = self._tcp_pose[0]
-            if self._get_gripper_pos is not None:
+            if self._get_gripper_pos is not None and self.env.supports_observation_spec("ik_ee"):
                 pos = self._get_gripper_pos()
                 if isinstance(pos, torch.Tensor):
                     pos = pos.detach().cpu().numpy().astype(np.float64)
@@ -422,15 +422,11 @@ class Open3DVisualizer:
 
     def get_tcp_pose(self) -> Sequence[float]:
         """Get the TCP post from the environment."""
+        # print("get_tcp_pose", self.env.get_observation(self.env.coerce_obs_spec("ik_ee").unbatched())["tcp_pose_b"])
         return (
-            self.env.get_observation(self.env.batched_env.obs_spec_ikee.unbatched())["tcp_pose_b"]
-            .detach()
-            .cpu()
-            .numpy()
+            self.env.get_observation(self.env.coerce_obs_spec("ik_ee").unbatched())["tcp_pose_b"].detach().cpu().numpy()
         )
 
     def get_gripper_pos(self) -> Sequence[float]:
         """Get the gripper position from the environment."""
-        return (
-            self.env.get_observation(self.env.batched_env.obs_spec_ikee.unbatched())["gripper"].detach().cpu().numpy()
-        )
+        return self.env.get_observation(self.env.coerce_obs_spec("ik_ee").unbatched())["gripper"].detach().cpu().numpy()

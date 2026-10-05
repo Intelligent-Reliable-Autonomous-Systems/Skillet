@@ -3,10 +3,11 @@
 from typing import Any, ClassVar, Literal, override
 
 import torch
+import numpy as np
 from jaxtyping import Float
 
 from skillet import DEVICE
-from skillet.core.math import normalize, quat_apply, quat_from_matrix, quat_inv, quat_mul
+from skillet.core.math import normalize, quat_apply, quat_from_matrix, quat_inv, quat_mul, apply_delta_pose
 from skillet.scene.base import SceneObject
 
 
@@ -226,7 +227,8 @@ class Table(SceneObject):
     def __init__(
         self,
         height: float = 0.0,
-        init_pose: torch.Tensor | None = None,  # (x, y, z, w, x, y, z)
+        shape: tuple[float, float] = (0.76, 1.25),
+        init_pose: torch.Tensor | None = (0.30, 0.0, 0.0, 1, 0, 0, 0),  # (x, y, z, w, x, y, z)
         name: str | None = None,
     ) -> None:
         """Initialize the table.
@@ -238,7 +240,8 @@ class Table(SceneObject):
         """
         super().__init__(name=name, localizable=False)
         self._height = height
-        self._pose = init_pose
+        self._shape = torch.as_tensor([*shape, 0.0], dtype=torch.float32)
+        self._pose = torch.as_tensor(init_pose, dtype=torch.float32)
         self._supportable = False
 
     @property
@@ -261,12 +264,18 @@ class Table(SceneObject):
 
         Return false to avoid plotting.
         """
-        return False
+        return True
 
     @property
     def height(self) -> float:
         """The height of the top of the table in the world frame."""
         return self._height
+
+    @property
+    def aabb(self) -> torch.Tensor:
+        """The axis-aligned bounding box of the table."""
+        shape = self._shape.to(self._pose.device)
+        return torch.cat([self._pose[:3] - shape / 2.0, self._pose[:3] + shape / 2.0], dim=-1)
 
     def __str__(self) -> str:
         """Return a printable string."""
@@ -303,6 +312,7 @@ class Target(SceneObject):
     def pose(self, pose: torch.Tensor) -> None:
         """Set the pose of the target in the world frame."""
         self._pose = pose
+        self._pose[2] = 0
 
     @property
     def object_type(self) -> str:
@@ -342,6 +352,8 @@ class Location(SceneObject):
         self,
         size: float = 0.05,
         init_pose: torch.Tensor | None = None,  # (x, y, z, w, x, y, z)
+        rel_pose: torch.Tensor | None = None,  # (x, y, z, w, x, y, z)
+        rel_to: SceneObject | None = None,
         name: str | None = None,
     ) -> None:
         """Initialize the target.
@@ -354,12 +366,23 @@ class Location(SceneObject):
         super().__init__(name=name, localizable=False)
         self._size = size
         self._pose = init_pose
+        self._rel_pose = rel_pose
+        self._rel_to = rel_to
         self._supportable = True
         self._hoverable = True
 
     @property
     def pose(self) -> torch.Tensor:
         """The pose of the target in the world frame."""
+        if self._rel_to is not None:
+            pos = self._rel_to.pose[:3] + self._rel_pose[:3]
+            # pos = self._rel_pose[:3]
+            # pos[:2] = self._rel_to.pose[:2] + self._rel_pose[:2]
+            if len(pos) > 3:
+                rot = quat_mul(self._rel_to.pose[3:], self._rel_pose[3:])
+            else:
+                rot = self._rel_pose[3:]
+            return torch.cat([pos, rot])
         return self._pose
 
     @pose.setter
@@ -377,7 +400,7 @@ class Location(SceneObject):
 
         Return false to avoid plotting.
         """
-        return False
+        return self._pose is not None or (self._rel_pose is not None and self._rel_to is not None)
 
     @property
     def size(self) -> float:
@@ -387,7 +410,8 @@ class Location(SceneObject):
     @property
     def aabb(self) -> torch.Tensor:
         """The axis-aligned bounding box of the location."""
-        return torch.cat([self._pose[:3] - self._size / 2.0, self._pose[:3] + self._size / 2.0], dim=-1)
+        pose = self.pose
+        return torch.cat([pose[:3] - self._size / 2.0, pose[:3] + self._size / 2.0], dim=-1)
 
     def __str__(self) -> str:
         """Return a printable string."""
