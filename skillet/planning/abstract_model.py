@@ -1,12 +1,13 @@
 """An abstract model of the scene."""
 
 import random
+import re
 from typing import Any, Literal
 
 from unified_planning.engines import PlanGenerationResultStatus as PGResultStatus
 from unified_planning.engines import UPSequentialSimulator
 from unified_planning.environment import Environment
-from unified_planning.io import PDDLReader
+from unified_planning.io import PDDLReader, PDDLWriter
 from unified_planning.model import MinimizeSequentialPlanLength, Object, Problem, UPState
 from unified_planning.plans import ActionInstance
 from unified_planning.shortcuts import And, AnytimePlanner, Not, OneshotPlanner
@@ -39,9 +40,10 @@ class AbstractModel(BasePlanner):
     def __init__(
         self,
         domain_file: str,
-        task_file: str | None = None,
-        task_nl: str | None = None,
         scene: Scene | None = None,
+        task_file: str | None = None,
+        task_pddl: str | None = None,
+        task_nl: str | None = None,
         environment: Environment | None = None,
         domain: Literal["blocks", "sponge"] = "blocks",
     ) -> None:
@@ -49,16 +51,18 @@ class AbstractModel(BasePlanner):
 
         Args:
             domain_file: The path to the PDDL domain file.
-            task_file: The path to the PDDL task file
-            task_nl: A natural language description of the task goal
             scene: The scene object
-
+            task_file: The path to the PDDL task file
+            tasl_pddl: A PDDL string to go inside (:goal ...)
+            task_nl: A natural language description of the task goal
+            domain: The domain name
         """
         self._environment = environment
         self._pddl_reader = PDDLReader(environment=environment)
 
         self._domain_file = domain_file
         self._task_file = task_file
+        self._task_pddl = task_pddl
         self._task_nl = task_nl
         self._scene = scene
         self._problem: Problem = None
@@ -80,18 +84,30 @@ class AbstractModel(BasePlanner):
     def goal(self) -> UPListGoal:
         return self._goal
 
-    def initialize(self, scene: Scene | None = None, task_file: str | None = None, task_nl: str | None = None) -> None:
+    def initialize(
+        self,
+        scene: Scene | None = None,
+        task_file: str | None = None,
+        task_pddl: str | None = None,
+        task_nl: str | None = None,
+    ) -> None:
         """Initialize the abstract model with the given scene and task."""
         if scene is not None:
             self._scene = scene
         if task_file is not None:
             self._task_file = task_file
+        if task_pddl is not None:
+            self._task_pddl = task_pddl
         if task_nl is not None:
             self._task_nl = task_nl
         try:
             # If task file is none, will return an incomplete problem which can be filled in get_abstract_state
-            self._problem: Problem = self._pddl_reader.parse_problem(self._domain_file, self._task_file)
-            self._simulator = UPSequentialSimulator(self._problem)
+            if self._task_file is None:
+                self._problem: Problem = self._pddl_reader.parse_problem(self._domain_file)
+                self._simulator = None
+            else:
+                self._problem: Problem = self._pddl_reader.parse_problem(self._domain_file, self._task_file)
+                self._simulator = UPSequentialSimulator(self._problem)
 
         except Exception as e:
             raise PDDLParsingError(f"Error parsing PDDL file: {e}") from e
@@ -121,9 +137,30 @@ class AbstractModel(BasePlanner):
         # if goal is not None:
         #     self._scene.goal = goal
 
-        goals = (
-            self._create_goal(self._scene.goal, object_state) if self._scene.goal is not None else self._problem.goals
-        )
+        # Case 1: Goal already cached
+        if len(self._problem.goals) > 0:
+            goals = [*self._problem.goals]
+        # Case 2: NL task
+        elif self._task_nl is not None:
+            raise NotImplementedError("Natural language goal translation not implemented")
+        # Case 3: PDDL goal string
+        elif self._task_pddl is not None:
+            problem = self.reset_abstract_state(
+                self._problem, ParsedUpProblem(fluents=fluent_state, objects=object_state, goals=[])
+            )
+            pwriter = PDDLWriter(problem)
+            domain_str = pwriter.get_domain()
+            problem_str = pwriter.get_problem()
+            pattern = r"(\(:goal\s*)\(\s*and\b.*?\)(\s*\))"
+            replacement = r"\1" + self._task_pddl + r"\2"
+            problem_str = re.sub(pattern, replacement, problem_str, flags=re.DOTALL)
+            self._problem = self._pddl_reader.parse_problem_string(domain_str, problem_str)
+            goals = [*self._problem.goals]
+        # Case 4: Goal from scene
+        elif self._scene.goal is not None:
+            goals = self._create_goal(self._scene.goal, object_state)
+        else:
+            raise ValueError("No goal provided")
 
         return ParsedUpProblem(fluents=fluent_state, objects=object_state, goals=goals)
 
@@ -134,8 +171,11 @@ class AbstractModel(BasePlanner):
 
         TODO: Support non-empty problems?
         """
+        problem._objects.clear()
         problem.add_objects(list(state.objects.values()))
+        problem._goals = []
         problem.add_goal(And(*list(state.goals)))
+        problem._initial_value.clear()
         [problem.set_initial_value(fluent, value) for fluent, value in state.fluents.items()]
 
         return problem
@@ -145,8 +185,12 @@ class AbstractModel(BasePlanner):
         self._problem: Problem = self._pddl_reader.parse_problem(self._domain_file, self._task_file)
         state = self.get_abstract_state()
 
+        self._problem._objects.clear()
         self._problem.add_objects(list(state.objects.values()))
         # self._problem.add_goal(And(*list(state.goals)))
+        self._problem.goals.clear()
+        self._problem.add_goal(And(*list(state.goals)))
+        self._problem._initial_value.clear()
         [self._problem.set_initial_value(fluent, value) for fluent, value in state.fluents.items()]
         self._simulator = UPSequentialSimulator(self._problem)
         self._init_state = AbstractState(

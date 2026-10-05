@@ -44,7 +44,9 @@ class PlanningAgent(Agent):
     def execute(
         self,
         env: Environment[Any, Any],
-        task: str | None = None,
+        task_file: str | None = None,
+        task_pddl: str | None = None,
+        task_nl: str | None = None,
         logger: SkilletDataLogger = None,
     ) -> None:
         """Execute the policy over the options configured.
@@ -55,7 +57,7 @@ class PlanningAgent(Agent):
 
         """
         # Get the current symbolic state
-        self._abstract_model.initialize(self._scene, task)
+        self._abstract_model.initialize(self._scene, task_file=task_file, task_pddl=task_pddl, task_nl=task_nl)
 
         abstract_state = self._abstract_model.get_abstract_state()
         self._result, self._plan, up_actions = self._abstract_model.plan(abstract_state=abstract_state)

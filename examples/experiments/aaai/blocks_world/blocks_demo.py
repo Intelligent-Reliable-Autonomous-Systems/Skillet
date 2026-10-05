@@ -118,16 +118,16 @@ def main() -> None:
 
     tamp_agent = PlanningAgent(scene, abstract_model=abs_model, action_to_skill_map=ACTION_MAP)
     while True:
-        # goal = input("Enter the goal ('exit' to quit): ")
-        # if goal == "exit":
-        #     break
+        goal = input("Enter the goal ('exit' to quit): ")
+        if goal == "exit":
+            break
         # scene.goal = goal
         # print(scene.goal)
 
         input("Press Enter to start the planning and evaluation experiment...\n")
 
         env.reset()
-        tamp_agent.execute(env, task=None)
+        tamp_agent.execute(env, task_pddl=goal)
         print("[INFO][Main] finished experiment, exiting...")
 
 
