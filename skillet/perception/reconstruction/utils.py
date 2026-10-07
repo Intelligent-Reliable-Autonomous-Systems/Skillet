@@ -174,6 +174,7 @@ def find_block_centers_mean(
     depth_scale: float = 1.0,
     obj_size: float | np.ndarray = 0.044,
     frame: Literal["world", "camera"] = "camera",
+    obj_types: np.ndarray | None = None,
 ) -> torch.Tensor:
     """Find object centers from segmentation masks and depth map in the camera frame.
 
@@ -188,6 +189,7 @@ def find_block_centers_mean(
         depth_scale: Scale factor for depth values (if depth is in mm, use 1/1000)
         obj_size: Expected object size in meters (used for validation)
         frame: frame in which to compute RANSAC in (world or camera)
+        obj_types: the type of the object
 
     Returns:
         Centers: List of 3D object centers in camera frame (N, 3)
@@ -230,8 +232,14 @@ def find_block_centers_mean(
             threshold += 0.005
             mask_v = torch.abs(centroid_v - proj_v) < threshold
             mask_u = torch.abs(centroid_u - proj_u) < threshold
+        if obj_types is None:
+            centroid_w = proj_w[mask_u & mask_v].mean() + (o_size * (3 / 4))
+        else:
+            if obj_types[i] == "target":
+                centroid_w = proj_w[mask_u & mask_v].mean()
+            else:
+                centroid_w = proj_w[mask_u & mask_v].mean() + (o_size * (3 / 4))
 
-        centroid_w = proj_w[mask_u & mask_v].mean() + (o_size * (3 / 4))
         centroid = torch.as_tensor([centroid_u, centroid_v, centroid_w], device=masks.device)
         centers.append(centroid)
         bboxes.append(torch.cat((points_3d.min(dim=0)[0], points_3d.max(dim=0)[0]), dim=0))

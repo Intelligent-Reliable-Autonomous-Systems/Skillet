@@ -24,6 +24,7 @@ class KeyboardListener:
         )
         self._pressed_keys: set[str] = set()
         self._additional_callbacks: dict[str, Callable] = {}
+        self.enabled = False
 
     def stop(self):
         """Stop the keyboard listener."""
@@ -41,6 +42,8 @@ class KeyboardListener:
             return None
 
     def _on_press(self, key):
+        if not self.enabled:
+            return
         char = self._key_to_char(key)
         if char is None:
             return
@@ -104,6 +107,7 @@ class SkilletModerator:
         self._action = None
         self._action_spec = None
         self._exp_count = 0
+        self._run = False
         print(
             "===[SkilletExpModerator]===\nQ: Quit Experiment\nX: Stop Robot\nH: Return Robot to Home\nR: Resume Robot Experiment\nP: Pause the Experiment."
         )
@@ -142,6 +146,26 @@ class SkilletModerator:
     @property
     def is_paused(self) -> bool:
         return self._status == ExpStatusCodes.PAUSE
+
+    @property
+    def run(self) -> bool:
+        return self._run
+
+    @property
+    def status(self) -> int:
+        return self._status
+
+    @status.setter
+    def status(self, stat: int) -> None:
+        self._status = stat
+
+    @run.setter
+    def run(self, val: bool) -> None:
+        self._run = val
+        if self._run:
+            self._listener.enabled = True
+        else:
+            self._listener.enabled = False
 
     def poll(self, env: Environment, skill: Skill = None) -> tuple[torch.Tensor, ActionSpec]:
         """Poll the correct action on a skill."""

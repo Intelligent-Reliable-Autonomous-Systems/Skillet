@@ -139,6 +139,7 @@ class Sam3Reconstructor(ReconstructorBase):
         camera_pose = obs["camera_pose"]
 
         agg_obj_masks = []
+        agg_obj_types = []
         if masks.shape[0] == 0:
             return None, None
         _, mh, mw = masks.shape
@@ -153,12 +154,14 @@ class Sam3Reconstructor(ReconstructorBase):
                 o_mask = torch.logical_or(o_mask, masks[j].squeeze())
 
             agg_obj_masks.append(o_mask)
+            agg_obj_types.append(o.object_type)
         if len(agg_obj_masks) == 0:
             return None, None
         obj_masks = torch.stack(agg_obj_masks, dim=0)
+        obj_types = np.stack(agg_obj_types, axis=0)
 
         # Compute the object centers
-        centers, bboxes = self._get_blocksworld_centers(obj_masks, depth, intrinsic_k, camera_pose)
+        centers, bboxes = self._get_blocksworld_centers(obj_masks, depth, intrinsic_k, camera_pose, obj_types=obj_types)
 
         # Assign the pose and bounding boxes to each object
         ids = []
@@ -230,6 +233,7 @@ class Sam3Reconstructor(ReconstructorBase):
         depth: torch.Tensor,
         intrinsic_k: torch.Tensor,
         camera_pose: torch.Tensor,
+        obj_types: np.ndarray | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         # Find object centers and orientation in the camera frame
 
@@ -246,6 +250,7 @@ class Sam3Reconstructor(ReconstructorBase):
             obj_size=CUBE_SIZE,
             camera_pos=camera_pose[0:3],
             camera_quat=camera_pose[3:7],
+            obj_types=obj_types,
         )
         centers = transform_xyz_to_world(centers, camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7])
         bboxes[:, 0:3] = transform_xyz_to_world(

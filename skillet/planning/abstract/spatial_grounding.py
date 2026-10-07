@@ -261,10 +261,14 @@ def _is_at(a: Cube, l: Location, z_slack_frac: float = 0.00, xy_slack_frac: floa
     z_slack = a.size * z_slack_frac
 
     # tcp pose should be within a's footprint (plus a little slack)
-    within_x = l.pose[0] - xy_slack <= a.pose[0] <= (l.pose[0] + l.size + xy_slack)
+    if l._rel_to is not None:
+        # If l is relative to something, the location is at the center, not on the right side
+        within_x = l.pose[0] - xy_slack - l.size / 2 <= a.pose[0] <= (l.pose[0] + l.size / 2 + xy_slack)
+    else:
+        # If l is not relative to something, its center is right aligned (TODO fix for consistency)
+        within_x = l.pose[0] - xy_slack <= a.pose[0] <= (l.pose[0] + l.size + xy_slack)
     within_y = True
     within_z = l.pose[2] - z_slack <= a.pose[2] <= (l.pose[2] + a.size) + z_slack
-    # (aabb_a[1] - z_slack) <= l.pose[2] + l.size / 2 <= (aabb_a[5] + z_slack)
 
     # To be holding must be within footprint and gripper must be closed
     return bool(within_x and within_y and within_z)
@@ -398,7 +402,7 @@ def ground_location_relations(scene: Scene) -> list[tuple[str, SceneObject, Scen
                 if obj.object_id != other_obj.object_id and _is_north_of_loc(obj, other_obj):
                     north_relations.append(("loc-north-of", obj, other_obj))
             elif isinstance(other_obj, Cube):
-                if _is_at(other_obj, obj, z_slack_frac=0.02):
+                if _is_at(other_obj, obj, xy_slack_frac=0.2 if obj._rel_to is not None else 0.1):
                     at_relations.append(("at-loc", other_obj, obj))
                     occupied_relations.add(("occupied", obj))
 

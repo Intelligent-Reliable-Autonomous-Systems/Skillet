@@ -421,7 +421,7 @@ def five_cube_scene_loader() -> None:
     )
 
 
-def five_cube_three_dots_scene_loader() -> None:
+def two_magnet_three_wooden_three_dots_scene_loader() -> None:
     table = Table(name="table_0")
     green_target = Target(radius=0.04, name="green_circle")
     purple_target = Target(radius=0.04, name="purple_circle")
@@ -456,7 +456,87 @@ def five_cube_three_dots_scene_loader() -> None:
         bounds=bounds,
         contains_objects=True,
         goal=[
-            {"predicate": "not on", "args": ["blue_block", "yellow_block"]},
+            {"predicate": "not on", "args": ["green_block", "yellow_block"]},
+        ],
+    )
+
+
+def three_magnet_two_wooden_three_dots_scene_loader() -> None:
+    table = Table(name="table_0")
+    green_target = Target(radius=0.04, name="green_circle")
+    purple_target = Target(radius=0.04, name="purple_circle")
+    red_target = Target(radius=0.04, name="red_circle")
+    bounds = table.aabb
+    bounds[-1] = bounds[2] + 1.0
+    return Scene(
+        objects=[
+            table,
+            Cube(size=CUBE_SIZE, name="green_block", material="wooden", color="green"),
+            Cube(size=CUBE_SIZE, name="pink_block", material="plastic", color="pink"),
+            Cube(size=CUBE_SIZE, name="yellow_block", material="wooden", color="yellow"),
+            Cube(size=CUBE_SIZE, name="blue_block", material="plastic", color="blue"),
+            Cube(size=CUBE_SIZE, name="red_block", material="plastic", color="red"),
+            green_target,
+            purple_target,
+            red_target,
+            Location(rel_pose=torch.as_tensor([0.0, 0.0, -0.075], device=DEVICE), rel_to=green_target, name="loc_g0"),
+            Location(rel_pose=torch.as_tensor([0.0, 0.0, -0.025], device=DEVICE), rel_to=green_target, name="loc_g1"),
+            Location(rel_pose=torch.as_tensor([0.0, 0.0, 0.025], device=DEVICE), rel_to=green_target, name="loc_g2"),
+            Location(rel_pose=torch.as_tensor([0.0, 0.0, 0.075], device=DEVICE), rel_to=green_target, name="loc_g3"),
+            Location(rel_pose=torch.as_tensor([0.0, 0.0, -0.075], device=DEVICE), rel_to=purple_target, name="loc_p0"),
+            Location(rel_pose=torch.as_tensor([0.0, 0.0, -0.025], device=DEVICE), rel_to=purple_target, name="loc_p1"),
+            Location(rel_pose=torch.as_tensor([0.0, 0.0, 0.025], device=DEVICE), rel_to=purple_target, name="loc_p2"),
+            Location(rel_pose=torch.as_tensor([0.0, 0.0, 0.075], device=DEVICE), rel_to=purple_target, name="loc_p3"),
+            Location(rel_pose=torch.as_tensor([0.0, 0.0, -0.075], device=DEVICE), rel_to=red_target, name="loc_r0"),
+            Location(rel_pose=torch.as_tensor([0.0, 0.0, -0.025], device=DEVICE), rel_to=red_target, name="loc_r1"),
+            Location(rel_pose=torch.as_tensor([0.0, 0.0, 0.025], device=DEVICE), rel_to=red_target, name="loc_r2"),
+            Location(rel_pose=torch.as_tensor([0.0, 0.0, 0.075], device=DEVICE), rel_to=red_target, name="loc_r3"),
+        ],
+        closed_set=True,
+        bounds=bounds,
+        contains_objects=True,
+        goal=[
+            {"predicate": "not on", "args": ["green_block", "yellow_block"]},
+        ],
+    )
+
+
+def five_wooden_three_dots_scene_loader() -> None:
+    table = Table(name="table_0")
+    green_target = Target(radius=0.04, name="green_circle")
+    purple_target = Target(radius=0.04, name="purple_circle")
+    red_target = Target(radius=0.04, name="red_circle")
+    bounds = table.aabb
+    bounds[-1] = bounds[2] + 1.0
+    return Scene(
+        objects=[
+            table,
+            Cube(size=CUBE_SIZE, name="green_block", material="wooden", color="green"),
+            Cube(size=CUBE_SIZE, name="pink_block", material="wooden", color="pink"),
+            Cube(size=CUBE_SIZE, name="yellow_block", material="wooden", color="yellow"),
+            Cube(size=CUBE_SIZE, name="blue_block", material="wooden", color="blue"),
+            Cube(size=CUBE_SIZE, name="red_block", material="wooden", color="red"),
+            green_target,
+            purple_target,
+            red_target,
+            Location(rel_pose=torch.as_tensor([0.0, 0.0, -0.075], device=DEVICE), rel_to=green_target, name="loc_g0"),
+            Location(rel_pose=torch.as_tensor([0.0, 0.0, -0.025], device=DEVICE), rel_to=green_target, name="loc_g1"),
+            Location(rel_pose=torch.as_tensor([0.0, 0.0, 0.025], device=DEVICE), rel_to=green_target, name="loc_g2"),
+            Location(rel_pose=torch.as_tensor([0.0, 0.0, 0.075], device=DEVICE), rel_to=green_target, name="loc_g3"),
+            Location(rel_pose=torch.as_tensor([0.0, 0.0, -0.075], device=DEVICE), rel_to=purple_target, name="loc_p0"),
+            Location(rel_pose=torch.as_tensor([0.0, 0.0, -0.025], device=DEVICE), rel_to=purple_target, name="loc_p1"),
+            Location(rel_pose=torch.as_tensor([0.0, 0.0, 0.025], device=DEVICE), rel_to=purple_target, name="loc_p2"),
+            Location(rel_pose=torch.as_tensor([0.0, 0.0, 0.075], device=DEVICE), rel_to=purple_target, name="loc_p3"),
+            Location(rel_pose=torch.as_tensor([0.0, 0.0, -0.075], device=DEVICE), rel_to=red_target, name="loc_r0"),
+            Location(rel_pose=torch.as_tensor([0.0, 0.0, -0.025], device=DEVICE), rel_to=red_target, name="loc_r1"),
+            Location(rel_pose=torch.as_tensor([0.0, 0.0, 0.025], device=DEVICE), rel_to=red_target, name="loc_r2"),
+            Location(rel_pose=torch.as_tensor([0.0, 0.0, 0.075], device=DEVICE), rel_to=red_target, name="loc_r3"),
+        ],
+        closed_set=True,
+        bounds=bounds,
+        contains_objects=True,
+        goal=[
+            {"predicate": "not on", "args": ["green_block", "yellow_block"]},
         ],
     )
 
@@ -603,8 +683,15 @@ def one_cube_scene_loader() -> None:
 
 def load_scene(name: str) -> Scene:
     """Load scenes by name."""
-    if name == "5cube_3dots":
-        return five_cube_three_dots_scene_loader()
+    if name == "0magnet_demo":
+        return five_wooden_three_dots_scene_loader()
+    if name == "2magnet_demo":
+        return two_magnet_three_wooden_three_dots_scene_loader()
+    if name == "3magnet_demo":
+        return three_magnet_two_wooden_three_dots_scene_loader()
+    if name == "2magnet_3wooden_3dots":
+        return two_magnet_three_wooden_three_dots_scene_loader()
+
     if name == "2magnet_2wooden_5loc":
         return two_magnet_two_wooden_five_loc_scene()
     if name == "3magnet_2wooden_5loc":

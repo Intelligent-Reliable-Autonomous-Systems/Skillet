@@ -6,6 +6,7 @@ from typing import Any
 
 from skillet.agents import SkilletModerator
 from skillet.agents.base_agent import Agent
+from skillet.agents.moderator import ExpStatusCodes
 from skillet.core.env import Environment
 from skillet.core.policy import Unparameterized
 from skillet.core.skill import SingleSkill, SkillStatusCodes
@@ -56,6 +57,7 @@ class PlanningAgent(Agent):
             task: The task to execute.
 
         """
+        self._moderator.run = True
         # Get the current symbolic state
         self._abstract_model.initialize(self._scene, task_file=task_file, task_pddl=task_pddl, task_nl=task_nl)
 
@@ -65,6 +67,8 @@ class PlanningAgent(Agent):
         terminated = False
         if self._plan is None:
             print("[WARNING][TAMP] Failed to find plan.")
+            self._moderator.run = False
+
             return
         print(self._plan)
         for ab_action, up_action in zip(self._plan.actions, up_actions):
@@ -109,6 +113,9 @@ class PlanningAgent(Agent):
                 actions=up_action,
                 executions="applicable",
             )
+
+        self._moderator.run = False
+        self._moderator._status = ExpStatusCodes.RUNNING
 
 
 class RandomTampAgent(Agent):
@@ -239,9 +246,10 @@ class ActiveLearningAgent(Agent):
             task: The task to execute.
 
         """
+        self._moderator.run = True
+
         # Get the current symbolic state
         self._abstract_model.initialize(self._scene, task)
-
         terminated = False
         up_state = self._abstract_model.reset_up_problem_state()
         up_objects = self._abstract_model._problem.all_objects
@@ -265,7 +273,7 @@ class ActiveLearningAgent(Agent):
             up_objects = self._abstract_model._problem.all_objects
 
             if up_action is None:
-                print("[WARN][ACTIVE] Invalid action selected/unable to find valid caction")
+                print("[WARN][ACTIVE] Invalid action selected/unable to find valid action")
                 time.sleep(0.1)
                 continue
             ab_action = AbstractAction(

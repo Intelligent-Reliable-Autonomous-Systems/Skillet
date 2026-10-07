@@ -1,18 +1,14 @@
 """Run a tabletop block stacking task."""
 
 import argparse
-import json
-import pathlib
-import time
 from typing import TYPE_CHECKING
 
+from examples.demo.demo_gui import run_gui
 from skillet.agents import PlanningAgent
 from skillet.core import ObservationSpec
 from skillet.core.env import BatchToSingleWrapper
 from skillet.envs import SkilletEnv
-from skillet.envs.realsense import RealsenseEnv
 from skillet.envs.specs import NULL_ACTION_SPEC
-from skillet.logging import SkilletDataLogger
 from skillet.perception.perception import SkilletPerception
 from skillet.planning import AbstractModel
 from skillet.scene import (
@@ -44,20 +40,17 @@ parser.add_argument("--o3d", action=argparse.BooleanOptionalAction, default=True
 parser.add_argument(
     "--vlm", type=argparse.BooleanOptionalAction, default=False, help="If to use the VLM for scene building"
 )
-parser.add_argument(
-    "--domain_path",
-    type=str,
-    default="skillet_tasks/blocksworld-pick-place/eval/domains/default/simple-blocksworld-pick-place.domain.pddl",
-    help="Path to .domain.pddl file",
-)
 parser.add_argument("--model_dir", type=str, default="default", help="Name of model used")
 args_cli = parser.parse_args()
 
 
 def main() -> None:
 
-    scene = load_scene("5cube_3dots")
-    block_domain = args_cli.domain_path
+    scene = load_scene("0magnet_demo")
+    domains = {
+        "simple": "skillet_tasks/blocksworld-pick-place/simple-blocksworld-pick-place.domain.pddl",
+        "magnet": "skillet_tasks/blocksworld-pick-place/magnet-blocksworld-pick-place.domain.pddl",
+    }
     env_cfg = {
         "robot_ip": args_cli.robot_ip,
         "device": "cuda",
@@ -73,16 +66,8 @@ def main() -> None:
     env = BatchToSingleWrapper(env)
     env.reset()
     rgbd_grip_spec: ObservationSpec[RGBD_Gripper_Obs] = env.coerce_obs_spec("rgbd-gripper")
-    # rgbd_grip_spec: ObservationSpec[RGBD_Gripper_Obs] = env.coerce_obs_spec("rgbd-gripper")
-    # env = RealsenseEnv(
-    #     apriltag_id=1,
-    #     apriltag_pose=[0.14, -0.01, 0.0, 0.0, 0.0, 0.7071068, -0.7071068],
-    #     apriltag_fam="tag36h11",
-    #     apriltag_size_m=0.1,
-    # )
-    # rgbd_grip_spec: ObservationSpec[RGBD_Gripper_Obs] = env.obs_spec
 
-    abs_model = AbstractModel(block_domain, scene=scene)
+    abs_model = AbstractModel(domains["simple"], scene=scene)
 
     perception = SkilletPerception(
         env=env,
@@ -102,12 +87,6 @@ def main() -> None:
         target_pose_func = visualizer.set_target_pos
     perception.run_thread()
 
-    # env.reset()
-    # while True:
-    #     obs = env.get_observation(env.coerce_obs_spec("ik_ee"))
-    #     print(obs)
-    #     env.step(NULL_ACTION_SPEC.unbatched().cast([]), NULL_ACTION_SPEC.unbatched())
-    # Low-level policies
     skill_length = 1e9
     arm_policy = TcpCartPolicy(env.batched_env.obs_spec_tcp_cart, env.batched_env.action_spec_tcp_cart)
     place_skill = PlaceSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length)
@@ -117,18 +96,8 @@ def main() -> None:
     ACTION_MAP = {"place_block": place_block_skill, "pick_block": pick_block_skill}
 
     tamp_agent = PlanningAgent(scene, abstract_model=abs_model, action_to_skill_map=ACTION_MAP)
-    while True:
-        goal = input("Enter the goal ('exit' to quit): ")
-        if goal == "exit":
-            break
-        # scene.goal = goal
-        # print(scene.goal)
 
-        input("Press Enter to start the planning and evaluation experiment...\n")
-
-        env.reset()
-        tamp_agent.execute(env, task_pddl=goal)
-        print("[INFO][Main] finished experiment, exiting...")
+    run_gui(env, tamp_agent, abs_model, domains, scene)
 
 
 if __name__ == "__main__":

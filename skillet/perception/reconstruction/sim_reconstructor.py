@@ -102,6 +102,7 @@ class SimReconstructor(ReconstructorBase):
             obj_size=obj_sizes,
             camera_pos=camera_pose[0:3],
             camera_quat=camera_pose[3:7],
+            obj_types=obj_types[obj_inds],
         )
         obj_centers = transform_xyz_to_world(obj_centers, camera_pos=camera_pose[0:3], camera_quat=camera_pose[3:7])
 

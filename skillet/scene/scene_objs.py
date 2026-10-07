@@ -376,8 +376,6 @@ class Location(SceneObject):
         """The pose of the target in the world frame."""
         if self._rel_to is not None:
             pos = self._rel_to.pose[:3] + self._rel_pose[:3]
-            # pos = self._rel_pose[:3]
-            # pos[:2] = self._rel_to.pose[:2] + self._rel_pose[:2]
             if len(pos) > 3:
                 rot = quat_mul(self._rel_to.pose[3:], self._rel_pose[3:])
             else:

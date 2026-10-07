@@ -303,6 +303,15 @@ class Scene:
             ob_names.append(ob.name)
         return ob_names
 
+    def get_object_from_type(self, obj_type: tuple[SceneObject]) -> list[str]:
+        """Get the name of all objecs of a specific type."""
+        objs = []
+        for ob in self._objects:
+            if not isinstance(ob, obj_type):
+                continue
+            objs.append(ob)
+        return objs
+
     def serialize_scene_poses(self) -> None:
         """Return a numpy array of poses for all the objects in the scene."""
         poses = []
