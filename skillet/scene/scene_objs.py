@@ -342,7 +342,7 @@ class Target(SceneObject):
 
     def __str__(self) -> str:
         """Return a printable string."""
-        return f"Target | ID: {self.object_id} | Name: {self.name} | Center: {self.pose.cpu().numpu()[:2]}"
+        return f"Target | ID: {self.object_id} | Name: {self.name} | Center: {self.pose.cpu().numpy()[:2]}"
 
 
 class Location(SceneObject):

@@ -6,10 +6,13 @@ from typing import Literal
 import torch
 
 from skillet.scene.base import Scene, SceneObject
-from skillet.scene.scene_objs import Can, Cube, Location, Plate, Spill, Sponge, Table, Bin
+from skillet.scene.scene_objs import Bin, Can, Cube, Location, Plate, Spill, Sponge, Table, Target
+from skillet.scene.scenes import CUBE_SIZE
 
 
-def _is_on(a: Cube | Location, b: Cube | Location, height_tol_frac: float = 0.3, xy_slack_frac: float = 0.5) -> bool:
+def _is_on(
+    a: Cube | Location, b: Cube | Location | Target, height_tol_frac: float = 0.3, xy_slack_frac: float = 0.5
+) -> bool:
     """Return True if cube *a* is resting on top of cube *b*.
 
     Args:
@@ -21,7 +24,7 @@ def _is_on(a: Cube | Location, b: Cube | Location, height_tol_frac: float = 0.3,
             edges, as a fraction of the smaller cube's side length.
 
     """
-    if isinstance(a, Cube) and isinstance(b, Cube) and not (a.is_pose_known() and b.is_pose_known()):
+    if isinstance(a, Cube) and isinstance(b, (Cube, Target)) and not (a.is_pose_known() and b.is_pose_known()):
         return False
 
     aabb_a = a.aabb  # [xmin, ymin, zmin, xmax, ymax, zmax]
@@ -239,28 +242,22 @@ def _is_lifted(scene: Scene, lift_height: float = 0.2) -> bool:
     return bool((scene.tcp_pose[2] > lift_height).item())
 
 
-def _is_at(a: Cube, l: Location, z_slack_frac: float = 0.00, xy_slack_frac: float = 0.1) -> bool:
-    """Test if a cube is at a location.
-
-    The cube xyz position must be sufficiently close to the tcp pose
-    in the scene and the gripper must be closed.
+def _is_at(a: Cube | Target, l: Location, z_slack_frac: float = 0.00, xy_slack_frac: float = 0.1) -> bool:
+    """Test if a cube or target is at a location.
 
     Args:
-        a: Cube to test against
+        a: Cube or target to test against
         l: Location to test against
         z_slack_frac: the z fraction tolerance to be inside
         xy_slack_frac: slack around xy to still be considered holding
 
     """
-    # Check that the scene has both gripper and tcp pose
     if not a.is_pose_known():
         return False
 
-    aabb_a = a.aabb  # [xmin, ymin, zmin, xmax, ymax, zmax]
     xy_slack = a.size * xy_slack_frac
     z_slack = a.size * z_slack_frac
 
-    # tcp pose should be within a's footprint (plus a little slack)
     if l._rel_to is not None:
         # If l is relative to something, the location is at the center, not on the right side
         within_x = l.pose[0] - xy_slack - l.size / 2 <= a.pose[0] <= (l.pose[0] + l.size / 2 + xy_slack)
@@ -268,9 +265,14 @@ def _is_at(a: Cube, l: Location, z_slack_frac: float = 0.00, xy_slack_frac: floa
         # If l is not relative to something, its center is right aligned (TODO fix for consistency)
         within_x = l.pose[0] - xy_slack <= a.pose[0] <= (l.pose[0] + l.size + xy_slack)
     within_y = True
-    within_z = l.pose[2] - z_slack <= a.pose[2] <= (l.pose[2] + a.size) + z_slack
+    if isinstance(a, Target):
+        # Targets sit on the table (z=0). Their cell is the table-level location
+        # below them, about 1/4-1/2 of a block down.
+        below = a.pose[2] - CUBE_SIZE - l.pose[2] # shift down because of weird location offet idk
+        within_z = abs(below - 0.5 * CUBE_SIZE) <= 0.25 * CUBE_SIZE
+    else:
+        within_z = l.pose[2] - z_slack <= a.pose[2] <= (l.pose[2] + a.size) + z_slack
 
-    # To be holding must be within footprint and gripper must be closed
     return bool(within_x and within_y and within_z)
 
 
@@ -316,6 +318,9 @@ def ground_cube_relations(scene: Scene) -> tuple[list[tuple[str, SceneObject, Sc
 
     cube_list = []
     for obj in scene.objects:
+        if isinstance(obj, Target) and table is not None:
+            on_relations.append(("on", obj, table))
+            continue
         if not isinstance(obj, Cube):
             continue
         cube_list.append(obj)
@@ -328,12 +333,21 @@ def ground_cube_relations(scene: Scene) -> tuple[list[tuple[str, SceneObject, Sc
         if table is not None and _is_on_table(obj, table):
             on_relations.append(("on", obj, table))
         for other_obj in scene.objects:
-            if not isinstance(other_obj, Cube):
-                continue
-            if obj.object_id != other_obj.object_id and _is_on(obj, other_obj):
+            if isinstance(other_obj, (Cube, Target)) and obj.object_id != other_obj.object_id and _is_on(obj, other_obj):
                 on_relations.append(("on", obj, other_obj))
-            if obj.object_id != other_obj.object_id and _is_north_of(obj, other_obj):
+            if isinstance(other_obj, Cube) and obj.object_id != other_obj.object_id and _is_north_of(obj, other_obj):
                 north_relations.append(("north-of", obj, other_obj))
+
+    # A cube resting on a target (or another cube) is also near table height; drop the table support.
+    on_relations = [
+        (rel, obj1, obj2)
+        for rel, obj1, obj2 in on_relations
+        if not (
+            isinstance(obj1, Cube)
+            and isinstance(obj2, Table)
+            and any(o1 is obj1 and not isinstance(o2, Table) for _, o1, o2 in on_relations)
+        )
+    ]
 
     # Remove cubes from clear list if they have an object on top
     for o in on_relations:
@@ -401,7 +415,7 @@ def ground_location_relations(scene: Scene) -> list[tuple[str, SceneObject, Scen
                     above_relations.append(("loc-above", obj, other_obj))
                 if obj.object_id != other_obj.object_id and _is_north_of_loc(obj, other_obj):
                     north_relations.append(("loc-north-of", obj, other_obj))
-            elif isinstance(other_obj, Cube):
+            elif isinstance(other_obj, (Cube, Target)):
                 if _is_at(other_obj, obj, xy_slack_frac=0.2 if obj._rel_to is not None else 0.1):
                     at_relations.append(("at-loc", other_obj, obj))
                     occupied_relations.add(("occupied", obj))

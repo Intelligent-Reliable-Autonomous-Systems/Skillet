@@ -9,7 +9,7 @@ from skillet.planning.abstract.spatial_grounding import (
     _is_on,
     _is_on_table,
 )
-from skillet.scene import Cube, Table
+from skillet.scene import Cube, Table, Target
 from skillet.scene.base import Scene, SceneObject
 
 
@@ -31,10 +31,10 @@ def _pick_skill_4_grounding(scene_objs: list[SceneObject], scene: Scene) -> bool
     """
     target, support, targetloc, supportloc = scene_objs[:4]
     at_grd = _is_at(target, targetloc) and (
-        (_is_at(support, supportloc) and isinstance(support, Cube)) or isinstance(support, Table)
+        (_is_at(support, supportloc) and isinstance(support, (Cube, Target))) or isinstance(support, Table)
     )
     above_grd = _is_above_loc(targetloc, supportloc)
-    if isinstance(support, Cube):
+    if isinstance(support, (Cube, Target)):
         on_grd = _is_on(target, support)
     elif isinstance(support, Table):
         on_grd = bool(_is_on_table(target, support).item())
@@ -73,7 +73,7 @@ def _place_skill_4_grounding(scene_objs: list[SceneObject], scene: Scene) -> boo
     full_grd = _gripper_closed(scene)
     print("gripper grasping", full_grd)
     at_grd = (not _is_at(grasped, freeloc)) and (
-        (_is_at(target, targetloc) and isinstance(target, Cube)) or isinstance(target, Table)
+        (_is_at(target, targetloc) and isinstance(target, (Cube, Target))) or isinstance(target, Table)
     )
     print("not at grasped freeloc", not _is_at(grasped, freeloc))
     print("is at target targetloc", _is_at(target, targetloc) and isinstance(target, Cube))
