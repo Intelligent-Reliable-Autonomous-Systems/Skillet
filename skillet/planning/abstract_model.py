@@ -2,7 +2,7 @@
 
 import random
 import re
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from unified_planning.engines import PlanGenerationResultStatus as PGResultStatus
 from unified_planning.engines import UPSequentialSimulator
@@ -33,6 +33,9 @@ from skillet.planning.base_planner import BasePlanner
 from skillet.scene.base import Scene
 from skillet.scene.scene_objs import Bin, Can, Cube, Location, Plate, Spill, Sponge, Target
 
+if TYPE_CHECKING:
+    from skillet.planning.llm import GoalTranslator, LLMProvider
+
 
 class AbstractModel(BasePlanner):
     """An abstract model of the scene."""
@@ -46,6 +49,8 @@ class AbstractModel(BasePlanner):
         task_nl: str | None = None,
         environment: Environment | None = None,
         domain: Literal["blocks", "sponge"] = "blocks",
+        goal_translator: "GoalTranslator | None" = None,
+        llm_provider: "LLMProvider" = "gemini",
     ) -> None:
         """Initialize the abstract model.
 
@@ -56,6 +61,8 @@ class AbstractModel(BasePlanner):
             tasl_pddl: A PDDL string to go inside (:goal ...)
             task_nl: A natural language description of the task goal
             domain: The domain name
+            goal_translator: LLM used to translate task_nl into PDDL. Created on first use if None.
+            llm_provider: Provider used when constructing a default translator ("gemini", "claude", or "anthropic").
         """
         self._environment = environment
         self._pddl_reader = PDDLReader(environment=environment)
@@ -69,6 +76,8 @@ class AbstractModel(BasePlanner):
         self._init_state: AbstractState = None
         self._goal: UPListGoal = None
         self._domain = domain
+        self._goal_translator = goal_translator
+        self._llm_provider = llm_provider
 
     @property
     def problem(self) -> Problem:
@@ -140,17 +149,25 @@ class AbstractModel(BasePlanner):
         # Case 1: Goal already cached
         if len(self._problem.goals) > 0:
             goals = [*self._problem.goals]
-        # Case 2: NL task
-        elif self._task_nl is not None:
-            raise NotImplementedError("Natural language goal translation not implemented")
-        # Case 3: PDDL goal string
-        elif self._task_pddl is not None:
+        elif self._task_pddl is not None or self._task_nl is not None:
             problem = self.reset_abstract_state(
                 self._problem, ParsedUpProblem(fluents=fluent_state, objects=object_state, goals=[])
             )
             pwriter = PDDLWriter(problem)
             domain_str = pwriter.get_domain()
             problem_str = pwriter.get_problem()
+            # Case 2: NL task
+            if self._task_nl is not None:
+                if self._goal_translator is None:
+                    from skillet.planning.llm import create_goal_translator
+
+                    self._goal_translator = create_goal_translator(self._llm_provider)
+                self._task_pddl = self._goal_translator.translate(
+                    self._task_nl, domain_str, problem_str, domain=self._domain
+                )
+                print(f"[INFO][LLM Goal]: {self._task_pddl}")
+                self._task_nl = None
+            # Case 3: PDDL goal string
             pattern = r"(\(:goal\s*)\(\s*and\b.*?\)(\s*\))"
             replacement = r"\1" + self._task_pddl + r"\2"
             problem_str = re.sub(pattern, replacement, problem_str, flags=re.DOTALL)

@@ -91,8 +91,15 @@ def run_gui(
 
     def worker(goal: str) -> None:
         try:
+            if len(goal) == 0:
+                raise ValueError("Goal cannot be empty")
             env.reset()
-            tamp_agent.execute(env, task_pddl=goal)
+            if goal.startswith("("): # PDDL goal
+                print(f"[INFO][Main] Executing PDDL goal: {goal}")
+                tamp_agent.execute(env, task_pddl=goal)
+            else:
+                print(f"[INFO][Main] Executing NL goal: {goal}")
+                tamp_agent.execute(env, task_nl=goal)
             print("[INFO][Main] finished experiment")
         except Exception:
             traceback.print_exc()

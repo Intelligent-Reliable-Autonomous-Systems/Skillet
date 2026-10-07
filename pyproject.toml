@@ -60,6 +60,7 @@ perception = [
 ]
 vlm = [
     "openai",
+    "anthropic",
 ]
 ros = [
     "roslibpy",

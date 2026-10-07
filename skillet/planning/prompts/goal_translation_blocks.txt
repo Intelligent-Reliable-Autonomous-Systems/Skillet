@@ -1,0 +1,5 @@
+Domain notes:
+- This is a tabletop blocks world. Blocks are named by their color (e.g. red_block), and the table is a surface that blocks can be placed on.
+- Stacking instructions map to (on top bottom) atoms, e.g. "put the red block on the blue block" is (on red_block blue_block).
+- Locations and targets describe positions on the table. Only reference them when the instruction refers to a position or a target.
+- Do not include gripper predicates in the goal unless the instruction explicitly asks the robot to hold something.

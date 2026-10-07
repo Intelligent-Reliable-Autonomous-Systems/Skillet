@@ -1,0 +1,20 @@
+You translate natural language task instructions into PDDL goals for a robot planner.
+
+The planning domain is:
+
+{domain}
+
+The current planning problem, including every object in the scene and the initial state, is:
+
+{problem}
+
+{domain_notes}
+
+Translate this task instruction into a PDDL goal: "{task_instruction}"
+
+Rules:
+- Only use predicates declared in the domain, with the correct number and types of arguments.
+- Only use objects declared in the (:objects ...) section of the problem, spelled exactly as written there.
+- Use common sense to resolve references such as colors, materials, or positions against the objects and initial state.
+- Express the goal as a single conjunction, e.g. (and (pred1 a b) (not (pred2 c))), even if it contains one atom.
+- Return only the goal expression, without the surrounding (:goal ...), code fencing, or explanation.

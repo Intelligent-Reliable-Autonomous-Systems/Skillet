@@ -1,0 +1,5 @@
+Domain notes:
+- This is a tabletop cleaning world with items (sponges, cans, spills) and surfaces (table, plates, bins, targets).
+- Placing an item maps to (on item surface), e.g. "throw the can in the bin" is (on can bin).
+- Cleaning a surface means it should no longer be dirty, e.g. "clean the plate" is (not (dirty plate)).
+- Do not include gripper predicates in the goal unless the instruction explicitly asks the robot to hold something.

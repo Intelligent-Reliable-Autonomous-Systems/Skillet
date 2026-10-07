@@ -8,7 +8,6 @@ from skillet.agents import PlanningAgent
 from skillet.core import ObservationSpec
 from skillet.core.env import BatchToSingleWrapper
 from skillet.envs import SkilletEnv
-from skillet.envs.specs import NULL_ACTION_SPEC
 from skillet.perception.perception import SkilletPerception
 from skillet.planning import AbstractModel
 from skillet.scene import (
@@ -41,6 +40,12 @@ parser.add_argument(
     "--vlm", type=argparse.BooleanOptionalAction, default=False, help="If to use the VLM for scene building"
 )
 parser.add_argument("--model_dir", type=str, default="default", help="Name of model used")
+parser.add_argument(
+    "--translation_model",
+    choices=["anthropic", "gemini"],
+    default="anthropic",
+    help="LLM used to translate natural language goals into PDDL.",
+)
 args_cli = parser.parse_args()
 
 
@@ -67,7 +72,7 @@ def main() -> None:
     env.reset()
     rgbd_grip_spec: ObservationSpec[RGBD_Gripper_Obs] = env.coerce_obs_spec("rgbd-gripper")
 
-    abs_model = AbstractModel(domains["simple"], scene=scene)
+    abs_model = AbstractModel(domains["simple"], scene=scene, llm_provider=args_cli.translation_model)
 
     perception = SkilletPerception(
         env=env,
