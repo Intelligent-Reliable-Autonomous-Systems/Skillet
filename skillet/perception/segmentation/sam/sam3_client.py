@@ -152,7 +152,7 @@ class SAM3Client(SAMClient):
             dtype=torch.float32,
         )
 
-    def _load_sam_model(self, checkpoint: pathlib.Path | None = None, confidence: float = 0.9):  # noqa: ANN202
+    def _load_sam_model(self, checkpoint: pathlib.Path | None = None, confidence: float = 0.7):  # noqa: ANN202
         """Load and cache the SAM2 image predictor."""
         if checkpoint is not None and not checkpoint.exists():
             # Let sam3 download the checkpoint if it doesn't exist

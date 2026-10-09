@@ -199,3 +199,54 @@ class PickBlock4Skill(PickBlockSkill):
             names = self._scene.resolve_ids_to_names(self._params)
             return f"Pick Block: | {names[0]} | {names[1]} |"
         return "Pick Block: | Unset | Unset |"
+
+
+class PickBlock4DemoSkill(PickBlockSkill):
+    def __init__(
+        self,
+        scene: Scene,
+        pick_skill: PickSkill[BxM_Action],
+        vis_target_pos: Callable[[Sequence[float]], None] | None = None,
+        xyz_offset: tuple[int] = (0, 0.0, 0.02),
+    ) -> None:
+        """Initialize the pick block skill."""
+        super().__init__(scene, pick_skill, vis_target_pos, xyz_offset=xyz_offset)
+        self._block_params_spec = SkillParamsSpec(
+            space=gym.spaces.MultiDiscrete((self.max_objects,) * 4), name="block_id", is_torch=False, is_batched=False
+        )
+        self._params = None
+
+    def initiate(self, obs, params):
+        """Initiate the skill with the given observation and parameters."""
+        self._status = None
+        self._params = self.params_spec.cast(params[:4])
+
+        objs = self._scene.get_objects_from_id(self._params)
+        self._target_block = objs[0]
+        self._scene._picked_block = objs[0]
+        self._scene._block_picked_from = objs[1] if isinstance(objs[1], Cube) else None
+        if (
+            not self._target_block.is_pose_known()
+            or self._target_block == self._params[1]
+            or not self._target_block.moveable
+            # or not _pick_skill_4_grounding(objs, self._scene)
+        ):
+            self._status = torch.as_tensor(SkillStatusCodes.FAILED, device=self.params_spec.device)
+            print(
+                f"[INFO][PICK BLOCK][FAILED]: {self._target_block.name} | {objs[1].name} | {objs[2].name} | {objs[3].name}"
+            )
+            return
+        target_xyz = self._target_block.pose[:3].to(self.obs_spec.device).clone() + self._offset
+        if self._vis_target_pos is not None:
+            self._vis_target_pos(target_xyz)
+        yaw = 0
+        target_pose = torch.tensor([target_xyz[0], target_xyz[1], target_xyz[2], yaw])
+        target_pose = self._pick_skill.params_spec.with_n_envs(1).cast(target_pose)
+        self._pick_skill.initiate(obs, target_pose)
+        print(f"[INFO][PICK BLOCK]: {self._target_block.name} | {objs[1].name}")
+
+    def __str__(self) -> str:
+        if self._params is not None:
+            names = self._scene.resolve_ids_to_names(self._params)
+            return f"Pick Block: | {names[0]} | {names[1]} |"
+        return "Pick Block: | Unset | Unset |"

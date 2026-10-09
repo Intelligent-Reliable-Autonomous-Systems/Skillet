@@ -268,7 +268,7 @@ def _is_at(a: Cube | Target, l: Location, z_slack_frac: float = 0.00, xy_slack_f
     if isinstance(a, Target):
         # Targets sit on the table (z=0). Their cell is the table-level location
         # below them, about 1/4-1/2 of a block down.
-        below = a.pose[2] - CUBE_SIZE - l.pose[2] # shift down because of weird location offet idk
+        below = a.pose[2] - CUBE_SIZE - l.pose[2]  # shift down because of weird location offet idk
         within_z = abs(below - 0.5 * CUBE_SIZE) <= 0.25 * CUBE_SIZE
     else:
         within_z = l.pose[2] - z_slack <= a.pose[2] <= (l.pose[2] + a.size) + z_slack
@@ -333,7 +333,11 @@ def ground_cube_relations(scene: Scene) -> tuple[list[tuple[str, SceneObject, Sc
         if table is not None and _is_on_table(obj, table):
             on_relations.append(("on", obj, table))
         for other_obj in scene.objects:
-            if isinstance(other_obj, (Cube, Target)) and obj.object_id != other_obj.object_id and _is_on(obj, other_obj):
+            if (
+                isinstance(other_obj, (Cube, Target))
+                and obj.object_id != other_obj.object_id
+                and _is_on(obj, other_obj)
+            ):
                 on_relations.append(("on", obj, other_obj))
             if isinstance(other_obj, Cube) and obj.object_id != other_obj.object_id and _is_north_of(obj, other_obj):
                 north_relations.append(("north-of", obj, other_obj))

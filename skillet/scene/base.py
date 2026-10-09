@@ -196,6 +196,8 @@ class Scene:
         self._gripper_pos = None
         self._goal = goal
         self._abstract_scene = None
+        self._picked_block = None
+        self._block_picked_from = None
 
     @property
     def objects(self) -> list[SceneObject]:

@@ -4,10 +4,12 @@ from .drag_block import DragBlock5Skill as DragBlock5Skill
 from .drag_block import DragBlockSkill as DragBlockSkill
 from .hover_obj import HoverObject2Skill as HoverObject2Skill
 from .hover_obj import HoverObjectSkill as HoverObjectSkill
+from .pick_block import PickBlock4DemoSkill as PickBlock4DemoSkill
 from .pick_block import PickBlock4Skill as PickBlock4Skill
 from .pick_block import PickBlockSkill as PickBlockSkill
 from .pick_block import PickObj2Skill as PickObj2Skill
 from .place_block import PlaceBlock3Skill as PlaceBlock3Skill
+from .place_block import PlaceBlock4DemoSkill as PlaceBlock4DemoSkill
 from .place_block import PlaceBlock4Skill as PlaceBlock4Skill
 from .place_block import PlaceBlockSkill as PlaceBlockSkill
 from .place_block import PlaceObj2Skill as PlaceObj2Skill

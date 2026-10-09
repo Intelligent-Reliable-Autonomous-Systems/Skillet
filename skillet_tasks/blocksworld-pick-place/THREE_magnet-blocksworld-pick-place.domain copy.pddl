@@ -88,6 +88,46 @@
                 (not (obstructed-above ?loc-below)) ; the support has been removed, so ?loc-below is clear above
             )
         )
+
+        ;; CASE 3: TARGET, SUPPORT, AND SURFACE-BELOW ARE MAGNETIC
+        (when
+            (exists (?surface-below ?surface-below-below - surface) ; the block below support and the block below that
+                (and
+                    (on ?support ?surface-below) (on ?surface-below ?surface-below-below)
+                    (plastic ?target) (plastic ?support) (plastic ?surface-below) ; only when surface-below is magnetically connected
+                )
+            )
+            (three-held) ; magnetic 3-chain exists, so three are held
+        )
+        (forall (?surface-below ?surface-below-below - surface) ; the block below support and the block below that
+            (when
+                (and
+                    (on ?support ?surface-below) (on ?surface-below ?surface-below-below)
+                    (plastic ?target) (plastic ?support) (plastic ?surface-below) ; only when surface-below is magnetically connected
+                )
+                (not (on ?surface-below ?surface-below-below)) ; surface-below is picked up, surface-below-below is disconnected
+            )
+        )
+        (forall (?surface-below - surface ?loc-below - location) ; the block below support and its location
+            (when
+                (and
+                    (on ?support ?surface-below) (at-loc ?surface-below ?loc-below)
+                    (plastic ?target) (plastic ?support) (plastic ?surface-below) ; only when surface-below is magnetically connected
+                )
+                (not (at-loc ?surface-below ?loc-below)) ; surface-below is picked up
+            )
+        )
+        (forall (?surface-below - surface ?loc-below ?loc-below-below - location) ; the block below support and its location, plus the location below that
+            (when
+                (and
+                    (on ?support ?surface-below) (at-loc ?surface-below ?loc-below) (loc-above ?loc-below ?loc-below-below)
+                    (plastic ?target) (plastic ?support) (plastic ?surface-below) ; only when surface-below is magnetically connected
+                )
+                (not (obstructed-above ?loc-below-below)) ; surface-below is picked up, so loc-below-below becomes unobstructed
+            )
+        )
+
+        ;; TODO: 4 magnetic blocks connected
     )
 )
 
@@ -159,6 +199,56 @@
             (obstructed-above ?freeloc) ; ?above-loc is occupied, so ?freeloc is obstructed
         )
 
+        ;; CASE 3: THERE ARE 2 HANGING blocks
+        ;;                  (on ?grasped ?hanging-block) (on ?hanging-block ?hanging-hanging-block)
+        (forall (?hanging-block ?hanging-hanging-block - surface)
+            (when
+                (and
+                    (on ?grasped ?hanging-block)
+                    (on ?hanging-block ?hanging-hanging-block)
+                    (three-held)
+                )
+                (on ?hanging-hanging-block ?target) ; connect hanging hanging block to target
+            )
+        )
+        (forall (?hanging-block ?hanging-hanging-block - surface)
+            (when
+                (and
+                    (on ?grasped ?hanging-block)
+                    (on ?hanging-block ?hanging-hanging-block)
+                    (three-held)
+                )
+                (at-loc ?hanging-hanging-block ?freeloc) ; hanging hanging block goes at freeloc
+            )
+        )
+        (forall (?hanging-block - surface ?above-loc - location) ; location above freeloc
+            (when
+                (and
+                    (on ?grasped ?hanging-block)
+                    (loc-above ?above-loc ?freeloc)
+                    (three-held)
+                )
+                (at-loc ?hanging-block ?above-loc) ; hanging block is 1 block above freeloc
+            )
+        )
+        (forall (?above-loc ?above-above-loc - location) ; location 2 above freeloc
+            (when
+                (and
+                    (loc-above ?above-loc ?freeloc) (loc-above ?above-above-loc ?above-loc)
+                    (three-held)
+                )
+                (at-loc ?grasped ?above-above-loc) ; grasped block is 2 blocks above freeloc
+            )
+        )
+        (forall (?above-loc - location) ; location above freeloc
+            (when
+                (and
+                    (loc-above ?above-loc ?freeloc)
+                    (three-held)
+                )
+                (obstructed-above ?above-loc) ; above-above-loc is occupied, so above-loc is obstructed
+            )
+        )
     )
 )
 

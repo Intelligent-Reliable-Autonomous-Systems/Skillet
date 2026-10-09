@@ -97,7 +97,7 @@ class PlanningAgent(Agent):
 
             if terminated:
                 break
-            time.sleep(1)
+            time.sleep(2)
         if logger is not None:
             obs_log = env.get_observation(logger._obs_spec)
             logger.log(

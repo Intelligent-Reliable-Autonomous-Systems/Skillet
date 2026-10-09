@@ -19,8 +19,8 @@ from skillet.skill.high_level import (
     PlaceSkill,
 )
 from skillet.skill.object_level import (
-    PickBlock4Skill,
-    PlaceBlock4Skill,
+    PickBlock4DemoSkill,
+    PlaceBlock4DemoSkill,
 )
 from skillet.skill.policy import TcpCartPolicy
 from skillet_tasks.kortex_tasks.factory import create_kortex_env
@@ -96,8 +96,8 @@ def main() -> None:
     arm_policy = TcpCartPolicy(env.batched_env.obs_spec_tcp_cart, env.batched_env.action_spec_tcp_cart)
     place_skill = PlaceSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length)
     pick_skill = PickSkill(reach_policy=arm_policy, lift_height=0.21, gripper_close=0.6, length=skill_length)
-    pick_block_skill = PickBlock4Skill(scene, pick_skill, vis_target_pos=target_pose_func)
-    place_block_skill = PlaceBlock4Skill(scene, place_skill, vis_target_pos=target_pose_func)
+    pick_block_skill = PickBlock4DemoSkill(scene, pick_skill, vis_target_pos=target_pose_func)
+    place_block_skill = PlaceBlock4DemoSkill(scene, place_skill, vis_target_pos=target_pose_func)
     ACTION_MAP = {"place_block": place_block_skill, "pick_block": pick_block_skill}
 
     tamp_agent = PlanningAgent(scene, abstract_model=abs_model, action_to_skill_map=ACTION_MAP)
