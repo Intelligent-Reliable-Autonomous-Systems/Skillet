@@ -43,7 +43,7 @@ class SkilletPerception:
         scene: Scene,
         obs_spec: ObservationSpec,
         abstract_model: AbstractModel | None = None,
-        reconstructor: Literal["sam3", "april", "vlm", "sam+vlm", "sim"] = "sam3",
+        reconstructor: Literal["sam3", "sam3_streaming", "april", "vlm", "sam+vlm", "sim"] = "sam3",
         poll_rate_hz: float = 10,
         device: str | torch.device | None = None,
         max_depth_m: float | None = None,
@@ -240,7 +240,8 @@ class SkilletPerception:
     def stop(self) -> None:
         """Signal the polling loop to stop and wait for the worker thread."""
         self._stop_event.set()
-        if self._thread is not None and self._thread.is_alive():
+        # `run()` calls this on exit from inside the worker thread, which cannot join itself
+        if self._thread is not None and self._thread.is_alive() and self._thread is not threading.current_thread():
             self._thread.join(timeout=2.0)
 
     def update_state(self) -> None:
@@ -358,8 +359,10 @@ class SkilletPerception:
                     self._scene is not None
                 ), "[ERROR] Perception Scene cannot be None when using AprilTagStateReconstructor."
                 self._reconstructor = ApriltagStateReconstructor(self._scene, domain=self._domain)
-            elif self._reconstructor_type == "sam3":
-                self._reconstructor = Sam3Reconstructor(self._scene, device=self.device, domain=self._domain)
+            elif self._reconstructor_type in ("sam3", "sam3_streaming"):
+                self._reconstructor = Sam3Reconstructor(
+                    self._scene, device=self.device, domain=self._domain, model=self._reconstructor_type
+                )
             elif self._reconstructor_type == "vlm":
                 self._reconstructor = VlmReconstructor(scene=self._scene, domain=self._domain)
             elif self._reconstructor_type == "sim":

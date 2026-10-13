@@ -73,6 +73,14 @@ class CameraLocalizer:
         self._outlier_pos_threshold_m = 0.05
         self._outlier_rot_threshold_rad = 0.1
 
+    @property
+    def is_localized(self) -> bool:
+        """Whether the pose buffer is full, i.e. `get_camera_pose` returns a settled tag-based estimate.
+
+        Until then `get_camera_pose` falls back to a placeholder (the tag pose itself).
+        """
+        return len(self._pose_buffer) >= self._max_pose_buffer_size
+
     def get_camera_pose(self, rgb: np.ndarray, intrinsic_k: np.ndarray) -> np.ndarray:
         """Get the camera pose from the ROS observation.
 

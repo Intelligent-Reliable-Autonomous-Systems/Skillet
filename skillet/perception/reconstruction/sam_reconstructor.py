@@ -54,10 +54,14 @@ class Sam3Reconstructor(ReconstructorBase):
         visualize: bool = True,
         vlm: Literal["qwen", "gemini"] = "gemini",
         domain: Literal["blocks", "sponge"] = "blocks",
+        model: Literal["sam3", "sam3_streaming"] = "sam3",
     ) -> None:
-        """Initialize the SAM reconstructor."""
+        """Initialize the SAM reconstructor.
+
+        `model="sam3_streaming"` tracks objects across frames instead of segmenting each frame independently.
+        """
         super().__init__(scene, device=device)
-        self._sam_model: SAMClient = get_sam_client("sam3")(use_server=True)
+        self._sam_model: SAMClient = get_sam_client(model)(use_server=True)
         self._vlm_client: VLMClient = (
             GeminiClient(prompt_name="detect_goal_with_scene")
             if vlm == "gemini"

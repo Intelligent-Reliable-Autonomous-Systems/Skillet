@@ -128,7 +128,7 @@ def draw_stats_panel(
 
 
 def main(
-    model: Literal["sam2", "sam3"],
+    model: Literal["sam2", "sam3", "sam3_streaming"],
     mode: Literal["text", "bboxes"] = "text",
     *,
     rolling_window: int = 30,

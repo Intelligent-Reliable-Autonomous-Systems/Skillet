@@ -37,6 +37,10 @@ def get_sam_client(model: Literal["sam2", "sam3", "sam3_streaming"] = "sam3") ->
         from skillet.perception.segmentation.sam.sam3_client import SAM3Client as SAM3Client
 
         return SAM3Client
+    if model == "sam3_streaming":
+        from skillet.perception.segmentation.sam.sam3_stream_client import SAM3StreamClient as SAM3StreamClient
+
+        return SAM3StreamClient
     raise ValueError(f"Invalid SAM model: {model}")
 
 
@@ -87,6 +91,7 @@ class SAMClient(ABC):
         self.model_path = model_path
         self.server_url = server_url
         self.use_server = use_server
+        self.load_server = load_server
 
         if use_server and not load_server:
             SAMClient.ensure_server(self.server_url, self.model_name)
@@ -274,6 +279,12 @@ class SAMClient(ABC):
 
         @app.get("/health")
         def health():
+            return {"status": "ok", "model": self.model_name}
+
+        @app.post("/reset")
+        def reset():
+            """Reset any per-stream state held by the server (e.g. SAM3 streaming sessions)."""
+            self.reset()
             return {"status": "ok"}
 
         @app.post("/segment/concepts", response_model=ConceptResponse)
@@ -355,6 +366,12 @@ class SAMClient(ABC):
     def ensure_server(server_url: str, model_name: str | None = None, timeout: float = 30.0) -> None:
         """Start the server as a detached background process if not already running."""
         if SAMClient._is_server_alive(server_url):
+            running = httpx.get(f"{server_url}/health", timeout=2.0).json().get("model")
+            if model_name is not None and running is not None and running != model_name:
+                raise RuntimeError(
+                    f"SAM server at {server_url} is running `{running}`, but `{model_name}` was requested. "
+                    "Stop the running server first."
+                )
             return
 
         print("[INFO][SAM] No server found, spawning background process…")
